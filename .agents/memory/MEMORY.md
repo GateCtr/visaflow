@@ -16,6 +16,7 @@
 - [Spain guide planning and conversion](spain-guide-planning-conversion.md) — Spain appointment guides must plan travel dates from all delays and use Spain-specific destination conversion paths, not generic visa copy.
 - [Convex prod deploy flow](convex-prod-deploy-flow.md) — no local `convex dev` sync; schema/function edits need explicit `npx convex deploy` with `CONVEX_DEPLOY_KEY` or client calls hit "Server Error".
 - [Spain HTTP proxy binding](spain-http-proxy-binding.md) — HTTP-only sessions must solve and scan through the same Decodo/SOAX proxy; local CF cookies have unknown origin IPs and must not be reused.
+- [Spain HTTP-pur capsolver-residential](spain-http-pure-capsolver-residential.md) — mode capsolver-residential: Impit+CapSolver+gate.decodo.com; bookititState dans session; makeBookititUrl ordre strict; dynamic maxDays while loop.
 - [Spain watcher cadence](spain-watcher-cadence.md) — HTTP scan timing is persisted in seconds and measured start-to-start; empty /main responses log HTTP/body-read diagnostics.
 - [CapSolver Decodo HTTP test](capsolver-decodo-http-test.md) — Decodo direct bypass succeeds; explicit CapSolver task polling currently returns ERROR_INVALID_TASK_DATA.
 - [Spain Bookitit dossier session isolation](spain-bookitit-dossier-session-isolation.md) — share CF clearance/proxy, but create a fresh PHPSESSID with main/ for every dossier before signin/summary.
@@ -27,3 +28,5 @@
 - [CEV Overview page flow](cev-overview-flow.md) — /VOW/Overview Cas 1: "Nouveau rendez-vous" href=/Integration/VOW/SelectSlot → suivi direct; Cas 2: limit_reached; implémenté + testé VOWINT6323902.
 - [Spain portal constants](spain-portal-constants.md) — spain-portals.ts centralise Kinshasa/Saopolo keys; isBookititServiceRedirect rendu générique; test live Saopolo dans scripts/test-saopola-live.ts.
 - [Monorepo package installation](package-install.md) — restaurer tous les workspaces avec pnpm frozen-lockfile, jamais npm dans le package racine.
+- [CapSolver userAgent obligatoire avec html](capsolver-ua-with-html.md) — AntiCloudflareTask avec champ html exige userAgent sinon ERROR_INVALID_TASK_DATA.
+- [getsigninfields/ obligatoire avant signin/](spain-getsigninfields-required.md) — sans cet appel HTTP, signin/ retourne 0B ; appelé en amont, signin/ répond normalement (confirmé 2026-08-12 Saopolo HTTP pur).

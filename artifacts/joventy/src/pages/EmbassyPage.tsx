@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getEmbassyBySlug, EMBASSIES_SEO } from "@/data/embassies-seo";
 import { getDestinationBySlug } from "@/data/destinations-seo";
-import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -90,7 +90,7 @@ export default function EmbassyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <PublicLayout>
       <Helmet>
         <title>{embassy.title}</title>
         <meta name="description" content={embassy.metaDescription} />
@@ -111,33 +111,8 @@ export default function EmbassyPage() {
         <script type="application/ld+json">{JSON.stringify(localBusinessSchema)}</script>
       </Helmet>
 
-      {/* ── NAV ── */}
-      <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <Link href="/">
-            <JoventyLogo variant="light" size="sm" />
-          </Link>
-          <nav className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-            <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
-            <ChevronRight className="w-3 h-3" />
-            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-primary font-semibold">{embassy.countryShort}</span>
-          </nav>
-          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
-            <Link href="/prix" className="hover:text-primary transition-colors">Tarifs</Link>
-            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
-          </nav>
-          <Link href="/register">
-            <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
-              Commencer <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-            </Button>
-          </Link>
-        </div>
-      </header>
-
       {/* ── HERO ── */}
-      <section className="bg-gradient-to-br from-primary via-primary/95 to-primary/80 text-white py-16 sm:py-20">
+      <section className="bg-gradient-to-br from-primary via-primary/95 to-primary/80 text-white pt-36 pb-20 sm:pt-40 sm:pb-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-3 mb-6">
             <FlagImg code={embassy.flagCode} size={48} className="shadow-md rounded" />
@@ -440,24 +415,6 @@ export default function EmbassyPage() {
         </section>
       </div>
 
-      {/* ── FOOTER ── */}
-      <footer className="bg-primary text-white py-10 mt-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
-          <Link href="/">
-            <JoventyLogo variant="dark" size="sm" />
-          </Link>
-          <p className="text-white/40 text-xs text-center">
-            © {new Date().getFullYear()} Joventy · Assistance visa premium · Kinshasa, RDC
-          </p>
-          <div className="flex gap-4 text-white/40 text-xs">
-            <Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link>
-            <Link href="/conditions" className="hover:text-white transition-colors">CGU</Link>
-          </div>
-        </div>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 mt-5 border-t border-white/10 text-white/40">
-          <LegalFooterNote />
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 }

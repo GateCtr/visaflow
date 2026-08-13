@@ -72,8 +72,8 @@ async function main(): Promise<void> {
 
   // Extract cookies
   const cookies = await page.cookies();
-  const cfClearance = cookies.find(c => c.name === "cf_clearance")?.value ?? "";
-  const phpSessId = cookies.find(c => c.name === "PHPSESSID")?.value ?? "";
+  const cfClearance = cookies.find((c: any) => c.name === "cf_clearance")?.value ?? "";
+  const phpSessId = cookies.find((c: any) => c.name === "PHPSESSID")?.value ?? "";
   const ua = await page.evaluate(() => navigator.userAgent);
 
   console.log(`  cf_clearance: ${cfClearance.slice(0, 30)}…`);

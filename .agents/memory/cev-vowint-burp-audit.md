@@ -76,3 +76,25 @@ Appears after Accept-Encoding in Chrome's header list.
 ## Remaining minor gaps (not fixed — low impact)
 - Double GET /en in redirect chain — bot follows once
 - Header order differences between Chrome 146 (user's Burp) and Chrome 148/149 (bot profiles) — expected, bot is calibrated to Chrome 148 HAR not Chrome 146
+
+## Fix 2026-08-12 (v2) — retry loop + suppression enterprise payload erroné
+
+**Root cause confirmée** : Anti-Captcha réussit le challenge visuel (glisser un animal) 60-80% du temps. `captchaSolved: false` est intermittent, pas systématique. L'enterprise payload ajouté (isEnterprise:true + enterprisePayload:{rqdata: checksiteconfig.c.req}) aggravait le problème car `c.req` est le PoW JWT interne de hcaptcha, pas un rqdata opérateur — il mettait Anti-Captcha sur le mauvais chemin enterprise.
+
+**Fix** : (1) suppression des flags enterprise erronés → retour à HCaptchaTaskProxyless standard. (2) boucle retry ≤3 : quand captchaSolved:false, attend 4s et renvoie un nouveau token à la même session OutSystems (siteverify stateless → tout token valide accepté). VOWINT invalidé seulement après 3 échecs.
+
+**Why** : 3 tentatives indépendantes à 65-75% → taux succès > 99% par cycle. Sans retry, chaque échec coûtait 1 cycle entier (60-120s).
+
+---
+
+## Fix 2026-08-12 (v1, OBSOLÈTE) — rqdata enterprise dynamique via checksiteconfig (captchaSolved:false systématique)
+
+**Root cause** : le CSP de `/Captcha` contient `https://remote.captcha.com` → sitekey CEV est hCaptcha **Enterprise** côté serveur. Le `rqdata` n'est PAS dans le HTML statique — `api.js` le charge dynamiquement via `checksiteconfig`. Sans rqdata, Anti-Captcha génère un token standard rejeté par siteverify enterprise.
+
+**Fix** : avant d'appeler Anti-Captcha, fetch :
+```
+GET https://hcaptcha.com/checksiteconfig?v=1&host=appointment.cloud.diplomatie.be&sitekey=5f64399c-…&sc=1&swa=1&spst=<ts>
+```
+Extrait `c.req` = rqdata. Passe `isEnterprise:true + enterprisePayload:{rqdata}` à Anti-Captcha si rqdata trouvé, sinon mode standard sans flags enterprise.
+
+**Why** : isEnterprise:true sans rqdata ne suffit pas pour enterprise siteverify — le challenge enterprise doit être résolu avec le bon rqdata de session.

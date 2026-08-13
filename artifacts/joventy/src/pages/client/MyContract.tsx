@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
-import { useQuery } from "convex/react";
+import { useRef, useState, useEffect } from "react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { CheckCircle2, FileText, ShieldCheck, User, Clock, Hash, Download, Printer } from "lucide-react";
+import { CheckCircle2, FileText, ShieldCheck, User, Clock, Hash, Download, Printer, PenLine, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const CONTRACT_SECTIONS = [
   {
@@ -373,10 +374,283 @@ function patchAllCssRules(): void {
   }
 }
 
+/* ── Confirmation plein-écran après signature inline ── */
+function InlineSignedConfirmation({ signedName, onContinue }: { signedName: string; onContinue: () => void }) {
+  const [visible, setVisible] = useState(false);
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+
+  const signedAt = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const signedTime = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setVisible(true), 80);
+    const t2 = setTimeout(() => setStep(1), 500);
+    const t3 = setTimeout(() => setStep(2), 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0B111E] px-4">
+      <div
+        className="relative flex items-center justify-center mb-8 transition-all duration-700"
+        style={{ opacity: visible ? 1 : 0, transform: visible ? "scale(1)" : "scale(0.5)" }}
+      >
+        <div className="absolute w-36 h-36 rounded-full bg-[#F59E0B]/10 animate-ping" style={{ animationDuration: "2s" }} />
+        <div className="absolute w-28 h-28 rounded-full bg-[#F59E0B]/15" />
+        <div className="relative w-24 h-24 rounded-full bg-[#F59E0B] flex items-center justify-center shadow-[0_0_60px_rgba(245,158,11,0.5)]">
+          <CheckCircle2 className="w-12 h-12 text-[#0B111E]" strokeWidth={2.5} />
+        </div>
+      </div>
+
+      <div className="text-center transition-all duration-500 mb-6" style={{ opacity: step >= 1 ? 1 : 0, transform: step >= 1 ? "translateY(0)" : "translateY(16px)" }}>
+        <h1 className="text-white text-2xl sm:text-3xl font-bold mb-2">Contrat signé !</h1>
+        <p className="text-white/50 text-sm sm:text-base">Votre engagement a été enregistré avec succès.</p>
+      </div>
+
+      <div className="w-full max-w-sm transition-all duration-500 mb-8" style={{ opacity: step >= 2 ? 1 : 0, transform: step >= 2 ? "translateY(0)" : "translateY(20px)" }}>
+        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+            <div className="w-8 h-8 rounded-lg bg-[#F59E0B]/20 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-4 h-4 text-[#F59E0B]" />
+            </div>
+            <div>
+              <p className="text-white text-xs font-semibold">Contrat d'accompagnement Visa</p>
+              <p className="text-white/40 text-[11px]">Version 1.1 · Joventy / Akollad Groupe</p>
+            </div>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            {[
+              ["Signataire", signedName],
+              ["Date", signedAt],
+              ["Heure", signedTime],
+            ].map(([label, value]) => (
+              <div key={label} className="flex justify-between items-center">
+                <span className="text-white/40 text-xs">{label}</span>
+                <span className="text-white text-xs font-semibold capitalize">{value}</span>
+              </div>
+            ))}
+            <div className="flex justify-between items-center">
+              <span className="text-white/40 text-xs">Statut</span>
+              <span className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                Archivé et horodaté
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full max-w-sm transition-all duration-500" style={{ opacity: step >= 2 ? 1 : 0, transform: step >= 2 ? "translateY(0)" : "translateY(20px)" }}>
+        <Button
+          onClick={onContinue}
+          className="w-full h-14 text-base font-bold gap-2 bg-[#F59E0B] hover:bg-[#d97706] text-[#0B111E] rounded-xl"
+        >
+          Voir mon contrat signé
+          <ArrowRight className="w-5 h-5" />
+        </Button>
+        <p className="text-white/30 text-[11px] text-center mt-3">
+          Vous retrouverez ce contrat dans votre espace client à tout moment.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ── Vue signature inline (contrat non signé) ── */
+function UnsignedView({ onSigned }: { onSigned: (name: string) => void }) {
+  const [signedName, setSignedName] = useState("");
+  const [accepted, setAccepted] = useState(false);
+  const [hasScrolled, setHasScrolled] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const signContract = useMutation(api.contracts.signContract);
+
+  const today = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const max = el.scrollHeight - el.clientHeight;
+      const pct = max > 0 ? Math.min(100, Math.round((el.scrollTop / max) * 100)) : 100;
+      setScrollProgress(pct);
+      if (pct >= 98) setHasScrolled(true);
+    };
+    el.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const isNameMatch = signedName.trim().length >= 3;
+  const canSign = hasScrolled && accepted && isNameMatch && !isPending;
+
+  const handleSign = async () => {
+    if (!canSign) return;
+    setIsPending(true);
+    setError("");
+    try {
+      await signContract({ signedName: signedName.trim(), userAgent: navigator.userAgent });
+      onSigned(signedName.trim());
+    } catch {
+      setError("Une erreur est survenue. Veuillez réessayer.");
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto">
+
+      {/* En-tête + barre de progression */}
+      <div className="rounded-2xl bg-[#0B111E] overflow-hidden">
+        <div className="h-1 bg-white/10">
+          <div className="h-full bg-[#F59E0B] transition-all duration-300" style={{ width: `${scrollProgress}%` }} />
+        </div>
+        <div className="px-6 sm:px-8 py-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#F59E0B] flex items-center justify-center flex-shrink-0">
+              <FileText className="w-5 h-5 text-[#0B111E]" />
+            </div>
+            <div>
+              <div className="text-[#F59E0B] text-[10px] font-bold tracking-widest uppercase mb-0.5">Signature requise</div>
+              <h1 className="text-white text-base sm:text-lg font-bold">Contrat d'Accompagnement Visa</h1>
+            </div>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            {!hasScrolled
+              ? <span className="text-white/50 text-xs tabular-nums">{scrollProgress}% lu</span>
+              : <span className="text-emerald-400 text-xs font-semibold">✓ Prêt à signer</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Contrat scrollable */}
+      <div
+        ref={scrollRef}
+        className="bg-white rounded-2xl border border-border shadow-sm overflow-y-auto relative"
+        style={{ maxHeight: "60vh", scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 transparent" }}
+      >
+        {/* En-tête document */}
+        <div className="bg-[#0B111E] px-6 sm:px-10 py-6 sm:py-8">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <div className="text-[#F59E0B] text-[10px] font-bold tracking-widest uppercase mb-2">Document officiel — Akollad Groupe</div>
+              <h2 className="text-white text-xl sm:text-2xl font-bold leading-tight">
+                Contrat d'Accompagnement <span className="text-[#F59E0B]">Visa</span>
+              </h2>
+              <p className="text-white/40 text-xs mt-1.5">Version 1.1 — {today}</p>
+            </div>
+            <div className="hidden sm:block text-right flex-shrink-0 text-white/30 text-[10px] leading-relaxed">
+              <div>RCCM : CD/KNG/RCCM/25-A-07960</div>
+              <div>N° Impôt : A2557944L</div>
+              <div>IDNAT : 01-J6100-N86614P</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sections du contrat */}
+        <div
+          className="px-6 sm:px-10 py-7 sm:py-10 space-y-7 text-slate-700 leading-[1.85]"
+          style={{ fontFamily: "'Georgia','Times New Roman',serif", fontSize: "15px" }}
+        >
+          {CONTRACT_SECTIONS.map((section) => (
+            <section key={section.title}>
+              <h2 className="font-sans font-bold text-[#0B111E] text-xs sm:text-sm uppercase tracking-wider mb-3 pb-2 border-b border-slate-100">
+                {section.title}
+              </h2>
+              {section.content}
+            </section>
+          ))}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-dashed border-slate-200 text-xs text-slate-400">
+            <span>Joventy · Akollad Groupe · Kinshasa, RDC</span>
+            <span>Version 1.1 · {new Date().getFullYear()}</span>
+          </div>
+        </div>
+
+        {/* Indicateur "continuer à lire" */}
+        {!hasScrolled && (
+          <div className="sticky bottom-0 bg-gradient-to-t from-white via-white/90 to-transparent pt-10 pb-4 px-6 text-center pointer-events-none">
+            <p className="text-xs text-slate-400">↓ Faites défiler jusqu'en bas pour signer</p>
+          </div>
+        )}
+      </div>
+
+      {/* Formulaire de signature (révélé après lecture complète) */}
+      <div
+        className="overflow-hidden transition-all duration-700 ease-out"
+        style={{ maxHeight: hasScrolled ? "700px" : "0px", opacity: hasScrolled ? 1 : 0 }}
+      >
+        <div className="bg-white rounded-2xl border border-border border-t-2 border-t-[#F59E0B] shadow-sm p-6 sm:p-8 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0B111E] flex items-center justify-center flex-shrink-0">
+              <PenLine className="w-5 h-5 text-[#F59E0B]" />
+            </div>
+            <div>
+              <p className="font-bold text-[#0B111E] text-base">Signature numérique</p>
+              <p className="text-xs text-slate-500">Tapez votre nom complet pour signer ce contrat</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Nom complet du signataire</label>
+            <Input
+              placeholder="Votre nom complet"
+              value={signedName}
+              onChange={(e) => setSignedName(e.target.value)}
+              className="text-base font-medium border-slate-300 focus:border-[#0B111E] bg-white"
+              style={{ height: "52px" }}
+            />
+            {signedName.trim().length > 0 && signedName.trim().length < 3 && (
+              <p className="text-xs text-red-500">Veuillez entrer votre nom complet (au moins 3 caractères).</p>
+            )}
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-1 w-4 h-4 accent-[#0B111E] flex-shrink-0"
+            />
+            <span className="text-sm text-slate-600 leading-relaxed">
+              Je déclare avoir lu et compris l'intégralité du contrat d'accompagnement Joventy, et j'accepte
+              sans réserve l'ensemble de ses conditions, notamment l'absence de garantie de visa et la
+              non-remboursabilité des frais d'engagement.
+            </span>
+          </label>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>
+          )}
+
+          <Button
+            onClick={handleSign}
+            disabled={!canSign}
+            className="w-full text-base font-bold gap-2 bg-[#0B111E] hover:bg-[#1a2540] text-white disabled:opacity-30 rounded-xl"
+            style={{ height: "56px" }}
+          >
+            <ShieldCheck className="w-5 h-5 text-[#F59E0B]" />
+            {isPending ? "Enregistrement en cours…" : "Je signe ce contrat numériquement"}
+          </Button>
+
+          <p className="text-[11px] text-slate-400 text-center">
+            Signature horodatée · RCCM CD/KNG/RCCM/25-A-07960 · contact@joventy.cd
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MyContract() {
   const sig = useQuery(api.contracts.getContractSignature);
   const contractRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [finalName, setFinalName] = useState("");
 
   const signedDate = sig
     ? new Date(sig.signedAt).toLocaleDateString("fr-FR", {
@@ -397,6 +671,40 @@ export default function MyContract() {
   const filename = sig
     ? `Contrat-Joventy-${sig.signedName.replace(/\s+/g, "-")}-${sig.contractVersion}.pdf`
     : "Contrat-Joventy.pdf";
+
+  // ── États conditionnels ──
+
+  // Chargement
+  if (sig === undefined) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-4 animate-pulse">
+        <div className="h-24 rounded-2xl bg-slate-200" />
+        <div className="h-96 rounded-2xl bg-slate-100" />
+      </div>
+    );
+  }
+
+  // Écran de confirmation post-signature
+  if (showConfirmation) {
+    return (
+      <InlineSignedConfirmation
+        signedName={finalName}
+        onContinue={() => setShowConfirmation(false)}
+      />
+    );
+  }
+
+  // Contrat non signé → vue inline
+  if (!sig) {
+    return (
+      <UnsignedView
+        onSigned={(name) => {
+          setFinalName(name);
+          setShowConfirmation(true);
+        }}
+      />
+    );
+  }
 
   const handleDownload = async () => {
     if (!contractRef.current) return;

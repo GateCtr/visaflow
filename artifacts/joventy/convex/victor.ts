@@ -55,7 +55,7 @@ export const checkAndIncrement = internalMutation({
       return {
         allowed: false,
         reason:
-          "Vous avez beaucoup de questions, c'est excellent ! Un assistant validateur avec un niveau de validation élevé va prendre la relève et vous contacter sous peu.",
+          "Vous avez beaucoup de questions, c'est excellent ! Pour aller plus loin, contactez directement un conseiller Joventy sur WhatsApp.\n[CTA:💬 Contacter sur WhatsApp:https://wa.me/243840808122?text=Bonjour%2C%20je%20souhaite%20%C3%AAtre%20accompagn%C3%A9%20pour%20mon%20visa]",
       };
     }
 

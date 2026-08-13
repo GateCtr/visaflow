@@ -38,6 +38,62 @@ export const SAOPOLO_PORTAL_URL =
 /** Clé Bookitit extraite de l'URL (publickey / widgetId) — portail São Paulo. */
 export const SAOPOLO_WIDGET_KEY = "2d01502f12dc08400e22aea87fb00ae34";
 
+/** Service Pasaportes São Paulo (validé 2026-08-11). */
+export const SAOPOLO_DEFAULT_SERVICE_ID = "bkt853215";
+
+// ─── Cuba / La Habana (LMD) ──────────────────────────────────────────────────
+/** URL complète du widget Bookitit pour le portail Cuba (La Habana / LMD). */
+export const CUBA_LMD_PORTAL_URL =
+  "https://www.citaconsular.es/es/hosteds/widgetdefault/28330379fc95acafd31ee9e8938c278ff/";
+
+/** Clé Bookitit extraite de l'URL (publickey / widgetId) — portail Cuba LMD. */
+export const CUBA_LMD_WIDGET_KEY = "28330379fc95acafd31ee9e8938c278ff";
+
+// ─── Cameroun (Yaoundé) ───────────────────────────────────────────────────────
+/** Clé Bookitit — portail Cameroun. */
+export const CAMEROON_WIDGET_KEY = "2c7359283dfa615bb8bf086b630561d9d";
+
+// ─── Proxy résidentiel Decodo (gate.decodo.com) ───────────────────────────────
+/**
+ * Portails qui exigent le proxy résidentiel rotatif (gate.decodo.com).
+ * Le range ISP Decodo (isp.decodo.com) est grillé sur citaconsular.es pour ces portails.
+ * Validé 2026-08-11 : ISP ports 10001-10005 → 0B sur /main/ ; résidentiel → 128KB OK.
+ */
+export const RESIDENTIAL_PROXY_PORTALS = new Set([
+  SAOPOLO_WIDGET_KEY,
+  CUBA_LMD_WIDGET_KEY,
+]);
+
+/**
+ * Retourne le type de proxy recommandé pour un portail donné.
+ * @param widgetKey - Clé Bookitit du portail (publickey)
+ * @returns "residential" (gate.decodo.com) ou "isp" (isp.decodo.com)
+ */
+export function getPortalProxyType(widgetKey: string): "residential" | "isp" {
+  return RESIDENTIAL_PROXY_PORTALS.has(widgetKey) ? "residential" : "isp";
+}
+
+/**
+ * Retourne l'URL du proxy résidentiel Decodo (gate.decodo.com) depuis les env vars.
+ * Si SPAIN_RESIDENTIAL_PROXY_URL est défini, l'utilise ; sinon tente de dériver
+ * depuis DECODO_PROXY_URL en remplaçant isp.decodo.com → gate.decodo.com.
+ *
+ * @param portOffset - Décalage de port optionnel (0 = port de base, 1 = port+1, etc.)
+ */
+export function getResidentialProxyUrl(portOffset = 0): string | undefined {
+  const base = process.env.SPAIN_RESIDENTIAL_PROXY_URL;
+  if (!base) return undefined;
+  if (portOffset === 0) return base;
+  try {
+    const u = new URL(base);
+    const basePort = parseInt(u.port || "10001", 10);
+    u.port = String(((basePort - 10001 + portOffset) % 20) + 10001);
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
 // ─── Defaults (portail historique = Kinshasa) ─────────────────────────────────
 /**
  * Portail et clé par défaut utilisés par les scripts de découverte, tests, etc.

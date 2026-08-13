@@ -70,8 +70,8 @@
     "undici": "^7.29.0"
   },
   "devDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.62.4",
     "@types/node": "^22.0.0",
+    "devtools-protocol": "*",
     "fast-check": "4.9.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

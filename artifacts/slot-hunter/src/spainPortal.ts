@@ -797,9 +797,12 @@ async function tryApiFirstSlot(
     return null;
   }
 
-  // 4) Datetime scan (mois courant + 8 suivants — conforme au bundle datetimelist.js)
+  // 4) Datetime scan dynamique basé sur maxDays (reproduit test-bookitit-dynamic.ts)
+  // Minimum 2 mois (M + M+1) ; continue selon maxDays extrait de chaque réponse.
   const baseDate = new Date();
-  for (let i = 0; i < 9; i++) {
+  let dtGlobalMaxDays: Date | null = null;
+  let dtConsecutiveEmpty = 0;
+  for (let i = 0; i < 12; i++) {
     const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
     const payload = await callJsonpUndici(endpointBase, "datetime/", {
       ...initParams,
@@ -811,6 +814,21 @@ async function tryApiFirstSlot(
     }, _cookieHdr, endpointBase);
     const slot = extractSlotFromBookititPayload(payload);
     if (slot) return slot;
+
+    // maxDays pour contrôle dynamique de la fenêtre de scan
+    const mRaw: string = (payload as any)?.maxDays ?? "";
+    if (mRaw && /^\d{4}-\d{2}-\d{2}$/.test(mRaw)) {
+      const mDate = new Date(mRaw + "T23:59:59");
+      const todayEnd = new Date(new Date().toISOString().slice(0, 10) + "T23:59:59");
+      // Ignorer maxDays ≤ aujourd'hui — signal mois courant vide, pas une limite globale
+      if (mDate > todayEnd && (!dtGlobalMaxDays || mDate > dtGlobalMaxDays)) dtGlobalMaxDays = mDate;
+    }
+    dtConsecutiveEmpty++;
+    if (i >= 1 && dtGlobalMaxDays) {
+      const next = new Date(baseDate.getFullYear(), baseDate.getMonth() + i + 1, 1);
+      if (next > dtGlobalMaxDays) break;
+    }
+    if (!dtGlobalMaxDays && dtConsecutiveEmpty >= 3) break;
   }
 
   return null;
@@ -867,10 +885,12 @@ async function tryApiFirstWithCachedSession(
     return false; // pas de services/agendas → impossible de scanner, mais session valide
   }
 
-  // Scan datetime (9 mois)
-  const baseDate = new Date();
-  for (let i = 0; i < 9; i++) {
-    const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
+  // Scan datetime dynamique basé sur maxDays (reproduit test-bookitit-dynamic.ts)
+  const cachedBaseDate = new Date();
+  let cachedDtMaxDays: Date | null = null;
+  let cachedDtConsEmpty = 0;
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(cachedBaseDate.getFullYear(), cachedBaseDate.getMonth() + i, 1);
     const payload = await callJsonpUndici(bookititBase, "datetime/", {
       ...initParams,
       services: services.join(","),
@@ -889,6 +909,20 @@ async function tryApiFirstWithCachedSession(
 
     const slot = extractSlotFromBookititPayload(payload);
     if (slot) return slot;
+
+    const mRaw2: string = (payload as any)?.maxDays ?? "";
+    if (mRaw2 && /^\d{4}-\d{2}-\d{2}$/.test(mRaw2)) {
+      const mDate2 = new Date(mRaw2 + "T23:59:59");
+      const todayEnd2 = new Date(new Date().toISOString().slice(0, 10) + "T23:59:59");
+      // Ignorer maxDays ≤ aujourd'hui — signal mois courant vide, pas une limite globale
+      if (mDate2 > todayEnd2 && (!cachedDtMaxDays || mDate2 > cachedDtMaxDays)) cachedDtMaxDays = mDate2;
+    }
+    cachedDtConsEmpty++;
+    if (i >= 1 && cachedDtMaxDays) {
+      const next2 = new Date(cachedBaseDate.getFullYear(), cachedBaseDate.getMonth() + i + 1, 1);
+      if (next2 > cachedDtMaxDays) break;
+    }
+    if (!cachedDtMaxDays && cachedDtConsEmpty >= 3) break;
   }
 
   return false; // session valide, 0 créneau
@@ -1592,6 +1626,8 @@ export interface SpainWatcherProbeResult {
   slotInfo?: string;
   screenshotBase64?: string;
   errorMessage?: string;
+  _mainHtml?: string;
+  _allSlots?: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
 }
 
 export async function runSpainWatcherProbe(portalUrl: string): Promise<SpainWatcherProbeResult> {

@@ -1006,6 +1006,23 @@ async function confirmSlotsViaDatetime(
     Priority: "u=1, i",
   };
 
+  // ── Callback JSONP partagé ────────────────────────────────────────────────────
+  // CRITIQUE : tous les endpoints JSONP d'une même session widget doivent utiliser
+  // le MÊME callback jQuery. Si getwidgetconfigurations/ utilise callback A et
+  // getagendas/ utilise callback B, le serveur retourne 0B sur les appels suivants.
+  //
+  // En mode capsolver, session.bookititState.jqCallback est le callback exact du solve
+  // (utilisé par le widget natif Bookitit) → priorité absolue.
+  // En mode playwright / fallback : callback fresh au format jQuery 2.1.1 natif.
+  const sharedCb = session.bookititState?.jqCallback
+    ?? `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  // nextReqCounter : incrémente session.bookititState.reqCounter si disponible
+  // (cohérence séquentielle avec le widget natif), sinon Date.now() comme cache-buster.
+  const nextReqCounter = () => {
+    if (session.bookititState) return ++session.bookititState.reqCounter;
+    return Date.now();
+  };
+
   // Extraire les services rendus (liens #selectservice hors templates)
   // ID peut être numérique (ex: 897578) ou préfixé bkt (ex: bkt897578) selon la version Bookitit.
   const svcMatches = [...renderedHtml.matchAll(/<a[^>]+href=['"]#selectservice\/([\w]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
@@ -1029,7 +1046,15 @@ async function confirmSlotsViaDatetime(
       // Non-fatal : on continue même si ça échoue.
       // CRITIQUE : le callback JSONP doit être au format jQuery 2.1.1 natif : jQuery21109{timestamp}_{counter}
       // Un callback au mauvais format (ex: "jQueryCfg...") est rejeté silencieusement par Bookitit → 0B.
-      const cfgCb = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      //
+      // CRITIQUE #2 : getwidgetconfigurations/ ET getservices/ doivent utiliser le MÊME callback.
+      // Le widget Bookitit utilise un seul jqCallback pour toute la session widget (comme jQuery JSONP natif).
+      // Si getservices/ utilise un callback différent de getwidgetconfigurations/, le serveur retourne 0B.
+      // En mode capsolver, session.bookititState.jqCallback est le callback exact du solve → priorité absolue.
+      const sharedCb = session.bookititState?.jqCallback
+        ?? `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      // reqCounter : utiliser et incrémenter session.bookititState si disponible (cohérence séquentielle).
+      const cfgCb = sharedCb;
       const cfgQ = new URLSearchParams();
       cfgQ.append("callback",       cfgCb);
       console.log(`[spain-http] 🔧 init callback getwidgetconfigurations/ = ${cfgCb}`);
@@ -1039,7 +1064,7 @@ async function confirmSlotsViaDatetime(
       cfgQ.append("version",        "4");
       cfgQ.append("src",            referer);
       cfgQ.append("srvsrc",         srvsrc);
-      cfgQ.append("_",              String(Date.now()));
+      cfgQ.append("_",              String(nextReqCounter()));
       // ── Routage getwidgetconfigurations/ + getservices/ ───────────────────────
       // Mode persistent-browser (session.source === "playwright") :
       //   Le PHPSESSID est lié à l'IP Decodo du browser (ex: port 10002).
@@ -1076,7 +1101,7 @@ async function confirmSlotsViaDatetime(
         } catch { /* non-fatal */ }
       }
 
-      const svcCb = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      const svcCb = sharedCb; // même callback que getwidgetconfigurations/ — obligatoire
       const svcQ = new URLSearchParams();
       svcQ.append("callback",       svcCb);
       console.log(`[spain-http] 🔧 init callback getservices/ = ${svcCb}`);
@@ -1086,7 +1111,7 @@ async function confirmSlotsViaDatetime(
       svcQ.append("version",        "4");
       svcQ.append("src",            referer);
       svcQ.append("srvsrc",         srvsrc);
-      svcQ.append("_",              String(Date.now()));
+      svcQ.append("_",              String(nextReqCounter()));
 
       let svcRaw: string;
       if (useBrowserFetch) {
@@ -1127,6 +1152,13 @@ async function confirmSlotsViaDatetime(
       console.log(`[spain-http] 🔬 getservices/ raw (500c): ${svcRaw.slice(0, 500)}`);
       const svcPayload = parseJsonpPayload(svcRaw);
       console.log(`[spain-http] 🔬 getservices/ parsed type: ${typeof svcPayload} | isArray: ${Array.isArray(svcPayload)} | keys: ${svcPayload && typeof svcPayload === "object" ? Object.keys(svcPayload as object).slice(0, 10).join(",") : "n/a"}`);
+      if (svcPayload && typeof svcPayload === "object") {
+        const p = svcPayload as Record<string, unknown>;
+        const allow = p["AllowAppointment"] ?? p["allowAppointment"];
+        if (allow !== undefined) {
+          console.log(`[spain-http] 🔬 getservices/ AllowAppointment = ${JSON.stringify(allow)}`);
+        }
+      }
       const svcDetails = extractServiceDetails(svcPayload);
 
       if (svcDetails.length === 0) {
@@ -1162,8 +1194,8 @@ async function confirmSlotsViaDatetime(
     });
   }
 
-  // Générateur de callback jQuery 2.1.1 natif — format exact attendu par Bookitit.
-  const jqCbGen = () => `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  // jqCbGen conservé pour compatibilité avec du code non migré (alias de sharedCb).
+  const jqCbGen = () => sharedCb;
   const cbBase = `jQuery${Date.now()}_`; // conservé pour compatibilité log uniquement
   const now = new Date();
   const srvsrc = "https://www.citaconsular.es";
@@ -1188,7 +1220,10 @@ async function confirmSlotsViaDatetime(
     console.log(`[spain-http] 🎯 Service priorisé pour datetime/ : "${prioritizedService.serviceName}" (${prioritizedService.serviceId})`);
   }
 
-  for (const svc of orderedServices.slice(0, 3)) {
+  // Règle SPAIN-HTTP-PURE-FLOW.md §9 : 1 seul getagendas/ par PHPSESSID.
+  // Les appels suivants retournent 0B → inutile d'itérer sur plusieurs services.
+  // Le service priorisé (visible + AllowAppointment) est déjà en tête d'orderedServices.
+  for (const svc of orderedServices.slice(0, 1)) {
     const svcSlotsStart = allSlots.length; // repère pour détecter les créneaux de CE service
     console.log(`[spain-http] 🔍 Vérif datetime/ → "${svc.serviceName}" (ID: ${svc.serviceId})`);
 
@@ -1237,18 +1272,20 @@ async function confirmSlotsViaDatetime(
         nativeDtRaws.push(...nativeCapture.datetimeRaws);
       } else {
         // ── Approche 2 : AJAX direct (fallback si page Chromium indisponible) ─
+        // Ordre des paramètres conforme à test-bookitit-dynamic.ts (Cuba exige cet ordre).
         const agQ = new URLSearchParams();
-        const agCb = jqCbGen();
+        const agCb = sharedCb;
         agQ.append("callback",   agCb);
         console.log(`[spain-http] 🔧 getagendas/ fallback AJAX = ${agCb}`);
         agQ.append("type",       "default");
         agQ.append("publickey",  publickey);
         agQ.append("lang",       "es");
+        agQ.append("services[]", svc.serviceId);   // ← avant version (ordre strict Bookitit)
         agQ.append("version",    "4");
         agQ.append("src",        referer);
         agQ.append("srvsrc",     srvsrc);
-        agQ.append("services[]", svc.serviceId);
-        agQ.append("_",          String(Date.now()));
+        agQ.append("selectedPeople", "1");
+        agQ.append("_",          String(nextReqCounter()));
         if (useBrowserFetch) {
           agRaw = await fetchBookititBodyWithFallback(session, `${base}getagendas/?${agQ}`, headers);
           const pageUrl = spainPersistentBrowser.getActivePage()?.url();
@@ -1291,30 +1328,12 @@ async function confirmSlotsViaDatetime(
     }
     void agRawForParsing; // utilisé implicitement via agendaId
 
-    // 2. datetime/ sur 3 mois — en démarrant au bon mois selon la fenêtre de publication.
+    // 2. datetime/ scan dynamique — démarre TOUJOURS au mois courant (mo=0).
     //
-    // Certains portails publient les créneaux N jours à l'avance.
-    // Exemple Kinshasa : 36 jours → le 3 août, premier créneau publiable = 8 septembre.
-    // Démarrer depuis août est inutile (créneaux déjà épuisés ou pas encore publiés).
-    //
-    // Calcul : startMonthOffset = delta de mois entre aujourd'hui et (aujourd'hui + publishDays).
-    // Si publishDays = 0 (portail inconnu) → on démarre au mois courant comme avant.
-    const { KINSHASA_WIDGET_KEY, KINSHASA_CALENDAR_PUBLISH_DAYS } = await import("./spain-portals.js");
-    const CALENDAR_PUBLISH_DAYS_BY_KEY: Record<string, number> = {
-      [KINSHASA_WIDGET_KEY]: KINSHASA_CALENDAR_PUBLISH_DAYS,
-    };
-    const publishDays = CALENDAR_PUBLISH_DAYS_BY_KEY[publickey] ?? 0;
-    let startMonthOffset = 0;
-    if (publishDays > 0) {
-      const firstPublish = new Date(now.getFullYear(), now.getMonth(), now.getDate() + publishDays);
-      startMonthOffset = (firstPublish.getFullYear() - now.getFullYear()) * 12
-                       + (firstPublish.getMonth()    - now.getMonth());
-      if (startMonthOffset > 0) {
-        console.log(
-          `[spain-http] 📅 Fenêtre publication ${publishDays}j → premier mois pertinent : +${startMonthOffset} (${firstPublish.toISOString().slice(0, 7)})`,
-        );
-      }
-    }
+    // On ne saute plus de mois en avance basé sur une hypothèse arbitraire (ex. "36j").
+    // Le serveur est la source de vérité : si le mois courant est vide, il retourne 0B.
+    // La fenêtre s'arrête dès que le mois suivant dépasse maxDays de la réponse serveur,
+    // ou après 3 mois vides consécutifs sans maxDays. Même logique que test-bookitit-dynamic.ts.
 
     // Alignement sur la requête observée du vrai portail :
     //   - services[] obligatoire
@@ -1338,27 +1357,35 @@ async function confirmSlotsViaDatetime(
     }
 
     const widgetSrc = referer.replace(/\/?$/, "/");
-    for (let mo = startMonthOffset; mo < startMonthOffset + 3; mo++) {
+    // ── Dynamic multi-month scan basé sur maxDays (reproduit test-bookitit-dynamic.ts) ────
+    // Minimum 2 mois (M + M+1) ; continue selon maxDays extrait de chaque réponse datetime/.
+    // Garantit que Cuba (créneaux en M+2 à M+5) et São Paulo sont couverts sans limite fixe.
+    let globalMaxDays: Date | null = null;
+    let consecutiveEmpty = 0;
+    const MAX_DT_MONTHS = 12;
+    let mo = 0;
+    while (mo < MAX_DT_MONTHS) {
+      let slotsThisMonth = 0;
       const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
       const start = tgt.toISOString().slice(0, 10);
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
       try {
         const dtQ = new URLSearchParams();
-        const dtCb = jqCbGen();
+        const dtCb = sharedCb;
         dtQ.append("callback",       dtCb);
         console.log(`[spain-http] 🔧 callback datetime/ = ${dtCb}`);
         dtQ.append("type",           "default");
         dtQ.append("publickey",      publickey);
         dtQ.append("lang",           "es");
+        dtQ.append("services[]",     svc.serviceId);   // ← avant version (ordre strict Bookitit)
+        if (agendaId) dtQ.append("agendas[]", agendaId); // ← avant version
         dtQ.append("version",        "4");
         dtQ.append("src",            widgetSrc);
         dtQ.append("srvsrc",         srvsrc);
-        dtQ.append("services[]",     svc.serviceId);
-        if (agendaId) dtQ.append("agendas[]", agendaId);
         dtQ.append("start",          start);
         dtQ.append("end",            end);
         dtQ.append("selectedPeople", "1");
-        dtQ.append("_",              String(Date.now()));
+        dtQ.append("_",              String(nextReqCounter()));
 
         const datetimeUrl = `${base}datetime/?${dtQ}`;
         console.log(`[spain-http] 📡 datetime request → ${datetimeUrl}`);
@@ -1411,9 +1438,24 @@ async function confirmSlotsViaDatetime(
               console.log(`[spain-http] 🔎 datetime/ ${start} — structure: keys=${Object.keys(parsed as object).join(",")}`);
             }
           }
-          // Accumuler TOUS les créneaux sur les 3 mois (pas de retour précoce — on finit le scan)
+          // ── Extraire maxDays pour navigation multi-mois ──────────────────────────
+          const maxDaysRaw: string = (parsed as any)?.maxDays ?? "";
+          if (maxDaysRaw && /^\d{4}-\d{2}-\d{2}$/.test(maxDaysRaw)) {
+            const maxDate = new Date(maxDaysRaw + "T23:59:59");
+            const todayMidnight = new Date(now.toISOString().slice(0, 10) + "T23:59:59");
+            // Ignorer maxDays ≤ aujourd'hui — signal "mois courant vide", pas une limite globale
+            // (règle SPAIN-HTTP-PURE-FLOW.md §2 : toujours scanner M + M+1 minimum)
+            if (maxDate > todayMidnight && (!globalMaxDays || maxDate > globalMaxDays)) {
+              globalMaxDays = maxDate;
+              console.log(`[spain-http] 📅 maxDays mis à jour: ${maxDaysRaw} (mois ${start.slice(0, 7)})`);
+            } else if (maxDate <= todayMidnight) {
+              console.log(`[spain-http] 📅 maxDays=${maxDaysRaw} ≤ aujourd'hui — ignoré (signal mois vide, pas limite globale)`);
+            }
+          }
+          // Accumuler TOUS les créneaux (scan complet du mois — pas de retour précoce)
           const newSlots = extractAllSlotsFromDatetime(parsed);
           for (const s of newSlots) allSlots.push(s);
+          slotsThisMonth = newSlots.length;
           if (newSlots.length > 0) {
             const preview = newSlots.slice(0, 5).map(s => `${s.date} ${s.time} (${s.freeslots < 0 ? "?" : s.freeslots} places)`).join(", ");
             const more = newSlots.length > 5 ? ` … +${newSlots.length - 5} de plus` : "";
@@ -1426,15 +1468,45 @@ async function confirmSlotsViaDatetime(
       } catch (dtErr) {
         console.warn(`[spain-http] ⚠️ datetime/ exception: ${dtErr}`);
       }
+
+      mo++;
+
+      // ── Condition d'arrêt dynamique (minimum 2 mois : M + M+1) ───────────────
+      if (mo >= 2 && globalMaxDays) {
+        const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+        if (firstOfNextMonth > globalMaxDays) {
+          console.log(
+            `[spain-http] ⏹ Fin datetime/ : ${firstOfNextMonth.toISOString().slice(0, 10)} ` +
+            `> maxDays ${globalMaxDays.toISOString().slice(0, 10)} — arrêt`,
+          );
+          break;
+        }
+      }
+      // Sécurité : 3 mois consécutifs vides sans maxDays → portail fermé ou erreur réseau
+      if (slotsThisMonth === 0) consecutiveEmpty++;
+      else consecutiveEmpty = 0;
+      if (!globalMaxDays && consecutiveEmpty >= 3) {
+        console.log(`[spain-http] ⏹ 3 mois vides consécutifs sans maxDays — arrêt sécurité`);
+        break;
+      }
     }
-    // Après les 3 mois : si de nouveaux créneaux ont été trouvés pour ce service → retour
+
+    // Après le scan dynamique : si de nouveaux créneaux ont été trouvés → retour
+    const monthsScanned = mo;
     if (allSlots.length > svcSlotsStart) {
       const firstSlot = allSlots[svcSlotsStart];
       const count = allSlots.length - svcSlotsStart;
-      console.log(`[spain-http] ✅ datetime/ CONFIRMÉ: ${firstSlot.date} ${firstSlot.time} — "${svc.serviceName}" (${count} créneaux sur 3 mois)`);
+      console.log(
+        `[spain-http] ✅ datetime/ CONFIRMÉ: ${firstSlot.date} ${firstSlot.time} — ` +
+        `"${svc.serviceName}" (${count} créneaux sur ${monthsScanned} mois scannés)`,
+      );
       return { serviceId: svc.serviceId, serviceName: svc.serviceName, date: firstSlot.date, time: firstSlot.time, allSlots, widgetConfig };
     }
-    console.log(`[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" (${dateFrom(now)} → ${dateFrom(new Date(now.getFullYear(), now.getMonth() + 2, 0))})`);
+    const endScan = new Date(now.getFullYear(), now.getMonth() + mo - 1, 0);
+    console.log(
+      `[spain-http] ⛔ datetime/ vide pour "${svc.serviceName}" ` +
+      `(${dateFrom(now)} → ${dateFrom(endScan)}, ${monthsScanned} mois scannés)`,
+    );
   }
   return null;
 }
@@ -1701,8 +1773,9 @@ async function scanViaMainEndpoint(
   let phpSessId =
     session.allCookies.find((c) => c.name === "PHPSESSID")?.value ?? "";
   if (phpSessId) {
+    const src = session.source ?? "capsolver";
     console.log(
-      `[spain-http] 🍪 PHPSESSID pré-initialisé (session Playwright): ${phpSessId.slice(0, 12)}…`
+      `[spain-http] 🍪 PHPSESSID pré-initialisé (session ${src}): ${phpSessId.slice(0, 12)}…`
     );
   }
 
@@ -1797,6 +1870,18 @@ async function scanViaMainEndpoint(
     console.log(
       `[spain-http] ⏩ Session Playwright + PHPSESSID pré-initialisé → ` +
       `skipPortalFlow=true dès le départ (bypass portail + nonce JSD caché)`,
+    );
+  } else if (session.source === "capsolver" && phpSessId) {
+    // En mode capsolver-residential, la danse GET portail → POST widget → JSD
+    // modifie le cf_clearance dans la session. Le PHPSESSID lié à l'ancien
+    // cf_clearance (obtenu lors du solve) devient invalide pour les appels JSONP
+    // suivants (getservices/ → 0B HTTP 200). On bypasse la danse entièrement :
+    // le cf_clearance + PHPSESSID du solve sont cohérents entre eux et valides
+    // pour les appels impit tant que la session est active (~115 min).
+    skipPortalFlow = true;
+    console.log(
+      `[spain-http] ⏩ Session capsolver + PHPSESSID → skipPortalFlow=true ` +
+      `(bypass portail + JSD — cf_clearance du solve conservé intact)`,
     );
   }
   const entryRes = skipPortalFlow ? null : await spainCfFetch(portalUrl, session, {
@@ -2394,7 +2479,7 @@ async function scanViaMainEndpoint(
     mainBody = session.prefetchedMainHtml;
     mainFromCache = true;
     console.log(
-      `[spain-http] 📦 /main/ pré-fetchée via Chromium (${mainBody.length}B) — appel impit ignoré`,
+      `[spain-http] 📦 /main/ déjà fetchée par impit pendant le solve (${mainBody.length}B) — réutilisée, pas de 2ème appel`,
     );
     // ── Effacer le cache après lecture ──────────────────────────────────────
     // Le probe suivant appellera /main/ live via page.evaluate :
@@ -3024,6 +3109,9 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   // Nombre de rotations supplémentaires à tenter (0 si pool ≤ 1 ou test provider).
   const maxIpRotations = _testSessionProvider ? 0 : Math.max(0, poolSize - 1);
   let ipRotations = 0;
+  // true si au moins une rotation a avorté parce que ensureSpainCfSession a retourné null
+  // (= panne CF ou proxy, pas un Bookitit block). On évite de masquer ça en "ip_pool_blocked".
+  let sessionAcquisitionFailed = false;
 
   while (!mainResult && ipRotations < maxIpRotations) {
     ipRotations++;
@@ -3033,6 +3121,7 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
     session = await ensureSpainCfSession(portalUrl);
     if (!session) {
       console.warn("[spain-http] ⚠️ ensureSpainCfSession → null lors de la rotation pool — CF ou proxy indisponible");
+      sessionAcquisitionFailed = true;
       break;
     }
     mainResult = await scanViaMainEndpoint(session, portalUrl);
@@ -3043,11 +3132,11 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   }
 
   // 3. Toutes les tentatives ont échoué.
-  // Si c'était un vrai blocage CF (403 / challenge), la rotation a déjà été
-  // déclenchée dans scanViaMainEndpoint au moment de la détection.
-  // Si toutes les IPs Decodo sont bloquées par Bookitit → ip_pool_blocked :
-  // le watcher applique un backoff long (5 min) avant de retenter.
-  const allIpsBlocked = ipRotations >= maxIpRotations && poolSize > 1;
+  // ip_pool_blocked uniquement si TOUTES les rotations ont eu une session valide mais
+  // /main/ retournait quand même 0B → blocage Bookitit sur toutes les IPs.
+  // Si la session CF elle-même a échoué (sessionAcquisitionFailed), c'est une panne
+  // CF/proxy, pas un block Bookitit → retourner "error" pour éviter un backoff 5 min injustifié.
+  const allIpsBlocked = !sessionAcquisitionFailed && ipRotations >= maxIpRotations && poolSize > 1;
   return {
     status: allIpsBlocked ? "ip_pool_blocked" : "error",
     errorMessage: allIpsBlocked
@@ -3076,12 +3165,19 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
   errorMessage?: string;
   /** Raw HTML from /main/ when status=found (used for auto-booking extraction) */
   _mainHtml?: string;
+  /** Tous les créneaux disponibles — pour la stratégie multi-dossiers round-robin */
+  _allSlots?: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
 }> {
   const result = await scanSpainHttp(portalUrl);
 
   switch (result.status) {
     case "found":
-      return { status: "found", slotInfo: result.slotInfo, _mainHtml: result._mainHtml };
+      return {
+        status: "found",
+        slotInfo: result.slotInfo,
+        _mainHtml: result._mainHtml,
+        _allSlots: result._allSlots,
+      };
     case "not_found":
       return { status: "not_found" };
     case "ip_pool_blocked":

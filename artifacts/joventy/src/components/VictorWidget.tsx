@@ -117,20 +117,20 @@ function parseCTAs(text: string): { clean: string; buttons: { label: string; hre
   const buttons: { label: string; href: string }[] = [];
 
   // Regex robuste :
-  //   [CTA:Label:/path]        format strict
-  //   [CTA:Label : /path]      avec espaces autour du séparateur (Claude en produit parfois)
-  //   [Label:/path]            sans préfixe CTA:
+  //   [CTA:Label:/path]             format strict chemin interne
+  //   [CTA:Label : /path]           avec espaces autour du séparateur (Claude en produit parfois)
+  //   [Label:/path]                 sans préfixe CTA:
+  //   [CTA:Label:https://...]       URL externe (WhatsApp, etc.)
   // Le quantifier lazy +? + \s* gère les espaces avant le séparateur (:)
-  // Le \s* après le séparateur absorbe les espaces avant le path (/ ...)
-  const regex = /\[(?:CTA:)?([^\]|:\n]+?)\s*:\s*(\/[^\]\n]+?)\s*\]/g;
+  const regex = /\[(?:CTA:)?([^\]|:\n]+?)\s*:\s*((?:https?:\/\/|\/)[^\]\n]+?)\s*\]/g;
 
   const found: { match: string; label: string; href: string; index: number }[] = [];
   let m: RegExpExecArray | null;
   while ((m = regex.exec(text)) !== null) {
     const label = m[1].trim();
     const href = m[2].trim();
-    // Ignorer si le href ne ressemble pas à un chemin valide
-    if (!href.startsWith("/")) continue;
+    // Ignorer si le href ne ressemble pas à un chemin ou URL valide
+    if (!href.startsWith("/") && !/^https?:\/\//.test(href)) continue;
     found.push({ match: m[0], label, href, index: m.index });
   }
 
@@ -379,7 +379,7 @@ export function VictorWidget() {
         });
 
         const data = (await res.json()) as { text?: string };
-        const raw = data.text ?? "Je suis momentanément indisponible. Veuillez réessayer.";
+        const raw = data.text ?? "Je suis momentanément indisponible. Contactez-nous directement :\n[CTA:💬 WhatsApp Joventy:https://wa.me/243840808122?text=Bonjour%2C%20j%27ai%20besoin%20d%27aide%20pour%20mon%20visa]";
         const { clean, buttons } = parseCTAs(raw);
 
         // Arrêter l'indicateur de frappe et démarrer le streaming progressif
@@ -391,7 +391,8 @@ export function VictorWidget() {
           ...prev,
           {
             role: "victor",
-            content: "Une erreur est survenue. Veuillez réessayer dans un instant.",
+            content: "Une erreur est survenue. Vous pouvez nous contacter directement sur WhatsApp.",
+            ctaButtons: [{ label: "💬 WhatsApp Joventy", href: "https://wa.me/243840808122?text=Bonjour%2C%20j%27ai%20besoin%20d%27aide%20pour%20mon%20visa" }],
             ts: Date.now(),
           },
         ]);
@@ -420,6 +421,12 @@ export function VictorWidget() {
             })
           );
         } catch { /* non bloquant */ }
+      }
+
+      // Liens externes (WhatsApp, site tiers) → nouvel onglet, ne ferme pas le widget
+      if (href.startsWith("http://") || href.startsWith("https://")) {
+        window.open(href, "_blank", "noopener,noreferrer");
+        return;
       }
 
       navigate(href);

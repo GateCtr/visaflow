@@ -18,6 +18,7 @@
 import { Impit } from "impit";
 
 const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
+const DECODO_PROXY_URL_CEV = process.env.DECODO_PROXY_URL;
 
 // ─── Configuration proxy via botConfig ──────────────────────────────────────
 
@@ -719,15 +720,93 @@ export function rotateCevSoaxSession(identifier: string): void {
   console.log(`[CEV] 🔄 Rotation proxy SOAX demandée pour ${key.slice(0, 20)}… (rot#${current + 1})`);
 }
 
+// ─── Decodo Sticky Session Management ──────────────────────────────────────
+
+/** Compteur de rotation Decodo par identifiant. */
+const _cevDecodoRotationCount = new Map<string, number>();
+
+/** Lifetime des sessions sticky Decodo (minutes) — cohérent avec iProyal. */
+const DECODO_STICKY_LIFETIME_MIN = 60;
+
 /**
- * Génère une URL proxy CEV sticky agnostique (SOAX ou iProyal selon le provider choisi).
+ * Génère une URL Decodo résidentiel avec session sticky déterministe par dossier.
  *
- * @param provider - "soax" | "iproyal"
+ * Format Decodo résidentiel: http://user-sessid-{id}-sesstime-{min}:pass@gate.decodo.com:PORT
+ *
+ * Session ID déterministe par (fenêtre 12h + accountId + rotationCount) — même
+ * logique V10 que SOAX/iProyal pour éviter la rotation synchronisée à 00h/12h UTC.
+ *
+ * @param baseUrl      - URL de base Decodo (http://user:pass@gate.decodo.com:PORT)
+ * @param lifetimeMinutes - Durée sticky en minutes
+ * @param identifier   - Identifiant unique par dossier (ex: "cev-dossier-VOWINTXXXXX")
+ */
+export function makeCevDecodoStickyUrl(
+  baseUrl: string,
+  lifetimeMinutes: number = DECODO_STICKY_LIFETIME_MIN,
+  identifier?: string,
+): string {
+  try {
+    const parsed = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
+    let proxyUser = decodeURIComponent(parsed.username);
+
+    // Nettoyer les anciens paramètres de session Decodo si présents
+    proxyUser = proxyUser
+      .replace(/-sessid-[^-]*/g, "")
+      .replace(/-sesstime-[^-]*/g, "")
+      .replace(/-+$/, "");
+
+    // V10 — Fenêtres 12h décalées par-compte (même logique SOAX/iProyal)
+    const now = new Date();
+    const accountKey = (identifier ?? "cev-default").toLowerCase();
+    const offsetSec = _cevAccountRotationOffsetSec(accountKey);
+    const windowIdx = Math.floor((Math.floor(now.getTime() / 1000) - offsetSec) / 43200);
+    const rotationCount = _cevDecodoRotationCount.get(accountKey) ?? 0;
+    const seed = `w${windowIdx}:${accountKey}:cev-decodo:r${rotationCount}`;
+    let hash = 0;
+    for (const ch of seed) hash = ((hash << 5) - hash + ch.charCodeAt(0)) & 0x7fffffff;
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let sessionId = "";
+    let h = Math.abs(hash);
+    for (let i = 0; i < 8; i++) {
+      sessionId += chars[h % 36];
+      h = Math.floor(h / 36) + (i + 1) * 7;
+    }
+
+    const nextWindowSec = (windowIdx + 1) * 43200 + offsetSec;
+    const nextRotationAt = new Date(nextWindowSec * 1000).toISOString().slice(11, 16) + " UTC";
+    console.log(`[CEV-DECODO] ⏱ V10 offset=${offsetSec}s window=${windowIdx} → prochaine rotation ~${nextRotationAt}`);
+
+    proxyUser += `-sessid-${sessionId}-sesstime-${lifetimeMinutes}`;
+    parsed.username = encodeURIComponent(proxyUser);
+    console.log(`[CEV] 🔒 Decodo sticky sessid=${sessionId} sesstime=${lifetimeMinutes}min rot#${rotationCount}`);
+    return parsed.toString();
+  } catch {
+    console.warn(`[CEV] ⚠️ Impossible de parser l'URL Decodo — fallback URL brute`);
+    return baseUrl;
+  }
+}
+
+/**
+ * Force la rotation du proxy Decodo pour un identifiant CEV donné.
+ */
+export function rotateCevDecodoSession(identifier: string): void {
+  const key = identifier.toLowerCase();
+  const current = _cevDecodoRotationCount.get(key) ?? 0;
+  _cevDecodoRotationCount.set(key, current + 1);
+  _proxyImpit = undefined;
+  _proxyImpitUrl = undefined;
+  console.log(`[CEV] 🔄 Rotation proxy Decodo demandée pour ${key.slice(0, 20)}… (rot#${current + 1})`);
+}
+
+/**
+ * Génère une URL proxy CEV sticky agnostique (SOAX, iProyal ou Decodo selon le provider choisi).
+ *
+ * @param provider - "soax" | "iproyal" | "decodo"
  * @param lifetimeMinutes - Durée de session sticky
  * @param identifier - Identifiant unique du slot IP
  */
 export function makeCevProxyStickyUrl(
-  provider: "soax" | "iproyal",
+  provider: "soax" | "iproyal" | "decodo",
   lifetimeMinutes?: number,
   identifier?: string,
 ): string {
@@ -743,6 +822,14 @@ export function makeCevProxyStickyUrl(
     }
     return makeCevSoaxStickyUrl(base, lifetimeMinutes ?? SOAX_SESSION_TIME_MIN, identifier);
   }
+  if (provider === "decodo") {
+    const base = DECODO_PROXY_URL_CEV;
+    if (!base) {
+      console.warn(`[CEV] ⚠️ DECODO_PROXY_URL non configurée — fallback sans proxy`);
+      return "";
+    }
+    return makeCevDecodoStickyUrl(base, lifetimeMinutes ?? DECODO_STICKY_LIFETIME_MIN, identifier);
+  }
   // iProyal (défaut)
   return makeCevIproyalStickyUrl(
     IPROYAL_PROXY_URL ?? "",
@@ -754,9 +841,11 @@ export function makeCevProxyStickyUrl(
 /**
  * Force la rotation du proxy CEV agnostique.
  */
-export function rotateCevProxySession(provider: "soax" | "iproyal", identifier: string): void {
+export function rotateCevProxySession(provider: "soax" | "iproyal" | "decodo", identifier: string): void {
   if (provider === "soax") {
     rotateCevSoaxSession(identifier);
+  } else if (provider === "decodo") {
+    rotateCevDecodoSession(identifier);
   } else {
     rotateCevIproyalSession(identifier);
   }

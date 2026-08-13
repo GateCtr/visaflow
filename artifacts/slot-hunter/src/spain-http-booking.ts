@@ -27,6 +27,7 @@
 import {
   spainCfFetch,
   cloneSpainCfSessionForDossier,
+  createFreshSpainImpit,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import {
@@ -74,6 +75,12 @@ export interface SpainBookingConfig {
   targetDate?: string;
   /** Heure pré-confirmée par le scanner (HH:MM) — saute le re-fetch datetime/. */
   targetTime?: string;
+  /**
+   * Agenda pré-confirmé par le scanner (ex: bkt301070).
+   * Règle #9 : getagendas/ ne retourne qu'une réponse par PHPSESSID — transmis
+   * depuis le scan pour éviter agendaId="" sur dossier #2+ en mode capsolver.
+   */
+  agendaId?: string;
   /**
    * Nombre minimum de places libres requises (group booking).
    * Si > 1, les créneaux avec freeslots < groupSize sont ignorés.
@@ -407,7 +414,32 @@ export async function createIsolatedBookingSession(
   cfSession: SpainCfSession,
   portalUrl: string,
 ): Promise<{ session: SpainCfSession; mainHtml?: string } | null> {
+  // ── Mode HTTP-pur (capsolver/impit) ──────────────────────────────────────────
+  // En mode capsolver-residential, le PHPSESSID est lié au challenge CF complet
+  // (GET widget → POST token → /main/). Un appel /main/ nu sans ce flow ne crée
+  // pas de nouveau PHPSESSID — le serveur exige que le challenge ait été résolu.
+  // → On réutilise le PHPSESSID de la session principale (seul disponible).
+  // → Le booking parallèle n'est donc pas possible en capsolver sans re-solve CF.
+  // → Booking séquentiel conservé dans le watcher.
+  if (cfSession.source === "capsolver") {
+    const phpSessId = cfSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
+    if (phpSessId) {
+      console.log("[spain-booking] ℹ️ Mode capsolver — PHPSESSID existant réutilisé (lié au solve CF)");
+      return {
+        session: {
+          ...cfSession,
+          allCookies: cfSession.allCookies.map(c => ({ ...c })),
+          extraHeaders: { ...cfSession.extraHeaders },
+          _ownImpit: createFreshSpainImpit(cfSession),
+        },
+      };
+    }
+    console.warn("[spain-booking] ⚠️ Mode capsolver mais PHPSESSID absent — le booking peut échouer");
+  }
+
   const session = cloneSpainCfSessionForDossier(cfSession);
+  // Instance impit dédiée → bookings parallèles sans conflit TLS singleton
+  session._ownImpit = createFreshSpainImpit(cfSession);
   const publickey = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1] ?? "";
   const referer = portalUrl.replace(/\/?$/, "/");
   const callback = `jQueryBooking${Date.now()}${Math.floor(Math.random() * 10_000)}`;
@@ -687,7 +719,9 @@ export async function executeHttpBooking(
   console.log(`[spain-booking] 🔍 DEBUG getagendas raw: ${JSON.stringify(agendasPayload)?.slice(0, 400)}`);
   console.log(`[spain-booking] 🔍 DEBUG widgetcfg raw: ${JSON.stringify(rawCfgPayload)?.slice(0, 400)}`);
 
-  let agendaId = "";
+  // config.agendaId = valeur transmise depuis le scan (règle #9 : getagendas/ ne répond qu'une
+  // fois par PHPSESSID — pour dossier #2+ en mode capsolver, la réponse est 0B).
+  let agendaId = config.agendaId ?? "";
   if (agendasPayload && typeof agendasPayload === "object") {
     const agendaIds = extractIds(agendasPayload, /agenda.*id|^id$/i);
     console.log(`[spain-booking] 🔍 DEBUG extractIds agendas: ${JSON.stringify(agendaIds)}`);
@@ -702,7 +736,22 @@ export async function executeHttpBooking(
   let slotTime = config.targetTime ?? "";
 
   if (slotDate && slotTime) {
-    console.log(`[spain-booking] ✅ Créneau pré-confirmé par scanner: ${slotDate} à ${slotTime}`);
+    // Créneau pré-confirmé par le scanner — on ne re-cherche pas de slot, mais on appelle
+    // datetime/ pour le mois du créneau afin d'activer le nonce PHP requis par getsigninfields/.
+    // Confirmé 2026-08-12 : sans datetime/, getsigninfields/ → 0B (nonce non amorcé).
+    // Même si datetime/ retourne 0B (post-signin/ état consommé), le serveur met à jour
+    // sa session côté PHP → getsigninfields/ répond avec 13816B.
+    const slotMonth = slotDate.slice(0, 7);
+    const dtNonceParams: Record<string, string | string[]> = {
+      ...baseParams,
+      "services[]": [targetService.serviceId],
+      ...(agendaId ? { "agendas[]": [agendaId] } : {}),
+      start: `${slotMonth}-01`,
+      end: `${slotMonth}-${String(new Date(Number(slotMonth.slice(0, 4)), Number(slotMonth.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
+      selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+    };
+    const dtNonce = await callEndpoint("datetime/", dtNonceParams);
+    console.log(`[spain-booking] ✅ Créneau pré-confirmé: ${slotDate} à ${slotTime} — datetime/ nonce: ${dtNonce ? "OK" : "0B (nonce activé côté PHP)"}`);
   } else {
     console.log(`[spain-booking] 📅 Récupération datetime…`);
     const now = new Date();
@@ -900,10 +949,10 @@ export async function executeHttpBooking(
   // (confirmé par CDP 2026-07-30). Ce call retourne un nonce côté PHP qui est stocké
   // dans la session PHP — signin/ ne répond que si ce nonce est présent.
   //
-  // On ne réplique PAS getsigninfields/ nous-mêmes : il retourne 0B à nos fetch/jQuery
-  // car il nécessite une variable de session PHP initialisée par le widget lui-même.
-  // Le widget l'appelle naturellement → nonce stocké → signin/ (via DOM form submit)
-  // fonctionnera.
+  // En mode browser : getsigninfields/ est déclenché automatiquement par le widget
+  // Backbone lors de navigateToSelecttime() → nonce PHP stocké → signin/ accepté.
+  // En mode HTTP-only : on appelle getsigninfields/ manuellement (confirmé 2026-08-12 :
+  // sans ce call, signin/ retourne 0B ; avec ce call, signin/ répond normalement).
   if (useBrowserCalls) {
     // ── Navigation native vers le créneau ─────────────────────────────────────
     //
@@ -1011,6 +1060,28 @@ export async function executeHttpBooking(
 
     // Laisser 1s pour que getsigninfields/ du widget soit complètement traité côté PHP.
     await new Promise<void>((r) => setTimeout(r, 1_000));
+  } else {
+    // ─── 5a. getsigninfields/ (mode HTTP-only) ────────────────────────────────
+    // Le nonce PHP est activé par datetime/ appelé plus haut dans le flow pré-confirmé
+    // (step 3). Sans ce call, getsigninfields/ retourne 0B (confirmé 2026-08-12).
+    // Le serveur Bookitit stocke un nonce dans la session PHP après cet appel.
+    // Sans ce nonce, signin/ retourne 0B (confirmé 2026-08-12 Saopolo HTTP pur).
+    // Params identiques à ceux de signin/ (services[], agendas[], date, time, selectedPeople).
+    const gsfParams: Record<string, string | string[]> = {
+      ...baseParams,
+      "services[]": [targetService.serviceId],
+      ...(agendaId ? { "agendas[]": [agendaId] } : {}),
+      date: slotDate,
+      time: slotTime,
+      selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+    };
+    console.log(`${logPrefix} 🔑 getsigninfields/ — activation nonce PHP pour signin/…`);
+    const gsfPayload = await callEndpoint("getsigninfields/", gsfParams);
+    if (gsfPayload) {
+      console.log(`${logPrefix} ✅ getsigninfields/ OK — nonce PHP activé`);
+    } else {
+      console.warn(`${logPrefix} ⚠️ getsigninfields/ → 0B — signin/ pourrait retourner 0B (portail non compatible HTTP pur ?)`);
+    }
   }
 
   // Ordre selon registration_type (endpoints confirmés depuis bundle citaconsular)
@@ -1344,24 +1415,32 @@ function extractFirstSlot(payload: unknown, minFree?: number): { date: string; t
       const times = dayObj.times;
       if (!times || typeof times !== "object" || Array.isArray(times)) continue;
 
-      // La réponse datetime est : times = { "HH:MM": { freeslots, agenda, timestamp, … } }
-      // La CLE est l'heure (ex: "09:00"), l'agenda est dans CHAQUE entrée temporelle.
-      // Confirmé par datetimelist.js showAvailableHours :
-      //   var agenda = someResults.somePreparedSlots[time]['agenda'];
-      //   parameters = { agenda, time, date }
-      // → on itère avec Object.entries pour obtenir la clé (=heure) ET la valeur (=données slot).
-      // Trier par clé (= heure "HH:MM") pour prendre le créneau le plus tôt disponible
+      // Structure réelle Bookitit (confirmée 2026-08-12) :
+      //   times = { "<clé_opaque>": { time: "HH:MM", freeSlots: N, totalSlots: N, agenda: "bkt…" } }
+      // La clé peut être un format HH:MM ou une valeur opaque ; le champ `time` dans la valeur
+      // contient toujours l'heure lisible. On utilise `t.time` en priorité, avec fallback sur la
+      // clé si elle ressemble à HH:MM (portails legacy).
+      // → on itère avec Object.entries pour accéder à la clé ET à la valeur.
+      // Trier par clé pour prendre le créneau le plus tôt dans l'objet.
       const sortedSlotEntries = Object.entries(times as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
       for (const [timeKey, v] of sortedSlotEntries) {
         if (!v || typeof v !== "object") continue;
         const t = v as Record<string, unknown>;
 
-        // freeslots est le nom de champ confirmé par le bundle ("freeslots", pas "freeSlots")
-        const freeRaw = t.freeslots ?? t.freeSlots ?? t.free_slots;
+        // freeSlots est le champ camelCase retourné par le serveur (freeSlots: 2).
+        // freeslots (lowercase) est le nom legacy mentionné dans le bundle client.
+        const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
         const free = typeof freeRaw === "number" ? freeRaw : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
         if (free === 0) continue; // explicitement aucun créneau
         // Group booking : ignorer les créneaux avec moins de places que le minimum requis
         if (minFree && minFree > 1 && free !== -1 && free < minFree) continue;
+
+        // Extraire l'heure : `t.time` en priorité (champ dans la valeur — structure réelle),
+        // fallback sur la clé si elle ressemble déjà à "HH:MM" (portails legacy).
+        const timeVal = typeof t.time === "string" && /^\d{1,2}:\d{2}$/.test(t.time) ? t.time
+          : /^\d{1,2}:\d{2}$/.test(timeKey) ? timeKey
+          : typeof t.time === "string" ? t.time
+          : timeKey;
 
         // agenda est dans l'entrée temporelle, pas dans l'objet jour parent
         const agendaId = typeof t.agenda === "string" ? t.agenda
@@ -1369,7 +1448,7 @@ function extractFirstSlot(payload: unknown, minFree?: number): { date: string; t
           : typeof dayObj.agenda === "string" ? dayObj.agenda // fallback parent
           : undefined;
 
-        return { date, time: timeKey, agendaId };
+        return { date, time: timeVal, agendaId };
       }
     }
   }

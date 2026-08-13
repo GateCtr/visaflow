@@ -23,12 +23,14 @@ import {
   removeSpainCfSessionFromRedis,
   syncSoaxRotationToRedis,
   restoreSoaxRotationFromRedis,
+  syncResidentialPortStateToRedis,
+  restoreResidentialPortStateFromRedis,
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
 import { cookieManager } from "./cookie-manager.js";
 import { solveSpainWidgetSession } from "./local-playwright-solver.js";
 import { applyStableGaProfile } from "./spain-redis-persistence.js";
-import { getCurrentDecodoUrl } from "./spain-decodo-pool.js";
+import { getCurrentDecodoUrl, getDecodoProxyForIndex, getDecodoPoolSize } from "./spain-decodo-pool.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -152,6 +154,36 @@ export interface SpainCfSession {
    * pour Kinshasa) et d'invalider prefetchedMainHtml + apiPrefetchCache stale.
    */
   portalKey?: string;
+  /**
+   * Instance impit dédiée à cette session isolée (booking multi-dossiers).
+   * Quand présent, spainCfFetch utilise cette instance au lieu du singleton
+   * global _spainImpit — permet plusieurs bookings parallèles sans conflit TLS.
+   * Créé par createIsolatedBookingSession() pour chaque session de booking.
+   */
+  _ownImpit?: InstanceType<typeof import("impit").Impit>;
+  /**
+   * État Bookitit pour le mode HTTP-pur (capsolver-residential).
+   * Établi lors de l'init de session (GET widget → POST token → GET /main/).
+   * Partagé par le scanner et le booking pour garantir le même jqCallback
+   * et reqCounter incrémental tout au long de la session.
+   * ⚠️ reqCounter est mutable — ne pas sérialiser vers Redis.
+   */
+  bookititState?: {
+    /** jQuery callback fixe pour toute la session : jQuery21109{ts}_{rand9} */
+    jqCallback: string;
+    /** Compteur de requêtes mutable — incrémenté par makeBookititUrl() */
+    reqCounter: number;
+    /** srvsrc extrait du corps POST token (origin citaconsular.es ou app.bookitit.com) */
+    srvsrc: string;
+    /** Version JS Bookitit extraite du corps POST token (ex: "4") */
+    version: string;
+    /** URL du widget (citaconsular.es) — utilisée comme src= et Referer */
+    widgetUrl: string;
+    /** Clé Bookitit publique (publickey=) */
+    publickey: string;
+    /** Base des appels JSONP Bookitit (ex: https://app.bookitit.com/onlinebookings/) */
+    bookititBase: string;
+  };
 }
 
 /**
@@ -332,6 +364,8 @@ export async function solveSpainCloudflare(
   capsolverApiKey: string,
   soaxProxyUrl: string,
   challengeHtml?: string,
+  /** User-Agent à inclure dans la tâche CapSolver quand html est fourni (obligatoire). */
+  userAgent?: string,
 ): Promise<SolveResult> {
   const t0 = Date.now();
   console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}`);
@@ -389,8 +423,12 @@ export async function solveSpainCloudflare(
       proxy: proxyForCapsolver,
     };
     if (challengeHtml) {
+      // CapSolver exige userAgent quand html est fourni (sinon → ERROR_INVALID_TASK_DATA)
+      const ua = userAgent ??
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
       capsolverTask["html"] = challengeHtml.slice(0, 32_000);
-      console.log(`[spain-soax] 📤 createTask AntiCloudflareTask WITH html (${capsolverTask["html"].length} chars) — cf_clearance lié à la TLS impit`);
+      capsolverTask["userAgent"] = ua;
+      console.log(`[spain-soax] 📤 createTask AntiCloudflareTask WITH html (${capsolverTask["html"].length} chars) + userAgent — cf_clearance lié à la TLS impit`);
     } else {
       console.log(`[spain-soax] 📤 createTask AntiCloudflareTask sans html — cf_clearance lié au Chrome CapSolver`);
     }
@@ -440,8 +478,10 @@ export async function solveSpainCloudflare(
         if (
           errCode.includes("ERROR_INVALID_TASK_DATA") ||
           errCode.includes("ERROR_CAPTCHA_UNSOLVABLE") ||
-          errCode.includes("ERROR_PROXY")
+          errCode.includes("ERROR_PROXY") ||
+          errCode.includes("ERROR_TASK_NOT_FOUND")
         ) {
+          // ERROR_TASK_NOT_FOUND = tâche expirée côté CapSolver (~2 min TTL) — inutile de continuer
           console.error(`[spain-soax] ❌ Erreur fatale: ${errCode}`);
           const details = resultData.errorDescription
             ? `${errCode}: ${resultData.errorDescription}`
@@ -523,6 +563,80 @@ export async function solveSpainCloudflare(
 
 let _activeCfSession: SpainCfSession | undefined;
 
+/**
+ * Index courant dans le pool résidentiel (gate.decodo.com:10001-10100, 100 ports).
+ * Avancé d'un cran UNIQUEMENT quand /main/ retourne 0B ou erreur tunnel — jamais proactivement.
+ * Persistant pour la durée de vie du process (Railway/Replit).
+ */
+let _residentialPortIndex = 0;
+
+/**
+ * Ports résidentiels ayant retourné /main/ = 0B ou une erreur tunnel,
+ * mémorisés pour éviter de les réutiliser immédiatement.
+ * Format : port → timestamp du flagging (ms). TTL = 30 min.
+ */
+const _badResidentialPorts = new Map<number, number>();
+
+/** TTL de la mémoire des ports mauvais. Après ce délai le port est réhabilité. */
+const BAD_PORT_TTL_MS = 30 * 60_000; // 30 min
+
+/** Marque un port comme mauvais et persiste dans Redis.
+ * @param reason motif lisible (ex: "main/ 0B", "token absent HTTP 403", "POST token échoué", …)
+ */
+function flagResidentialPort(port: number, reason = "main/ 0B"): void {
+  _badResidentialPorts.set(port, Date.now());
+  // Compter combien de ports sont actuellement exclus (TTL non expiré)
+  let activeFlags = 0;
+  for (const [p, t] of _badResidentialPorts) {
+    if (Date.now() - t <= BAD_PORT_TTL_MS) activeFlags++;
+    else _badResidentialPorts.delete(p);
+  }
+  console.log(`[spain-soax] 🚩 Port ${port} flaggé (${reason}) — ${activeFlags}/100 port(s) exclus pendant ${BAD_PORT_TTL_MS / 60_000}min`);
+  // Persistance Redis — survit aux redémarrages
+  syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+}
+
+/** Retourne true si le port est actuellement flaggé (TTL non expiré). */
+function isPortBad(port: number): boolean {
+  const t = _badResidentialPorts.get(port);
+  if (!t) return false;
+  if (Date.now() - t > BAD_PORT_TTL_MS) {
+    _badResidentialPorts.delete(port); // réhabilitation automatique
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Avance _residentialPortIndex jusqu'au premier port non-flaggé.
+ * Si tous les ports sont flaggés (cas extrême), purge les flags et retourne au courant.
+ * Utilise la taille réelle du pool Decodo (decodo-proxies.csv).
+ */
+function advanceToCleanPort(): void {
+  const poolSize = getDecodoPoolSize() || 100;
+  const before = _residentialPortIndex;
+  for (let i = 0; i < poolSize; i++) {
+    const url = getDecodoProxyForIndex(_residentialPortIndex);
+    const port = url
+      ? parseInt(new URL(url).port || "10001", 10)
+      : (_residentialPortIndex % poolSize) + 10001;
+    if (!isPortBad(port)) break; // port propre trouvé
+    _residentialPortIndex++;
+  }
+  if (_residentialPortIndex !== before) {
+    // Cas extrême : tous les ports sont flaggés — purge totale
+    const url = getDecodoProxyForIndex(_residentialPortIndex);
+    const port = url
+      ? parseInt(new URL(url).port || "10001", 10)
+      : (_residentialPortIndex % poolSize) + 10001;
+    if (isPortBad(port)) {
+      console.warn(`[spain-soax] ⚠️ Tous les ${poolSize} ports résidentiels flaggés — purge des flags et reprise`);
+      _badResidentialPorts.clear();
+    }
+    syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+  }
+}
+
 /** Retourne la session CF active (ou undefined si expirée/inexistante). */
 export function getActiveSpainCfSession(): SpainCfSession | undefined {
   if (!_activeCfSession) return undefined;
@@ -597,6 +711,357 @@ export async function ensureSpainCfSession(
       }
     }
     return session;
+  }
+
+  // ── Mode capsolver-residential : HTTP-pur + proxy résidentiel Decodo ─────────
+  // SPAIN_SESSION_MODE=capsolver-residential → Impit (Chrome TLS) + CapSolver
+  // AntiCloudflareTask + gate.decodo.com (pool de 100 ports : 10001-10100).
+  // Reproduit exactement test-bookitit-dynamic.ts :
+  //   GET widget → CF solve → GET widget → POST token → srvsrc/version → GET /main/
+  // Session PHPSESSID + jqCallback + reqCounter stockés dans session.bookititState.
+  // Rotation : le port ne change QUE quand /main/ retourne 0B (_residentialPortIndex++).
+  if (process.env.SPAIN_SESSION_MODE === "capsolver-residential") {
+    // ── Cache check : réutiliser la session active si elle est encore valide ────
+    // Sans ce check, le retry loop de scanSpainHttp (ligne ~3091) déclenche un
+    // deuxième solve CapSolver même quand la session est toujours valide en mémoire.
+    const cached = getActiveSpainCfSession();
+    if (cached) {
+      console.log(
+        `[spain-soax] ♻️ capsolver-residential — session en cache réutilisée ` +
+        `(expire dans ${Math.round((cached.expiresAt - Date.now()) / 60_000)}min)`,
+      );
+      return cached;
+    }
+
+    const capKey = process.env.CAPSOLVER_API_KEY;
+    if (!capKey) {
+      console.error("[spain-soax] ❌ capsolver-residential exige CAPSOLVER_API_KEY");
+      return null;
+    }
+
+    // Priorité : pool Decodo (decodo-proxies.csv) → SPAIN_RESIDENTIAL_PROXY_URL (fallback)
+    const _decodoPoolSize = getDecodoPoolSize();
+    const _residentialFallbackBase = _decodoPoolSize === 0
+      ? process.env.SPAIN_RESIDENTIAL_PROXY_URL
+      : undefined;
+    if (_decodoPoolSize === 0 && !_residentialFallbackBase) {
+      console.error(
+        "[spain-soax] ❌ capsolver-residential: configurer decodo-proxies.csv " +
+        "ou SPAIN_RESIDENTIAL_PROXY_URL (ex: http://user:pass@es.decodo.com:10001)",
+      );
+      return null;
+    }
+    if (_decodoPoolSize > 0) {
+      console.log(`[spain-soax] 📋 Pool Decodo chargé — ${_decodoPoolSize} IP(s) dédiée(s) (decodo-proxies.csv)`);
+    }
+
+    /** Retourne l'URL proxy à l'index donné depuis le pool Decodo (ou fallback SPAIN_RESIDENTIAL_PROXY_URL). */
+    const getResidentialProxyForIndex = (portIndex: number): string => {
+      if (_decodoPoolSize > 0) {
+        return getDecodoProxyForIndex(portIndex) ?? "";
+      }
+      // Fallback legacy : construire depuis URL de base + rotation de port
+      try {
+        const u = new URL(_residentialFallbackBase!);
+        u.port = String((portIndex % 100) + 10001);
+        return u.toString();
+      } catch { return _residentialFallbackBase!; }
+    };
+
+    const UA_RESIDENTIAL =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+    /** Extrait tous les Set-Cookie en un dictionnaire name→value. */
+    const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
+      const jar: Record<string, string> = {};
+      const raw = headers.get("set-cookie") ?? "";
+      for (const part of raw.split(/,(?=[^ ])/)) {
+        const m = part.trim().match(/^([^=]+)=([^;]*)/);
+        if (m) jar[m[1].trim()] = m[2];
+      }
+      return jar;
+    };
+
+    const buildCookieStr = (j: Record<string, string>) =>
+      Object.entries(j).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+
+    /**
+     * Injecte un identifiant de session sticky Decodo dans l'URL proxy.
+     * Decodo résidentiel : username format = "user-{id}-session-{sid}-sessionduration-60"
+     * Le même {sid} → même exit IP pour impit ET CapSolver → cf_clearance valide.
+     *
+     * Sans session sticky, impit et CapSolver obtiennent des exit IP différents (TCP
+     * connections différentes → sessions Decodo différentes → IPs différentes) → CF
+     * rejette le cf_clearance de CapSolver lors du GET impit suivant (HTTP 403).
+     */
+    const addStickySession = (url: string, sid: string): string => {
+      try {
+        const u = new URL(url);
+        // Insérer -session-{sid} avant le dernier segment du username
+        // ex: user-sp4e4cx19x-sessionduration-60  →  user-sp4e4cx19x-session-{sid}-sessionduration-60
+        const user = decodeURIComponent(u.username);
+        const stickyUser = user.includes("-session-")
+          ? user.replace(/-session-[^-]+/, `-session-${sid}`)  // remplacer session existante
+          : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${sid}$2`);
+        u.username = encodeURIComponent(stickyUser);
+        return u.toString();
+      } catch { return url; }
+    };
+
+    const MAX_RETRIES_RESIDENTIAL = 3;
+
+    for (let attempt = 0; attempt < MAX_RETRIES_RESIDENTIAL; attempt++) {
+      // Sauter les ports flaggés (main/ 0B ou tunnel error) avant de sélectionner
+      advanceToCleanPort();
+      const proxyUrl = getResidentialProxyForIndex(_residentialPortIndex);
+      const portNum = parseInt(new URL(proxyUrl).port || "10001", 10);
+      const poolSize = _decodoPoolSize || 100;
+
+      // Sticky session : même exit IP pour impit ET CapSolver (IPs dédiées = toujours même IP par port,
+      // mais le session ID reste utile pour le proxy résidentiel fallback gate.decodo.com).
+      const stickyId = Math.random().toString(36).slice(2, 10);
+      const stickyProxyUrl = addStickySession(proxyUrl, stickyId);
+
+      const masked = stickyProxyUrl.replace(/:([^:@/]+)@/, ":***@");
+      const badCount = [..._badResidentialPorts.values()].filter(t => Date.now() - t <= BAD_PORT_TTL_MS).length;
+      console.log(
+        `[spain-soax] 🏠 capsolver-residential tentative ${attempt + 1}/${MAX_RETRIES_RESIDENTIAL} ` +
+        `— port=${portNum} (index=${_residentialPortIndex % poolSize}/${poolSize}) sid=${stickyId}` +
+        `${badCount > 0 ? ` | 🚫 ${badCount} port(s) exclus` : ""} | proxy: ${masked.slice(0, 60)}…`,
+      );
+
+      // timeout: 12s — échoue rapide sur port Decodo injoignable (défaut impit = 30s),
+      // ce qui déclenche la rotation vers le port suivant sans attendre 30s.
+      // ⚠️ Utiliser stickyProxyUrl (avec session ID) pour que impit et CapSolver partagent le même exit IP.
+      const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 12_000 } as any);
+      const jar: Record<string, string> = {};
+
+      // Étape 1a : GET widget → détecter challenge CF
+      let challengeHtml: string | undefined;
+      try {
+        const r1 = await (impit.fetch(targetUrl, {
+          headers: { "User-Agent": UA_RESIDENTIAL, "Accept": "text/html,*/*;q=0.8" },
+        } as any) as unknown as Promise<Response>);
+        const body1 = await r1.text();
+        Object.assign(jar, extractCookies(r1.headers as any));
+        const isCf = r1.status === 403 || /just a moment|_cf_chl_opt/i.test(body1.slice(0, 3000));
+        if (isCf) {
+          challengeHtml = body1;
+          console.log(`[spain-soax]    ⚠️ CF challenge (${body1.length}B) → Capsolver...`);
+        } else {
+          console.log(`[spain-soax]    ✅ Pas de CF challenge (HTTP ${r1.status}, ${body1.length}B)`);
+        }
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ GET widget échoué: ${e} → rotation port + retry`);
+        // Flag + rotate : tunnel error = port inutilisable, on l'évite pendant 30 min.
+        flagResidentialPort(portNum, "GET widget erreur tunnel");
+        _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+        continue;
+      }
+
+      // Étape 1b : CapSolver AntiCloudflareTask si challenge détecté
+      if (challengeHtml !== undefined) {
+        // ⚠️ Passer stickyProxyUrl (avec session ID) → CapSolver résout depuis le MÊME exit IP
+        // que notre impit. Le cf_clearance sera lié à cet exit IP → GET suivant accepté (pas 403).
+        const capResult = await solveSpainCloudflare(targetUrl, capKey, stickyProxyUrl, challengeHtml, UA_RESIDENTIAL);
+        if (!capResult.success || !capResult.session?.cfClearance) {
+          console.warn(`[spain-soax]    ⚠️ CapSolver échoué: ${capResult.error} → rotation port + retry`);
+          // Avancer le port : cette IP résidentielle n'a pas pu déverrouiller CF ;
+          // flaggée pour 30 min pour éviter de la réessayer inutilement.
+          flagResidentialPort(portNum, `CapSolver échoué: ${capResult.error ?? "unknown"}`);
+          _residentialPortIndex++;
+          syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+          continue;
+        }
+        jar.cf_clearance = capResult.session.cfClearance;
+        console.log(`[spain-soax]    ✅ cf_clearance: ${jar.cf_clearance.slice(0, 30)}…`);
+      }
+
+      // Étape 2a : GET widget avec cf_clearance → token + PHPSESSID
+      // (jqCallback généré une seule fois pour toute la session)
+      const jqCallback = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1_000_000_000)}`;
+      let reqCounter = Date.now();
+      let token: string | undefined;
+
+      try {
+        const rGet = await (impit.fetch(targetUrl, {
+          headers: { "User-Agent": UA_RESIDENTIAL, "Cookie": buildCookieStr(jar) },
+        } as any) as unknown as Promise<Response>);
+        const bodyGet = await rGet.text();
+        Object.assign(jar, extractCookies(rGet.headers as any));
+        token = bodyGet.match(/name="token"\s+value="([^"]+)"/i)?.[1];
+        if (!token) {
+          console.warn(`[spain-soax]    ⚠️ Token absent (HTTP ${rGet.status}, ${bodyGet.length}B) → rotation port + retry`);
+          // CF bloque encore malgré le solve ou la page est anormale — changer d'IP.
+          flagResidentialPort(portNum, `token absent HTTP ${rGet.status}`);
+          _residentialPortIndex++;
+          syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+          continue;
+        }
+        console.log(
+          `[spain-soax]    ✅ Token: ${token.slice(0, 15)}… | ` +
+          `PHPSESSID: ${jar.PHPSESSID ? jar.PHPSESSID.slice(0, 12) + "…" : "❌"}`,
+        );
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ GET widget (token) échoué: ${e} → rotation port + retry`);
+        flagResidentialPort(portNum, "GET widget (token) erreur");
+        _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+        continue;
+      }
+
+      // Étape 2b : POST token → srvsrc + version Bookitit
+      const baseHost = new URL(targetUrl).origin;
+      let srvsrc = baseHost;
+      let version = "4";
+
+      try {
+        const rPost = await (impit.fetch(targetUrl, {
+          method: "POST",
+          headers: {
+            "User-Agent": UA_RESIDENTIAL,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Cookie": buildCookieStr(jar),
+            "Referer": targetUrl,
+            "Origin": baseHost,
+          },
+          body: `token=${encodeURIComponent(token)}`,
+        } as any) as unknown as Promise<Response>);
+        const bodyPost = await rPost.text();
+        Object.assign(jar, extractCookies(rPost.headers as any));
+        srvsrc = bodyPost.match(/srvsrc:\s*'([^']+)'/)?.[1] ?? baseHost;
+        version = bodyPost.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
+        console.log(
+          `[spain-soax]    ✅ POST token → HTTP ${rPost.status} | ${bodyPost.length}B | ` +
+          `srvsrc=${srvsrc} | v=${version}`,
+        );
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ POST token échoué: ${e} → rotation port + retry`);
+        flagResidentialPort(portNum, "POST token erreur");
+        _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+        continue;
+      }
+
+      // Construire makeUrl inline (même logique que test-bookitit-dynamic.ts)
+      const publickey = targetUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "";
+      const bookititBase = `${baseHost}/onlinebookings`;
+
+      const makeResidentialUrl = (endpoint: string, extra?: Record<string, string>): string => {
+        reqCounter++;
+        const params: Array<[string, string]> = [
+          ["callback",  jqCallback],
+          ["type",      "default"],
+          ["publickey", publickey],
+          ["lang",      "es"],
+        ];
+        if (extra?.["services[]"]) params.push(["services[]", extra["services[]"]]);
+        if (extra?.["agendas[]"])  params.push(["agendas[]",  extra["agendas[]"]]);
+        params.push(
+          ["version", version],
+          ["src",     targetUrl],
+          ["srvsrc",  srvsrc],
+        );
+        if (extra) {
+          for (const [k, v] of Object.entries(extra)) {
+            if (k !== "services[]" && k !== "agendas[]") params.push([k, v]);
+          }
+        }
+        params.push(["_", String(reqCounter)]);
+        return `${bookititBase}/${endpoint}?` +
+          params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+      };
+
+      const bktHeaders = {
+        "User-Agent": UA_RESIDENTIAL,
+        "Accept": "text/javascript, application/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "Referer": targetUrl,
+      };
+
+      // Étape 2c : GET /main/ → valider session (>1000B)
+      let prefetchedMainHtml: string;
+      try {
+        const rMain = await (impit.fetch(makeResidentialUrl("main/"), {
+          headers: { ...bktHeaders, "Cookie": buildCookieStr(jar) },
+        } as any) as unknown as Promise<Response>);
+        prefetchedMainHtml = await rMain.text();
+        if (prefetchedMainHtml.length < 1000) {
+          flagResidentialPort(portNum, `main/ ${prefetchedMainHtml.length}B trop court`);
+          _residentialPortIndex++;
+          const nextPort = (_residentialPortIndex % 100) + 10001;
+          syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+          console.warn(
+            `[spain-soax] 🔄 /main/ = ${prefetchedMainHtml.length}B — ` +
+            `rotation port ${portNum} → ${nextPort} (index=${_residentialPortIndex % 100}/100)`,
+          );
+          continue;
+        }
+        console.log(`[spain-soax]    ✅ /main/ → ${prefetchedMainHtml.length}B — session prête! port=${portNum}`);
+      } catch (e) {
+        console.warn(`[spain-soax]    ⚠️ GET /main/ échoué: ${e} → rotation port + retry`);
+        flagResidentialPort(portNum, "GET /main/ erreur");
+        _residentialPortIndex++;
+        syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+        continue;
+      }
+
+      // Session établie — construire SpainCfSession avec bookititState
+      const nowMs = Date.now();
+      const allCookies: Array<{ name: string; value: string }> = Object.entries(jar)
+        .filter(([, v]) => v)
+        .map(([name, value]) => ({ name, value }));
+
+      const session: SpainCfSession = {
+        cfClearance:         jar.cf_clearance ?? "",
+        cfDomain:            ".citaconsular.es",
+        soaxProxyUrl:        stickyProxyUrl, // conserver l'URL sticky pour les requêtes JSONP suivantes
+        userAgent:           UA_RESIDENTIAL,
+        createdAt:           nowMs,
+        expiresAt:           nowMs + CF_CLEARANCE_TTL_MS,
+        allCookies,
+        extraHeaders:        {},
+        source:              "capsolver",
+        prefetchedMainHtml,
+        phpSessionCreatedAt: nowMs,
+        bookititState: {
+          jqCallback,
+          reqCounter,
+          srvsrc,
+          version,
+          widgetUrl:    targetUrl,
+          publickey,
+          bookititBase,
+        },
+      };
+
+      // Réutiliser le même impit pour spainCfFetch (même TLS session = même IP résidentielle)
+      _spainImpit        = impit;
+      _spainImpitProxyUrl = proxyUrl;
+
+      _activeCfSession = session;
+      syncSpainCfSessionToRedis(session as SerializableSpainCfSession);
+
+      console.log(
+        `[spain-soax] 🎉 Session capsolver-residential établie! ` +
+        `port=${portNum} (index=${_residentialPortIndex % 100}/100) | ` +
+        `jqCallback=${jqCallback.slice(0, 30)}… | ` +
+        `PHPSESSID=${jar.PHPSESSID ? "✅" : "❌"} | ` +
+        `srvsrc=${srvsrc} | v=${version} | ` +
+        `Valide ~${Math.round(CF_CLEARANCE_TTL_MS / 60_000)}min`,
+      );
+      return session;
+    }
+
+    console.error(
+      `[spain-soax] ❌ Impossible d'obtenir session capsolver-residential après ${MAX_RETRIES_RESIDENTIAL} tentatives`,
+    );
+    return null;
   }
 
   // ── Mode persistent-browser : déléguer entièrement au PB manager ────────────
@@ -1067,6 +1532,7 @@ export async function ensureSpainCfSession(
  * Permet de reprendre avec le bon rotation count après un redéploiement.
  */
 export async function restoreSpainSoaxStateFromRedis(): Promise<void> {
+  // Rotation SOAX
   try {
     const rotationMap = await restoreSoaxRotationFromRedis();
     if (rotationMap && rotationMap.size > 0) {
@@ -1077,6 +1543,22 @@ export async function restoreSpainSoaxStateFromRedis(): Promise<void> {
     }
   } catch (err) {
     console.warn(`[spain-soax] ⚠️ Restauration rotation échouée (non-fatal): ${err}`);
+  }
+
+  // Port résidentiel — index + ports flaggés
+  try {
+    const portState = await restoreResidentialPortStateFromRedis();
+    if (portState) {
+      _residentialPortIndex = portState.portIndex;
+      _badResidentialPorts.clear();
+      for (const [port, ts] of Object.entries(portState.badPorts)) {
+        _badResidentialPorts.set(Number(port), Number(ts));
+      }
+      const badCount = _badResidentialPorts.size;
+      console.log(`[spain-soax] ✅ Port state restauré — index=${_residentialPortIndex} (port ${(_residentialPortIndex % 100) + 10001}), ${badCount} port(s) flaggé(s)`);
+    }
+  } catch (err) {
+    console.warn(`[spain-soax] ⚠️ Restauration port state échouée (non-fatal): ${err}`);
   }
 }
 
@@ -1099,6 +1581,19 @@ export function registerSpainPageFetcher(fn: SpainPageFetchFn | null): void {
 
 let _spainImpit: InstanceType<typeof Impit> | undefined;
 let _spainImpitProxyUrl: string | undefined;
+
+/**
+ * Crée une instance impit fraîche pour une session isolée (booking multi-dossiers).
+ * Chaque appel retourne un objet distinct — pas de singleton partagé.
+ * Utilisé par createIsolatedBookingSession() pour isoler les bookings parallèles.
+ */
+export function createFreshSpainImpit(session: SpainCfSession): InstanceType<typeof Impit> {
+  const impit = new Impit({
+    browser: "chrome",
+    proxyUrl: session.soaxProxyUrl || undefined,
+  } as any);
+  return impit;
+}
 
 /**
  * Retourne une instance impit configurée avec le proxy de la session CF active.
@@ -1181,7 +1676,7 @@ export async function spainCfFetch(
     }
   }
 
-  const impit = getSpainImpit(session);
+  const impit = session._ownImpit ?? getSpainImpit(session);
 
   // Keep the cookie order observed in the browser flow and place the
   // Cloudflare cookie last. Callers that update PHPSESSID after a response
@@ -1246,7 +1741,30 @@ export async function spainCfFetch(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const isTimeout = /timeout|timed out|request timeout/i.test(msg);
+      const isProxyConnectError = /CONNECT tunnel|proxy.*502|502.*proxy|ProxyTunnel/i.test(msg);
       console.error(`[spain-soax] ❌ Fetch error: ${msg} (attempt ${attempt + 1}/${maxRetries + 1})`);
+
+      if (isProxyConnectError) {
+        // Le port résidentiel du proxy refuse le tunnel CONNECT → port inutilisable.
+        // On flagge le port ET on invalide la session CF pour forcer un nouveau solve
+        // avec un port différent au prochain appel à ensureSpainCfSession().
+        // Sans cette invalidation, la boucle de rotation ISP réutilise la même session
+        // cachée avec le même port mort → 10 rotations inutiles.
+        if (session.soaxProxyUrl) {
+          try {
+            const deadPort = parseInt(new URL(session.soaxProxyUrl).port || "10001", 10);
+            if (deadPort >= 10001 && deadPort <= 10100) {
+              flagResidentialPort(deadPort);
+              _residentialPortIndex++;
+              syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+            }
+          } catch { /* ignore URL parse errors */ }
+        }
+        console.warn(`[spain-soax] ⚠️ Proxy CONNECT error → session CF invalidée (prochain solve avec port différent)`);
+        invalidateSpainCfSession();
+        return null;
+      }
+
       if (attempt < maxRetries && isTimeout) {
         const backoff = 500 * (attempt + 1);
         await new Promise((r) => setTimeout(r, backoff));
@@ -1287,4 +1805,55 @@ export async function verifySpainCfSession(session: SpainCfSession): Promise<boo
     console.error(`[spain-soax] ❌ Verify error: ${err}`);
     return false;
   }
+}
+
+// ─── Utilitaire URL Bookitit partagé ────────────────────────────────────────
+
+/**
+ * Construit une URL JSONP Bookitit avec l'ordre de paramètres strict
+ * requis par certains portails (ex: Cuba bkt897578 retourne 0B si ordre incorrect).
+ *
+ * Ordre canonique (reproduit test-bookitit-dynamic.ts) :
+ *   callback → type → publickey → lang → [services[]] → [agendas[]] →
+ *   version → src → srvsrc → [autres params] → _
+ *
+ * @param session  Session active avec bookititState (mode capsolver-residential)
+ * @param endpoint Endpoint Bookitit ex: "datetime/", "getservices/"
+ * @param extra    Params supplémentaires : services[], agendas[], start, end, etc.
+ * @returns URL complète prête à passer à spainCfFetch / impit.fetch
+ */
+export function makeBookititUrl(
+  session: SpainCfSession,
+  endpoint: string,
+  extra?: Record<string, string>,
+): string {
+  const state = session.bookititState;
+  if (!state) {
+    throw new Error(
+      "[spain-soax] makeBookititUrl() exige session.bookititState " +
+      "(mode capsolver-residential uniquement)",
+    );
+  }
+  state.reqCounter++;
+  const params: Array<[string, string]> = [
+    ["callback",  state.jqCallback],
+    ["type",      "default"],
+    ["publickey", state.publickey],
+    ["lang",      "es"],
+  ];
+  if (extra?.["services[]"]) params.push(["services[]", extra["services[]"]]);
+  if (extra?.["agendas[]"])  params.push(["agendas[]",  extra["agendas[]"]]);
+  params.push(
+    ["version", state.version],
+    ["src",     state.widgetUrl],
+    ["srvsrc",  state.srvsrc],
+  );
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (k !== "services[]" && k !== "agendas[]") params.push([k, v]);
+    }
+  }
+  params.push(["_", String(state.reqCounter)]);
+  return `${state.bookititBase}/${endpoint}?` +
+    params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
 }

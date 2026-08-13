@@ -1,32 +1,18 @@
 import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
-import { ArrowRight, ChevronRight, MessageCircle, BookOpen, Globe } from "lucide-react";
+import { ChevronRight, MessageCircle, BookOpen, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoventyLogo } from "@/components/JoventyLogo";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <PublicLayout solidNav>
       <Helmet>
         <title>Page introuvable — Joventy</title>
         <meta name="robots" content="noindex" />
       </Helmet>
 
-      {/* Header */}
-      <header className="bg-white border-b border-border py-4">
-        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between">
-          <Link href="/">
-            <JoventyLogo variant="light" size="sm" />
-          </Link>
-          <Link href="/register">
-            <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
-              Commencer <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-            </Button>
-          </Link>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-16 text-center">
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <p className="text-6xl font-bold text-primary mb-4">404</p>
         <h1 className="text-2xl font-bold text-slate-800 mb-3">Page introuvable</h1>
         <p className="text-muted-foreground mb-10 max-w-md mx-auto">
@@ -102,7 +88,7 @@ export default function NotFound() {
             </Button>
           </a>
         </div>
-      </main>
-    </div>
+      </div>
+    </PublicLayout>
   );
 }

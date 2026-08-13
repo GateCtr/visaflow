@@ -62,12 +62,15 @@ import {
   initCevRedis,
   syncPoolStateToRedis,
   restorePoolStateFromRedis,
+  acquireCevScanLock,
+  releaseCevScanLock,
   type SerializablePoolState,
 } from "../cev-redis-persistence.js";
 import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
 import { createLogger } from "../logger.js";
 import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
 import { solveHcaptchaWithProxy, parseProxyForAnticaptcha } from "../cev-hcaptcha.js";
+import { getCevDecodoUrlForAccount, hasCevDecodoProxy, getCevDecodoPoolSize } from "../cev-decodo-pool.js";
 
 // ─── Constantes stealth Puppeteer ─────────────────────────────────────────────
 
@@ -182,6 +185,8 @@ function resolvePuppeteerProxy(accountId: string, hunterConfig?: { cevUseProxy?:
     rawUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
   } else if (process.env.IPROYAL_PROXY_URL) {
     rawUrl = makeCevProxyStickyUrl("iproyal", undefined, `cev-dossier-${accountId}`);
+  } else if (hasCevDecodoProxy()) {
+    rawUrl = getCevDecodoUrlForAccount(accountId) ?? "";
   } else if (process.env.PROXY_URL) {
     rawUrl = process.env.PROXY_URL;
   }
@@ -743,7 +748,7 @@ async function captureFullSessionForAccount(
 // ── One-Shot (Predator) — la limite 5 clics/h n'existe plus ────────────────
 // Stratégie : 1 réveil toutes les 2 min → 1 clic par dossier → fermeture → sleep
 // Session VOWINT réutilisée si encore valide (cache 4h dans cevHttpSetup)
-const DEFAULT_INTERVAL_SEC = 120; // 2 min par défaut (configurable via cevScanIntervalSec)
+const DEFAULT_INTERVAL_SEC = 60; // 2 min par défaut (configurable via cevScanIntervalSec)
 const CLICK_WINDOW_MS = 60 * 60 * 1000; // fenêtre stats uniquement (plus de limite quota)
 
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
@@ -890,12 +895,11 @@ class CevDossierPool {
       this.currentIndex = saved.currentIndex;
     }
 
-    // Restaurer les dossiers en pause (backward compatibility: champ peut être undefined)
-    if (saved.pausedDossiers) {
-      saved.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
-    }
+    // Les pausedDossiers ne sont PAS restaurés depuis Redis — c'est de l'état runtime transitoire.
+    // Si un booking a échoué avant le redémarrage, le dossier doit scanner de nouveau.
+    // Si un booking a réussi, le dossier est terminé de toute façon.
 
-    this.logger.info(`Pool restauré depuis Redis (index=${this.currentIndex}, paused=${saved.pausedDossiers?.length || 0})`);
+    this.logger.info(`Pool restauré depuis Redis (index=${this.currentIndex}, paused=0 — pauses non restaurées)`);
   }
 }
 
@@ -1052,10 +1056,25 @@ async function performScan(
     const isCaptchaError = result.error === "HCAPTCHA_FAILED" || 
                            result.error?.includes("CAPTCHA") ||
                            result.error?.includes("CAPTCHA_RETRY");
-    if (isCaptchaError && _hcaptchaRetry < 2) {
-      logFn.warn(`  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/2 avec clé fraîche dans 5s…`);
+    // HCAPTCHA_REJECTED_BY_SERVER = captchaSolved:false retourné par CEV.
+    // Root cause confirmé : le retry réutilisait la MÊME session VOWINT (ASP.NET_SessionId identique,
+    // cache 4h). CEV marque la session comme "captcha tenté/expiré" après le 1er reject → tout nouveau
+    // token soumis sur cette session reçoit aussi captchaSolved:false, même s'il est frais.
+    // FIX : invalider AUSSI la session VOWINT sur HCAPTCHA_REJECTED_BY_SERVER pour forcer un re-login
+    // complet (nouveau ASP.NET_SessionId) → CEV accepte le token frais sur la nouvelle session.
+    const isServerRejection = result.error === "HCAPTCHA_REJECTED_BY_SERVER";
+    const maxRetries = 2;
+    if (isCaptchaError && _hcaptchaRetry < maxRetries) {
+      logFn.warn(`  ⟳ ${result.error} — retry ${_hcaptchaRetry + 1}/${maxRetries} avec clé fraîche dans 30s…`);
       invalidateAnticaptchaCache();
-      await sleep(5_000);
+      if (isServerRejection) {
+        // Session CEV consommée/invalidée côté serveur après le 1er reject.
+        // Invalider le cache VOWINT → prochain setupCevSessionHttp() fera un re-login complet
+        // (nouveau ASP.NET_SessionId) plutôt que de réutiliser la session rejetée.
+        invalidateVowintCache(vowintEmail);
+        logFn.warn(`  🔄 Session VOWINT invalidée → re-login complet au prochain retry`);
+      }
+      await sleep(30_000);
       return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger);
     }
     logFn.warn(`  Erreur setup: ${result.error}`);
@@ -1146,10 +1165,13 @@ async function handleSlotFound(
   logFn.info(`🚨 SLOT DÉTECTÉ sur dossier #${dossier.index} ${dossier.vowintRef} — DISCOVERY + BOOKING`);
   state.slotsFound++;
 
-  // ── PAUSE immédiate du dossier (ne plus le re-scanner) ──
+  // ── PAUSE immédiate (empêche les re-scans concurrents pendant le booking) ──
+  // La pause est LEVÉE en cas d'échec booking — seul le succès la rend définitive.
   pausedDossiers.add(dossier.vowintRef);
-  logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE`);
+  logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE temporaire (booking en cours)`);
+  let _bookingSucceeded = false;
 
+  try {
   botLog({
     applicationId,
     step: "cev_dossier_slot_found",
@@ -1187,14 +1209,15 @@ async function handleSlotFound(
           location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
           confirmationCode: httpResult.confirmationCode,
         });
+        _bookingSucceeded = true;
         return;
       }
-      // Si NO_AVAILABILITY → le slot est pris, on s'arrête
+      // Si NO_AVAILABILITY → le slot est pris par quelqu'un d'autre — dépause pour futurs créneaux
       if (httpResult.error === "NO_AVAILABILITY" || httpResult.error === "NO_SLOTS_IN_RESPONSE") {
         logFn.info(`  ❌ Slot disparu (${httpResult.error}) — pas de retry`);
-        return;
+        return; // finally dépause
       }
-      // SessionExpired ou autre erreur → le slot existe peut-être encore → retry avec re-login
+      // SessionExpired ou autre erreur → retry avec re-login
       logFn.info(`  ⚠️ Booking HTTP échoué: ${httpResult.error} — retry avec re-login...`);
     } catch (err) {
       logFn.warn(`  ⚠️ Booking HTTP crash: ${err} — retry avec re-login...`);
@@ -1214,7 +1237,7 @@ async function handleSlotFound(
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
     logFn.error(`  ❌ Re-setup échoué: ${session.error ?? "unknown"}`);
-    return;
+    return; // finally dépause
   }
 
   // Tenter le booking avec la session fraîche
@@ -1232,13 +1255,24 @@ async function handleSlotFound(
         location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
         confirmationCode: httpResult.confirmationCode,
       });
+      _bookingSucceeded = true;
     } else {
       logFn.error(`  ❌ Booking HTTP (re-login) échoué: ${httpResult.error}`);
     }
   } catch (err) {
     logFn.error(`  💥 Crash booking: ${err}`);
   }
-}
+} finally {
+  // ── Dépause si le booking n'a pas abouti ──────────────────────────────────
+  // La pause était temporaire (anti-concurrent). Seul un booking confirmé la rend définitive.
+  if (!_bookingSucceeded) {
+    pausedDossiers.delete(dossier.vowintRef);
+    logFn.info(`  ▶️ Dossier #${dossier.index} ${dossier.vowintRef} dépausé (booking non confirmé)`);
+  } else {
+    logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} reste en PAUSE (booking confirmé)`);
+  }
+  } // fin try/finally
+} // fin handleSlotFound
 
 // ─── Booking isolé par dossier ───────────────────────────────────────────────
 //
@@ -1299,24 +1333,30 @@ async function bookDossierIsolated(
     }
   }
 
-  // ── Re-login isolé (cache keyed par vowintRef = session indépendante) ───
-  logFn.info(`  [${vowintRef}] 🔑 Ouverture session isolée (re-login)...`);
-  // Invalider le cache pour ce dossier spécifique afin de forcer un login frais
-  invalidateVowintCache(vowintEmail);
+  // ── Session isolée par dossier (ipSlotId = vowintRef) ──────────────────
+  // Chaque dossier a son propre slot de cache VOWINT (clé = "email:vowintRef").
+  // → Si ce dossier a déjà une session valide en cache (scan précédent ou scan
+  //   en cours sur le même compte), setupCevSessionHttp saute le login VOWINT
+  //   et commence directement à getAppointment — pas de captcha, ~5-10x plus rapide.
+  // → On NE vide PAS le cache global : les autres dossiers gardent leurs propres sessions.
+  // → Pas de risque "multiple session" CEV : chaque dossier a ses propres cookies VOWINT
+  //   (isolés par ipSlotId) et obtient un ASP.NET_SessionId CEV distinct.
+  logFn.info(`  [${vowintRef}] 🔑 Ouverture session (cache isolé par dossier — login sauté si session valide)...`);
 
   let session: Awaited<ReturnType<typeof setupCevSessionHttp>>;
   try {
     session = await setupCevSessionHttp(
       vowintEmail,
       vowintPassword,
-      vowintRef,   // accountId isolé par dossier
-      applicationId,
-      vowintRef,
-      undefined,
+      vowintRef,        // _applicationId (accountId par dossier)
+      applicationId,    // clientId (pour les logs)
+      vowintRef,        // vowintAppUrl
+      undefined,        // siphoned
+      vowintRef,        // ipSlotId → cache isolé par dossier, pas d'invalidation globale
     );
   } catch (err) {
-    logFn.error(`  [${vowintRef}] ❌ Re-login crash: ${err}`);
-    return { success: false, error: `re-login crash: ${err}` };
+    logFn.error(`  [${vowintRef}] ❌ Setup session crash: ${err}`);
+    return { success: false, error: `session setup crash: ${err}` };
   }
 
   if (!session.success || !session.sessionCookie || !session.integrationUrl) {
@@ -1394,10 +1434,20 @@ async function handleSlotFoundMulti(
     logFn.info(`  🎯 Aucun pool cible → tous les ${eligibleRefs.length} dossier(s) du pool participent`);
   }
 
-  // Garantir que le dossier détecteur est toujours mis en pause (qu'il soit éligible ou non)
+  // ── PAUSE temporaire (anti-concurrent) — dépausée en fin de fonction si échec ──
+  const _allPausedRefs = [detectingDossier.vowintRef, ...eligibleRefs];
+  const _succeededRefs = new Set<string>();
   pausedDossiers.add(detectingDossier.vowintRef);
   eligibleRefs.forEach(ref => pausedDossiers.add(ref));
-  logFn.info(`  ⏸️ ${eligibleRefs.length} dossier(s) mis en PAUSE immédiatement`);
+  logFn.info(`  ⏸️ ${_allPausedRefs.length} dossier(s) mis en PAUSE temporaire (booking en cours)`);
+
+  // Variables hissées avant le try pour rester accessibles dans l'email post-finally.
+  let totalFree = 0;
+  let detectingBookingResult: Awaited<ReturnType<typeof bookDossierIsolated>> | null = null;
+  let skipMulti = true;
+
+  // try/finally garantit la dépause même si une exception survient pendant le booking.
+  try {
 
   botLog({
     applicationId,
@@ -1415,7 +1465,6 @@ async function handleSlotFoundMulti(
   // ── Analyser les slots IMMÉDIATEMENT depuis le HTML pré-capturé ─────────
   // CRITIQUE : ne pas perdre la session sur des opérations inutiles.
   // CEV invalide la session dès qu'on fait autre chose que soumettre le form SelectSlot.
-  let totalFree = 0;
   if (existingSelectSlotHtml && existingSelectSlotHtml.length > 500) {
     const inlineSlots = extractInlineSlotsFromHtml(existingSelectSlotHtml);
     totalFree = inlineSlots.reduce((sum, s) => sum + (s.free ?? 1), 0);
@@ -1439,14 +1488,36 @@ async function handleSlotFoundMulti(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STRATÉGIE : BOOKER LE DOSSIER DÉTECTEUR EN PREMIER — TOUJOURS
-  // La session CEV expire dès qu'on fait autre chose que soumettre le SelectSlot.
-  // Pas de discovery, pas d'email, pas de wake multi-dossier AVANT le booking.
+  // STRATÉGIE : BOOKER LE DOSSIER DÉTECTEUR EN PREMIER — TOUJOURS SI ÉLIGIBLE,
+  //             ET EN FALLBACK D'URGENCE SI HORS POOL + TOTALFREE ≤ 1
+  //
+  // Contrainte CEV fondamentale : la session est liée au dossier détecteur.
+  // Un dossier éligible ne peut PAS réutiliser cette session — il devrait refaire
+  // le flux complet (login → getAppointment → captcha → selectDossier → SelectSlot),
+  // ce qui prend 1-2 min minimum. Avec un seul créneau disponible, le slot est parti.
+  //
+  // Règles :
+  //   • Détecteur dans le pool → booke immédiatement (cas nominal).
+  //   • Détecteur hors pool + totalFree ≥ 2 → ne booke PAS. Les eligibles font un
+  //     re-login isolé — les créneaux restants les attendent.
+  //   • Détecteur hors pool + totalFree ≤ 1 → FALLBACK D'URGENCE : le détecteur booke
+  //     quand même. Perdre le slot est pire que le "mauvais" dossier qui le prend.
+  //     Le double-session est aussi évité : on n'ouvre PAS de seconde session eligible.
   // ═══════════════════════════════════════════════════════════════════════════
 
-  let detectingBookingResult: Awaited<ReturnType<typeof bookDossierIsolated>> | null = null;
+  const detectorIsEligible = eligibleRefs.includes(detectingDossier.vowintRef);
+  // Fallback d'urgence : seul créneau disponible et détecteur hors pool.
+  const detectorMustBookAsFallback = !detectorIsEligible && totalFree <= 1;
 
-  if (existingSessionCookie && existingIntegrationUrl) {
+  if (!detectorIsEligible && !detectorMustBookAsFallback) {
+    logFn.info(`  ℹ️ ${detectingDossier.vowintRef} hors pool de booking, totalFree=${totalFree} ≥ 2 → skip booking détecteur, wake eligibles`);
+  }
+  if (detectorMustBookAsFallback) {
+    logFn.warn(`  ⚠️ FALLBACK URGENCE: ${detectingDossier.vowintRef} hors pool MAIS totalFree=${totalFree} (seul créneau) → booke pour éviter perte du slot`);
+    botLog({ applicationId, step: "cev_detector_fallback_booking", status: "warn", data: { detectingDossier: detectingDossier.vowintRef, eligibleRefs, totalFree, reason: "single_slot_outside_pool" } });
+  }
+
+  if ((detectorIsEligible || detectorMustBookAsFallback) && existingSessionCookie && existingIntegrationUrl) {
     logFn.info(`  🎯 BOOKING IMMÉDIAT — ${detectingDossier.vowintRef} (session existante, pas de discovery)...`);
     try {
       detectingBookingResult = await bookDossierIsolated(
@@ -1465,6 +1536,7 @@ async function handleSlotFoundMulti(
 
       if (detectingBookingResult.success) {
         logFn.info(`  ✅ ${detectingDossier.vowintRef} → BOOKING RÉUSSI! code=${detectingBookingResult.confirmationCode} date=${detectingBookingResult.bookedDate}`);
+        _succeededRefs.add(detectingDossier.vowintRef);
         await reportSlotFound({
           applicationId,
           date: detectingBookingResult.bookedDate ?? "",
@@ -1486,13 +1558,20 @@ async function handleSlotFoundMulti(
   // Si free=1 → pas de multi. Si détecteur a échoué (session expired) → le slot est peut-être pris par un humain → pas de multi non plus.
   const freeConsumedByDetector = detectingBookingResult?.success ? 1 : 0;
   const remainingFree = totalFree - freeConsumedByDetector;
+  // Les "autres" sont tous les éligibles sauf le détecteur (qu'il soit éligible ou non,
+  // sa place dans la liste parallèle ne le concerne pas — il a déjà booké ou est hors pool).
   const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
-  // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles
-  const dossiersToWake = Math.min(remainingFree, otherRefs.length);
-  const skipMulti = dossiersToWake <= 0;
+  // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles.
+  // Si le détecteur a booké en fallback d'urgence (hors pool + totalFree≤1), on ne tente PAS
+  // de réveiller des eligibles : le seul créneau est pris, et ouvrir une 2e session VOWINT
+  // pendant que la session détecteur est encore ouverte risque un "multiple session" CEV.
+  const dossiersToWake = detectorMustBookAsFallback ? 0 : Math.min(remainingFree, otherRefs.length);
+  skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
-    if (detectingBookingResult?.success && remainingFree <= 0) {
+    if (detectorMustBookAsFallback) {
+      logFn.info(`  🏁 Fallback urgence (détecteur hors pool, seul créneau) — pas de multi-dossier (risque double session)`);
+    } else if (detectingBookingResult?.success && remainingFree <= 0) {
       logFn.info(`  🏁 Booking réussi pour ${detectingDossier.vowintRef} — aucune place restante (free=${totalFree})`);
     } else if (totalFree <= 1) {
       logFn.info(`  🏁 totalFree=${totalFree} — pas de multi-dossier`);
@@ -1501,12 +1580,16 @@ async function handleSlotFoundMulti(
     }
   } else {
     // ── Multi-dossier : booker les AUTRES dossiers en parallèle ─────────────
-    // Le détecteur a déjà tenté. On réveille seulement le nombre de dossiers = places restantes.
-    // Chaque dossier re-login isolé → le serveur leur montre le availability[] mis à jour.
+    // Le détecteur a déjà tenté (ou est hors pool avec totalFree≥2 — les créneaux
+    // restants attendent). Chaque dossier éligible fait son propre re-login isolé.
+    //
+    // NOTE : on ne transfère PAS la session du détecteur aux eligibles. La session CEV
+    // est liée au dossier qui a appelé selectDossier — un autre dossier ne peut pas la
+    // réutiliser ; il doit refaire le flux complet (login → captcha → selectDossier).
     const selectedRefs = otherRefs.slice(0, dossiersToWake);
     logFn.info(`  🚀 remainingFree=${remainingFree} — lancement ${selectedRefs.length} dossier(s) secondaire(s) [${selectedRefs.join(", ")}]...`);
 
-    const bookingTasks = selectedRefs.map(vowintRef =>
+    const bookingTasks = selectedRefs.map((vowintRef) =>
       bookDossierIsolated(
         vowintEmail, vowintPassword,
         vowintRef, applicationId,
@@ -1524,6 +1607,7 @@ async function handleSlotFoundMulti(
       const r = settled.value;
       if (r.success) {
         logFn.info(`  ✅ ${r.vowintRef} → BOOKING RÉUSSI! code=${r.confirmationCode} date=${r.bookedDate}`);
+        _succeededRefs.add(r.vowintRef);
         await reportSlotFound({
           applicationId,
           date: r.bookedDate ?? "",
@@ -1537,6 +1621,19 @@ async function handleSlotFoundMulti(
         logFn.warn(`  ❌ ${r.vowintRef} → Booking échoué: ${r.error}`);
         botLog({ applicationId, step: "cev_multi_booking_fail", status: "fail", data: { vowintRef: r.vowintRef, error: r.error } });
       }
+    }
+  }
+
+  // ── Dépause des dossiers dont le booking n'a pas abouti ──────────────────
+  // Seul le succès rend la pause définitive — les autres reprennent le scan.
+  } finally {
+    const toUnpause = _allPausedRefs.filter(ref => !_succeededRefs.has(ref));
+    if (toUnpause.length > 0) {
+      toUnpause.forEach(ref => pausedDossiers.delete(ref));
+      logFn.info(`  ▶️ ${toUnpause.length} dossier(s) dépausé(s) (booking non confirmé): [${toUnpause.join(", ")}]`);
+    }
+    if (_succeededRefs.size > 0) {
+      logFn.info(`  ⏸️ ${_succeededRefs.size} dossier(s) en PAUSE définitive (booking confirmé): [${[..._succeededRefs].join(", ")}]`);
     }
   }
 
@@ -1696,8 +1793,8 @@ async function runAccountLoop(job: any): Promise<void> {
   const intervalSec = hunterConfig.cevScanIntervalSec || DEFAULT_INTERVAL_SEC;
   const intervalMs = intervalSec * 1000;
   
-  // Proxy config
-  const useProxy = hunterConfig.cevUseProxy ?? await shouldUseProxy();
+  // Proxy config (let → peut être rechargé depuis Convex en cours de loop)
+  let useProxy = hunterConfig.cevUseProxy ?? await shouldUseProxy();
   
   logger.info(`═══ Compte: ${applicantName} (${dossiers.length} dossiers) ═══`);
   logger.info(`  Intervalle: ${intervalSec}s`);
@@ -1710,16 +1807,14 @@ async function runAccountLoop(job: any): Promise<void> {
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
     savedScanCount = savedPoolState.scanCount || 0;
-    // Restaurer les dossiers en pause depuis Redis (backward compatibility: champ peut être undefined)
-    if (savedPoolState.pausedDossiers) {
-      savedPoolState.pausedDossiers.forEach(vowintRef => pausedDossiers.add(vowintRef));
-    }
-    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=${savedPoolState.pausedDossiers?.length || 0}`);
+    // Les pausedDossiers ne sont PAS restaurés depuis Redis — état runtime transitoire uniquement.
+    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=0 (pauses non restaurées)`);
   } else {
     logger.info( "Pas de pool state en Redis — démarrage frais");
   }
 
   const soaxBaseUrl = process.env.SOAX_PROXY_URL;
+  const decodoBaseUrl = process.env.DECODO_PROXY_URL;
   let proxyExitIp: string | null = null;
 
   logger.info(`Config:`);
@@ -1728,21 +1823,31 @@ async function runAccountLoop(job: any): Promise<void> {
   logger.info(`  • Intervalle: ${Math.round(intervalMs / 1000)}s (±jitter log-normal)`);
 
   if (useProxy) {
-    logger.info(`  • Proxy: SOAX (1 IP fixe Kinshasa)`);
-
-    // ─── Configure SOAX proxy ─────────────────────────────────────────────────
-    if (soaxBaseUrl) {
+    // ─── Configure proxy (priorité: Decodo CSV > SOAX > iProyal) ─────────────
+    if (hasCevDecodoProxy()) {
+      const poolSize = getCevDecodoPoolSize();
+      logger.info(`  • Proxy: Decodo CSV pool (${poolSize} IP(s)) — 1 IP fixe par compte`);
+      const decodoUrl = getCevDecodoUrlForAccount(accountId);
+      if (decodoUrl) {
+        process.env.IPROYAL_PROXY_URL = decodoUrl; // impit réutilise ce chemin
+        resetCevImpitInstances();
+        logger.info(`  • Decodo proxy configuré: ${decodoUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
+        proxyExitIp = await initCevProxyGuardWithExitIp(decodoUrl, `cev-dossier-${accountId}`);
+      } else {
+        logger.warn(`  ⚠️ Pool Decodo vide — connexion directe`);
+      }
+    } else if (soaxBaseUrl) {
+      logger.info(`  • Proxy: SOAX (sticky Kinshasa)`);
       const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
       process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
-      resetCevImpitInstances(); // Force impit to recreate with new proxy URL
+      resetCevImpitInstances();
       logger.info(`  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
-      // Effectuer un health check pour récupérer l'IP de sortie et initialiser le guard
       proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
     } else if (process.env.IPROYAL_PROXY_URL) {
-      // Si on utilise iProyal, aussi initialiser le guard
+      logger.info(`  • Proxy: iProyal (sticky session)`);
       proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
     } else {
-      logger.warn(`  ⚠️ AUCUN PROXY (SOAX_PROXY_URL et IPROYAL_PROXY_URL absents) — connexion directe`);
+      logger.warn(`  ⚠️ AUCUN PROXY (Decodo CSV, SOAX_PROXY_URL, IPROYAL_PROXY_URL absents) — connexion directe`);
     }
   } else {
     logger.info(`  • Proxy: Désactivé (mode sans proxy via hunterConfig)`);
@@ -1815,6 +1920,46 @@ async function runAccountLoop(job: any): Promise<void> {
           vowintEmail = freshEmail;
           vowintPassword = freshPassword;
         }
+
+        // Recharger cevUseProxy — l'admin peut activer/désactiver le proxy sans redémarrer le bot
+        const freshUseProxy: boolean = latestJob.hunterConfig?.cevUseProxy ?? false;
+        if (freshUseProxy !== useProxy) {
+          logger.info(`🔄 Proxy config changée: ${useProxy ? 'activé' : 'désactivé'} → ${freshUseProxy ? 'activé' : 'désactivé'}`);
+          useProxy = freshUseProxy;
+          if (useProxy) {
+            // Activer le proxy (priorité: Decodo CSV > SOAX > iProyal)
+            if (hasCevDecodoProxy()) {
+              const decodoUrl = getCevDecodoUrlForAccount(accountId);
+              if (decodoUrl) {
+                process.env.IPROYAL_PROXY_URL = decodoUrl;
+                resetCevImpitInstances();
+                proxyExitIp = await initCevProxyGuardWithExitIp(decodoUrl, `cev-dossier-${accountId}`);
+                logger.info(`  • Proxy activé: Decodo CSV (exit IP: ${proxyExitIp ?? "inconnue"})`);
+              } else {
+                logger.warn(`  ⚠️ Pool Decodo vide — proxy non activé malgré cevUseProxy=true`);
+                useProxy = false;
+              }
+            } else if (process.env.SOAX_PROXY_URL) {
+              const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-dossier-${accountId}`);
+              process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
+              resetCevImpitInstances();
+              proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-dossier-${accountId}`);
+              logger.info(`  • Proxy activé: SOAX (exit IP: ${proxyExitIp ?? "inconnue"})`);
+            } else if (process.env.IPROYAL_PROXY_URL) {
+              proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-dossier-${accountId}`);
+              logger.info(`  • Proxy activé: iProyal (exit IP: ${proxyExitIp ?? "inconnue"})`);
+            } else {
+              logger.warn(`  ⚠️ cevUseProxy=true mais aucun proxy disponible (Decodo CSV, SOAX, iProyal absents) — mode direct maintenu`);
+              useProxy = false;
+            }
+          } else {
+            // Désactiver le proxy
+            delete process.env.IPROYAL_PROXY_URL;
+            resetCevImpitInstances();
+            proxyExitIp = null;
+            logger.info(`  • Proxy désactivé — connexion directe`);
+          }
+        }
       }
 
       // ─── Check stop signal (permet d'arrêter même en config automatique) ───
@@ -1836,6 +1981,18 @@ async function runAccountLoop(job: any): Promise<void> {
         continue;
       }
 
+      // ─── Lock distribué anti-double-instance (Replit + Railway) ─────────────
+      // Deux instances partagent le même VOWINT Redis. Sans lock, elles appellent
+      // SetCaptchaToken sur la même session CEV en même temps → l'une réussit,
+      // l'autre reçoit captchaSolved:false (session déjà consommée).
+      // SET NX EX 90s → atomique Redis → une seule instance scanne ce dossier à la fois.
+      const scanLockAcquired = await acquireCevScanLock(dossier.vowintRef);
+      if (!scanLockAcquired) {
+        logger.warn(`  🔒 ${dossier.vowintRef} — lock scan distribué pris (autre instance en cours) → skip`);
+        await sleep(2_000); // courte pause avant le prochain dossier
+        continue;
+      }
+
       // Scan
       state.scanCount++;
       localPool.checkDailyReset();
@@ -1845,15 +2002,21 @@ async function runAccountLoop(job: any): Promise<void> {
 
       // One-Shot: setupCevSessionHttp réutilise la session VOWINT si encore valide (cache 4h).
       // Si expirée → re-login + captcha automatique.
-      const result = await performScan(
-        vowintEmail,
-        vowintPassword,
-        dossier,
-        logApplicationId,
-        undefined, // pas de siphonedCreds en One-Shot
-        0,
-        logger,
-      );
+      let result: Awaited<ReturnType<typeof performScan>>;
+      try {
+        result = await performScan(
+          vowintEmail,
+          vowintPassword,
+          dossier,
+          logApplicationId,
+          undefined, // pas de siphonedCreds en One-Shot
+          0,
+          logger,
+        );
+      } finally {
+        // Libérer le lock après le scan (succès OU erreur)
+        await releaseCevScanLock(dossier.vowintRef);
+      }
 
       // Log chaque scan dans Convex
       botLog({

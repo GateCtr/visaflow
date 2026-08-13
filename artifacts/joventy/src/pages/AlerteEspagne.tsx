@@ -4,6 +4,7 @@ import { api } from "@convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Navbar } from "@/components/layout/Navbar";
+import { PublicFooter } from "@/components/layout/PublicFooter";
 import {
   CheckCircle2,
   Upload,
@@ -551,19 +552,7 @@ export default function AlerteEspagne() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════ FOOTER ═══ */}
-      <footer className="py-8 px-4 bg-slate-900 text-center border-t border-white/10">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-slate-500 text-xs">
-            © {new Date().getFullYear()} Joventy · Akollad Groupe · RCCM CD/KNG/RCCM/25-A-07960 ·{" "}
-            <a href="/confidentialite" className="hover:text-slate-300 transition-colors">Confidentialité</a>{" · "}
-            <a href="/conditions" className="hover:text-slate-300 transition-colors">CGU</a>
-          </p>
-          <p className="text-slate-600 text-xs mt-2">
-            Joventy facilite l'accès à l'information. Les rendez-vous sont pris directement auprès de l'ambassade via le portail officiel citaconsular.es. Joventy n'est pas affilié à l'Ambassade d'Espagne.
-          </p>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

@@ -18,7 +18,12 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-/** Parse le fichier CSV → tableau d'URLs http://user:pass@host:port */
+/** Parse le fichier CSV → tableau d'URLs http://user:pass@host:port
+ *
+ * Deux formats acceptés :
+ *   A. URL complète   → http://user:pass@host:port   (une par ligne)
+ *   B. Champs séparés → host:port:username:password
+ */
 function parseProxyCsv(filePath: string): string[] {
   try {
     const content = readFileSync(filePath, "utf-8");
@@ -26,6 +31,20 @@ function parseProxyCsv(filePath: string): string[] {
     for (const raw of content.split("\n")) {
       const line = raw.trim();
       if (!line || line.startsWith("#")) continue;
+
+      // Format A : URL complète
+      if (line.startsWith("http://") || line.startsWith("https://")) {
+        try {
+          new URL(line); // valider
+          urls.push(line);
+          continue;
+        } catch {
+          console.warn(`[spain-decodo] ⚠️ URL invalide ignorée: "${line}"`);
+          continue;
+        }
+      }
+
+      // Format B : host:port:username:password
       const parts = line.split(":");
       if (parts.length < 4) {
         console.warn(`[spain-decodo] ⚠️ Ligne CSV ignorée (format invalide): "${line}"`);
@@ -134,4 +153,14 @@ export function isDecodoMultiPool(): boolean {
 /** Retourne le nombre d'IPs dans le pool (0 si non configuré). */
 export function getDecodoPoolSize(): number {
   return getPool().length;
+}
+
+/**
+ * Retourne l'URL à l'index donné (modulo taille du pool).
+ * Utilisé par capsolver-residential pour la rotation manuelle avec tracking de ports mauvais.
+ */
+export function getDecodoProxyForIndex(idx: number): string | undefined {
+  const pool = getPool();
+  if (pool.length === 0) return undefined;
+  return pool[idx % pool.length];
 }

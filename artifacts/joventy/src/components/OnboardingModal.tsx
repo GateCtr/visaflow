@@ -2,138 +2,16 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
-import {
-  X,
-  FileText,
-  Search,
-  CheckCircle2,
-  ArrowRight,
-  ArrowLeft,
-  Sparkles,
-} from "lucide-react";
+import { X, CalendarClock, FileText, ArrowRight } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const STORAGE_KEY_PREFIX = "joventy_onboarded_";
 
-const STEPS = [
-  {
-    icon: Sparkles,
-    color: "bg-secondary",
-    iconColor: "text-primary",
-    tag: "Bienvenue",
-    title: "Votre visa simplifié,\nde A à Z.",
-    description:
-      "Joventy s'occupe de tout : dossier, créneau ambassade, suivi en temps réel. Vous n'avez qu'à suivre les étapes.",
-    visual: (
-      <div className="flex items-center justify-center gap-3 mt-6">
-        {["USA", "Espagne", "Dubaï", "Turquie", "Inde"].map((dest) => (
-          <span
-            key={dest}
-            className="px-3 py-1.5 rounded-full bg-white/20 text-white text-xs font-semibold border border-white/30"
-          >
-            {dest}
-          </span>
-        ))}
-      </div>
-    ),
-  },
-  {
-    icon: FileText,
-    color: "bg-blue-600",
-    iconColor: "text-white",
-    tag: "ÉTAPE CLÉ",
-    title: "Créez votre dossier\nmaintenant",
-    description:
-      "C'est le moment de commencer ! Remplissez votre demande en quelques minutes et lancez votre processus de visa.",
-    visual: (
-      <div className="mt-6 bg-white/10 rounded-2xl p-4 border border-white/20">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-            <FileText className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex-1">
-            <div className="h-2 bg-white/30 rounded-full w-3/4 mb-1.5" />
-            <div className="h-2 bg-white/20 rounded-full w-1/2" />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {["Destination", "Visa type", "Date"].map((f) => (
-            <div key={f} className="bg-white/10 rounded-lg p-2 text-center">
-              <p className="text-[10px] text-white/60 mb-1">{f}</p>
-              <div className="h-1.5 bg-white/30 rounded-full" />
-            </div>
-          ))}
-        </div>
-      </div>
-    ),
-  },
-  {
-    icon: Search,
-    color: "bg-indigo-600",
-    iconColor: "text-white",
-    tag: "SERVICE",
-    title: "Notre service chasse\nvotre créneau 24/7",
-    description:
-      "Une fois votre dossier créé, notre service surveille en continu les portails officiels pour saisir un rendez-vous dès qu'il est disponible.",
-    visual: (
-      <div className="mt-6 bg-white/10 rounded-2xl p-4 border border-white/20">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-white/70 font-medium">Service actif</span>
-          <span className="flex items-center gap-1.5 text-[10px] text-green-300 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            En ligne
-          </span>
-        </div>
-        {["10:42 — Portail USA vérifié", "10:56 — Portail USA vérifié", "11:10 — Créneau détecté !"].map(
-          (line, i) => (
-            <div
-              key={i}
-              className={`text-[11px] py-1.5 border-b border-white/10 last:border-0 ${
-                i === 2 ? "text-green-300 font-semibold" : "text-white/60"
-              }`}
-            >
-              {line}
-            </div>
-          )
-        )}
-      </div>
-    ),
-  },
-  {
-    icon: CheckCircle2,
-    color: "bg-emerald-600",
-    iconColor: "text-white",
-    tag: "RÉSULTAT",
-    title: "Créneau trouvé.\nVotre visa arrive.",
-    description:
-      "Dès qu'un créneau est réservé, vous êtes notifié en urgence. Après confirmation de votre rendez-vous, réglez les honoraires et recevez votre visa.",
-    visual: (
-      <div className="mt-6 bg-white/10 rounded-2xl p-4 border border-white/20 space-y-2">
-        {[
-          { icon: "🎯", label: "Créneau réservé", done: true },
-          { icon: "📧", label: "Vous recevez une alerte", done: true },
-          { icon: "💳", label: "Règlement honoraires", done: true },
-          { icon: "✈️", label: "Visa obtenu — bon voyage !", done: true },
-        ].map(({ icon, label, done }) => (
-          <div key={label} className="flex items-center gap-2.5">
-            <span className="text-base">{icon}</span>
-            <span className={`text-xs flex-1 ${done ? "text-white font-medium" : "text-white/50"}`}>
-              {label}
-            </span>
-            {done && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />}
-          </div>
-        ))}
-      </div>
-    ),
-  },
-];
-
 export function OnboardingModal() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
-  const [animating, setAnimating] = useState(false);
+  const [isPending, setIsPending] = useState(false);
   const completeOnboarding = useMutation(api.users.completeOnboarding);
 
   const storageKey = user ? `${STORAGE_KEY_PREFIX}${user.id}` : null;
@@ -144,131 +22,104 @@ export function OnboardingModal() {
     if (!done) setVisible(true);
   }, [storageKey]);
 
-  const dismiss = async () => {
+  const markDone = async () => {
     if (storageKey) localStorage.setItem(storageKey, "1");
     try {
       await completeOnboarding();
-    } catch (error) {
-      console.error("Erreur lors de la completion du onboarding:", error);
+    } catch (err) {
+      console.error("Erreur onboarding:", err);
     }
+  };
+
+  const dismiss = async () => {
+    setIsPending(true);
+    await markDone();
     setVisible(false);
+    setIsPending(false);
   };
 
-  const finish = async () => {
-    await dismiss();
-    setLocation("/dashboard/applications/new");
-  };
-
-  const goTo = (next: number) => {
-    if (animating) return;
-    setAnimating(true);
-    setTimeout(() => {
-      setStep(next);
-      setAnimating(false);
-    }, 150);
+  const goTo = async (path: string) => {
+    setIsPending(true);
+    await markDone();
+    setVisible(false);
+    setLocation(path);
   };
 
   if (!visible) return null;
 
-  const current = STEPS[step];
-  const Icon = current.icon;
-  const isLast = step === STEPS.length - 1;
-  const isFirst = step === 0;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div
-        className={`relative w-full max-w-sm bg-gradient-to-br from-[#1e3a5f] to-[#2563eb] rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 ${
-          animating ? "opacity-0 scale-95" : "opacity-100 scale-100"
-        }`}
-      >
-        {/* Close */}
+      <div className="relative w-full max-w-md bg-gradient-to-br from-[#0B111E] to-[#1e2d4d] rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+
+        {/* Bouton fermer */}
         <button
           onClick={dismiss}
+          disabled={isPending}
           className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
         >
           <X className="w-4 h-4 text-white/70" />
         </button>
 
-        {/* Content */}
-        <div className="p-7 pt-6">
-          {/* Tag */}
-          <span className="inline-block text-[11px] font-semibold text-white/60 uppercase tracking-widest mb-4">
-            {current.tag}
-          </span>
-
-          {/* Icon */}
-          <div className={`w-12 h-12 rounded-2xl ${current.color} flex items-center justify-center mb-4 shadow-lg`}>
-            <Icon className={`w-6 h-6 ${current.iconColor}`} />
+        {/* En-tête */}
+        <div className="px-7 pt-8 pb-6 text-center">
+          <div className="inline-flex items-center gap-2 bg-secondary/20 border border-secondary/30 rounded-full px-3 py-1 mb-5">
+            <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
+            <span className="text-secondary text-[11px] font-bold tracking-widest uppercase">Bienvenue sur Joventy</span>
           </div>
-
-          {/* Title */}
-          <h2 className="text-2xl font-serif font-bold text-white leading-tight whitespace-pre-line">
-            {current.title}
+          <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight mb-3">
+            Que voulez-vous faire<br />
+            <span className="text-secondary">aujourd'hui ?</span>
           </h2>
-
-          {/* Description */}
-          <p className="mt-3 text-white/70 text-sm leading-relaxed">
-            {current.description}
+          <p className="text-white/50 text-sm leading-relaxed">
+            Choisissez votre objectif — nous nous occupons du reste.
           </p>
-
-          {/* Visual */}
-          {current.visual}
         </div>
 
-        {/* Footer */}
-        <div className="px-7 pb-7 pt-2">
-          {/* Dots */}
-          <div className="flex items-center justify-center gap-2 mb-5">
-            {STEPS.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => goTo(i)}
-                className={`rounded-full transition-all duration-300 ${
-                  i === step ? "w-6 h-2 bg-secondary" : "w-2 h-2 bg-white/25 hover:bg-white/40"
-                }`}
-              />
-            ))}
-          </div>
+        {/* Boutons de choix */}
+        <div className="px-6 pb-4 space-y-3">
 
-          {/* Buttons */}
-          <div className="flex gap-3">
-            {!isFirst && (
-              <button
-                onClick={() => goTo(step - 1)}
-                className="flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl border border-white/20 text-white/80 hover:bg-white/10 text-sm font-medium transition-all"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Retour
-              </button>
-            )}
-            {isLast ? (
-              <button
-                onClick={finish}
-                className="flex-1 h-11 rounded-xl bg-secondary hover:bg-yellow-400 text-primary font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg"
-              >
-                Créer mon dossier
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                onClick={() => goTo(step + 1)}
-                className="flex-1 h-11 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all"
-              >
-                Suivant
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          {/* Créneaux consulaires */}
+          <button
+            onClick={() => goTo("/dashboard/applications/new/creneau")}
+            disabled={isPending}
+            className="group w-full flex items-center gap-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-secondary/40 rounded-2xl px-5 py-4 text-left transition-all duration-200 disabled:opacity-50"
+          >
+            <div className="w-11 h-11 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
+              <CalendarClock className="w-5 h-5 text-secondary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-bold text-sm">Prendre un créneau consulaire</p>
+              <p className="text-white/40 text-xs mt-0.5">Rendez-vous ambassade : USA, Espagne, Schengen…</p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-secondary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+          </button>
 
-          {isFirst && (
-            <button
-              onClick={dismiss}
-              className="w-full text-center text-xs text-white/40 hover:text-white/60 mt-3 transition-colors"
-            >
-              Passer l'introduction
-            </button>
-          )}
+          {/* Demande de visa */}
+          <button
+            onClick={() => goTo("/dashboard/applications/new")}
+            disabled={isPending}
+            className="group w-full flex items-center gap-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-blue-400/40 rounded-2xl px-5 py-4 text-left transition-all duration-200 disabled:opacity-50"
+          >
+            <div className="w-11 h-11 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/30 transition-colors">
+              <FileText className="w-5 h-5 text-blue-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-bold text-sm">Faire une demande de visa</p>
+              <p className="text-white/40 text-xs mt-0.5">Dossier complet : e-Visa, Dubaï, Canada, UK…</p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+          </button>
+        </div>
+
+        {/* Passer */}
+        <div className="px-6 pb-7 pt-1 text-center">
+          <button
+            onClick={dismiss}
+            disabled={isPending}
+            className="text-xs text-white/30 hover:text-white/60 transition-colors disabled:opacity-50"
+          >
+            Passer pour l'instant
+          </button>
         </div>
       </div>
     </div>

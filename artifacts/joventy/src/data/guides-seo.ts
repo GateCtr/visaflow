@@ -3167,6 +3167,364 @@ const guides: Guide[] = [
     auditCtaAfterSection: 1,
     relatedDestination: "visa-schengen-kinshasa",
   },
+
+  // ─── Guide : Visa Allemagne long séjour depuis Kinshasa ───────────────────
+  {
+    slug: "visa-allemagne-long-sejour-kinshasa-2026",
+    title: "Visa Allemagne long séjour depuis Kinshasa 2026 — Procédure nationale D (travail, études, famille)",
+    metaTitle: "Visa Allemagne Long Séjour Kinshasa 2026 — Nationale D : travail, études, famille | Joventy",
+    metaDescription:
+      "Vous préparez un visa national D pour l'Allemagne depuis Kinshasa ? Voici la procédure complète : prise de rendez-vous sur RK-Termin, documents requis, délais et erreurs à éviter selon votre type de visa.",
+    publishedDate: "2026-08-12",
+    updatedDate: "2026-08-12",
+    readingTime: 8,
+    category: "Visa Allemagne",
+    coverEmoji: "🇩🇪",
+    intro:
+      "Le visa national D pour l'Allemagne est un visa de long séjour distinct du visa Schengen court séjour. Il permet de rester plus de 90 jours en Allemagne et s'adresse aux candidats qui partent travailler, étudier, rejoindre un membre de la famille ou suivre une formation. Depuis Kinshasa, ce visa se dépose directement à l'Ambassade d'Allemagne — et non au CEV. La prise de rendez-vous s'effectue sur le portail officiel service2.diplo.de/rktermin. Ce guide présente la procédure étape par étape, les documents requis selon votre type de visa et les délais réalistes à anticiper.",
+    sections: [
+      {
+        heading: "Visa Schengen vs visa national D : quelle différence pour Kinshasa ?",
+        body:
+          "Les deux types de visa portent le nom « visa Allemagne » mais ils obéissent à des règles radicalement différentes. La confusion entre les deux est l'une des principales sources d'erreur de préparation depuis Kinshasa.",
+        list: [
+          "Visa Schengen (type C) : court séjour, maximum 90 jours sur 180, pour tourisme, visite familiale ou voyage d'affaires. Pour les ressortissants congolais, il se dépose au CEV (cev-kin.eu), géré par l'Ambassade de Belgique.",
+          "Visa national D : long séjour, durée supérieure à 90 jours. Pour tout type de visa national D, la demande se dépose directement à l'Ambassade d'Allemagne à Kinshasa, quelle que soit votre nationalité.",
+          "Si vous prévoyez de travailler, étudier, rejoindre votre conjoint ou faire un stage long en Allemagne : c'est un visa national D qu'il vous faut.",
+          "Un visa Schengen ne peut pas être converti en titre de séjour une fois arrivé en Allemagne — il faut partir avec le bon visa.",
+        ],
+      },
+      {
+        heading: "Les types de visa national D disponibles depuis Kinshasa",
+        body:
+          "L'Ambassade d'Allemagne à Kinshasa instruit plusieurs catégories de visa national selon votre projet. Chaque catégorie a ses propres documents obligatoires et conditions d'éligibilité.",
+        list: [
+          "Visa de travail qualifié (Beschäftigung) : contrat de travail signé avec un employeur allemand, reconnaissance de diplôme ou équivalence si applicable, preuve que le poste n'a pas pu être pourvu localement.",
+          "Visa d'études (Studium) : lettre d'admission d'une université ou Hochschule allemande, preuve de financement suffisant (environ 11 208 € sur un compte bloqué Sperrkonto), niveau d'allemand B2 ou C1 selon la formation.",
+          "Visa de regroupement familial (Familienzusammenführung) : acte de mariage ou de naissance selon la parenté, preuve que le membre de la famille est en situation régulière en Allemagne, logement de taille suffisante.",
+          "Visa de formation professionnelle (Ausbildung) : contrat d'apprentissage signé, niveau d'allemand B1 minimum, candidature via la plateforme Make-it-in-Germany peut faciliter la démarche.",
+          "Visa de chercheur d'emploi (Arbeitssuche) : diplôme reconnu équivalent à bac+3 allemand, preuve de financement pour la durée du séjour (6 mois maximum).",
+          "Visa de cours de langue (Sprachkurs) : inscription dans une école de langue agréée, durée inférieure à un an.",
+          "Visa d'au pair : contrat avec une famille d'accueil allemande, âge entre 18 et 27 ans, niveau d'allemand A2 minimum.",
+        ],
+      },
+      {
+        heading: "Où se rend-on pour le rendez-vous à Kinshasa ?",
+        body:
+          "Tous les visas nationaux D pour l'Allemagne se déposent directement à l'Ambassade d'Allemagne à Kinshasa. Il n'y a pas d'intermédiaire consulaire comme le CEV pour ce type de visa.",
+        list: [
+          "Adresse : 82, Avenue Roi Baudouin, Kinshasa-Gombe",
+          "Horaires section consulaire : lundi à vendredi de 8h00 à 12h00, uniquement sur rendez-vous",
+          "Téléphone pour urgences consulaires (pas les visas) : +243 82 517 30 64",
+          "Contact pour questions visa : via le formulaire en ligne sur kinshasa.diplo.de",
+          "Présentez-vous à l'heure exacte du rendez-vous — la section consulaire n'accepte pas les retardataires sans nouveau rendez-vous.",
+        ],
+      },
+      {
+        heading: "Comment prendre rendez-vous sur RK-Termin (service2.diplo.de)",
+        body:
+          "La prise de rendez-vous pour un visa national D à l'Ambassade d'Allemagne de Kinshasa se fait uniquement via le portail officiel service2.diplo.de/rktermin. Le portail est en allemand et en anglais — voici la procédure pas à pas.",
+        list: [
+          "1. Ouvrez le portail : service2.diplo.de/rktermin/extern/appointment_showMonth.do",
+          "2. Sélectionnez « Kinshasa » dans la liste des ambassades (locationCode=ksha)",
+          "3. Choisissez la catégorie de visa correspondant à votre projet (travail, études, famille, etc.)",
+          "4. Consultez le calendrier mensuel — les créneaux disponibles apparaissent en vert",
+          "5. Cliquez sur un créneau disponible et remplissez le formulaire de réservation avec vos informations exactes",
+          "6. Confirmez la réservation et conservez le récépissé envoyé par email",
+          "7. Si aucun créneau n'est disponible, revenez consulter le calendrier régulièrement — des annulations libèrent des places",
+          "Joventy surveille automatiquement le portail RK-Termin pour alerter dès qu'un créneau se libère.",
+        ],
+      },
+      {
+        heading: "Délais réalistes à anticiper depuis Kinshasa en 2026",
+        body:
+          "Le délai entre la prise de rendez-vous et la date du rendez-vous varie selon la catégorie de visa et la pression de la demande. Les observations de Joventy sur le portail RK-Termin de Kinshasa permettent d'estimer les délais réels.",
+        list: [
+          "Disponibilité des créneaux : les créneaux s'ouvrent et se ferment de manière imprévisible. Certaines semaines affichent plusieurs dates libres, d'autres aucune pendant plusieurs jours.",
+          "Délai entre réservation et rendez-vous : généralement entre 2 et 6 semaines selon la catégorie et la période.",
+          "Délai d'instruction après le rendez-vous : 4 à 8 semaines pour un visa national D, parfois plus si une vérification de diplôme ou une apostille est requise.",
+          "Planification recommandée : commencez la préparation du dossier au moins 4 à 5 mois avant la date de départ visée.",
+          "Ne réservez pas de billet non remboursable avant d'avoir le visa — le délai d'instruction peut varier.",
+        ],
+      },
+      {
+        heading: "Documents communs à tous les visas nationaux D",
+        body:
+          "Quelle que soit la catégorie de visa national, certains documents sont toujours requis à Kinshasa. Vérifiez-les avant de compléter les pièces spécifiques à votre type de visa.",
+        list: [
+          "Passeport valide au moins 6 mois après la date de retour prévue, avec au moins 2 pages vierges",
+          "Deux photos biométriques récentes (fond blanc, visage dégagé, 35×45 mm)",
+          "Formulaire de demande de visa national D dûment complété et signé (disponible sur kinshasa.diplo.de)",
+          "Preuve de couverture maladie valable en Allemagne pour la durée initiale du séjour",
+          "Preuve de ressources financières suffisantes ou prise en charge par un tiers en Allemagne",
+          "Casier judiciaire apostillé si demandé selon la catégorie",
+          "Tous les documents en langue étrangère doivent être traduits par un traducteur assermenté",
+        ],
+      },
+      {
+        heading: "Les erreurs les plus fréquentes qui retardent ou font échouer la demande",
+        body:
+          "Les dossiers de visa national D sont examinés en détail par la section consulaire. Une pièce manquante ou incohérente peut allonger le délai d'instruction ou entraîner un refus.",
+        list: [
+          "Demander un visa Schengen court séjour au CEV alors que le projet nécessite un visa national D",
+          "Présenter un contrat de travail signé d'un côté seulement ou sans mention de salaire conforme au SMIG sectoriel allemand",
+          "Fournir une attestation de compte bancaire sans lettre officielle de la banque — les tableaux PDF imprimés sans en-tête sont refusés",
+          "Oublier de faire traduire les actes d'état civil (mariage, naissance) en allemand par un traducteur agréé",
+          "Se présenter au rendez-vous avec un dossier incomplet en espérant déposer les pièces manquantes plus tard",
+          "Confondre le Sperrkonto (compte bloqué pour les étudiants) avec un simple relevé bancaire",
+          "Réserver un billet d'avion avant d'avoir obtenu le visa national D",
+        ],
+      },
+      {
+        heading: "Comment Joventy vous accompagne pour le visa national D Allemagne",
+        body:
+          "Joventy suit en temps réel le portail RK-Termin de l'Ambassade d'Allemagne à Kinshasa et vous alerte dès qu'un créneau se libère dans votre catégorie de visa. En parallèle, l'équipe vérifie votre dossier avant le dépôt.",
+        list: [
+          "Surveillance automatique du portail RK-Termin — alerte immédiate dès qu'un créneau apparaît",
+          "Vérification complète du dossier selon votre catégorie de visa (travail, études, famille, formation)",
+          "Conseil sur la traduction et l'apostille des documents congolais",
+          "Aide à la préparation du Sperrkonto pour les étudiants",
+          "Accompagnement en cas de demande de documents complémentaires après le rendez-vous",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Est-ce que je passe par le CEV pour un visa Allemagne long séjour ?",
+        a: "Non. Le CEV (Centre Européen des Visas, cev-kin.eu) traite uniquement les visas Schengen court séjour pour les ressortissants congolais. Pour tout visa national D (long séjour de plus de 90 jours : travail, études, famille, formation), vous déposez votre dossier directement à l'Ambassade d'Allemagne, 82 Avenue Roi Baudouin, Kinshasa-Gombe.",
+      },
+      {
+        q: "Combien coûte un visa national D Allemagne ?",
+        a: "Les frais de visa national D s'élèvent à 75 € pour les adultes. Ils sont payables en francs congolais au taux du jour lors du dépôt du dossier à l'ambassade. Ces frais sont non remboursables en cas de refus.",
+      },
+      {
+        q: "Le portail RK-Termin est en allemand — comment le naviguer ?",
+        a: "Le portail service2.diplo.de/rktermin propose une interface en anglais accessible via un sélecteur de langue en haut de page. Sélectionnez « Kinshasa » dans la liste des ambassades, puis choisissez la catégorie correspondant à votre type de visa. Les créneaux disponibles apparaissent en vert dans le calendrier mensuel.",
+      },
+      {
+        q: "Combien de temps faut-il pour obtenir un visa travail Allemagne depuis Kinshasa ?",
+        a: "Il faut compter : le délai de recherche d'un créneau RK-Termin (variable, de quelques jours à plusieurs semaines), puis 2 à 6 semaines entre la réservation et le rendez-vous, puis 4 à 8 semaines d'instruction après le dépôt. En pratique, prévoyez au minimum 3 à 5 mois entre le début de la démarche et l'obtention du visa.",
+      },
+      {
+        q: "Mon diplôme congolais est-il reconnu en Allemagne ?",
+        a: "La reconnaissance des diplômes est vérifiée par l'Anabin (base de données du Centre pour la reconnaissance académique) et parfois par l'anabin.kmk.org. Pour les diplômes professionnels (Ausbildung), c'est l'Anerkennungsberatung qui s'en charge. Certains secteurs (santé, ingénierie) exigent une reconnaissance formelle avant la délivrance du visa. Joventy peut vous aider à identifier les étapes de reconnaissance propres à votre diplôme.",
+      },
+      {
+        q: "Puis-je venir accompagné de ma famille avec un visa travail ?",
+        a: "Oui, vos proches (conjoint et enfants mineurs) peuvent demander un visa de regroupement familial une fois que vous êtes en situation régulière en Allemagne. Ils n'entrent pas en Allemagne avec votre visa de travail — ils font leur propre demande auprès de l'ambassade, en joignant la preuve de votre statut régulier en Allemagne.",
+      },
+    ],
+    relatedSlugs: [
+      "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
+      "visa-schengen-allemagne-kinshasa-etrangers-2026",
+      "documents-visa-schengen-kinshasa",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+    ],
+    relatedDestination: "visa-allemagne-kinshasa",
+    internalLinks: [
+      {
+        href: "/ambassade-allemagne-kinshasa",
+        label: "Ambassade d'Allemagne à Kinshasa",
+        description: "Adresse, horaires et coordonnées officielles.",
+      },
+      {
+        href: "/guides/visa-schengen-allemagne-kinshasa-etrangers-2026",
+        label: "Visa Schengen Allemagne pour étrangers en RDC",
+        description: "Procédure spécifique pour les non-ressortissants congolais vivant en RDC.",
+      },
+      {
+        href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
+        label: "Rendez-vous CEV Kinshasa — Visa Schengen court séjour",
+        description: "Pour les ressortissants congolais demandant un visa Schengen court séjour.",
+      },
+    ],
+    conversion: {
+      heading: "Vous préparez un visa national D pour l'Allemagne ?",
+      body: "Joventy surveille le portail RK-Termin de l'Ambassade d'Allemagne à Kinshasa et vous alerte dès qu'un créneau s'ouvre. L'équipe vérifie également votre dossier avant le dépôt pour éviter les causes de refus les plus fréquentes.",
+      primaryLabel: "Démarrer mon dossier Allemagne — 150 USD",
+      primaryHref: "/register",
+      whatsappLabel: "Parler à Joventy sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, je prépare un visa national D pour l'Allemagne depuis Kinshasa (travail / études / famille — préciser). Je veux de l'aide pour le dossier et une alerte dès qu'un créneau RK-Termin est disponible.",
+    },
+  },
+
+  // ─── Guide : Visa Schengen Allemagne pour étrangers vivant en RDC ──────────
+  {
+    slug: "visa-schengen-allemagne-kinshasa-etrangers-2026",
+    title: "Visa Schengen Allemagne à Kinshasa pour étrangers 2026 — Procédure RK-Termin (non-ressortissants congolais)",
+    metaTitle: "Visa Schengen Allemagne Kinshasa Étrangers 2026 — RK-Termin ambassade | Joventy",
+    metaDescription:
+      "Vous êtes expatrié, réfugié ou ressortissant non-congolais vivant en RDC et vous voulez un visa Schengen pour l'Allemagne ? La procédure est différente du CEV. Voici comment prendre rendez-vous sur RK-Termin et préparer votre dossier.",
+    publishedDate: "2026-08-12",
+    updatedDate: "2026-08-12",
+    readingTime: 7,
+    category: "Visa Allemagne",
+    coverEmoji: "🇩🇪",
+    intro:
+      "Si vous vivez en République Démocratique du Congo mais que vous n'êtes pas de nationalité congolaise, la procédure pour obtenir un visa Schengen allemand est différente de celle suivie par les Congolais. Vous ne passez pas par le CEV (Centre Européen des Visas, cev-kin.eu). Vous vous adressez directement à l'Ambassade d'Allemagne à Kinshasa, et vous prenez rendez-vous via le portail officiel service2.diplo.de/rktermin. Ce guide s'adresse aux expatriés, aux ressortissants d'Afrique centrale hors RDC, aux réfugiés reconnus et à toute personne de nationalité non-congolaise résidant légalement en RDC.",
+    sections: [
+      {
+        heading: "Qui est concerné par ce guide ?",
+        body:
+          "Cette procédure s'applique aux personnes qui résident en RDC sans être de nationalité congolaise et qui souhaitent obtenir un visa Schengen court séjour pour l'Allemagne (tourisme, visite familiale, affaires, transit).",
+        list: [
+          "Expatriés (ressortissants européens, américains, asiatiques) vivant et travaillant en RDC",
+          "Ressortissants de pays africains (Angola, Rwanda, Burundi, Congo-Brazzaville, etc.) résidant en RDC",
+          "Réfugiés reconnus par le HCR ou titulaires d'un titre de séjour RDC de nationalité étrangère",
+          "Ressortissants congolais binationaux qui voyagent avec un passeport étranger (dans ce cas, c'est leur autre nationalité qui détermine la procédure)",
+          "Ce guide ne s'applique PAS aux ressortissants congolais (passeport RDC) : pour eux, le visa Schengen allemand court séjour se dépose au CEV.",
+        ],
+      },
+      {
+        heading: "Pourquoi ne pas passer par le CEV ?",
+        body:
+          "Le Centre Européen des Visas (CEV) à Kinshasa est une plateforme externalisée gérée par l'Ambassade de Belgique pour le traitement des visas Schengen des ressortissants congolais. Il n'a pas vocation à traiter les demandes des ressortissants d'autres nationalités.",
+        list: [
+          "Le CEV est mandaté pour les ressortissants de nationalité congolaise uniquement.",
+          "Si vous avez une nationalité étrangère, le CEV n'est pas compétent pour votre demande de visa Schengen allemand.",
+          "Vous déposez votre dossier directement à la section consulaire de l'Ambassade d'Allemagne.",
+          "Exception : si votre nationalité est celle d'un pays couvert par un autre accord de représentation (ex. certains pays pour lesquels la France ou l'Italie traitent les visas), vérifiez auprès de l'ambassade concernée.",
+        ],
+      },
+      {
+        heading: "L'Ambassade d'Allemagne à Kinshasa : où et quand se rendre ?",
+        body:
+          "Tous les dépôts de visa Schengen et national D pour les non-ressortissants congolais se font directement à l'Ambassade d'Allemagne. Aucun intermédiaire n'est prévu pour ce profil.",
+        list: [
+          "Adresse : 82, Avenue Roi Baudouin, Kinshasa-Gombe",
+          "Horaires section consulaire : lundi à vendredi, 8h00 à 12h00, uniquement sur rendez-vous préalable",
+          "Langue de la procédure : français et/ou anglais acceptés",
+          "Contact : formulaire en ligne sur kinshasa.diplo.de (pas de question visa par téléphone)",
+          "Présentez-vous à l'heure exacte du rendez-vous avec l'ensemble du dossier original.",
+        ],
+      },
+      {
+        heading: "Prendre rendez-vous sur RK-Termin — étape par étape",
+        body:
+          "Le portail RK-Termin (service2.diplo.de/rktermin) est l'outil officiel de prise de rendez-vous de toutes les ambassades allemandes dans le monde. Le portail est disponible en anglais.",
+        list: [
+          "1. Accédez au portail : service2.diplo.de/rktermin/extern/appointment_showMonth.do",
+          "2. Dans la liste des postes, sélectionnez « Kinshasa »",
+          "3. Choisissez la catégorie « Visa Schengen (court séjour) » — vérifiez que l'intitulé correspond bien à votre projet (tourisme, affaires, visite familiale)",
+          "4. Le calendrier mensuel s'affiche : les jours avec des créneaux disponibles apparaissent en vert",
+          "5. Cliquez sur un jour disponible, puis sélectionnez l'heure souhaitée",
+          "6. Complétez le formulaire de réservation avec vos informations exactes (nom, prénom, nationalité, numéro de passeport)",
+          "7. Validez et conservez le récépissé de réservation envoyé par email — il sera exigé le jour du rendez-vous",
+          "Si aucun créneau n'est visible, vérifiez d'autres semaines ou revenez consulter ultérieurement. Des annulations libèrent régulièrement des places.",
+        ],
+      },
+      {
+        heading: "Disponibilité des créneaux RK-Termin à Kinshasa — ce qu'on observe",
+        body:
+          "Joventy suit en continu le portail RK-Termin de l'Ambassade d'Allemagne à Kinshasa. Les observations permettent d'identifier les tendances de disponibilité selon les périodes.",
+        list: [
+          "Les créneaux s'ouvrent de façon irrégulière — il n'y a pas d'heure fixe d'ouverture de calendrier comme pour d'autres ambassades.",
+          "Les périodes de forte demande (rentrée scolaire allemande en octobre, fin d'année) voient moins de créneaux disponibles.",
+          "Les annulations de dernière minute libèrent des places parfois à moins de 48h — il est utile de consulter régulièrement.",
+          "Pour les visas Schengen, les délais entre réservation et rendez-vous sont généralement plus courts que pour les visas nationaux D.",
+          "Joventy alerte automatiquement dès qu'un créneau Kinshasa se libère sur le portail RK-Termin.",
+        ],
+      },
+      {
+        heading: "Documents requis pour un visa Schengen Allemagne en tant qu'étranger en RDC",
+        body:
+          "La liste de documents est proche de celle d'un visa Schengen standard, mais certains éléments sont spécifiques à votre situation de résident étranger en RDC.",
+        list: [
+          "Passeport national valide au moins 3 mois après la date de retour prévue, avec au moins 2 pages vierges",
+          "Deux photos biométriques récentes (35×45 mm, fond blanc, visage dégagé)",
+          "Formulaire de demande de visa Schengen complété et signé (disponible sur kinshasa.diplo.de)",
+          "Preuve de résidence légale en RDC : titre de séjour, permis de travail, carte diplomatique ou attestation du HCR selon votre situation",
+          "Assurance voyage couvrant toute la zone Schengen pour un minimum de 30 000 € (valide pour l'Allemagne spécifiquement si c'est votre destination principale)",
+          "Justificatif de moyens financiers : relevés bancaires des 3 derniers mois, lettre d'employeur ou contrat de travail",
+          "Réservation d'hébergement en Allemagne (hôtel, lettre d'invitation d'un proche en Allemagne)",
+          "Itinéraire de voyage : réservation de vol (non définitive — évitez d'acheter un billet avant le visa)",
+          "Lettre de motivation expliquant le but et la durée du séjour",
+        ],
+      },
+      {
+        heading: "Documents supplémentaires selon votre statut en RDC",
+        body:
+          "Votre situation en RDC (salarié expatrié, réfugié, indépendant, étudiant) peut nécessiter des documents complémentaires pour prouver que vous retournerez en RDC après votre séjour en Allemagne.",
+        list: [
+          "Expatrié salarié : lettre de l'employeur congolais attestant de votre poste, salaire et date de retour, avec le tampon de l'entreprise",
+          "Réfugié reconnu : attestation valide du HCR ou titre de protection internationale, accompagnée d'une lettre expliquant les circonstances du voyage",
+          "Ressortissant africain non-réfugié : preuves d'attaches économiques ou familiales en RDC (contrat de bail, actes de propriété, actes de naissance des enfants résidant en RDC)",
+          "Étudiant étranger en RDC : carte d'étudiant ou attestation d'inscription, lettre de l'établissement confirmant la poursuite des études à la rentrée",
+          "Ressortissant européen ou nord-américain : la preuve de résidence en RDC (titre de séjour) est généralement suffisante pour les attaches",
+        ],
+      },
+      {
+        heading: "Erreurs spécifiques aux étrangers en RDC à éviter",
+        body:
+          "Les demandeurs de nationalité non-congolaise résidant en RDC font face à des difficultés particulières que les ressortissants congolais ne rencontrent pas. Connaître ces écueils avant le dépôt peut faire la différence.",
+        list: [
+          "Se présenter au CEV avec un passeport non-congolais — le CEV refusera de traiter votre dossier.",
+          "Ne pas fournir la preuve de résidence légale en RDC : l'ambassade doit vérifier que vous êtes bien établi au Congo et que vous ne cherchez pas à migrer via l'Allemagne.",
+          "Présenter des relevés bancaires d'un compte dans votre pays d'origine au lieu d'un compte actif en RDC.",
+          "Négliger la lettre de motivation : pour un réfugié ou un ressortissant d'un pays à risque migratoire élevé, la lettre est lue avec attention.",
+          "Oublier de faire traduire les documents dans votre langue nationale en français ou en allemand si l'original n'est pas dans l'une de ces langues.",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Je suis français expatrié à Kinshasa — dois-je vraiment aller à l'Ambassade d'Allemagne ?",
+        a: "Oui. En tant que ressortissant français (ou de tout pays de l'UE), vous n'avez pas besoin de visa Schengen pour l'Allemagne — votre passeport ou carte d'identité européenne vous permet d'entrer librement dans l'espace Schengen. Seuls les ressortissants de pays soumis à l'obligation de visa pour l'espace Schengen sont concernés par ce guide.",
+      },
+      {
+        q: "Je suis rwandais vivant à Kinshasa. Où dépose-je mon visa Schengen pour l'Allemagne ?",
+        a: "À l'Ambassade d'Allemagne à Kinshasa, 82 Avenue Roi Baudouin, Kinshasa-Gombe, via un rendez-vous RK-Termin. Vous ne passez pas par le CEV (réservé aux ressortissants congolais). Préparez également la preuve de votre résidence légale en RDC.",
+      },
+      {
+        q: "Je suis réfugié reconnu par le HCR en RDC. Puis-je demander un visa Schengen ?",
+        a: "Oui, les réfugiés reconnus peuvent demander un visa Schengen. Vous devez joindre votre attestation HCR valide et une lettre expliquant le but du voyage. L'absence de passeport national peut nécessiter un titre de voyage pour réfugiés — vérifiez auprès du HCR et de l'ambassade si ce document est accepté.",
+      },
+      {
+        q: "Combien de temps à l'avance faut-il prendre rendez-vous ?",
+        a: "Il est conseillé de consulter le portail RK-Termin 6 à 8 semaines avant le voyage prévu. Les visas Schengen peuvent être déposés au maximum 6 mois avant la date de départ et au minimum 15 jours avant. Prévoyez le délai d'instruction (généralement 15 jours ouvrables, parfois plus).",
+      },
+      {
+        q: "Mes relevés bancaires sont dans la devise de mon pays d'origine. L'ambassade les accepte-t-elle ?",
+        a: "L'ambassade préfère des relevés de compte actif en RDC (en USD ou CDF). Si votre compte principal est à l'étranger, fournissez également une attestation de virement récent ou un relevé international — et assurez-vous que les montants sont cohérents avec votre niveau de vie déclaré en RDC.",
+      },
+      {
+        q: "Le portail RK-Termin est en anglais. Est-ce que je peux déposer le dossier en français ?",
+        a: "Oui. L'Ambassade d'Allemagne à Kinshasa accepte les dossiers en français. Le portail RK-Termin est en anglais pour la prise de rendez-vous, mais la correspondance avec la section consulaire se fait en français.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-allemagne-long-sejour-kinshasa-2026",
+      "documents-visa-schengen-kinshasa",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+      "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
+    ],
+    relatedDestination: "visa-allemagne-kinshasa",
+    internalLinks: [
+      {
+        href: "/ambassade-allemagne-kinshasa",
+        label: "Ambassade d'Allemagne à Kinshasa",
+        description: "Adresse, horaires et coordonnées officielles.",
+      },
+      {
+        href: "/guides/visa-allemagne-long-sejour-kinshasa-2026",
+        label: "Visa Allemagne long séjour — Nationale D",
+        description: "Pour les demandes de visa travail, études ou regroupement familial en Allemagne.",
+      },
+      {
+        href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
+        label: "Rendez-vous CEV — Visa Schengen court séjour",
+        description: "Procédure réservée aux ressortissants congolais.",
+      },
+    ],
+    conversion: {
+      heading: "Vous préparez un visa Schengen Allemagne depuis Kinshasa ?",
+      body: "Joventy surveille le portail RK-Termin de l'Ambassade d'Allemagne à Kinshasa et vous alerte dès qu'un créneau disponible correspond à votre catégorie de visa. L'équipe vérifie aussi votre dossier pour éviter les causes de refus liées à votre statut de résident étranger en RDC.",
+      primaryLabel: "Démarrer ma demande — 150 USD",
+      primaryHref: "/register",
+      whatsappLabel: "Parler à Joventy sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, je suis étranger (non-congolais) vivant en RDC et je veux un visa Schengen pour l'Allemagne. Je veux de l'aide pour le dossier et une alerte RK-Termin dès qu'un créneau est disponible à l'Ambassade d'Allemagne à Kinshasa.",
+    },
+  },
 ];
 export function getAllGuides(): Guide[] {
   return guides;

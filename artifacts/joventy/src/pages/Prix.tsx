@@ -2,8 +2,7 @@ import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
 import { ArrowRight, CheckCircle2, MessageCircle, ChevronRight, AlertTriangle, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JoventyLogo } from "@/components/JoventyLogo";
-import { LegalFooterNote } from "@/components/LegalFooterNote";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) { return FLAG_SIZES.find((s) => s >= n) ?? 80; }
@@ -99,7 +98,7 @@ export default function Prix() {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <PublicLayout solidNav>
       <Helmet>
         <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
         <meta name="description" content="Tarifs transparents pour l'assistance visa depuis Kinshasa : USA 250+750$, Schengen 150+450$, Dubaï 150+200$, Maroc/Égypte 150+200$. Paiement M-Pesa. Prime de succès uniquement si résultat obtenu." />
@@ -118,28 +117,6 @@ export default function Prix() {
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
       </Helmet>
-
-      {/* NAV */}
-      <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <Link href="/"><JoventyLogo variant="light" size="sm" /></Link>
-          <nav className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-            <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-primary font-semibold">Tarifs</span>
-          </nav>
-          <nav className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground">
-            <Link href="/ambassades" className="hover:text-primary transition-colors">Ambassades</Link>
-            <Link href="/guides" className="hover:text-primary transition-colors">Guides</Link>
-            <Link href="/audit-diagnostic" className="hover:text-primary transition-colors">Audit & Diagnostic</Link>
-          </nav>
-          <Link href="/register">
-            <Button size="sm" className="bg-secondary hover:bg-secondary/90 text-white font-semibold">
-              Commencer <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-            </Button>
-          </Link>
-        </div>
-      </header>
 
       {/* HERO */}
       <section className="bg-gradient-to-b from-primary/5 to-white py-16 px-4">
@@ -299,20 +276,6 @@ export default function Prix() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="bg-slate-900 text-white/50 py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
-          <p>© {new Date().getFullYear()} Joventy · Un service <a href="https://akollad.com" target="_blank" rel="noreferrer" className="hover:text-white/70 underline underline-offset-2">Akollad Groupe</a> · Kinshasa, RDC</p>
-          <div className="flex gap-4">
-            <Link href="/" className="hover:text-white transition-colors">Accueil</Link>
-            <Link href="/guides" className="hover:text-white transition-colors">Guides</Link>
-            <Link href="/mentions-legales" className="hover:text-white transition-colors">Légal</Link>
-          </div>
-        </div>
-        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-white/10">
-          <LegalFooterNote />
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 }
