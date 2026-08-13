@@ -566,25 +566,43 @@ subsection("3a. Session CF indisponible → cf_blocked");
   resetMocks();
 }
 
-subsection("3b. No hay horas VISIBLE → not_found (aucun appel API)");
+subsection("3b. No hay horas VISIBLE → JAMAIS de décision sur le texte, datetime/ obligatoire");
 {
   resetMocks();
   const session = makeMockSession({ prefetchedMainHtml: HTML_NO_SLOTS_VISIBLE });
   _setTestSessionProvider(async () => session);
 
-  // No API calls expected — mock returns null for everything
-  let apiCallCount = 0;
-  _setTestFetch(async (url) => {
-    if (url.includes("/cdn-cgi/rum") || url.includes("jsd/oneshot")) {
-      return new Response("", { status: 200 });
-    }
-    if (url.includes("/onlinebookings/")) apiCallCount++;
-    return null;
-  });
+  // Le texte "No hay horas" ne doit plus court-circuiter la vérification :
+  // le scanner DOIT interroger datetime/ avant de conclure.
+  let datetimeCalled = false;
+  _setTestFetch(makeMockFetch([
+    ["getagendas/",  () => jsonpResp(AGENDA_OK)],
+    ["datetime/",    () => { datetimeCalled = true; return jsonpResp(DATETIME_EMPTY); }],
+    ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
+    ["getservices/", () => jsonpResp([{ id: "bkt3452974", name: "Tramitación de visas" }])],
+  ]));
 
   const result = await scanSpainHttp(PORTAL_URL);
-  assertEq(result.status, "not_found", "No hay horas visible → not_found");
-  assertEq(apiCallCount, 0, "Zéro appel API Bookitit effectué (court-circuit direct)");
+  assertEq(result.status, "not_found", "datetime/ vide → not_found (décision API, pas HTML)");
+  assert(datetimeCalled, "datetime/ appelé malgré 'No hay horas' visible (signal texte non fiable)");
+  resetMocks();
+}
+
+subsection("3b2. No hay horas VISIBLE + datetime/ POSITIF → found (anti faux négatif)");
+{
+  resetMocks();
+  const session = makeMockSession({ prefetchedMainHtml: HTML_NO_SLOTS_VISIBLE });
+  _setTestSessionProvider(async () => session);
+
+  _setTestFetch(makeMockFetch([
+    ["getagendas/",  () => jsonpResp(AGENDA_OK)],
+    ["datetime/",    () => jsonpResp(DATETIME_WITH_SLOT)],
+    ["getwidgetconfigurations/", () => jsonpResp(WIDGET_CFG_NO_CAPTCHA)],
+    ["getservices/", () => jsonpResp([{ id: "bkt3452974", name: "Tramitación de visas" }])],
+  ]));
+
+  const result = await scanSpainHttp(PORTAL_URL);
+  assertEq(result.status, "found", "'No hay horas' visible n'écrase JAMAIS un datetime/ positif");
   resetMocks();
 }
 

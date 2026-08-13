@@ -150,6 +150,57 @@ function getCachedBookititConfig(portalUrl: string): BookititConfig | null {
   return entry;
 }
 
+// ─── Warm Probe Cache (configuration UNIQUEMENT, jamais la disponibilité) ───
+//
+// RÈGLE ABSOLUE : ce cache ne contient QUE de la configuration de portail —
+// services[] et agendaId, qui ne changent pratiquement jamais. Les créneaux
+// (Slots / maxDays) ne sont JAMAIS mémorisés : datetime/ est toujours appelé en
+// live, à chaque cycle. Un cache ne peut donc jamais produire un "not_found" ;
+// il ne peut que produire soit un résultat live, soit une invalidation.
+//
+// Gain : sur les probes « à chaud », on supprime getwidgetconfigurations/ +
+// getservices/ + getagendas/ (≈1,2-1,9 s et 3 RTT par cycle). La boucle
+// datetime/ reste strictement séquentielle (voir commentaire dédié plus bas).
+
+interface WarmProbeEntry {
+  services: Array<{ serviceId: string; serviceName: string }>;
+  agendaId: string;
+  cachedAt: number;
+}
+
+/** TTL du warm cache — volontairement court, aligné sur le refresh PHPSESSID. */
+const WARM_PROBE_TTL_MS = 10 * 60_000;
+
+const WARM_PROBE_ENABLED = process.env.SPAIN_WARM_PROBE !== "0";
+
+const _warmProbeCache = new Map<string, WarmProbeEntry>();
+
+function getWarmProbe(publickey: string): WarmProbeEntry | null {
+  if (!WARM_PROBE_ENABLED || !publickey) return null;
+  const entry = _warmProbeCache.get(publickey);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > WARM_PROBE_TTL_MS) {
+    _warmProbeCache.delete(publickey);
+    return null;
+  }
+  return entry;
+}
+
+function setWarmProbe(publickey: string, services: Array<{ serviceId: string; serviceName: string }>, agendaId: string): void {
+  if (!WARM_PROBE_ENABLED || !publickey || services.length === 0 || !agendaId) return;
+  _warmProbeCache.set(publickey, { services, agendaId, cachedAt: Date.now() });
+  console.log(
+    `[spain-http] ♻️ Warm cache armé — ${services.length} service(s) + agenda ${agendaId} ` +
+    `(TTL ${Math.round(WARM_PROBE_TTL_MS / 60_000)}min, config uniquement — aucune disponibilité mémorisée)`,
+  );
+}
+
+function invalidateWarmProbe(publickey: string, reason: string): void {
+  if (_warmProbeCache.delete(publickey)) {
+    console.log(`[spain-http] 🧹 Warm cache invalidé (${reason}) — re-scan à froid immédiat`);
+  }
+}
+
 // ─── HTML Parsing Helpers ───────────────────────────────────────────────────
 
 /**
@@ -973,12 +1024,65 @@ async function buildConfigFromBase(
  *
  * Flow : #selectservice links → getagendas/ → datetime/ (2 mois) → premier créneau
  */
+type ConfirmSlotsResult = {
+  serviceId: string;
+  serviceName: string;
+  date: string;
+  time: string;
+  allSlots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
+  widgetConfig?: Record<string, unknown>;
+} | null | "ajax_unavailable";
+
+/**
+ * Wrapper « warm probe » de confirmSlotsViaDatetimeOnce.
+ *
+ * 1. Si un warm cache (services + agenda) existe pour ce publickey, on saute
+ *    getwidgetconfigurations/ + getservices/ + getagendas/ et on va directement
+ *    à datetime/ — qui reste TOUJOURS appelé en live, jamais mis en cache.
+ * 2. Garde-fou : un résultat négatif obtenu à chaud n'est accepté que si
+ *    datetime/ a réellement répondu (JSONP valide). Sinon → invalidation du
+ *    cache + re-scan à froid IMMÉDIAT. Un cache ne peut donc jamais produire
+ *    un faux "not_found" par session périmée.
+ */
 async function confirmSlotsViaDatetime(
   session: SpainCfSession,
   renderedHtml: string,
   publickey: string,
   cookieStr: string,
   referer: string,
+): Promise<ConfirmSlotsResult> {
+  const warm = getWarmProbe(publickey);
+  if (warm) {
+    const health = { datetimeResponded: false };
+    console.log(
+      `[spain-http] ♻️ Probe à chaud — services/agenda depuis le cache config ` +
+      `(${warm.services.length} service(s), agenda ${warm.agendaId}) → datetime/ direct, toujours live`,
+    );
+    const warmResult = await confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, warm, health);
+    if (warmResult && warmResult !== "ajax_unavailable") return warmResult;
+    if (warmResult === null && health.datetimeResponded) {
+      // datetime/ a répondu proprement : l'absence de créneau est une vraie absence.
+      return null;
+    }
+    invalidateWarmProbe(
+      publickey,
+      warmResult === "ajax_unavailable" ? "AJAX indisponible à chaud" : "datetime/ muet à chaud (session probablement périmée)",
+    );
+  }
+  const health = { datetimeResponded: false };
+  return confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, null, health);
+}
+
+async function confirmSlotsViaDatetimeOnce(
+  session: SpainCfSession,
+  renderedHtml: string,
+  publickey: string,
+  cookieStr: string,
+  referer: string,
+  /** Config mise en cache (services + agenda) — null pour un scan complet à froid. */
+  warm: WarmProbeEntry | null,
+  /** Mutable : passe à true dès qu'un datetime/ renvoie une réponse JSONP exploitable. */
+  health: { datetimeResponded: boolean },
 ): Promise<{
   serviceId: string;
   serviceName: string;
@@ -1029,7 +1133,12 @@ async function confirmSlotsViaDatetime(
 
   let services: Array<{ serviceId: string; serviceName: string }>;
 
-  if (svcMatches.length === 0) {
+  if (warm) {
+    // Probe à chaud : la liste des services vient du cache config (immuable côté
+    // portail). getwidgetconfigurations/ et getservices/ sont sautés — ils ne
+    // servaient qu'à (re)découvrir des IDs déjà connus.
+    services = warm.services;
+  } else if (svcMatches.length === 0) {
     // FALLBACK : Kinshasa (et certains portails Bookitit récents) utilisent un rendu
     // client-side via Backbone.js / Underscore templates — les liens #selectservice
     // contiennent <%= attributes.id %> côté serveur et ne sont jamais présents
@@ -1239,7 +1348,13 @@ async function confirmSlotsViaDatetime(
     let agendaId = "";
     const nativeDtRaws: string[] = []; // datetime/ capturés nativement, à parser avant AJAX
     let agRawForParsing = "";
-    try {
+    if (warm) {
+      // Probe à chaud : l'agenda est déjà connu. Bonus — règle §9 (1 seul
+      // getagendas/ par PHPSESSID) : ne pas le rappeler évite le 0B systématique
+      // des appels suivants sur une session réutilisée.
+      agendaId = warm.agendaId;
+      console.log(`[spain-http] ♻️ getagendas/ sauté — agenda ${agendaId} depuis le cache config`);
+    } else try {
       // ── Approche 1 : clic natif via SpainPersistentBrowser (persistent-browser uniquement) ──
       let nativeCapture: {
         getagendasRaw: string;
@@ -1360,6 +1475,18 @@ async function confirmSlotsViaDatetime(
     // ── Dynamic multi-month scan basé sur maxDays (reproduit test-bookitit-dynamic.ts) ────
     // Minimum 2 mois (M + M+1) ; continue selon maxDays extrait de chaque réponse datetime/.
     // Garantit que Cuba (créneaux en M+2 à M+5) et São Paulo sont couverts sans limite fixe.
+    //
+    // ⚠️ NE JAMAIS PARALLÉLISER CETTE BOUCLE — trois raisons dures :
+    //   1. Dépendance de données : la condition d'arrêt utilise `globalMaxDays`,
+    //      renvoyé par la réponse du mois précédent. Sans lui, on ne sait pas
+    //      combien de mois interroger (et `consecutiveEmpty` non plus).
+    //   2. Session PHP stateful : tous les appels partagent le même PHPSESSID et
+    //      le même callback JSONP (`sharedCb`) avec un compteur `_` séquentiel.
+    //      Des requêtes concurrentes sur ce triplet font répondre 0B / redirect
+    //      #services au serveur Bookitit — déjà observé.
+    //   3. Empreinte réseau : un vrai widget émet ses datetime/ à la suite ;
+    //      une rafale simultanée est une signature de bot évidente.
+    // Le gain de latence recherché passe par le warm cache ci-dessus, pas ici.
     let globalMaxDays: Date | null = null;
     let consecutiveEmpty = 0;
     const MAX_DT_MONTHS = 12;
@@ -1429,6 +1556,10 @@ async function confirmSlotsViaDatetime(
 
         if (dtRaw.length > 0) {
           const parsed = parseJsonpPayload(dtRaw);
+          // Signal de santé : le serveur a répondu du JSONP exploitable. C'est la
+          // SEULE condition qui autorise à conclure « aucun créneau » — un 0B ou un
+          // corps non-JSONP signifie session périmée, pas absence de disponibilité.
+          if (parsed && typeof parsed === "object") health.datetimeResponded = true;
           // ── Log structure brute du premier jour (voir les champs réels Bookitit) ──
           if (parsed && typeof parsed === "object") {
             const slots0 = (parsed as Record<string, unknown>).Slots;
@@ -1493,6 +1624,13 @@ async function confirmSlotsViaDatetime(
 
     // Après le scan dynamique : si de nouveaux créneaux ont été trouvés → retour
     const monthsScanned = mo;
+
+    // Armement du warm cache — uniquement après un scan à froid dont datetime/ a
+    // réellement répondu. On ne mémorise QUE la configuration (services + agenda) ;
+    // la disponibilité, elle, est re-interrogée en live à chaque cycle.
+    if (!warm && health.datetimeResponded && agendaId) {
+      setWarmProbe(publickey, services, agendaId);
+    }
     if (allSlots.length > svcSlotsStart) {
       const firstSlot = allSlots[svcSlotsStart];
       const count = allSlots.length - svcSlotsStart;
@@ -2745,6 +2883,24 @@ async function scanViaMainEndpoint(
     console.log(`[spain-http] 🟢 SPA: dialog-confirm dans idBktDefaultServicesTextBeforeServicesList → créneaux potentiels, datetime/ obligatoire`);
   }
 
+  // ─── Verdict d'indice serveur (INDICE, PAS DÉCISION) ──────────────────────
+  // Résume ce que le HTML laisse entendre, pour la lecture des logs uniquement.
+  // Comparaison des deux profils réellement observés :
+  //   • serviceContainer=true + dialogConfirm=true → le serveur a rendu le bloc
+  //     « instructions + ACEPTAR » : il a quelque chose à proposer → dispo probable.
+  //   • serviceContainer=false + templates=true    → rendu 100 % client : le HTML
+  //     ne dit RIEN de la disponibilité, ni dans un sens ni dans l'autre.
+  // Dans les deux cas la conclusion vient exclusivement de datetime/.
+  const serverAvailabilityHint = hasServerAcceptDialog || hasRenderedServiceLinks
+    ? "DISPONIBILITÉ PROBABLE"
+    : hasServiceTextContainer || hasClientSideTemplates
+      ? "INDÉTERMINÉ (rendu client)"
+      : "AUCUN SIGNAL";
+  console.log(
+    `[spain-http] 🧪 Indice serveur: ${serverAvailabilityHint} — indice non décisionnel, ` +
+    `seul datetime/ tranche (le texte "No hay horas" n'est jamais pris en compte)`,
+  );
+
   // ─── DÉTECTION DE DISPONIBILITÉ ──────────────────────────────────────────
   //
   // Flux UI réel Bookitit (confirmé captures 2026-08-06 Saopolo) :
@@ -2756,9 +2912,18 @@ async function scanViaMainEndpoint(
   // En HTTP, on ne simule pas le clic ACEPTAR — on appelle directement getservices/
   // puis getagendas/ puis datetime/ via confirmSlotsViaDatetime.
   //
-  // Signal négatif fiable (sans appel datetime/) :
-  //   → div "No hay horas disponibles" VISIBLE (style sans display:none)
+  // ⚠️ RÈGLE ABSOLUE : le texte "No hay horas disponibles" n'est JAMAIS une décision.
+  // Sur les portails Bookitit en rendu client (Backbone/Underscore), ce bloc est un
+  // placeholder statique laissé visible par le serveur même quand datetime/ retourne
+  // des créneaux — il a déjà provoqué des not_found alors que 14 créneaux existaient.
+  // Il n'est donc conservé QUE comme information de diagnostic (logs) et comme repli
+  // dégradé lorsque les endpoints AJAX sont totalement injoignables.
+  //
+  // Seuls signaux négatifs autorisés SANS appel datetime/ (signaux serveur, non textuels) :
+  //   → bkt_init_widget.dates=[] hors flow Aceptar/service
   //   → isSpa + !hasServiceTextContainer + !hasRenderedServiceLinks + !hasClientSideTemplates
+  //
+  // La seule source de vérité de disponibilité reste la réponse datetime/.
   // ─────────────────────────────────────────────────────────────────────────
 
   const { visible: hasVisibleNoSlots, hidden: hasHiddenNoSlots } = detectNoHayHorasVisibility(html);
@@ -2814,10 +2979,8 @@ async function scanViaMainEndpoint(
     mainFromCache,
   };
 
-  // Signal négatif fiable → pas besoin d'appel API
+  // ── DIAGNOSTIC UNIQUEMENT — aucune décision prise sur ce texte ────────────
   if (hasVisibleNoSlots) {
-    // ── DIAGNOSTIC : dump du contexte HTML autour du match ──────────────────
-    // Permet de vérifier que c'est bien un vrai "no hay horas" et non un artefact.
     const matchIdx = html.search(VISIBLE_NO_SLOTS_RE);
     if (matchIdx !== -1) {
       const ctxStart = Math.max(0, matchIdx - 150);
@@ -2825,33 +2988,19 @@ async function scanViaMainEndpoint(
       console.log(`[spain-http] 🔬 Contexte HTML "No hay horas" (pos ${matchIdx}):`);
       console.log(`[spain-http]    ${html.slice(ctxStart, ctxEnd).replace(/\s+/g, " ").trim()}`);
     }
-
-    const hasInteractiveAcceptFlow = hasAcceptModal || hasRenderedServiceLinks || hasClientSideTemplates;
-    if (!hasInteractiveAcceptFlow) {
-      console.log(`[spain-http] 📋 "No hay horas disponibles" VISIBLE → pas de créneau`);
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
-    }
-
     console.log(
-      `[spain-http] ⚠️ "No hay horas disponibles" VISIBLE MAIS flow interactif détecté ` +
-      `(modal Aceptar ou services dynamiques) → vérification via getservices/datetime...`,
+      `[spain-http] ⚠️ "No hay horas disponibles" VISIBLE — signal NON fiable, ignoré pour la décision ` +
+      `→ vérification obligatoire via getservices/getagendas/datetime...`,
     );
   }
 
   // Si le widget a déjà atteint un état de services/accept flow mais que datetime/ reste vide,
   // on ne considère pas ça comme un slot confirmé ; on le marque comme état intermédiaire pour
   // éviter les faux positifs et conserver un signal de progression clair.
-  if (diagnosticState === "service-state" && !hasVisibleNoSlots) {
+  if (diagnosticState === "service-state") {
     console.log(`[spain-http] 🟡 État widget service-state observé sans slot confirmé — vérification datetime/ en cours...`);
   }
-
-  if (hasVisibleNoSlots && !hasInteractiveAcceptFlow) {
-    return { status: "not_found", scanDurationMs: Date.now() - t0 };
-  }
-
-  if (hasVisibleNoSlots && hasInteractiveAcceptFlow) {
-    console.log(`[spain-http] ⚠️ "No hay horas disponibles" VISIBLE MAIS flow interactif détecté → vérification via getservices/datetime...`);
-  }
+  void hasInteractiveAcceptFlow; // conservé pour diagnostic — plus utilisé comme critère de décision
 
   // ─── Tous les signaux positifs passent par confirmSlotsViaDatetime ────────
   //   → Seule réponse datetime/ avec des Slots réels = "found"
@@ -2862,7 +3011,7 @@ async function scanViaMainEndpoint(
   // À ce stade bkt_init_widget.dates=[] EST ATTENDU (aucun service sélectionné).
   // La présence de la dialog est le signal le plus fiable : on appelle toujours
   // getservices/datetime pour confirmer la disponibilité réelle.
-  if (hasAcceptModal && !hasVisibleNoSlots) {
+  if (hasAcceptModal) {
     console.log(
       `[spain-http] 🔍 custom-dialog/Aceptar (idBktDefaultCustomContainer) détecté — ` +
       `vérification via getservices/datetime...`,
@@ -2899,18 +3048,15 @@ async function scanViaMainEndpoint(
   // dans ce cas — on l'appelle toujours quand "No hay horas" est masquée.
   // Même sans créneau actuellement (Kinshasa), getservices/ retourne la liste de
   // services et datetime/ confirme la disponibilité réelle.
-  if (hasHiddenNoSlots && !hasVisibleNoSlots) {
+  if (hasHiddenNoSlots || hasVisibleNoSlots) {
     const hasRenderedServiceLinks = /#selectservice\/[\w-]+/i.test(renderedHtml);
     // Check original (un-stripped) html for EJS template placeholders
     // reuse `hasClientSideTemplates` computed above
-    if (!hasRenderedServiceLinks && !hasClientSideTemplates) {
-      console.log(`[spain-http] ⚠️ "No hay horas" masquée MAIS aucun service rendu ni template Backbone détecté → not_found`);
-      return { status: "not_found", scanDurationMs: Date.now() - t0 };
-    }
+    const noHayLabel = hasVisibleNoSlots ? `"No hay horas" VISIBLE (ignorée)` : `"No hay horas" masquée`;
     if (hasClientSideTemplates && !hasRenderedServiceLinks) {
-      console.log(`[spain-http] 🔍 "No hay horas" masquée + templates Backbone (client-side render) — vérification datetime/ via getservices/ fallback…`);
+      console.log(`[spain-http] 🔍 ${noHayLabel} + templates Backbone (client-side render) — vérification datetime/ via getservices/ fallback…`);
     } else {
-      console.log(`[spain-http] 🔍 "No hay horas" masquée + services visibles — vérification datetime/…`);
+      console.log(`[spain-http] 🔍 ${noHayLabel} — vérification datetime/…`);
     }
     console.log(`[spain-http] ⏳ Phase 2 — /main/ OK, vérification secondaire via getservices/getagendas/datetime...`);
     const confirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
@@ -3049,8 +3195,30 @@ async function scanViaMainEndpoint(
     };
   }
 
-  console.log(`[spain-http] 📋 Pas de signal positif → not_found`);
-  return { status: "not_found", scanDurationMs: Date.now() - t0 };
+  // ─── Filet de sécurité : aucune conclusion négative sans datetime/ ───────────
+  // Aucun des cas ci-dessus n'a matché : plutôt que de conclure "pas de créneau"
+  // sur une simple heuristique HTML (historiquement le texte "No hay horas"), on
+  // interroge la seule source fiable. Coût : 2-3 requêtes JSONP, uniquement dans ce
+  // cas résiduel — le chemin nominal (Aceptar / services / templates) a déjà statué.
+  console.log(`[spain-http] 🔍 Aucun signal HTML exploitable — vérification finale via getservices/getagendas/datetime…`);
+  const finalConfirmed = await confirmSlotsViaDatetime(session, renderedHtml, publickey, buildCookieStr(), referer);
+  if (finalConfirmed === "ajax_unavailable") {
+    return resolveAjaxUnavailableOutcome(session, ajaxUnavailableCtx, Date.now() - t0);
+  }
+  if (!finalConfirmed) {
+    console.log(`[spain-http] 📋 datetime/ vide → not_found (décision fondée sur l'API, pas sur le HTML)`);
+    return { status: "not_found", scanDurationMs: Date.now() - t0 };
+  }
+  return {
+    status: "found",
+    slotInfo: `Créneau confirmé via datetime/: ${finalConfirmed.date} ${finalConfirmed.time} — "${finalConfirmed.serviceName}"`,
+    slot: { date: finalConfirmed.date, time: finalConfirmed.time, location: finalConfirmed.serviceName },
+    scanDurationMs: Date.now() - t0,
+    _mainHtml: html,
+    _services: [{ serviceId: finalConfirmed.serviceId, serviceName: finalConfirmed.serviceName }],
+    _allSlots: finalConfirmed.allSlots,
+    _widgetConfig: finalConfirmed.widgetConfig,
+  };
 }
 
 /**

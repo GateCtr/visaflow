@@ -678,7 +678,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
               })
             : Promise.resolve(null);
         } else {
-          log("WARN", `[SPAIN-WATCHER] ⚠️ FAUX POSITIF PROBABLE — 'No hay horas' masqué MAIS aucun service connu (ni HTML ni getservices/)`);
+          log("WARN", `[SPAIN-WATCHER] ⚠️ Créneau confirmé par datetime/ MAIS aucun service connu (ni HTML ni getservices/) — booking impossible`);
           // Log un extrait du HTML pour diagnostic
           const renderedHtml = mainHtml.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
           const containerMatch = renderedHtml.match(/idDivBktServicesContainer[^>]*>([\s\S]{0,500})/i);
@@ -704,10 +704,14 @@ export async function startSpainWatcherLoop(): Promise<void> {
             const services = diagServices;
             log("INFO", `[SPAIN-WATCHER]    Services Bookitit disponibles: ${services.map((s) => `"${s.serviceName}" (${s.serviceId})`).join(", ") || "aucun"}`);
 
-            // 3. Tous les dossiers bookent en parallèle — chacun a son PHPSESSID
-            //    isolé via createIsolatedBookingSession(). La session CF (cf_clearance)
-            //    est partagée en lecture seule : pas de conflit. Le gain est ~N×latence
-            //    booking au lieu de N×latence séquentielle (crítico si N>=2 au pic).
+            // 3. Les dossiers bookent SÉQUENTIELLEMENT (voir bloc « Booking séquentiel »
+            //    plus bas). createIsolatedBookingSession() n'isole réellement le
+            //    PHPSESSID qu'en mode HTTP/impit pur ; en mode capsolver — celui utilisé
+            //    en production — le PHPSESSID est lié au solve CF et donc partagé entre
+            //    tous les dossiers, ce qui interdit le parallélisme.
+            //    Ce coût séquentiel est assumé : l'objectif n'est pas de booker tous les
+            //    dossiers sur un même cycle, mais d'en sécuriser un proprement — les
+            //    autres repasseront au cycle suivant.
             // Date réellement confirmée par datetime/ (undefined si non extractible).
             // Ne jamais retomber sur "aujourd'hui" pour targetDate : cela ferait
             // booker une date inexistante. Le fallback ne sert qu'aux logs Convex.
@@ -739,6 +743,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
             // En mode capsolver, tous les dossiers partagent le même PHPSESSID (lié
             // au solve CF). getsigninfields/ est stateful par PHPSESSID côté serveur :
             // appels simultanés → N-1 dossiers reçoivent 0B. Testé et confirmé.
+            //
+            // Choix assumé : le surcoût (~3,5-4,5 s par dossier) est négligeable face au
+            // risque. Réserver un créneau proprement pour un dossier vaut mieux que de
+            // brûler N sessions en parallèle ; les dossiers non servis sont repris au
+            // cycle suivant, le round-robin ci-dessus évitant qu'ils visent tous le même
+            // créneau.
             // ─────────────────────────────────────────────────────────────────────
 
             // Capacité restante par créneau (clé = "date_time").
