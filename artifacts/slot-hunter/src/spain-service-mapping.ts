@@ -133,6 +133,22 @@ export function matchServiceForVisa(
   services: ExtractedSlotInfo[],
   visaType: string,
 ): ExtractedSlotInfo | null {
+  if (!services.length) {
+    console.warn(`[spain-mapping] ❌ Aucun service fourni pour "${visaType}" — rien à matcher`);
+    return null;
+  }
+
+  // ─── Portail mono-service (cas Kinshasa : "TRAMITACIÓN DE VISADOS") ────────
+  // Le guichet ne propose qu'un seul créneau de RDV, tous types de visa
+  // confondus : la distinction Tourisme / Études / Long séjour n'existe pas
+  // côté Bookitit. Matcher par visaType n'a donc aucun sens et faisait échouer
+  // 100 % des réservations. On prend directement le service réservable.
+  const bookable = services.filter((s) => (s.serviceName ?? "").replace(/<[^>]+>/g, "").trim().length > 0);
+  if (bookable.length === 1) {
+    console.log(`[spain-mapping] ✅ Portail mono-service → "${bookable[0].serviceName}" (${bookable[0].serviceId}) pour "${visaType}"`);
+    return bookable[0];
+  }
+
   const category = extractVisaCategory(visaType);
 
   if (!category) {

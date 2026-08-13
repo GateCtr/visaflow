@@ -26,7 +26,7 @@ import {
   tryRenewSpainPersistentBrowserSession,
 } from "../spain-persistent-browser.js";
 import { initSpainRedis, acquireSpainScannerLock, releaseSpainScannerLock, SPAIN_INSTANCE_ID } from "../spain-redis-persistence.js";
-import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig } from "../spain-http-booking.js";
+import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig, type ExtractedSlotInfo } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
 import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex, type SlotExplorationResult } from "../spain-slot-explorer.js";
 import { log } from "../scheduler-utils.js";
@@ -166,7 +166,28 @@ async function getActiveSpainDossiers(): Promise<SpainDossier[]> {
 }
 
 /**
+ * Tolérance (en jours) appliquée à `slotDateFrom`.
+ *
+ * POURQUOI : sur Bookitit les créneaux durent quelques secondes. Rejeter un
+ * créneau parce qu'il tombe quelques jours avant la date souhaitée revient à
+ * ne jamais rien réserver — alors qu'un RDV légèrement anticipé reste
+ * exploitable (le dossier peut être avancé / le RDV reprogrammé).
+ * `slotDateDeadline` reste strict : un RDV après la deadline est inutile.
+ *
+ * Override : SPAIN_SLOT_FROM_TOLERANCE_DAYS (0 = strict, -1 = ignorer slotDateFrom).
+ */
+const SLOT_FROM_TOLERANCE_DAYS = (() => {
+  const raw = Number(process.env.SPAIN_SLOT_FROM_TOLERANCE_DAYS ?? "45");
+  if (!Number.isFinite(raw)) return 45;
+  return Math.round(raw);
+})();
+
+/**
  * Vérifie si un créneau est dans la fenêtre de dates acceptable pour un dossier.
+ *
+ * `slotDateFrom` est traité comme une PRÉFÉRENCE (avec tolérance), pas comme un
+ * mur : seul un créneau déjà passé ou très en amont de la date souhaitée est
+ * écarté. `slotDateDeadline` reste une contrainte dure.
  */
 function isSlotInDateWindow(slotDate: string, dossier: SpainDossier): boolean {
   if (!slotDate) return true; // Pas de date connue → on tente quand même
@@ -174,11 +195,25 @@ function isSlotInDateWindow(slotDate: string, dossier: SpainDossier): boolean {
   const slot = new Date(slotDate);
   if (isNaN(slot.getTime())) return true;
 
-  if (dossier.slotDateFrom) {
+  // Un créneau dans le passé n'a jamais de sens.
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  if (slot < todayMidnight) {
+    log("INFO", `[SPAIN-WATCHER] ⏭️ ${dossier.applicantName}: créneau ${slotDate} déjà passé — skip`);
+    return false;
+  }
+
+  if (dossier.slotDateFrom && SLOT_FROM_TOLERANCE_DAYS >= 0) {
     const from = new Date(dossier.slotDateFrom);
-    if (!isNaN(from.getTime()) && slot < from) {
-      log("INFO", `[SPAIN-WATCHER] ⏭️ ${dossier.applicantName}: créneau ${slotDate} avant slotDateFrom ${dossier.slotDateFrom} — skip`);
-      return false;
+    if (!isNaN(from.getTime())) {
+      const fromWithTolerance = new Date(from.getTime() - SLOT_FROM_TOLERANCE_DAYS * 86_400_000);
+      if (slot < fromWithTolerance) {
+        log("INFO", `[SPAIN-WATCHER] ⏭️ ${dossier.applicantName}: créneau ${slotDate} trop en amont de slotDateFrom ${dossier.slotDateFrom} (tolérance ${SLOT_FROM_TOLERANCE_DAYS}j) — skip`);
+        return false;
+      }
+      if (slot < from) {
+        log("INFO", `[SPAIN-WATCHER] ✅ ${dossier.applicantName}: créneau ${slotDate} avant slotDateFrom ${dossier.slotDateFrom} mais dans la tolérance (${SLOT_FROM_TOLERANCE_DAYS}j) — accepté`);
+      }
     }
   }
 
@@ -480,12 +515,26 @@ export async function startSpainWatcherLoop(): Promise<void> {
       ) {
         const mainHtml = (result as any)._mainHtml as string;
 
-        // Extraction diagnostic — toujours logué, même sans dossier actif
-        const diagServices = extractServicesFromHtml(mainHtml);
+        // ─── Sources de services : HTML rendu OU getservices/ JSONP ───────────
+        // Le portail Bookitit rend la liste des services côté client (SPA) :
+        // /main/ ne contient AUCUN lien #selectservice. Le scanner a déjà
+        // récupéré les services via getservices/ et les expose dans `_services` ;
+        // les ignorer produisait un faux « FAUX POSITIF » + le skip de tous les
+        // dossiers (« aucun service ne matche … parmi:  » avec liste vide).
+        const htmlServices = extractServicesFromHtml(mainHtml);
+        const probeServices = ((result as any)._services ?? []) as ExtractedSlotInfo[];
+        const byId = new Map<string, ExtractedSlotInfo>();
+        for (const svc of [...htmlServices, ...probeServices]) {
+          if (svc?.serviceId && !byId.has(svc.serviceId)) byId.set(svc.serviceId, svc);
+        }
+        const diagServices = [...byId.values()];
+        if (htmlServices.length === 0 && probeServices.length > 0) {
+          log("INFO", `[SPAIN-WATCHER] ℹ️ 0 lien #selectservice dans le HTML (rendu SPA) → services repris de getservices/ : ${probeServices.map((s) => `"${s.serviceName}" (${s.serviceId})`).join(", ")}`);
+        }
         if (diagServices.length > 0) {
           detectedServicesJson = JSON.stringify(diagServices.map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName })));
           const targetService = diagServices.find((svc) => /tramita|visados|visa/i.test(svc.serviceName || "")) ?? null;
-          log("INFO", `[SPAIN-WATCHER] ✅ CRÉNEAU CONFIRMÉ — ${diagServices.length} service(s) rendu(s) dans le HTML :`);
+          log("INFO", `[SPAIN-WATCHER] ✅ CRÉNEAU CONFIRMÉ — ${diagServices.length} service(s) connu(s) :`);
           for (const svc of diagServices) {
             log("INFO", `[SPAIN-WATCHER]    🎯 "${svc.serviceName}" → serviceId: ${svc.serviceId}`);
           }
@@ -505,7 +554,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
               })
             : Promise.resolve(null);
         } else {
-          log("WARN", `[SPAIN-WATCHER] ⚠️ FAUX POSITIF PROBABLE — 'No hay horas' masqué MAIS aucun service rendu (0 liens #selectservice dans le HTML)`);
+          log("WARN", `[SPAIN-WATCHER] ⚠️ FAUX POSITIF PROBABLE — 'No hay horas' masqué MAIS aucun service connu (ni HTML ni getservices/)`);
           // Log un extrait du HTML pour diagnostic
           const renderedHtml = mainHtml.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
           const containerMatch = renderedHtml.match(/idDivBktServicesContainer[^>]*>([\s\S]{0,500})/i);
@@ -527,15 +576,20 @@ export async function startSpainWatcherLoop(): Promise<void> {
           } else {
             log("INFO", `[SPAIN-WATCHER] 🚀 AUTO-BOOKING DÉCLENCHÉ — ${dossiers.length} dossier(s) actif(s) à traiter`);
 
-            // 2. Extraire les services disponibles du HTML
-            const services = extractServicesFromHtml(mainHtml);
+            // 2. Services disponibles (HTML rendu + getservices/ JSONP)
+            const services = diagServices;
             log("INFO", `[SPAIN-WATCHER]    Services Bookitit disponibles: ${services.map((s) => `"${s.serviceName}" (${s.serviceId})`).join(", ") || "aucun"}`);
 
             // 3. Tous les dossiers bookent en parallèle — chacun a son PHPSESSID
             //    isolé via createIsolatedBookingSession(). La session CF (cf_clearance)
             //    est partagée en lecture seule : pas de conflit. Le gain est ~N×latence
             //    booking au lieu de N×latence séquentielle (crítico si N>=2 au pic).
-            const slotDateForLog = result.slotInfo?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? new Date().toISOString().slice(0, 10);
+            // Date réellement confirmée par datetime/ (undefined si non extractible).
+            // Ne jamais retomber sur "aujourd'hui" pour targetDate : cela ferait
+            // booker une date inexistante. Le fallback ne sert qu'aux logs Convex.
+            const confirmedSlotDate = (result as any).slot?.date || result.slotInfo?.match(/\d{4}-\d{2}-\d{2}/)?.[0] || undefined;
+            const confirmedSlotTime = (result as any).slot?.time || undefined;
+            const slotDateForLog = confirmedSlotDate ?? new Date().toISOString().slice(0, 10);
             await Promise.all(dossiers.map(async (dossier) => {
               const matched = matchServiceForVisa(services, dossier.visaType);
 
@@ -560,6 +614,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 targetServiceId: matched.serviceId,
                 visaType: dossier.visaType,
                 groupSize: dossier.groupSize,
+                // Le scanner a déjà validé services + date via getservices//datetime/.
+                // Les transmettre évite de refaire ces appels pendant le booking :
+                // au pic, un créneau vit quelques secondes, chaque aller-retour compte.
+                availableServices: services,
+                targetDate: confirmedSlotDate,
+                targetTime: confirmedSlotTime,
               };
 
               try {
