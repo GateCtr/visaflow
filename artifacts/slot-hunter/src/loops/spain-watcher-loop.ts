@@ -836,11 +836,37 @@ export async function startSpainWatcherLoop(): Promise<void> {
         }
       }
 
+      // ─── Tableau des créneaux pour l'alerte admin (coût zéro) ────────────────
+      // `_allSlots` est déjà en mémoire (produit par le scan datetime/) : le
+      // sérialiser ne coûte aucun appel réseau et garantit que l'email admin
+      // contient le tableau date/heure/places même si l'exploration échoue ou
+      // n'a pas été lancée. L'exploration, plus détaillée, écrase cette valeur
+      // si elle aboutit.
+      const probeAllSlots = (result as any)._allSlots as
+        | Array<{ date: string; time: string; agendaId?: string; freeslots: number }>
+        | undefined;
+      if (probeAllSlots && probeAllSlots.length > 0) {
+        const serviceLabel = detectedServicesJson
+          ? (JSON.parse(detectedServicesJson) as Array<{ serviceId: string; serviceName: string }>)[0]
+          : undefined;
+        detectedSlotsJson = JSON.stringify([{
+          id: serviceLabel?.serviceId ?? "",
+          name: serviceLabel?.serviceName ?? "Créneaux détectés",
+          slots: [...probeAllSlots]
+            .sort((a, b) => (a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
+            .slice(0, 40)
+            .map((s) => ({ d: s.date, t: s.time, n: s.freeslots })),
+        }]);
+      }
+
       // ─── Résultats exploration (attendus après le booking) ───────────────────
       // explorationPromise = Promise.resolve(null) si pas de créneau (not_found/error).
       const exploration = await explorationPromise;
       if (exploration) {
-        detectedSlotsJson = serializeExplorationForConvex(exploration);
+        // Ne pas écraser le tableau issu du scan si l'exploration n'a rien trouvé.
+        if (exploration.totalSlots > 0 || !detectedSlotsJson) {
+          detectedSlotsJson = serializeExplorationForConvex(exploration);
+        }
         const logLines = formatExplorationForLogs(exploration);
         for (const line of logLines) {
           log("INFO", line);

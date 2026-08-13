@@ -233,11 +233,92 @@ export const internalRecordScan = internalMutation({
           slotInfo: args.slotInfo ?? "Créneau disponible",
           portalUrl: watcher.portalUrl,
           screenshotStorageId: args.screenshotStorageId,
+          // Déjà calculé par le scan — aucun coût supplémentaire côté bot.
+          detectedSlots: args.detectedSlots,
         });
       }
     }
   },
 });
+
+// ─── Rendu du tableau de créneaux pour l'email admin ─────────────────────────
+
+/** Nombre maximum de lignes rendues dans l'email (garde-fou taille/temps). */
+const MAX_SLOT_ROWS = 40;
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Construit le tableau HTML « date / heure / places libres » à partir du JSON
+ * `detectedSlots` produit par le scan (`[{id, name, slots:[{d, t, n}]}]`).
+ *
+ * Coût : purement local (parse + concat borné à MAX_SLOT_ROWS). Aucune requête,
+ * aucun accès base — l'envoi de l'alerte reste hors du chemin critique de
+ * réservation (scheduler.runAfter(0), action asynchrone).
+ * Retourne "" si aucune donnée exploitable → l'email garde son ancien format.
+ */
+function buildSlotsTableHtml(detectedSlots?: string): string {
+  if (!detectedSlots) return "";
+
+  let parsed: Array<{ id?: string; name?: string; slots?: Array<{ d?: string; t?: string; n?: number }> }>;
+  try {
+    parsed = JSON.parse(detectedSlots);
+  } catch {
+    return "";
+  }
+  if (!Array.isArray(parsed)) return "";
+
+  const rows: string[] = [];
+  let total = 0;
+  let truncated = false;
+
+  for (const service of parsed) {
+    const slots = Array.isArray(service?.slots) ? service.slots : [];
+    total += slots.length;
+    for (const slot of slots) {
+      if (!slot?.d) continue;
+      if (rows.length >= MAX_SLOT_ROWS) {
+        truncated = true;
+        continue;
+      }
+      const places =
+        typeof slot.n === "number" && slot.n >= 0 ? String(slot.n) : "—";
+      rows.push(`
+      <tr>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; font-variant-numeric: tabular-nums;">${escapeHtml(slot.d)}</td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; font-variant-numeric: tabular-nums;">${escapeHtml(slot.t ?? "—")}</td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${places}</td>
+        <td style="padding: 7px 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">${escapeHtml(service?.name ?? "")}</td>
+      </tr>`);
+    }
+  }
+
+  if (rows.length === 0) return "";
+
+  return `
+  <div style="margin-bottom: 24px;">
+    <h3 style="font-size: 15px; margin: 0 0 8px; color: #1a1a1a;">📅 Créneaux détectés (${total})</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+      <thead>
+        <tr style="background: #f9fafb; text-align: left;">
+          <th style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb;">Date</th>
+          <th style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb;">Heure</th>
+          <th style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">Places</th>
+          <th style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb;">Service</th>
+        </tr>
+      </thead>
+      <tbody>${rows.join("")}
+      </tbody>
+    </table>
+    ${truncated ? `<p style="color: #6b7280; font-size: 12px; margin: 8px 0 0;">… et ${total - rows.length} autre(s) créneau(x) non affiché(s).</p>` : ""}
+  </div>`;
+}
 
 // ─── Internal: email alert via Resend ────────────────────────────────────────
 
@@ -247,6 +328,7 @@ export const internalSendWatcherAlert = internalAction({
     slotInfo: v.string(),
     portalUrl: v.string(),
     screenshotStorageId: v.optional(v.string()),
+    detectedSlots: v.optional(v.string()), // JSON [{id, name, slots:[{d,t,n}]}]
   },
   handler: async (_ctx, args) => {
     const apiKey = process.env.RESEND_API_KEY;
@@ -254,6 +336,12 @@ export const internalSendWatcherAlert = internalAction({
       console.warn("[SpainWatcher] RESEND_API_KEY non configurée — alerte email ignorée");
       return;
     }
+
+    // ─── Tableau des créneaux (date / heure / places libres) ──────────────────
+    // Les données proviennent du scan déjà effectué (champ detectedSlots) :
+    // aucun appel réseau supplémentaire, aucun impact sur la latence de booking.
+    // Le rendu est purement local et borné à MAX_ROWS lignes.
+    const slotsTableHtml = buildSlotsTableHtml(args.detectedSlots);
 
     const html = `
 <!DOCTYPE html>
@@ -268,6 +356,8 @@ export const internalSendWatcherAlert = internalAction({
     <h2 style="color: #15803d; margin-top: 0; font-size: 18px;">✅ Créneau trouvé</h2>
     <p style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">${args.slotInfo}</p>
   </div>
+
+  ${slotsTableHtml}
 
   <p style="color: #444; font-size: 14px; margin-bottom: 16px;">
     Le veilleur automatique Espagne a détecté une disponibilité sur le portail citaconsular.es.
