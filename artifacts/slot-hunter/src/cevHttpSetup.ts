@@ -1809,13 +1809,14 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
   const userAgent = getCevSessionUa();
 
   const useProxy = await shouldUseProxy();
-  // Priorité : getCevProxyUrl() = proxy réel de la session CEV (chargé depuis CSV, SOAX, DECODO…).
-  // C'est la SEULE source fiable — il correspond exactement à l'IP utilisée par cevImpitFetch.
-  // Fallback env vars seulement si le proxy guard n'est pas encore initialisé.
-  const rawProxyUrl = useProxy
-    ? (getCevProxyUrl() || process.env.SOAX_PROXY_URL || process.env.IPROYAL_PROXY_URL || process.env.DECODO_PROXY_URL || null)
-    : null;
-  const proxyUrl = rawProxyUrl ? (rawProxyUrl.startsWith("http") ? rawProxyUrl : `http://${rawProxyUrl}`) : null;
+  // FIX captchaSolved:false — Le proxy résidentiel Decodo assigne une IP de sortie
+  // DIFFÉRENTE à Anti-Captcha vs au bot (sessions TLS distinctes → IP distinctes).
+  // hCaptcha standard (sitekey CEV non-enterprise) ne lie PAS le token à l'IP du solveur.
+  // → Forcer HCaptchaTaskProxyless : Anti-Captcha résout sur ses serveurs, le token est
+  //   accepté par hCaptcha siteverify peu importe l'IP qui le soumet.
+  // L'ancien mode HCaptchaTask avec proxy causait un mismatch IP systématique.
+  const rawProxyUrl: string | null = null; // Proxy désactivé pour Anti-Captcha
+  const proxyUrl: string | null = null;
   let proxyConfig: any = null;
   let proxyDnsResolved: string | null = null;
   
