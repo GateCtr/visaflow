@@ -1869,25 +1869,34 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
     }
   }
 
-  // Only use Anti-Captcha for CEV (CapSolver doesn't support this sitekey)
   // Résolution dynamique : env var + fallback botConfig Convex
+  // Priorité : TWOCAPTCHA_API_KEY (meilleur taux de succès sur cette sitekey) > ANTICAPTCHA
+  const TWOCAPTCHA_KEY = process.env.TWOCAPTCHA_API_KEY || null;
   const ANTICAPTCHA_KEY = await resolveAnticaptchaKey();
-  if (ANTICAPTCHA_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "anticaptcha", useProxy: !!proxyConfig, proxyExitIp: proxyExitIp, proxyDnsResolved: proxyDnsResolved } });
+  
+  // Sélection provider : 2Captcha si disponible, sinon Anti-Captcha
+  const captchaProvider = TWOCAPTCHA_KEY ? "2captcha" : "anticaptcha";
+  const captchaApiKey = TWOCAPTCHA_KEY || ANTICAPTCHA_KEY;
+  const captchaBaseUrl = TWOCAPTCHA_KEY
+    ? "https://api.2captcha.com"
+    : "https://api.anti-captcha.com";
+
+  if (captchaApiKey) {
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: captchaProvider, useProxy: !!proxyConfig, proxyExitIp: proxyExitIp, proxyDnsResolved: proxyDnsResolved } });
     try {
       // ── Helper : créer + poller une tâche Anti-Captcha ──────────────────────
       // Renvoie le token ou null (en cas de timeout / erreur).
       // Lance Error("PROXY_CONNECT_REFUSED_NEEDS_ROTATION") si le proxy est coupé.
       const createAndPoll = async (task: Record<string, unknown>, label: string): Promise<string | null> => {
-        console.log(`[CEV-SETUP] Sending task to Anti-Captcha (${label}):`, JSON.stringify(task, null, 2));
-        const createRes = await fetch("https://api.anti-captcha.com/createTask", {
+        console.log(`[CEV-SETUP] Sending task to ${captchaProvider} (${label}):`, JSON.stringify(task, null, 2));
+        const createRes = await fetch(`${captchaBaseUrl}/createTask`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, task }),
+          body: JSON.stringify({ clientKey: captchaApiKey, task }),
           signal: AbortSignal.timeout(30_000),
         });
         const createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
-        console.log(`[CEV-SETUP] Anti-Captcha createTask (${label}):`, createData);
+        console.log(`[CEV-SETUP] ${captchaProvider} createTask (${label}):`, createData);
         botLog({ applicationId: clientId, step: "cev_http_hcaptcha_create", status: createData.errorId === 0 ? "ok" : "fail", data: { label, errorId: createData.errorId, taskId: createData.taskId, errorCode: createData.errorCode } });
 
         if (createData.errorId !== 0 || !createData.taskId) return null;
@@ -1900,10 +1909,10 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
           await new Promise(r => setTimeout(r, i === 0 ? 15_000 : 5_000));
           let pollData: any;
           try {
-            const pollRes = await fetch("https://api.anti-captcha.com/getTaskResult", {
+            const pollRes = await fetch(`${captchaBaseUrl}/getTaskResult`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ clientKey: ANTICAPTCHA_KEY, taskId: createData.taskId }),
+              body: JSON.stringify({ clientKey: captchaApiKey, taskId: createData.taskId }),
               signal: AbortSignal.timeout(10_000),
             });
             pollData = await pollRes.json();
