@@ -36,6 +36,15 @@ export async function runGermanyScan(
   const startMs = Date.now();
   let captchasSolved = 0;
   let datesScanned = 0;
+
+  // ─── Traçabilité des dates découvertes (coût zéro) ────────────────────────
+  // Ces tableaux sont alimentés au fil du scan avec des données DÉJÀ parsées.
+  // Ils sont renvoyés à la boucle qui les publie en fire-and-forget vers Convex :
+  // aucun appel réseau ajouté au chemin critique de réservation.
+  const discoveredSlots: Array<{ date: string; timeFrom: string; timeTo: string; count: number }> = [];
+  let discoveredDates: string[] = [];
+  let eligibleDates: string[] = [];
+  const discovery = () => ({ discoveredDates, eligibleDates, discoveredSlots });
   
   try {
     // ─── STEP 1: Scan du mois ───────────────────────────────────────────────
@@ -150,6 +159,9 @@ export async function runGermanyScan(
     // ─── STEP 3: Filtrer les dates selon les préférences ────────────────────
     const filteredDates = filterDatesByPreference(allAvailableDates, config);
     
+    discoveredDates = [...allAvailableDates];
+    eligibleDates = [...filteredDates];
+
     if (filteredDates.length === 0) {
       log("INFO", `${allAvailableDates.length} dates trouvées mais aucune dans la plage souhaitée`);
       return {
@@ -158,6 +170,7 @@ export async function runGermanyScan(
         captchasSolved,
         durationMs: Date.now() - startMs,
         updatedSession: currentSession,
+        ...discovery(),
       };
     }
     
@@ -175,6 +188,19 @@ export async function runGermanyScan(
       currentSession = daySession;
       
       const minSlots = config.groupSize && config.groupSize > 1 ? config.groupSize : 1;
+
+      // Mémoriser les créneaux observés (même s'ils ne sont pas réservables) :
+      // simple copie mémoire, exploitée ensuite pour l'onglet « découvertes ».
+      if (dayResult.status === "slots_found" && dayResult.slots.length > 0) {
+        const earliest = [...dayResult.slots].sort((a, b) => a.timeFrom.localeCompare(b.timeFrom))[0];
+        discoveredSlots.push({
+          date: dateStr,
+          timeFrom: earliest.timeFrom,
+          timeTo: earliest.timeTo,
+          count: dayResult.slots.length,
+        });
+      }
+
       if (dayResult.status === "slots_found" && dayResult.slots.length >= minSlots) {
         // Choisir le créneau le plus tôt de la journée (meilleur choix que « premier »)
         const sorted = [...dayResult.slots].sort((a, b) => a.timeFrom.localeCompare(b.timeFrom));
@@ -207,6 +233,7 @@ export async function runGermanyScan(
         captchasSolved,
         durationMs: Date.now() - startMs,
         updatedSession: currentSession,
+        ...discovery(),
       };
     }
     
@@ -224,6 +251,7 @@ export async function runGermanyScan(
           bookedDate: bestSlot.date,
           bookedTime: `${bestSlot.timeFrom} — ${bestSlot.timeTo}`,
         },
+        ...discovery(),
       };
     }
     
@@ -240,6 +268,7 @@ export async function runGermanyScan(
         datesScanned,
         captchasSolved,
         durationMs: Date.now() - startMs,
+        ...discovery(),
         // Ne pas retourner la session après un booking réussi — le job se termine
       };
     }
@@ -253,6 +282,7 @@ export async function runGermanyScan(
         durationMs: Date.now() - startMs,
         updatedSession: currentSession,
         errorMessage: "Slot taken by another user",
+        ...discovery(),
       };
     }
     
@@ -265,6 +295,7 @@ export async function runGermanyScan(
       durationMs: Date.now() - startMs,
       // Pas de updatedSession après session_error : forcer une nouvelle session au prochain scan
       errorMessage: bookingResult.validationError ?? bookingResult.errorMessage,
+      ...discovery(),
     };
     
   } catch (err) {

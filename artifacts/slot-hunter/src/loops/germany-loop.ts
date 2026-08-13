@@ -1,7 +1,7 @@
 // ─── Germany RK-Termin Loop — Boucle de polling pour les dossiers Allemagne ─
 // Filtre les jobs destination=germany, exécute le scan RK-Termin, rapporte au backend.
 
-import { getActiveJobs, sendHeartbeat, reportSlotFound, botLog, type HunterJob } from "../convexClient.js";
+import { getActiveJobs, sendHeartbeat, reportSlotFound, botLog, reportSlotDiscoveryBatch, type SlotDiscoveryEvent, type HunterJob } from "../convexClient.js";
 import { runGermanyScan } from "../germanyPortal/rktermin-orchestrator.js";
 import { RKTERMIN_TIMING, KINSHASA_CATEGORIES } from "../germanyPortal/config.js";
 import { isTransientNetworkError, rotateRKProxy } from "../germanyPortal/rktermin-session.js";
@@ -174,6 +174,86 @@ async function runGermanyCycle(): Promise<void> {
   }
 }
 
+// ─── Découvertes de dates (interface admin) ──────────────────────────────────
+
+/** Nombre maximum d'events de découverte publiés par scan (garde-fou volume). */
+const MAX_DISCOVERY_EVENTS = 120;
+
+/**
+ * Convertit une date RK-Termin `dd.MM.yyyy` en ISO `yyyy-MM-dd`.
+ * Le portail allemand est le seul à utiliser le format européen : Convex
+ * (découvertes ET calendrier admin) attend partout de l'ISO.
+ * Retourne la valeur d'origine si elle est déjà ISO ou non parsable.
+ */
+function rkDateToIso(value?: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const m = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : trimmed;
+}
+
+/**
+ * Publie les dates vues pendant le scan vers l'interface admin.
+ *
+ * COÛT : nul sur le chemin critique — les dates proviennent du résultat de scan
+ * déjà en mémoire, et l'envoi est fire-and-forget (aucun await, aucune requête
+ * supplémentaire vers le portail).
+ */
+function publishGermanyDiscoveries(
+  job: HunterJob,
+  result: { discoveredDates?: string[]; eligibleDates?: string[]; discoveredSlots?: Array<{ date: string; timeFrom: string; timeTo: string; count: number }> },
+  bookedIsoDate?: string,
+): void {
+  const dates = result.discoveredDates ?? [];
+  if (dates.length === 0) return;
+
+  const eligible = new Set(result.eligibleDates ?? []);
+  const slotByDate = new Map((result.discoveredSlots ?? []).map((s) => [s.date, s]));
+
+  // Tri chronologique réel : dd.MM.yyyy ne se trie pas lexicographiquement.
+  const ordered = [...new Set(dates)]
+    .map((raw) => ({ raw, iso: rkDateToIso(raw) }))
+    .filter((e): e is { raw: string; iso: string } => !!e.iso)
+    .sort((a, b) => a.iso.localeCompare(b.iso));
+
+  const events: SlotDiscoveryEvent[] = [];
+  for (const { raw, iso } of ordered) {
+    if (events.length >= MAX_DISCOVERY_EVENTS) break;
+    const slot = slotByDate.get(raw);
+    const isEligible = eligible.has(raw);
+    // "captured" uniquement pour la date effectivement réservée ; les autres dates
+    // éligibles restent "ignored" avec une raison explicite (cohérent avec Espagne).
+    const captured = !!bookedIsoDate && iso === bookedIsoDate;
+    events.push({
+      applicationId: job.id,
+      destination: "germany",
+      office: "Ambassade d'Allemagne Kinshasa",
+      dateFound: iso,
+      timeFound: slot ? `${slot.timeFrom} — ${slot.timeTo}` : undefined,
+      outcome: captured ? "captured" : "ignored",
+      reason: captured
+        ? undefined
+        : !isEligible
+          ? "outside_date_window"
+          : slot
+            ? "slot_not_booked"
+            : "no_time_slots",
+      context: {
+        visaType: job.visaType,
+        rawDate: raw,
+        freeSlots: slot?.count,
+      },
+      mode: "schedule",
+    });
+  }
+
+  if (events.length > 0) {
+    reportSlotDiscoveryBatch(events);
+    log("INFO", `🗂️ ${events.length} date(s) découverte(s) enregistrée(s) pour ${job.applicantName}`);
+  }
+}
+
 /** Traite un dossier Germany individuel. */
 async function processGermanyJob(job: HunterJob): Promise<void> {
   // Pas de rotation proactive : on garde la même IP tant qu'elle fonctionne.
@@ -227,10 +307,15 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
       case "slot_found":
         if (result.booking?.status === "booked") {
           log("INFO", `🎉 SLOT CAPTURED pour ${job.applicantName}! N° ${result.booking.confirmationNumber}`);
-          
+
+          // Le calendrier admin (getCalendarData → appointmentDetails.date) attend
+          // de l'ISO : RK-Termin renvoie du dd.MM.yyyy, non exploitable tel quel.
+          const bookedIsoDate = rkDateToIso(result.booking.bookedDate) ?? "";
+          publishGermanyDiscoveries(job, result, bookedIsoDate || undefined);
+
           await reportSlotFound({
             applicationId: job.id,
-            date: result.booking.bookedDate ?? "",
+            date: bookedIsoDate,
             time: result.booking.bookedTime ?? "",
             location: result.booking.bookedLocation ?? "Kinshasa",
             confirmationCode: result.booking.confirmationNumber,
@@ -241,11 +326,16 @@ async function processGermanyJob(job: HunterJob): Promise<void> {
           resetErrorState(job.id);
           sessionCache.delete(job.id); // job terminé — plus besoin de la session
           syncGermanyStateToRedis(completedJobs, pausedJobs);
+        } else {
+          // Créneau détecté mais non réservé (auto-book off, échec…) — on trace quand même.
+          publishGermanyDiscoveries(job, result);
         }
         break;
       
       case "not_found":
         log("INFO", `Pas de créneau pour ${job.applicantName} (${result.datesScanned} dates scannées, ${result.captchasSolved} captchas${cachedSession ? ", session réutilisée" : ""})`);
+        // Dates vues mais non réservées → visibles dans « découvertes » (fire-and-forget).
+        publishGermanyDiscoveries(job, result);
         await sendHeartbeat({
           applicationId: job.id,
           result: "not_found",

@@ -109,6 +109,16 @@ export interface RKTerminScanResult {
   /** Durée totale du scan en ms */
   durationMs: number;
   errorMessage?: string;
+  /**
+   * Toutes les dates vues sur le calendrier (format dd.MM.yyyy), tous mois confondus.
+   * Remontées pour alimenter l'onglet « découvertes » de l'admin — données déjà en
+   * mémoire, aucun appel réseau supplémentaire.
+   */
+  discoveredDates?: string[];
+  /** Sous-ensemble de `discoveredDates` retenu après filtrage fenêtre admin. */
+  eligibleDates?: string[];
+  /** Créneaux horaires réellement observés lors du scan jour (date dd.MM.yyyy). */
+  discoveredSlots?: Array<{ date: string; timeFrom: string; timeTo: string; count: number }>;
 }
 
 /** Provider de résolution captcha supporté. */

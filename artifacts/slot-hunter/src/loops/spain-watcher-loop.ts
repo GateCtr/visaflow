@@ -265,6 +265,66 @@ function buildDiscoveryEventsFromExploration(
 }
 
 /**
+ * Nombre maximum d'events de découverte envoyés par cycle de scan.
+ * Garde-fou : 40 créneaux × N dossiers peut exploser en volume. L'envoi est
+ * fire-and-forget mais la mutation Convex reste facturée.
+ */
+const MAX_DISCOVERY_EVENTS_PER_CYCLE = 200;
+
+/**
+ * Construit les SlotDiscoveryEvents directement à partir des créneaux du scan
+ * (`_allSlots`, produit par datetime/).
+ *
+ * POURQUOI : l'exploration détaillée (`exploreAvailableSlots`) est optionnelle,
+ * lancée en arrière-plan et souvent vide — résultat : l'interface admin
+ * « découvertes » ne recevait aucune date alors que le scan en avait confirmé
+ * plusieurs dizaines. Les données utilisées ici sont DÉJÀ en mémoire : aucun
+ * appel réseau supplémentaire, aucun impact sur la latence de réservation.
+ *
+ * La déduplication 24h côté Convex (applicationId + office + dateFound +
+ * outcome) évite les doublons avec les events issus de l'exploration/booking.
+ */
+function buildDiscoveryEventsFromScanSlots(
+  slots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>,
+  dossiers: SpainDossier[],
+  service: { serviceId: string; serviceName: string } | undefined,
+): SlotDiscoveryEvent[] {
+  if (dossiers.length === 0 || slots.length === 0) return [];
+
+  const office = service?.serviceName || "TRAMITACIÓN DE VISADOS";
+  const sorted = [...slots].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time),
+  );
+
+  const events: SlotDiscoveryEvent[] = [];
+  for (const slot of sorted) {
+    if (!slot.date) continue;
+    for (const dossier of dossiers) {
+      if (events.length >= MAX_DISCOVERY_EVENTS_PER_CYCLE) return events;
+      const inWindow = isSlotInDateWindow(slot.date, dossier);
+      events.push({
+        applicationId: dossier.applicationId,
+        destination: "spain",
+        office,
+        dateFound: slot.date,
+        timeFound: slot.time || undefined,
+        outcome: inWindow ? "captured" : "ignored",
+        reason: inWindow ? undefined : getDateWindowReason(slot.date, dossier),
+        context: {
+          serviceId: service?.serviceId,
+          freeSlots: slot.freeslots,
+          agendaId: slot.agendaId,
+          applicant: dossier.applicantName,
+          source: "scan_datetime",
+        },
+        mode: "schedule",
+      });
+    }
+  }
+  return events;
+}
+
+/**
  * Assigne équitablement les créneaux disponibles aux dossiers actifs (round-robin).
  *
  * Algorithme :
@@ -765,7 +825,9 @@ export async function startSpainWatcherLoop(): Promise<void> {
                     applicationId: dossier.applicationId,
                     destination: "spain",
                     office: matched.serviceName,
-                    dateFound: slotDateForLog,
+                    // Date réellement réservée en priorité (cohérence avec le calendrier admin).
+                    dateFound: bookingResult.bookedDate ?? assignedSlot?.date ?? slotDateForLog,
+                    timeFound: bookingResult.bookedTime ?? assignedSlot?.time ?? undefined,
                     outcome: "captured",
                     context: { locator: bookingResult.locator, serviceId: matched.serviceId },
                     mode: "schedule",
@@ -791,14 +853,32 @@ export async function startSpainWatcherLoop(): Promise<void> {
                   }
 
                   // ── 2. Report slot found to Convex (marque le dossier comme "slot_found") ──
+                  // IMPORTANT (calendrier admin) : `appointmentDetails.date` alimente
+                  // directement getCalendarData. Envoyer `result.slotInfo` (phrase de log)
+                  // rendait la date inexploitable dans le calendrier. On utilise donc la
+                  // date/heure réellement soumises au portail, avec repli sur le créneau
+                  // assigné par le round-robin puis sur celui confirmé par le scan.
+                  const appointmentDate =
+                    bookingResult.bookedDate ?? assignedSlot?.date ?? confirmedSlotDate;
+                  const appointmentTime =
+                    bookingResult.bookedTime ?? assignedSlot?.time ?? confirmedSlotTime ?? "";
+
+                  if (!appointmentDate) {
+                    log("WARN", `[SPAIN-WATCHER] ⚠️ ${dossier.applicantName}: booking confirmé mais date introuvable — calendrier non alimenté`);
+                  }
+
                   await reportSlotFound({
                     applicationId: dossier.applicationId,
-                    date: result.slotInfo ?? "unknown",
-                    time: "",
-                    location: "Ambassade d'Espagne Kinshasa",
+                    date: appointmentDate ?? "unknown",
+                    time: appointmentTime,
+                    location: bookingResult.bookedServiceName
+                      ? `Ambassade d'Espagne Kinshasa — ${bookingResult.bookedServiceName}`
+                      : "Ambassade d'Espagne Kinshasa",
                     confirmationCode: bookingResult.locator,
                     screenshotStorageId: undefined,
                   }).catch((e) => log("WARN", `[SPAIN-WATCHER] reportSlotFound error: ${e}`));
+
+                  log("INFO", `[SPAIN-WATCHER] 📆 ${dossier.applicantName}: rendez-vous enregistré ${appointmentDate ?? "?"} ${appointmentTime} (calendrier admin)`);
 
                   // Préfixer slotInfo avec la confirmation (écriture synchrone — pas de race en JS)
                   result.slotInfo = `✅ BOOKING CONFIRMÉ pour ${dossier.applicantName} ! Locator: ${bookingResult.locator ?? "N/A"} | ${result.slotInfo}`;
@@ -857,6 +937,22 @@ export async function startSpainWatcherLoop(): Promise<void> {
             .slice(0, 40)
             .map((s) => ({ d: s.date, t: s.time, n: s.freeslots })),
         }]);
+
+        // ─── Enregistrement des dates découvertes (interface admin) ───────────
+        // Source = créneaux déjà en mémoire → aucun appel réseau ajouté au
+        // chemin critique ; l'envoi lui-même est fire-and-forget.
+        const scanDiscoveryEvents = buildDiscoveryEventsFromScanSlots(
+          probeAllSlots,
+          activeDossiers,
+          serviceLabel,
+        );
+        if (scanDiscoveryEvents.length > 0) {
+          reportSlotDiscoveryBatch(scanDiscoveryEvents);
+          log(
+            "INFO",
+            `[SPAIN-WATCHER] 🗂️ ${scanDiscoveryEvents.length} date(s) découverte(s) enregistrée(s) depuis le scan (${scanDiscoveryEvents.filter((e) => e.outcome === "captured").length} captured, ${scanDiscoveryEvents.filter((e) => e.outcome === "ignored").length} ignored)`,
+          );
+        }
       }
 
       // ─── Résultats exploration (attendus après le booking) ───────────────────

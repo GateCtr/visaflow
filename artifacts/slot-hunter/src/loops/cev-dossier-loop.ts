@@ -52,6 +52,8 @@ import {
   getCevCredentials,
   recordCevSessionCheck,
   reportSlotFound,
+  reportSlotDiscoveryBatch,
+  type SlotDiscoveryEvent,
   botLog,
   getBotConfigValue,
   getActiveJobs,
@@ -1133,6 +1135,60 @@ import { sendSlotDetectedEmail, type SlotBookingEmailData } from "../cev-slot-di
 /** Dossiers en pause (après slot_found) — ne pas re-scanner */
 const pausedDossiers = new Set<string>();
 
+// ─── Découvertes de dates (interface admin) ────────────────────────────────
+
+/** Garde-fou volume : nombre max d'events publiés par détection. */
+const MAX_CEV_DISCOVERY_EVENTS = 120;
+
+/**
+ * Publie les créneaux vus sur la page SelectSlot vers l'onglet « découvertes ».
+ *
+ * COÛT : zéro sur le chemin critique — l'appel est fait APRÈS le booking, le
+ * parsing est local (HTML déjà en mémoire, aucune requête portail) et l'envoi
+ * Convex est fire-and-forget. Les dates CEV sont déjà en ISO (`datePart`), donc
+ * directement exploitables par les découvertes ET par le calendrier admin.
+ */
+function publishCevDiscoveries(
+  applicationId: string,
+  vowintRef: string,
+  selectSlotHtml?: string,
+  bookedDate?: string,
+  bookedTime?: string,
+): void {
+  if (!selectSlotHtml || selectSlotHtml.length < 500) return;
+  // setImmediate : le parsing regex/JSON ne s'exécute pas dans la continuation
+  // du booking — aucune milliseconde volée à la capture du créneau.
+  setImmediate(() => {
+    try {
+      const slots = extractInlineSlotsFromHtml(selectSlotHtml)
+        .filter((s) => !!s.date)
+        .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
+        .slice(0, MAX_CEV_DISCOVERY_EVENTS);
+      if (slots.length === 0) return;
+
+      const events: SlotDiscoveryEvent[] = slots.map((s) => {
+        const captured = !!bookedDate && s.date === bookedDate && (!bookedTime || s.time === bookedTime);
+        return {
+          applicationId,
+          destination: "schengen",
+          office: `CEV Belgique (${vowintRef})`,
+          dateFound: s.date,
+          timeFound: s.time || undefined,
+          outcome: captured ? "captured" : "ignored",
+          reason: captured ? undefined : bookedDate ? "other_slot_booked" : "slot_not_booked",
+          context: { vowintRef, freeSlots: s.free ?? 1, source: "selectslot_inline" },
+          mode: "schedule",
+        } satisfies SlotDiscoveryEvent;
+      });
+
+      reportSlotDiscoveryBatch(events);
+      log("INFO", `🗂️ [${vowintRef}] ${events.length} date(s) découverte(s) enregistrée(s)`);
+    } catch (err) {
+      log("WARN", `[${vowintRef}] publishCevDiscoveries (non bloquant): ${err}`);
+    }
+  });
+}
+
 async function handleSlotFound(
   vowintEmail: string,
   vowintPassword: string,
@@ -1170,6 +1226,8 @@ async function handleSlotFound(
   pausedDossiers.add(dossier.vowintRef);
   logFn.info(`  ⏸️ Dossier #${dossier.index} ${dossier.vowintRef} mis en PAUSE temporaire (booking en cours)`);
   let _bookingSucceeded = false;
+  let _bookedDate: string | undefined;
+  let _bookedTime: string | undefined;
 
   try {
   botLog({
@@ -1210,6 +1268,8 @@ async function handleSlotFound(
           confirmationCode: httpResult.confirmationCode,
         });
         _bookingSucceeded = true;
+        _bookedDate = httpResult.bookedDate;
+        _bookedTime = httpResult.bookedTime;
         return;
       }
       // Si NO_AVAILABILITY → le slot est pris par quelqu'un d'autre — dépause pour futurs créneaux
@@ -1256,6 +1316,8 @@ async function handleSlotFound(
         confirmationCode: httpResult.confirmationCode,
       });
       _bookingSucceeded = true;
+      _bookedDate = httpResult.bookedDate;
+      _bookedTime = httpResult.bookedTime;
     } else {
       logFn.error(`  ❌ Booking HTTP (re-login) échoué: ${httpResult.error}`);
     }
@@ -1263,6 +1325,9 @@ async function handleSlotFound(
     logFn.error(`  💥 Crash booking: ${err}`);
   }
 } finally {
+  // ── Dates découvertes (interface admin) — hors chemin critique ────────────
+  publishCevDiscoveries(applicationId, dossier.vowintRef, existingSelectSlotHtml, _bookedDate, _bookedTime);
+
   // ── Dépause si le booking n'a pas abouti ──────────────────────────────────
   // La pause était temporaire (anti-concurrent). Seul un booking confirmé la rend définitive.
   if (!_bookingSucceeded) {
@@ -1636,6 +1701,15 @@ async function handleSlotFoundMulti(
       logFn.info(`  ⏸️ ${_succeededRefs.size} dossier(s) en PAUSE définitive (booking confirmé): [${[..._succeededRefs].join(", ")}]`);
     }
   }
+
+  // ── Dates découvertes (interface admin) — après booking, fire-and-forget ──
+  publishCevDiscoveries(
+    applicationId,
+    detectingDossier.vowintRef,
+    existingSelectSlotHtml,
+    detectingBookingResult?.bookedDate,
+    detectingBookingResult?.bookedTime,
+  );
 
   // ── Email admin avec le RÉSULTAT du booking (pas de discovery inutile) ────
   // Envoie les infos utiles : slots détectés, résultat, code confirmation.

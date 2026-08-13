@@ -96,6 +96,16 @@ export interface SpainBookingResult {
   durationMs: number;
   /** PDF de confirmation généré (Buffer base64-ready) — présent uniquement si status="booked" */
   confirmationPdf?: Buffer;
+  /**
+   * Date réellement réservée (YYYY-MM-DD) — présente si status="booked".
+   * Nécessaire pour alimenter `appointmentDetails.date` côté Convex (calendrier admin) :
+   * sans elle, l'appelant ne dispose que d'une phrase de log non parsable.
+   */
+  bookedDate?: string;
+  /** Heure réellement réservée (HH:MM) — présente si status="booked". */
+  bookedTime?: string;
+  /** Nom du service Bookitit réservé — utilisé comme libellé de lieu/service. */
+  bookedServiceName?: string;
 }
 
 export interface ExtractedSlotInfo {
@@ -1371,6 +1381,11 @@ export async function executeHttpBooking(
     status: "booked",
     locator: locator || undefined,
     confirmationPdf,
+    // Date/heure effectivement soumises à signin//summary/ → source de vérité
+    // pour le calendrier admin (appointmentDetails).
+    bookedDate: slotDate || undefined,
+    bookedTime: slotTime || undefined,
+    bookedServiceName: targetService.serviceName || undefined,
     durationMs: Date.now() - t0,
   };
   } finally {
