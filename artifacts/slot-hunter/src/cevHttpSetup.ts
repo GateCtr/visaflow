@@ -68,9 +68,20 @@ export function invalidateAnticaptchaCache(): void {
 const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
 const TWOCAPTCHA_API_KEY = process.env.TWOCAPTCHA_API_KEY?.trim() ?? "";
 
+/**
+ * Proxy courant pour ce module — fixé par setupCevSessionHttp via setSetupProxy().
+ * Permet à chaque compte d'utiliser son IP Decodo dédiée sans passer par process.env global.
+ */
+let _setupProxyUrl: string | undefined;
+
+/** Définit le proxy à utiliser pour les prochains appels cevSetupFetch dans ce module. */
+export function setSetupProxy(proxyUrl: string | undefined): void {
+  _setupProxyUrl = proxyUrl;
+}
+
 /** Fetch CEV via impit partagé (setup + polling = même instance TLS → session stable) */
 function cevSetupFetch(url: string, options: RequestInit): Promise<Response> {
-  return cevImpitFetch(url, options, "[CEV-SETUP]");
+  return cevImpitFetch(url, options, "[CEV-SETUP]", _setupProxyUrl);
 }
 
 // ─── Cache session VOWINT — DEUX COUCHES ─────────────────────────────────────
@@ -632,7 +643,11 @@ export async function setupCevSessionHttp(
   ipSlotId?: string,
   /** Token hCaptcha pré-résolu — bypasse solveHcaptcha() entièrement (utile pour les tests) */
   presolvedHcaptchaToken?: string,
+  /** URL proxy à utiliser pour tous les fetches de ce setup (Decodo — 1 IP par compte). */
+  proxyUrl?: string,
 ): Promise<CevHttpSetupResult> {
+  // Fixer le proxy pour tous les cevSetupFetch de cette invocation
+  if (proxyUrl !== undefined) setSetupProxy(proxyUrl);
   try {
     botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok" });
     

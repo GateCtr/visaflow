@@ -28,9 +28,9 @@
  */
 
 import { setupCevSessionHttp, invalidateVowintCache, invalidateAnticaptchaCache, resolveFirstAppIdFromMyList } from "../cevHttpSetup.js";
+import { pollCevSlot } from "../cevPolling.js";
 import { cancelCevAppointment } from "../cevHttpCancel.js";
 import { bookCevViaHttp, extractInlineSlotsFromHtml } from "../cevHttpBooking.js";
-import { pollCevSlot } from "../cevPolling.js";
 import {
   initCevProxyGuard,
   releaseCevProxyGuard,
@@ -1119,6 +1119,8 @@ async function performScan(
   siphoned?: SiphonedCreds,
   _hcaptchaRetry = 0,
   logger?: ReturnType<typeof createLogger>,
+  /** URL proxy Decodo dédié à ce compte — transmis à setup et polling pour isolation par IP */
+  accountProxyUrl?: string,
 ): Promise<ScanResult> {
   const logFn = logger || { 
     info: (msg: string) => log("INFO", msg), 
@@ -1138,7 +1140,7 @@ async function performScan(
     Date.now() < siphoned.validUntil
   ) {
     const cookieStr = buildFullSessionCookieStr(siphoned);
-    const pollResult = await pollCevSlot(siphoned.integrationUrl, cookieStr, siphoned);
+    const pollResult = await pollCevSlot(siphoned.integrationUrl, cookieStr, siphoned, accountProxyUrl);
 
     if (pollResult.status === "slot_found") {
       return {
@@ -1164,6 +1166,9 @@ async function performScan(
     applicationId,
     dossier.vowintRef,
     siphoned,
+    undefined,  // ipSlotId
+    undefined,  // presolvedHcaptchaToken
+    accountProxyUrl,
   );
 
   if (!result.success) {
@@ -1192,7 +1197,7 @@ async function performScan(
         logFn.warn(`  🔄 Session VOWINT invalidée → re-login complet au prochain retry`);
       }
       await sleep(30_000);
-      return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger);
+      return performScan(vowintEmail, vowintPassword, dossier, applicationId, siphoned, _hcaptchaRetry + 1, logger, accountProxyUrl);
     }
     // Coupure réseau / surcharge serveur → retry rapide, pas de pause longue ni
     // d'invalidation de session (voir isTransientNetworkError).
@@ -1231,6 +1236,7 @@ async function performScan(
       result.integrationUrl ?? "",
       result.sessionCookie,
       siphoned,
+      accountProxyUrl,
     );
     if (pollResult.status === "slot_found") {
       return {
@@ -2011,6 +2017,15 @@ async function runAccountLoop(job: any): Promise<void> {
   const soaxBaseUrl = process.env.SOAX_PROXY_URL;
   const decodoBaseUrl = process.env.DECODO_PROXY_URL;
   let proxyExitIp: string | null = null;
+  /**
+   * Proxy dédié à ce compte — résolu une seule fois au démarrage.
+   * Passé explicitement à performScan → setupCevSessionHttp → cevImpitFetch
+   * au lieu d'écrire dans process.env.IPROYAL_PROXY_URL (variable globale partagée).
+   *
+   * Pour Decodo CSV : 1 URL fixe par accountId (hash déterministe sur 10 IPs).
+   * Pour SOAX / iProyal : null → comportement historique via process.env.
+   */
+  let accountProxyUrl: string | undefined;
 
   logger.info(`Config:`);
   logger.info(`  • Dossiers: ${localPool.size}`);
@@ -2024,7 +2039,8 @@ async function runAccountLoop(job: any): Promise<void> {
       logger.info(`  • Proxy: Decodo CSV pool (${poolSize} IP(s)) — 1 IP fixe par compte`);
       const decodoUrl = getCevDecodoUrlForAccount(accountId);
       if (decodoUrl) {
-        process.env.IPROYAL_PROXY_URL = decodoUrl; // impit réutilise ce chemin
+        accountProxyUrl = decodoUrl; // stocké localement — pas touche à process.env global
+        process.env.IPROYAL_PROXY_URL = decodoUrl; // compat historique (ex: solveHcaptchaWithProxy)
         resetCevImpitInstances();
         logger.info(`  • Decodo proxy configuré: ${decodoUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
         proxyExitIp = await initCevProxyGuardWithExitIp(decodoUrl, `cev-dossier-${accountId}`);
@@ -2132,7 +2148,7 @@ async function runAccountLoop(job: any): Promise<void> {
         try {
           state.scanCount++;
           const res = await performScan(
-            vowintEmail, vowintPassword, cand, logApplicationId, undefined, 0, logger,
+            vowintEmail, vowintPassword, cand, logApplicationId, undefined, 0, logger, accountProxyUrl,
           );
           // Seules les tentatives réellement arrivées jusqu'à CEV consomment un clic.
           if (res.status !== "transient_error" && res.status !== "probe_error") {
@@ -2241,6 +2257,7 @@ async function runAccountLoop(job: any): Promise<void> {
             if (hasCevDecodoProxy()) {
               const decodoUrl = getCevDecodoUrlForAccount(accountId);
               if (decodoUrl) {
+                accountProxyUrl = decodoUrl;
                 process.env.IPROYAL_PROXY_URL = decodoUrl;
                 resetCevImpitInstances();
                 proxyExitIp = await initCevProxyGuardWithExitIp(decodoUrl, `cev-dossier-${accountId}`);
@@ -2264,6 +2281,7 @@ async function runAccountLoop(job: any): Promise<void> {
             }
           } else {
             // Désactiver le proxy
+            accountProxyUrl = undefined;
             delete process.env.IPROYAL_PROXY_URL;
             resetCevImpitInstances();
             proxyExitIp = null;
@@ -2328,6 +2346,7 @@ async function runAccountLoop(job: any): Promise<void> {
           undefined, // pas de siphonedCreds en One-Shot
           0,
           logger,
+          accountProxyUrl,
         );
       } finally {
         // Libérer le lock après le scan (succès OU erreur)

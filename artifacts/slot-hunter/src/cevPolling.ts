@@ -18,9 +18,20 @@ import { F5CookieManager } from "./cev-f5-cookie-manager.js";
 const BASE = "https://appointment.cloud.diplomatie.be";
 const VOWINT_BASE = "https://visaonweb.diplomatie.be";
 
+/**
+ * Proxy courant pour ce module — fixé par pollCevSlot via setPollingProxy().
+ * Permet à chaque compte d'utiliser son IP Decodo dédiée sans passer par process.env global.
+ */
+let _pollingProxyUrl: string | undefined;
+
+/** Définit le proxy à utiliser pour les prochains appels cevFetch dans ce module. */
+export function setPollingProxy(proxyUrl: string | undefined): void {
+  _pollingProxyUrl = proxyUrl;
+}
+
 /** Fetch CEV avec fingerprint TLS Chrome via impit partagé (setup + polling = même instance) */
 function cevFetch(url: string, options: RequestInit): Promise<Response> {
-  return cevImpitFetch(url, options, "[CEV-POLL]");
+  return cevImpitFetch(url, options, "[CEV-POLL]", _pollingProxyUrl);
 }
 
 interface SiphonedCookies {
@@ -338,7 +349,10 @@ export async function pollCevSlot(
   integrationUrl: string,
   sessionCookie: string,
   siphoned?: SiphonedCookies,
+  proxyUrl?: string,
 ): Promise<CevPollResult> {
+  // Fixer le proxy pour tous les cevFetch de cette invocation
+  if (proxyUrl !== undefined) setPollingProxy(proxyUrl);
   try {
     if (siphoned?.userAgent) {
       setCevExternalUserAgent(siphoned.userAgent);

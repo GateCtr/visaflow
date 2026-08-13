@@ -1051,6 +1051,17 @@ async function confirmSlotsViaDatetime(
   cookieStr: string,
   referer: string,
 ): Promise<ConfirmSlotsResult> {
+  // ── Helper : rotation callback après chaque invocation ───────────────────────
+  // session.bookititState.jqCallback est fixé par le solve capsolver. Bookitit
+  // reconnaît un callback déjà utilisé et retourne 0B au cycle suivant.
+  // On régénère systématiquement après chaque scan (succès ou échec).
+  const rotateCallback = () => {
+    if (session.bookititState?.jqCallback) {
+      session.bookititState.jqCallback = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+      session.bookititState.reqCounter = 0;
+    }
+  };
+
   const warm = getWarmProbe(publickey);
   if (warm) {
     const health = { datetimeResponded: false };
@@ -1059,9 +1070,9 @@ async function confirmSlotsViaDatetime(
       `(${warm.services.length} service(s), agenda ${warm.agendaId}) → datetime/ direct, toujours live`,
     );
     const warmResult = await confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, warm, health);
+    rotateCallback();
     if (warmResult && warmResult !== "ajax_unavailable") return warmResult;
     if (warmResult === null && health.datetimeResponded) {
-      // datetime/ a répondu proprement : l'absence de créneau est une vraie absence.
       return null;
     }
     invalidateWarmProbe(
@@ -1070,7 +1081,9 @@ async function confirmSlotsViaDatetime(
     );
   }
   const health = { datetimeResponded: false };
-  return confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, null, health);
+  const result = await confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, null, health);
+  rotateCallback();
+  return result;
 }
 
 async function confirmSlotsViaDatetimeOnce(
@@ -1437,6 +1450,40 @@ async function confirmSlotsViaDatetimeOnce(
         agendaId = ids[0] ?? "";
         if (agendaId) console.log(`[spain-http]    agenda: ${agendaId}`);
         else console.warn(`[spain-http]    getagendas/ sans agenda ID (raw 200c: "${agRaw.slice(0, 200)}")`);
+      } else if (!useBrowserFetch) {
+        // ── Retry getagendas/ si 0B (serveur saturé sous la charge) ─────────────────
+        // Observé lors de la publication 2026-08-13 : getagendas/ retourne HTTP 200 | 0B
+        // si le serveur est sous pression. Sans agendaId, datetime/ est appelé sans
+        // agendas[] et retourne toujours 0B — cycle perdu. 2 retries rapides récupèrent
+        // l'agendaId sans délai significatif.
+        for (let retry = 0; retry < 2; retry++) {
+          await new Promise<void>((r) => setTimeout(r, 350 * (retry + 1)));
+          const agRetryQ = new URLSearchParams();
+          agRetryQ.append("callback", sharedCb);
+          agRetryQ.append("type", "default");
+          agRetryQ.append("publickey", publickey);
+          agRetryQ.append("lang", "es");
+          agRetryQ.append("services[]", svc.serviceId);
+          agRetryQ.append("version", "4");
+          agRetryQ.append("src", referer);
+          agRetryQ.append("srvsrc", srvsrc);
+          agRetryQ.append("selectedPeople", "1");
+          agRetryQ.append("_", String(nextReqCounter()));
+          const agRetryRes = await spainCfFetch(`${base}getagendas/?${agRetryQ}`, session, { headers });
+          const agRetryRaw = agRetryRes?.ok ? await agRetryRes.text() : "";
+          console.log(`[spain-http] 🔄 getagendas/ retry ${retry + 1}/2 (impit) → HTTP ${agRetryRes?.status ?? "null"} | ${agRetryRaw.length}B`);
+          if (agRetryRaw.length > 0) {
+            agRaw = agRetryRaw;
+            agRawForParsing = agRetryRaw;
+            const agData = parseJsonpPayload(agRetryRaw);
+            const ids = collectIds(agData, /(agenda.*id|agendas.*id|^id$)/i);
+            agendaId = ids[0] ?? "";
+            if (agendaId) { console.log(`[spain-http]    agenda (retry): ${agendaId}`); break; }
+          }
+        }
+        if (!agendaId) {
+          console.warn(`[spain-http]    getagendas/ 0B après retries — datetime/ appelé sans agendas[] (réponse serveur attendue vide)`);
+        }
       }
     } catch (agErr) {
       console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
@@ -1490,11 +1537,18 @@ async function confirmSlotsViaDatetimeOnce(
     let globalMaxDays: Date | null = null;
     let consecutiveEmpty = 0;
     const MAX_DT_MONTHS = 12;
+    // today au format YYYY-MM-DD (pour le start du premier mois)
+    const todayStr = now.toISOString().slice(0, 10);
     let mo = 0;
     while (mo < MAX_DT_MONTHS) {
       let slotsThisMonth = 0;
-      const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
-      const start = tgt.toISOString().slice(0, 10);
+      const tgt = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+      // Premier mois : start=aujourd'hui (aligne sur le vrai navigateur — le serveur
+      // retourne maxDays relatif à aujourd'hui, pas au 1er du mois).
+      // Créneaux d'annulation peuvent apparaître dès demain, indépendamment de la
+      // règle des 36j (qui s'applique uniquement aux nouvelles publications).
+      // Mois suivants : start=1er du mois (navigation mensuelle standard).
+      const start = mo === 0 ? todayStr : tgt.toISOString().slice(0, 10);
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
       try {
         const dtQ = new URLSearchParams();
@@ -1574,13 +1628,22 @@ async function confirmSlotsViaDatetimeOnce(
           if (maxDaysRaw && /^\d{4}-\d{2}-\d{2}$/.test(maxDaysRaw)) {
             const maxDate = new Date(maxDaysRaw + "T23:59:59");
             const todayMidnight = new Date(now.toISOString().slice(0, 10) + "T23:59:59");
-            // Ignorer maxDays ≤ aujourd'hui — signal "mois courant vide", pas une limite globale
-            // (règle SPAIN-HTTP-PURE-FLOW.md §2 : toujours scanner M + M+1 minimum)
+            const isCurrentMonth = mo === 0;
+
             if (maxDate > todayMidnight && (!globalMaxDays || maxDate > globalMaxDays)) {
               globalMaxDays = maxDate;
               console.log(`[spain-http] 📅 maxDays mis à jour: ${maxDaysRaw} (mois ${start.slice(0, 7)})`);
-            } else if (maxDate <= todayMidnight) {
-              console.log(`[spain-http] 📅 maxDays=${maxDaysRaw} ≤ aujourd'hui — ignoré (signal mois vide, pas limite globale)`);
+            } else if (maxDate <= todayMidnight && isCurrentMonth) {
+              // maxDays dans le passé sur le mois courant → normal, fenêtre de cet agenda
+              // commence aujourd'hui. On continue vers le mois suivant.
+              console.log(`[spain-http] 📅 maxDays=${maxDaysRaw} ≤ aujourd'hui (mois courant) — fenêtre agenda depuis aujourd'hui, suite normale`);
+            } else if (maxDate <= todayMidnight && !isCurrentMonth) {
+              // maxDays dans le passé sur un mois futur → signal probable "agenda épuisé"
+              // (tous les créneaux pris depuis la dernière publication).
+              // On ne stoppe PAS immédiatement — les mois suivants peuvent avoir de nouveaux
+              // créneaux d'une prochaine publication. La condition "3 mois vides consécutifs"
+              // arrêtera la boucle si ce pattern se confirme sur plusieurs mois.
+              console.log(`[spain-http] 📅 maxDays=${maxDaysRaw} ≤ aujourd'hui sur mois futur (${start.slice(0, 7)}) — signal agenda épuisé probable, continuation vers mois suivant`);
             }
           }
           // Accumuler TOUS les créneaux (scan complet du mois — pas de retour précoce)
@@ -1602,22 +1665,28 @@ async function confirmSlotsViaDatetimeOnce(
 
       mo++;
 
-      // ── Condition d'arrêt dynamique (minimum 2 mois : M + M+1) ───────────────
-      if (mo >= 2 && globalMaxDays) {
-        const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + mo, 1);
-        if (firstOfNextMonth > globalMaxDays) {
-          console.log(
-            `[spain-http] ⏹ Fin datetime/ : ${firstOfNextMonth.toISOString().slice(0, 10)} ` +
-            `> maxDays ${globalMaxDays.toISOString().slice(0, 10)} — arrêt`,
-          );
-          break;
-        }
-      }
-      // Sécurité : 3 mois consécutifs vides sans maxDays → portail fermé ou erreur réseau
+      // ── Condition d'arrêt : uniquement sur mois vides consécutifs ────────────
+      //
+      // maxDays NE pilote plus l'arrêt de la boucle.
+      //
+      // Pourquoi : le serveur Bookitit peut inclure des slots au-delà de maxDays
+      // dans la même réponse (confirmé : septembre retourne maxDays=2026-09-18
+      // mais les slots vont jusqu'au 30 septembre). maxDays est la limite de
+      // visibilité configurée de l'agenda, pas la dernière date de slot possible.
+      // Utiliser maxDays comme stop condition faisait rater des mois entiers :
+      // si maxDays=2026-09-18, octobre n'était jamais interrogé même si des slots
+      // y existaient.
+      //
+      // Nouvelle règle : on continue tant que le mois courant a retourné des slots
+      // ou qu'on n'a pas atteint 3 mois vides consécutifs (sécurité portail fermé).
+      // MAX_DT_MONTHS (12) reste le garde-fou absolu.
       if (slotsThisMonth === 0) consecutiveEmpty++;
       else consecutiveEmpty = 0;
-      if (!globalMaxDays && consecutiveEmpty >= 3) {
-        console.log(`[spain-http] ⏹ 3 mois vides consécutifs sans maxDays — arrêt sécurité`);
+      if (consecutiveEmpty >= 3) {
+        const reason = globalMaxDays
+          ? `3 mois vides consécutifs (maxDays référence: ${globalMaxDays.toISOString().slice(0, 10)})`
+          : `3 mois vides consécutifs sans maxDays`;
+        console.log(`[spain-http] ⏹ ${reason} — arrêt sécurité`);
         break;
       }
     }
@@ -2740,24 +2809,40 @@ async function scanViaMainEndpoint(
   }
 
   // Fire companions after the main response. These are application JSONP
-  // calls; no synthetic Cloudflare telemetry is generated.
+  // calls that mimic the GTM-triggered requests a real browser sends ~3s after /main/.
+  // We use an AbortController so the companion can be cancelled if the session
+  // is invalidated or a new scan starts before the 2.8s delay expires.
+  const companionAbort = new AbortController();
+  // Expose cancellation on the session so the next scan cycle can abort pending companions.
+  if ((session as any)._pendingCompanionAbort) {
+    (session as any)._pendingCompanionAbort.abort();
+  }
+  (session as any)._pendingCompanionAbort = companionAbort;
+
   void (async () => {
-    await new Promise<void>((r) => setTimeout(r, 2800 + Math.floor(Math.random() * 800)));
-    const tNow = Date.now();
-    const wcfgParams = new URLSearchParams({ ...Object.fromEntries(companionParams), _: String(tNow) });
-    const svcParams = new URLSearchParams({ ...Object.fromEntries(servicesParams), _: String(tNow + 9) });
-    if (preselectedServices.length > 0) {
-      for (const service of preselectedServices) svcParams.append("services[]", service);
+    try {
+      await new Promise<void>((r, rej) => {
+        const t = setTimeout(r, 2800 + Math.floor(Math.random() * 800));
+        companionAbort.signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("companion_aborted")); });
+      });
+      const tNow = Date.now();
+      const wcfgParams = new URLSearchParams({ ...Object.fromEntries(companionParams), _: String(tNow) });
+      const svcParams = new URLSearchParams({ ...Object.fromEntries(servicesParams), _: String(tNow + 9) });
+      if (preselectedServices.length > 0) {
+        for (const service of preselectedServices) svcParams.append("services[]", service);
+      }
+      if (preselectedAgendas.length > 0) {
+        for (const agenda of preselectedAgendas) svcParams.append("agendas[]", agenda);
+      }
+      await Promise.all([
+        spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${wcfgParams}`, session, { headers: jsonpHeaders }).catch(() => null),
+        spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
+      ]);
+      // Beacon #109 (Burp row 109) : t+500-650ms après companions.
+      fireRumBeacon(session, 1170, "/onlinebookings/getwidgetconfigurations/", widgetReferer, buildCookieStr(), 500 + Math.floor(Math.random() * 150));
+    } catch {
+      // Companion annulé par le cycle suivant — normal à haute cadence (10s)
     }
-    if (preselectedAgendas.length > 0) {
-      for (const agenda of preselectedAgendas) svcParams.append("agendas[]", agenda);
-    }
-    await Promise.all([
-      spainCfFetch(`${baseBookititUrl}getwidgetconfigurations/?${wcfgParams}`, session, { headers: jsonpHeaders }).catch(() => null),
-      spainCfFetch(`${baseBookititUrl}getservices/?${svcParams}`, session, { headers: jsonpHeaders }).catch(() => null),
-    ]);
-    // Beacon #109 (Burp row 109) : t+500-650ms après companions.
-    fireRumBeacon(session, 1170, "/onlinebookings/getwidgetconfigurations/", widgetReferer, buildCookieStr(), 500 + Math.floor(Math.random() * 150));
   })();
 
   // Parse JSONP → HTML

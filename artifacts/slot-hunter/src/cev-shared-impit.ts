@@ -1155,7 +1155,20 @@ async function directFetchWithRetry(url: string, options: RequestInit, logPrefix
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
-export async function cevImpitFetch(url: string, options: RequestInit, logPrefix = "[CEV]"): Promise<Response> {
+/**
+ * Fetch CEV via impit avec fingerprint TLS Chrome.
+ *
+ * @param explicitProxyUrl - URL proxy à utiliser pour CET appel uniquement.
+ *   Prioritaire sur process.env.IPROYAL_PROXY_URL.
+ *   Permet l'isolation par compte (Decodo — 1 IP par compte) sans passer par l'env global.
+ *   Si undefined → comportement historique (lecture de process.env.IPROYAL_PROXY_URL).
+ */
+export async function cevImpitFetch(
+  url: string,
+  options: RequestInit,
+  logPrefix = "[CEV]",
+  explicitProxyUrl?: string,
+): Promise<Response> {
   // ── Mode direct forcé (après 422 proxy) ─────────────────────────────────────
   if (Date.now() < _cevDirectModeUntil) {
     // Jitter réseau réaliste même en mode direct
@@ -1191,9 +1204,10 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
   await new Promise(r => setTimeout(r, jitterMs));
 
   // ── Déterminer le proxy à utiliser ──────────────────────────────────────────
-  // Si un proxy est passé dynamiquement via process.env (par le stealth loop),
-  // l'utiliser. Sinon utiliser la variable globale IPROYAL_PROXY_URL.
-  let currentProxy = process.env.IPROYAL_PROXY_URL;
+  // Priorité :
+  //   1. explicitProxyUrl (passé par-appel) — isolation par compte Decodo
+  //   2. process.env.IPROYAL_PROXY_URL — compatibilité historique / stealth-loop
+  let currentProxy = explicitProxyUrl ?? process.env.IPROYAL_PROXY_URL;
   
   if (!currentProxy) {
     // Pas de proxy configuré — connexion directe (avec retry sur coupure réseau)
@@ -1204,8 +1218,11 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= PROXY_MAX_RETRIES; attempt++) {
-    // Re-lire le proxy à chaque retry (peut avoir été roté entre les tentatives)
-    currentProxy = process.env.IPROYAL_PROXY_URL ?? currentProxy;
+    // Re-lire le proxy à chaque retry seulement si pas de proxy explicite
+    // (le proxy explicite Decodo est fixe par compte — pas de rotation inter-retry)
+    if (!explicitProxyUrl) {
+      currentProxy = process.env.IPROYAL_PROXY_URL ?? currentProxy;
+    }
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), PROXY_FETCH_TIMEOUT_MS);
@@ -1247,8 +1264,8 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
         lastError = new Error(`ERROR_${res.status}`);
         if (attempt < PROXY_MAX_RETRIES) {
           if (res.status === 502) {
-            // 502 = erreur gateway proxy → rotation IP immédiate
-            if (currentProxy?.includes("soax") || currentProxy?.includes("sessionid")) {
+            // 502 = erreur gateway proxy → rotation IP uniquement pour SOAX (pas Decodo explicite)
+            if (!explicitProxyUrl && (currentProxy?.includes("soax") || currentProxy?.includes("sessionid"))) {
               rotateCevSoaxSession("cev-retry");
               const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
               process.env.IPROYAL_PROXY_URL = newProxyUrl;
@@ -1292,10 +1309,8 @@ export async function cevImpitFetch(url: string, options: RequestInit, logPrefix
           `${logPrefix} ⚠️ Proxy ${isTimeout ? "TIMEOUT" : "error"} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1}): ${msg.slice(0, 80)}`
         );
         lastError = err instanceof Error ? err : new Error(msg);
-        // ── Rotation IP SOAX entre les retries ──────────────────────────────
-        // Si l'IP sticky actuelle est morte, on en demande une nouvelle
-        // avant de retenter (nouveau sessionid = nouvelle IP SOAX).
-        if (currentProxy?.includes("soax") || currentProxy?.includes("sessionid")) {
+        // ── Rotation IP SOAX entre les retries (pas sur proxy Decodo explicite) ──
+        if (!explicitProxyUrl && (currentProxy?.includes("soax") || currentProxy?.includes("sessionid"))) {
           rotateCevSoaxSession("cev-retry");
           const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
           process.env.IPROYAL_PROXY_URL = newProxyUrl;
