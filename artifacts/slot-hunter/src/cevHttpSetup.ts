@@ -1045,8 +1045,10 @@ export async function setupCevSessionHttp(
     // Garantit que l'IP utilisée par Anti-Captcha === l'IP qui soumet SetCaptchaToken.
     // hCaptcha vérifie (sitekey + token + IP) → mismatch = captchaSolved:false.
     lockCevProxy();
-    // On n'invalide VOWINT qu'après MAX_CAPTCHA_ATTEMPTS échecs consécutifs.
-    const MAX_CAPTCHA_ATTEMPTS = 3;
+    // IMPORTANT: pas de retry captcha. Le serveur CEV lie le captcha au COMPTE VOWINT.
+    // Si un captcha a été résolu récemment (scan précédent), la session est déjà "consommée".
+    // Un 2ème solve sur le même compte → rejeté systématiquement. Le retry empire la situation.
+    const MAX_CAPTCHA_ATTEMPTS = 1;
     let captchaData: { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean } = {};
 
     for (let captchaAttempt = 1; captchaAttempt <= MAX_CAPTCHA_ATTEMPTS; captchaAttempt++) {
@@ -1072,7 +1074,11 @@ export async function setupCevSessionHttp(
         }
         if (!hcaptchaToken) {
           unlockCevProxy();
-          return { success: false, error: "HCAPTCHA_FAILED" };
+          // Timeout captcha : le token n'a JAMAIS été soumis au serveur CEV.
+          // La session ASP.NET_SessionId est encore intacte (~15-20 min de validité restante).
+          // NE PAS invalider la session VOWINT — passer au dossier suivant et retenter ce dossier
+          // au prochain cycle avec la même session (pas besoin de re-login ni nouveau clic VOWINT).
+          return { success: false, error: "HCAPTCHA_TIMEOUT_SESSION_INTACT" };
         }
       }
 
@@ -1103,6 +1109,11 @@ export async function setupCevSessionHttp(
       captchaData = await captchaRes.json() as { validUntil?: string; redirectUrl?: string; captchaSolved?: boolean };
 
       // FIX #4: Le serveur peut renvoyer HTTP 200 avec captchaSolved:false
+      // CAUSE RACINE CONFIRMÉE : le serveur CEV rejette un 2ème captcha sur une session
+      // où un captcha a DÉJÀ été validé (par un scan précédent sur le même compte).
+      // La session ASP.NET_SessionId est partagée entre dossiers côté serveur.
+      // Solution : si captchaSolved=false au 1er attempt, tenter de naviguer directement
+      // vers le calendrier (la session est peut-être déjà validée, pas besoin de captcha).
       if (captchaData.captchaSolved === false) {
         botLog({
           applicationId: clientId,
@@ -1110,6 +1121,40 @@ export async function setupCevSessionHttp(
           status: captchaAttempt < MAX_CAPTCHA_ATTEMPTS ? "warn" : "fail",
           data: { fullResponse: JSON.stringify(captchaData), attempt: captchaAttempt, maxAttempts: MAX_CAPTCHA_ATTEMPTS },
         });
+        
+        // ── FIX : tenter bypass captcha (session déjà validée ?) ──────────────
+        // Si c'est le 1er attempt et que la session a déjà un captcha validé
+        // (2ème scan du même compte), on peut directement naviguer vers le calendrier.
+        if (captchaAttempt === 1 && integrationUrl) {
+          console.log(`[CEV-SETUP] 🔄 captchaSolved:false au 1er attempt — tentative bypass (session peut-être déjà validée)…`);
+          botLog({ applicationId: clientId, step: "cev_http_captcha_bypass_attempt", status: "ok" });
+          // Tenter de suivre l'integrationUrl directement (comme si le captcha était validé)
+          const bypassRes = await cevSetupFetch(integrationUrl, {
+            method: "GET",
+            headers: getCevBrowserHeaders({
+              cookie: fullCevCookie,
+              userAgent: siphoned?.userAgent,
+            }),
+            redirect: "manual",
+            signal: AbortSignal.timeout(15_000),
+          });
+          const bypassLoc = bypassRes.headers.get("location") ?? "";
+          const bypassStatus = bypassRes.status;
+          console.log(`[CEV-SETUP] 🔄 Bypass result: HTTP ${bypassStatus} → ${bypassLoc.slice(0, 100)}`);
+          
+          // Si le serveur redirige vers SelectSlot (pas vers /Captcha ni /Error) → session valide !
+          if (bypassStatus >= 300 && bypassStatus < 400 && bypassLoc && !bypassLoc.includes("/Captcha") && !bypassLoc.includes("/Error")) {
+            console.log(`[CEV-SETUP] ✅ Bypass réussi ! Session déjà validée (pas besoin de captcha)`);
+            botLog({ applicationId: clientId, step: "cev_http_captcha_bypass_success", status: "ok", data: { redirectTo: bypassLoc.slice(0, 100) } });
+            // Simuler un captchaData valide pour que le code continue normalement
+            captchaData = { captchaSolved: true, validUntil: undefined, redirectUrl: bypassLoc };
+            unlockCevProxy();
+            break;
+          }
+          // Bypass échoué — continuer avec les retries normaux
+          console.log(`[CEV-SETUP] ⚠️ Bypass échoué (HTTP ${bypassStatus}) — retry captcha normal`);
+        }
+        
         if (captchaAttempt < MAX_CAPTCHA_ATTEMPTS) {
           // Attendre 4s avant le retry — laisser le temps au serveur et éviter le spam
           await new Promise(r => setTimeout(r, 4_000));

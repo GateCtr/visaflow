@@ -1176,6 +1176,13 @@ async function performScan(
     if (result.error?.includes("RATE_LIMIT")) {
       return { status: "rate_limited" };
     }
+    // ── Timeout captcha : session intacte, passer au dossier suivant ──────────
+    // Le token n'a jamais été soumis → ASP.NET_SessionId encore valide.
+    // NE PAS invalider le cache VOWINT — le prochain scan réutilisera la session.
+    if (result.error === "HCAPTCHA_TIMEOUT_SESSION_INTACT") {
+      logFn.warn(`  ⏱️ Timeout captcha (2Captcha saturé) — session CEV intacte, dossier suivant`);
+      return { status: "transient_error", error: result.error };
+    }
     const isCaptchaError = result.error === "HCAPTCHA_FAILED" || 
                            result.error?.includes("CAPTCHA") ||
                            result.error?.includes("CAPTCHA_RETRY");
