@@ -176,23 +176,15 @@ const WARM_PROBE_ENABLED = process.env.SPAIN_WARM_PROBE !== "0";
 const _warmProbeCache = new Map<string, WarmProbeEntry>();
 
 function getWarmProbe(publickey: string): WarmProbeEntry | null {
-  if (!WARM_PROBE_ENABLED || !publickey) return null;
-  const entry = _warmProbeCache.get(publickey);
-  if (!entry) return null;
-  if (Date.now() - entry.cachedAt > WARM_PROBE_TTL_MS) {
-    _warmProbeCache.delete(publickey);
-    return null;
-  }
-  return entry;
+  // Warm cache désactivé — cause des 0B sur toutes les requêtes AJAX après /main/.
+  // Le cold path (getwidgetconfigurations + getservices + getagendas + datetime) est
+  // nécessaire à chaque cycle pour initialiser la session widget côté Bookitit.
+  return null;
 }
 
 function setWarmProbe(publickey: string, services: Array<{ serviceId: string; serviceName: string }>, agendaId: string): void {
-  if (!WARM_PROBE_ENABLED || !publickey || services.length === 0 || !agendaId) return;
-  _warmProbeCache.set(publickey, { services, agendaId, cachedAt: Date.now() });
-  console.log(
-    `[spain-http] ♻️ Warm cache armé — ${services.length} service(s) + agenda ${agendaId} ` +
-    `(TTL ${Math.round(WARM_PROBE_TTL_MS / 60_000)}min, config uniquement — aucune disponibilité mémorisée)`,
-  );
+  // Warm cache désactivé — no-op.
+  return;
 }
 
 function invalidateWarmProbe(publickey: string, reason: string): void {
@@ -1051,45 +1043,22 @@ async function confirmSlotsViaDatetime(
   cookieStr: string,
   referer: string,
 ): Promise<ConfirmSlotsResult> {
-  // ── Helper : rotation callback après chaque invocation ───────────────────────
-  // IMPORTANT: on ne génère PAS un callback aléatoire ici.
-  // Le callback Bookitit est lié à l'état de la session widget côté serveur.
-  // Un callback inconnu (généré arbitrairement) retourne 0B — pas un callback "déjà utilisé".
-  // La bonne pratique : chaque cycle re-initialise via getwidgetconfigurations/ (cold path)
-  // qui retourne le callback attendu pour CE cycle. En probe à chaud, on réutilise le
-  // même callback que getwidgetconfigurations/ a assigné lors du cold path précédent,
-  // puis on le remet à zéro pour que le cold path suivant le ré-initialise proprement.
-  const rotateCallback = () => {
-    if (session.bookititState?.jqCallback) {
-      // Remettre reqCounter à 0 uniquement — ne pas changer jqCallback arbitrairement.
-      // Le prochain cold path appellera getwidgetconfigurations/ qui assignera un nouveau callback.
-      session.bookititState.reqCounter = 0;
-      // Effacer le callback pour forcer getwidgetconfigurations/ au prochain cycle (cold path).
-      session.bookititState.jqCallback = "";
-    }
-  };
+  // ── Rotation callback désactivée ─────────────────────────────────────────────
+  // Le warm cache a été retiré. Le callback bookititState.jqCallback est le callback
+  // assigné par le solve capsolver et reste stable pour toute la durée de la session.
+  // Ne pas le modifier : Bookitit lie l'état widget au callback initial.
 
   const warm = getWarmProbe(publickey);
   if (warm) {
+    // Dead code — warm est toujours null.
     const health = { datetimeResponded: false };
-    console.log(
-      `[spain-http] ♻️ Probe à chaud — services/agenda depuis le cache config ` +
-      `(${warm.services.length} service(s), agenda ${warm.agendaId}) → datetime/ direct, toujours live`,
-    );
     const warmResult = await confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, warm, health);
-    rotateCallback();
     if (warmResult && warmResult !== "ajax_unavailable") return warmResult;
-    if (warmResult === null && health.datetimeResponded) {
-      return null;
-    }
-    invalidateWarmProbe(
-      publickey,
-      warmResult === "ajax_unavailable" ? "AJAX indisponible à chaud" : "datetime/ muet à chaud (session probablement périmée)",
-    );
+    if (warmResult === null && health.datetimeResponded) return null;
+    invalidateWarmProbe(publickey, "warm dead code");
   }
   const health = { datetimeResponded: false };
   const result = await confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, null, health);
-  rotateCallback();
   return result;
 }
 
@@ -1157,50 +1126,9 @@ async function confirmSlotsViaDatetimeOnce(
   // (plus de retry getagendas, donc plus besoin de tracker ce flag)
 
   if (warm) {
-    // Probe à chaud : la liste des services vient du cache config (immuable côté portail).
-    // getservices/ et getagendas/ sont sautés — IDs déjà connus.
-    // MAIS getwidgetconfigurations/ DOIT être appelé : il initialise l'état de la session
-    // widget côté serveur Bookitit. Sans lui, datetime/ retourne 0B même avec une session
-    // PHPSESSID valide (Bookitit ne reconnaît pas la session widget = corps vide systématique).
+    // Warm cache désactivé — ce bloc ne sera jamais atteint (getWarmProbe retourne toujours null).
     services = warm.services;
-    // Appel getwidgetconfigurations/ pour initialiser la session widget côté serveur
-    try {
-      const srvsrc = "https://www.citaconsular.es";
-      const warmCb = session.bookititState?.jqCallback
-        || `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-      const cfgQ = new URLSearchParams();
-      cfgQ.append("callback", warmCb);
-      cfgQ.append("type", "default");
-      cfgQ.append("publickey", publickey);
-      cfgQ.append("lang", "es");
-      cfgQ.append("version", "4");
-      cfgQ.append("src", referer);
-      cfgQ.append("srvsrc", srvsrc);
-      cfgQ.append("_", String(nextReqCounter()));
-      console.log(`[spain-http] 🔧 init callback getwidgetconfigurations/ = ${warmCb}`);
-      const cfgRes = await spainCfFetch(`${base}getwidgetconfigurations/?${cfgQ}`, session, { headers });
-      const cfgBody = cfgRes?.ok ? await cfgRes.text() : "";
-      console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → HTTP ${cfgRes?.status ?? "null"} | ${cfgBody.length}B`);
-      if (cfgBody.length === 0) {
-        console.warn(`[spain-http] ⚠️ getwidgetconfigurations/ 0B en probe à chaud — session PHPSESSID expirée → invalidation warm cache`);
-        invalidateWarmProbe(publickey, "getwidgetconfigurations/ 0B (PHPSESSID expiré)");
-        services = []; // force cold path
-      } else {
-        // Mettre à jour le callback partagé si la session a un bookititState
-        if (session.bookititState) session.bookititState.jqCallback = warmCb;
-        widgetConfig = (() => {
-          try { const d = parseJsonpPayload(cfgBody); return d && typeof d === "object" ? d as Record<string, unknown> : undefined; } catch { return undefined; }
-        })();
-        if (widgetConfig) {
-          console.log(`[spain-http] 🔧 widgetConfig capturé — captcha=${widgetConfig["captcha"]} reg_type=${widgetConfig["registration_type"]} waiting=${widgetConfig["waiting_list"]} confirm=${widgetConfig["confirm"]}`);
-        }
-      }
-    } catch (cfgErr) {
-      console.warn(`[spain-http] ⚠️ getwidgetconfigurations/ warm exception: ${cfgErr}`);
-    }
-  }
-  
-  if (services === undefined && svcMatches.length === 0) {
+  } else if (services === undefined && svcMatches.length === 0) {
     // FALLBACK : Kinshasa (et certains portails Bookitit récents) utilisent un rendu
     // client-side via Backbone.js / Underscore templates — les liens #selectservice
     // contiennent <%= attributes.id %> côté serveur et ne sont jamais présents
