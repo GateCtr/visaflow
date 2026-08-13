@@ -649,7 +649,10 @@ export async function setupCevSessionHttp(
   // Fixer le proxy pour tous les cevSetupFetch de cette invocation
   if (proxyUrl !== undefined) setSetupProxy(proxyUrl);
   try {
-    botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok" });
+    botLog({ applicationId: clientId, step: "cev_http_setup_start", status: "ok", data: { 
+      instanceId: process.env.RAILWAY_REPLICA_ID || process.env.RAILWAY_SERVICE_ID || process.env.REPL_SLUG || `local-${process.pid}`,
+      ipSlotId,
+    } });
     
     // ✅ Log détaillé des cookies siphonnés (pour vérifier en production)
     if (siphoned) {
