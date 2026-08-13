@@ -1179,9 +1179,10 @@ async function performScan(
     // ── Timeout captcha : session intacte, passer au dossier suivant ──────────
     // Le token n'a jamais été soumis → ASP.NET_SessionId encore valide.
     // NE PAS invalider le cache VOWINT — le prochain scan réutilisera la session.
+    // Status "no_slot_poll" = le loop passe au dossier suivant sans retry ni invalidation.
     if (result.error === "HCAPTCHA_TIMEOUT_SESSION_INTACT") {
-      logFn.warn(`  ⏱️ Timeout captcha (2Captcha saturé) — session CEV intacte, dossier suivant`);
-      return { status: "transient_error", error: result.error };
+      logFn.warn(`  ⏱️ Timeout captcha (2Captcha saturé) — session CEV intacte, skip → dossier suivant`);
+      return { status: "no_slot_poll" };
     }
     const isCaptchaError = result.error === "HCAPTCHA_FAILED" || 
                            result.error?.includes("CAPTCHA") ||
