@@ -1385,24 +1385,95 @@ export async function setupCevSessionHttp(
       });
     } catch (probeErr) {
       const errMsg = probeErr instanceof Error ? probeErr.message : String(probeErr);
-      botLog({
-        applicationId: clientId,
-        step: "cev_http_redirect_probe_error",
-        status: "warn",
-        data: { error: errMsg },
-      });
-      // En cas d'échec réseau (timeout, 503, 504) — signaler probeError
-      // pour que le loop retente immédiatement avec le dossier suivant.
-      return {
-        success: true,
-        sessionCookie: cevSessionCookie,
-        validUntilMs,
-        integrationUrl,
-        redirectUrl: captchaRedirectUrl,
-        slotsAvailable: false,
-        needsPlaywrightNavigation: false,
-        probeError: true,
-      };
+      
+      // ── Retry la chaîne de redirects (comportement navigateur : F5, pas re-clic "prendre RDV") ──
+      // Après captcha résolu, la session CEV est encore ouverte côté serveur malgré le 504/timeout.
+      // Si on refait GetEAppointmentUrl → "multiple session". Il faut retenter le même redirectUrl.
+      // Si le retry retourne SessionExpired → session morte → prochain cycle fera un re-login propre.
+      let retrySuccess = false;
+      for (let probeRetry = 1; probeRetry <= 3; probeRetry++) {
+        const waitMs = probeRetry * 2_000; // 2s, 4s, 6s
+        console.log(`[CEV-SETUP] ⚡ Probe 504/timeout (${errMsg.slice(0, 80)}) — retry ${probeRetry}/3 dans ${waitMs / 1000}s (même redirectUrl, pas de re-login)…`);
+        await new Promise(r => setTimeout(r, waitMs));
+        
+        try {
+          const retryRes = await cevSetupFetch(fullRedirectUrl, {
+            method: "GET",
+            redirect: "manual",
+            headers: getCevBrowserHeaders({
+              fetchSite: "same-origin",
+              cookie: fullCevCookie,
+              userAgent: siphoned?.userAgent,
+            }),
+            signal: AbortSignal.timeout(20_000),
+          });
+          
+          const retryLoc = retryRes.headers.get("location") ?? "";
+          const retryStatus = retryRes.status;
+          console.log(`[CEV-SETUP] ⚡ Probe retry ${probeRetry}/3 → HTTP ${retryStatus} → ${retryLoc.slice(0, 100)}`);
+          
+          // SessionExpired → session morte, signal propre pour invalider et recommencer
+          if (retryLoc.includes("SessionExpired") || retryStatus === 200) {
+            const retryBody = retryStatus === 200 ? await retryRes.text().catch(() => "") : "";
+            if (retryLoc.includes("SessionExpired") || retryBody.includes("SessionExpired")) {
+              console.log(`[CEV-SETUP] ⚡ Probe retry → SessionExpired — session morte (prochain cycle = re-login propre)`);
+              break; // sortir du retry loop → probeError sera retourné
+            }
+            // 200 avec body = page finale (SelectSlot ou autre)
+            if (retryBody.length > 500) {
+              probeBodyRaw = retryBody;
+              probeHttpStatus = retryStatus;
+              finalUrl = fullRedirectUrl;
+              retrySuccess = true;
+              console.log(`[CEV-SETUP] ✅ Probe retry réussi! (200, ${retryBody.length}B)`);
+              break;
+            }
+          }
+          
+          // 302 → suivre la chaîne normalement
+          if (retryStatus >= 300 && retryStatus < 400 && retryLoc) {
+            if (retryLoc.includes("NoAvailability")) {
+              console.log(`[CEV-SETUP] ✅ Probe retry → NoAvailability (pas de slot, session consommée proprement)`);
+              redirectChain.push(retryLoc.startsWith("http") ? retryLoc : `${CEV_BASE}${retryLoc}`);
+              retrySuccess = true;
+              break;
+            }
+            if (retryLoc.includes("SelectSlot")) {
+              console.log(`[CEV-SETUP] ✅ Probe retry → SelectSlot! (SLOT DISPONIBLE)`);
+              redirectChain.push(retryLoc.startsWith("http") ? retryLoc : `${CEV_BASE}${retryLoc}`);
+              finalUrl = retryLoc.startsWith("http") ? retryLoc : `${CEV_BASE}${retryLoc}`;
+              retrySuccess = true;
+              break;
+            }
+            // Autre redirect — continuer les retries
+          }
+          
+          // 5xx → retry suivant
+        } catch (retryErr) {
+          console.warn(`[CEV-SETUP] ⚡ Probe retry ${probeRetry}/3 échoué: ${retryErr instanceof Error ? retryErr.message : retryErr}`);
+        }
+      }
+      
+      if (!retrySuccess) {
+        botLog({
+          applicationId: clientId,
+          step: "cev_http_redirect_probe_error",
+          status: "warn",
+          data: { error: errMsg },
+        });
+        // En cas d'échec réseau (timeout, 503, 504) — signaler probeError
+        // pour que le loop retente immédiatement avec le dossier suivant.
+        return {
+          success: true,
+          sessionCookie: cevSessionCookie,
+          validUntilMs,
+          integrationUrl,
+          redirectUrl: captchaRedirectUrl,
+          slotsAvailable: false,
+          needsPlaywrightNavigation: false,
+          probeError: true,
+        };
+      }
     }
 
     // FIX #9 : vérifier toute la chaîne de redirections, pas seulement l'URL finale
