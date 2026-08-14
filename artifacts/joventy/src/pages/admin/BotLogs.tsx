@@ -955,10 +955,64 @@ function boolBadge(value: boolean | null | undefined, label?: string): JSX.Eleme
   );
 }
 
+function parseSpainScanTrace(raw: string | undefined): SpainScanTraceData | null {
+  if (!raw) return null;
+  try { return JSON.parse(raw) as SpainScanTraceData; } catch { return null; }
+}
+
+/** Résumé inline — visible sans déplier la trace complète. */
+function SpainScanTraceSummary({ scanTrace }: { scanTrace: string }) {
+  const trace = parseSpainScanTrace(scanTrace);
+  if (!trace) return null;
+  if (!trace.main && !trace.initConfig && !trace.service
+    && trace.bookings.length === 0 && trace.agendas.length === 0 && trace.datetimes.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1 items-center">
+      {trace.main && (
+        <>
+          <span className="text-[9px] text-violet-600 font-semibold">main</span>
+          <span className="text-[9px] text-slate-500">{trace.main.bytes}B</span>
+          {boolBadge(trace.main.serviceContainer, "serviceContainer")}
+          {boolBadge(trace.main.dialogConfirm, "dialogConfirm")}
+        </>
+      )}
+      {trace.initConfig && (
+        <>
+          <span className="text-[9px] text-violet-600 font-semibold ml-1">initConfig</span>
+          <span className="text-[9px] text-slate-500">{trace.initConfig.bytes}B</span>
+          {boolBadge(trace.initConfig.ok, "ok")}
+        </>
+      )}
+      {trace.service && (
+        <>
+          <span className="text-[9px] text-violet-600 font-semibold ml-1">service</span>
+          {boolBadge(trace.service.allowAppointment, "allowAppointment")}
+          {boolBadge(trace.service.serviceContainer, "serviceContainer")}
+          {boolBadge(trace.service.dialogConfirm, "dialogConfirm")}
+          <span className="text-[9px] text-slate-400">{trace.service.count} svc</span>
+        </>
+      )}
+      {trace.datetimes.length > 0 && (
+        <span className="text-[9px] text-slate-500 ml-1">
+          datetime ×{trace.datetimes.length}
+          {" "}({trace.datetimes.reduce((n, d) => n + d.slots, 0)} créneaux)
+        </span>
+      )}
+      {trace.bookings.length > 0 && (
+        <span className="text-[9px] text-amber-700 ml-1 font-medium">
+          booking ×{trace.bookings.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function SpainScanTraceBlock({ scanTrace }: { scanTrace: string }) {
   const [expanded, setExpanded] = useState(false);
-  let trace: SpainScanTraceData | null = null;
-  try { trace = JSON.parse(scanTrace) as SpainScanTraceData; } catch { /* noop */ }
+  const trace = parseSpainScanTrace(scanTrace);
   if (!trace) return null;
 
   const hasContent = trace.main || trace.initConfig || trace.service
@@ -1516,6 +1570,9 @@ function SpainWatcherTab() {
                           )}
                         </div>
                         {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
+
+                        {/* Trace scan — résumé inline + détail dépliable */}
+                        {scan.scanTrace && <SpainScanTraceSummary scanTrace={scan.scanTrace} />}
 
                         {/* Detected services for "found" */}
                         {scan.status === "found" && scan.detectedServices && (() => {
