@@ -89,11 +89,12 @@ export default function AdminCalendar() {
   const [modeFilter, setModeFilter] = useState<"schedule" | "reschedule" | undefined>(undefined);
   const [destFilter, setDestFilter] = useState<string | undefined>(undefined);
   const discoverySince = useMemo(() => Date.now() - 7 * 24 * 60 * 60 * 1000, []);
-  const discoveryStats = useQuery(api.slotDiscoveries.getStats, {
+  const discoveryArgs = useMemo(() => ({
     since: discoverySince,
     ...(modeFilter ? { mode: modeFilter } : {}),
     ...(destFilter ? { destination: destFilter } : {}),
-  });
+  }), [discoverySince, modeFilter, destFilter]);
+  const discoveryStats = useQuery(api.slotDiscoveries.getStats, discoveryArgs);
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState<string | null>(toISODateKey(today));
