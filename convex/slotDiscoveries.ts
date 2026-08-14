@@ -260,7 +260,7 @@ export const getStats = query({
       byMode,
       byOffice,
       // Dernières découvertes brutes (pour le feed temps réel) — dédupliquées avec seenCount
-      recent: filtered.slice(0, 50).map((d) => ({
+      recent: filtered.slice(0, 20).map((d) => ({
         _id: d._id,
         destination: d.destination,
         office: d.office,

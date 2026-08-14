@@ -89,6 +89,7 @@ export default function AdminCalendar() {
   const [modeFilter, setModeFilter] = useState<"schedule" | "reschedule" | undefined>(undefined);
   const [destFilter, setDestFilter] = useState<string | undefined>(undefined);
   const discoveryStats = useQuery(api.slotDiscoveries.getStats, {
+    since: Date.now() - 7 * 24 * 60 * 60 * 1000, // 7 derniers jours
     ...(modeFilter ? { mode: modeFilter } : {}),
     ...(destFilter ? { destination: destFilter } : {}),
   });
