@@ -187,6 +187,10 @@ export const getStats = query({
       return true;
     });
 
+    // Convex interdit les caractères non-ASCII dans les clés d'objet retournés.
+    // Sanitiser les noms (ex: "TRAMITACIÓN" → "TRAMITACION").
+    const sanitizeKey = (s: string): string => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "_");
+
     // Calculer stats agrégées
     const totalCaptured = filtered.filter((d) => d.outcome === "captured").length;
     const totalIgnored = filtered.filter((d) => d.outcome === "ignored").length;
@@ -201,7 +205,8 @@ export const getStats = query({
       if (d.outcome === "captured") entry.captured++;
       else entry.ignored++;
       if (d.reason) {
-        entry.reasons[d.reason] = (entry.reasons[d.reason] ?? 0) + 1;
+        const safeReason = sanitizeKey(d.reason);
+        entry.reasons[safeReason] = (entry.reasons[safeReason] ?? 0) + 1;
       }
     }
 
@@ -242,7 +247,7 @@ export const getStats = query({
     // Regrouper par office/service (pour Espagne : serviceName, pour USA : OFC/POST)
     const byOffice: Record<string, { captured: number; ignored: number; total: number }> = {};
     for (const d of filtered) {
-      const office = d.office ?? "unknown";
+      const office = sanitizeKey(d.office ?? "unknown");
       if (!byOffice[office]) byOffice[office] = { captured: 0, ignored: 0, total: 0 };
       byOffice[office].total++;
       if (d.outcome === "captured") byOffice[office].captured++;
