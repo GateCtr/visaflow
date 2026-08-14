@@ -770,14 +770,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 log("INFO", `[SPAIN-WATCHER] ♻️ ${dossier.applicantName}: services vides → fallback probe service "${matched.serviceName}" (${matched.serviceId})`);
               }
 
+              // Fallback ultime : portail mono-service connu (Kinshasa = bkt1181774)
+              // Ne JAMAIS bloquer un booking à cause d'un service manquant.
               if (!matched) {
-                log("WARN", `[SPAIN-WATCHER] ⚠️ ${dossier.applicantName}: aucun service ne matche "${dossier.visaType}" — skip`);
-                await sendHeartbeat({
-                  applicationId: dossier.applicationId,
-                  result: "not_found",
-                  errorMessage: `Créneau détecté mais aucun service Bookitit ne correspond au visa "${dossier.visaType}"`,
-                }).catch(() => {});
-                return;
+                matched = { serviceId: "bkt1181774", serviceName: "TRAMITACIÓN DE VISADOS" };
+                log("WARN", `[SPAIN-WATCHER] ⚠️ ${dossier.applicantName}: fallback ultime → service hardcodé "${matched.serviceName}" (${matched.serviceId})`);
               }
 
               // Récupérer le créneau assigné par le round-robin (peut être absent
