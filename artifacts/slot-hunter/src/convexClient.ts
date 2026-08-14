@@ -882,6 +882,7 @@ export async function reportSpainWatcherScan(payload: {
   errorMessage?: string;
   detectedServices?: string; // JSON string of [{serviceId, serviceName}]
   detectedSlots?: string;    // JSON string of [{id, name, slots: [{d, t, n}]}]
+  scanTrace?: string;        // JSON string SpainScanTrace
 }): Promise<void> {
   const url = `${CONVEX_SITE_URL}/hunter/spain-watcher/scan-result`;
   try {

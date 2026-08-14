@@ -177,6 +177,7 @@ export const internalRecordScan = internalMutation({
     pageCaptures: v.optional(v.string()),
     detectedServices: v.optional(v.string()),  // JSON array of {serviceId, serviceName}
     detectedSlots: v.optional(v.string()),     // JSON array of {id, name, slots: [{d, t, n}]}
+    scanTrace: v.optional(v.string()),         // JSON SpainScanTrace
   },
   handler: async (ctx, args) => {
     const watcher = await ctx.db
@@ -196,6 +197,7 @@ export const internalRecordScan = internalMutation({
       pageCaptures: args.pageCaptures,
       detectedServices: args.detectedServices,
       detectedSlots: args.detectedSlots,
+      scanTrace: args.scanTrace,
     });
 
     // Prune old scans (keep last MAX_SCANS)

@@ -912,6 +912,171 @@ function SpainCaptureItem({ capture, index }: { capture: SpainPageCapture; index
   );
 }
 
+// Component to display Spain scan trace (main/initConfig/service/agenda/datetime/bookings)
+interface SpainScanTraceData {
+  ipRotations?: number;
+  main?: {
+    bytes: number;
+    ok: boolean;
+    serviceContainer: boolean;
+    dialogConfirm: boolean;
+    isSpa?: boolean;
+    fromCache?: boolean;
+    cfRay?: string;
+  };
+  initConfig?: { bytes: number; ok: boolean };
+  service?: {
+    bytes: number;
+    ok: boolean;
+    allowAppointment: boolean | null;
+    serviceContainer: boolean;
+    dialogConfirm: boolean;
+    count: number;
+    names?: string;
+  };
+  agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string }>;
+  datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
+  bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number }>;
+}
+
+function boolBadge(value: boolean | null | undefined, label?: string): JSX.Element {
+  const v = value === true;
+  const nullish = value === null || value === undefined;
+  const text = nullish ? "n/a" : v ? "true" : "false";
+  const cls = nullish
+    ? "bg-slate-50 text-slate-500 border-slate-200"
+    : v
+      ? "bg-green-50 text-green-700 border-green-200"
+      : "bg-red-50 text-red-700 border-red-200";
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[9px] font-mono px-1 py-0.5 rounded border ${cls}`}>
+      {label ? `${label}=` : ""}{text}
+    </span>
+  );
+}
+
+function SpainScanTraceBlock({ scanTrace }: { scanTrace: string }) {
+  const [expanded, setExpanded] = useState(false);
+  let trace: SpainScanTraceData | null = null;
+  try { trace = JSON.parse(scanTrace) as SpainScanTraceData; } catch { /* noop */ }
+  if (!trace) return null;
+
+  const hasContent = trace.main || trace.initConfig || trace.service
+    || trace.agendas.length > 0 || trace.datetimes.length > 0 || trace.bookings.length > 0
+    || (trace.ipRotations ?? 0) > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 text-[10px] font-medium text-violet-600 hover:text-violet-800 transition-colors"
+      >
+        {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        <span>Trace scan</span>
+        {trace.main && (
+          <span className={`text-[9px] px-1 py-0.5 rounded-full ${trace.main.ok ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+            main {trace.main.bytes}B
+          </span>
+        )}
+        {trace.bookings.length > 0 && (
+          <span className="text-[9px] px-1 py-0.5 rounded-full bg-amber-50 text-amber-700">
+            {trace.bookings.length} booking
+          </span>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-2 text-[10px] font-mono">
+          {(trace.ipRotations ?? 0) > 0 && (
+            <p className="text-slate-500">ipRotations={trace.ipRotations}</p>
+          )}
+
+          {trace.main && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p className="font-semibold text-slate-700 mb-1">/main/</p>
+              <div className="flex flex-wrap gap-1">
+                <span className="text-slate-600">{trace.main.bytes}B</span>
+                {boolBadge(trace.main.ok, "ok")}
+                {boolBadge(trace.main.serviceContainer, "serviceContainer")}
+                {boolBadge(trace.main.dialogConfirm, "dialogConfirm")}
+                {trace.main.isSpa !== undefined && boolBadge(trace.main.isSpa, "isSpa")}
+                {trace.main.fromCache !== undefined && boolBadge(trace.main.fromCache, "fromCache")}
+                {trace.main.cfRay && <span className="text-slate-400">cfRay={trace.main.cfRay}</span>}
+              </div>
+            </div>
+          )}
+
+          {trace.initConfig && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p className="font-semibold text-slate-700 mb-1">initConfig</p>
+              <div className="flex flex-wrap gap-1">
+                <span className="text-slate-600">{trace.initConfig.bytes}B</span>
+                {boolBadge(trace.initConfig.ok, "ok")}
+              </div>
+            </div>
+          )}
+
+          {trace.service && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p className="font-semibold text-slate-700 mb-1">getservices/</p>
+              <div className="flex flex-wrap gap-1 mb-1">
+                <span className="text-slate-600">{trace.service.bytes}B · {trace.service.count} svc</span>
+                {boolBadge(trace.service.ok, "ok")}
+                {boolBadge(trace.service.allowAppointment, "allowAppointment")}
+                {boolBadge(trace.service.serviceContainer, "serviceContainer")}
+                {boolBadge(trace.service.dialogConfirm, "dialogConfirm")}
+              </div>
+              {trace.service.names && (
+                <p className="text-[9px] text-slate-500 break-all">{trace.service.names}</p>
+              )}
+            </div>
+          )}
+
+          {trace.agendas.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p className="font-semibold text-slate-700 mb-1">agenda ({trace.agendas.length})</p>
+              <div className="space-y-0.5">
+                {trace.agendas.map((a, i) => (
+                  <p key={i} className={`text-[9px] ${a.ok ? "text-slate-600" : "text-red-500"}`}>
+                    {a.serviceName} #{a.serviceId} — {a.bytes}B{a.agendaId ? ` · ${a.agendaId}` : ""}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {trace.datetimes.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p className="font-semibold text-slate-700 mb-1">datetime ({trace.datetimes.length})</p>
+              <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                {trace.datetimes.map((d, i) => (
+                  <p key={i} className={`text-[9px] ${d.ok ? "text-slate-600" : "text-red-500"}`}>
+                    {d.serviceName} · {d.month} — {d.bytes}B · {d.slots} créneau(x)
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {trace.bookings.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+              <p className="font-semibold text-amber-800 mb-1">bookings ({trace.bookings.length})</p>
+              <div className="space-y-0.5">
+                {trace.bookings.map((b, i) => (
+                  <p key={i} className={`text-[9px] ${b.status === "booked" ? "text-green-700" : "text-red-600"}`}>
+                    {b.applicant}: {b.status}{b.ms ? ` (${b.ms}ms)` : ""}{b.detail ? ` — ${b.detail}` : ""}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Component to display all page captures for a scan
 function SpainPageCapturesBlock({ pageCaptures }: { pageCaptures: string }) {
   const [showCaptures, setShowCaptures] = useState(false);
@@ -1329,7 +1494,7 @@ function SpainWatcherTab() {
         ) : (
           <>
             <div className="divide-y divide-slate-100">
-              {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string; detectedServices?: string; detectedSlots?: string }) => {
+              {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string; detectedServices?: string; detectedSlots?: string; scanTrace?: string }) => {
                 const meta = SCAN_META[scan.status as keyof typeof SCAN_META] ?? SCAN_META.error;
                 const isErrorExpanded = expandedErrors.has(scan._id);
                 return (
@@ -1429,6 +1594,9 @@ function SpainWatcherTab() {
                             )}
                           </div>
                         )}
+
+                        {/* Scan trace — main/initConfig/service/agenda/datetime/bookings */}
+                        {scan.scanTrace && <SpainScanTraceBlock scanTrace={scan.scanTrace} />}
 
                         {/* Page captures - network requests, headers, responses, cookies */}
                         {scan.pageCaptures && <SpainPageCapturesBlock pageCaptures={scan.pageCaptures} />}

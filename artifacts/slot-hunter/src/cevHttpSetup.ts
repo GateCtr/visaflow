@@ -1985,20 +1985,36 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
     }
   }
 
-  // ── NoneCap en FALLBACK uniquement (coût variable 12-50 crédits/solve → trop cher en prioritaire) ──
-  // Priorité : 2Captcha ($0.003/solve fixe) > NoneCap (fallback sur UNSOLVABLE/timeout)
+  // ── NoneCap prioritaire pour CEV (sitekey gouvernementale) ──
+  // Fallback : Anti-Captcha → 2Captcha
   const NONECAP_KEY = process.env.NONECAP_API_KEY || null;
   const TWOCAPTCHA_KEY = process.env.TWOCAPTCHA_API_KEY || null;
   const ANTICAPTCHA_KEY = await resolveAnticaptchaKey();
 
-  // Sélection provider principal : 2Captcha si disponible, sinon Anti-Captcha
-  const captchaProvider = TWOCAPTCHA_KEY ? "2captcha" : "anticaptcha";
-  const captchaApiKey = TWOCAPTCHA_KEY || ANTICAPTCHA_KEY;
-  const captchaBaseUrl = TWOCAPTCHA_KEY
+  if (NONECAP_KEY) {
+    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "nonecap" } });
+    try {
+      const { solveHcaptchaViaNonecap } = await import("./nonecap.js");
+      const token = await solveHcaptchaViaNonecap(NONECAP_KEY, HCAPTCHA_SITEKEY, pageUrl, "[CEV-SETUP]");
+      if (token) {
+        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_solved", status: "ok", data: { service: "nonecap" } });
+        return token;
+      }
+      errors.push("nonecap_failed");
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_nonecap_fail", status: "warn", data: { hint: "NoneCap échoué — fallback Anti-Captcha/2Captcha" } });
+    } catch (e) {
+      errors.push(`nonecap_exception: ${String(e)}`);
+    }
+  }
+
+  // Sélection provider fallback : Anti-Captcha si disponible, sinon 2Captcha
+  const captchaProvider = ANTICAPTCHA_KEY ? "anticaptcha" : (TWOCAPTCHA_KEY ? "2captcha" : null);
+  const captchaApiKey = ANTICAPTCHA_KEY || TWOCAPTCHA_KEY;
+  const captchaBaseUrl = TWOCAPTCHA_KEY && !ANTICAPTCHA_KEY
     ? "https://api.2captcha.com"
     : "https://api.anti-captcha.com";
 
-  if (captchaApiKey) {
+  if (captchaApiKey && captchaProvider) {
     botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: captchaProvider, useProxy: !!proxyConfig, proxyExitIp: proxyExitIp, proxyDnsResolved: proxyDnsResolved } });
     try {
       // ── Helper : créer + poller une tâche Anti-Captcha ──────────────────────

@@ -140,6 +140,16 @@ export function recordSpainScanBooking(entry: SpainScanTraceBooking): void {
   _active?.bookings.push(entry);
 }
 
+/** Ajoute une entrée booking à une trace déjà extraite du probe (post-booking). */
+export function appendSpainScanBooking(
+  trace: SpainScanTrace | undefined,
+  entry: SpainScanTraceBooking,
+): SpainScanTrace {
+  if (!trace) return { agendas: [], datetimes: [], bookings: [entry] };
+  trace.bookings.push(entry);
+  return trace;
+}
+
 /** Sérialise pour Convex (JSON string). */
 export function serializeSpainScanTrace(trace: SpainScanTrace | undefined): string | undefined {
   if (!trace) return undefined;

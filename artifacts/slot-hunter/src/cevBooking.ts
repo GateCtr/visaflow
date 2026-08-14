@@ -869,9 +869,10 @@ async function solveHcaptchaViaAccessibility(cevPage: Page, clientId: string): P
  * Résout un hCaptcha pour appointment.cloud.diplomatie.be via services externes.
  *
  * Ordre de priorité :
- *  1. Anti-Captcha (ANTICAPTCHA_API_KEY) — supporte les domaines gouvernementaux
- *  2. CapSolver    (CAPSOLVER_API_KEY)    — note: sitekey CEV blacklistée en 2026-04
- *  3. 2captcha     (twoCaptchaApiKey)     — note: compte actuel ne supporte pas hCaptcha
+ *  1. NoneCap       (NONECAP_API_KEY)      — prioritaire pour sitekey CEV
+ *  2. Anti-Captcha (ANTICAPTCHA_API_KEY) — supporte les domaines gouvernementaux
+ *  3. CapSolver    (CAPSOLVER_API_KEY)    — note: sitekey CEV blacklistée en 2026-04
+ *  4. 2captcha     (twoCaptchaApiKey)     — note: compte actuel ne supporte pas hCaptcha
  *
  * Priorité absolue (avant cette fonction) : solveHcaptchaViaAccessibility() si
  * HCAPTCHA_ACCESSIBILITY_COOKIE est configuré.
@@ -886,7 +887,17 @@ async function solveHcaptcha(
 
   botLog({ applicationId: clientId, step: 'cev_hcaptcha_solve_start', status: 'ok' });
 
-  // ─── Tentative 1 : Anti-Captcha (priorité — domaines gouvernementaux supportés) ──
+  // ─── Tentative 1 : NoneCap (prioritaire — sitekey gouvernementale CEV) ──
+  const nonecapKey = process.env.NONECAP_API_KEY ?? '';
+  if (nonecapKey) {
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_nonecap_start', status: 'ok' });
+    const { solveHcaptchaViaNonecap } = await import('./nonecap.js');
+    const token = await solveHcaptchaViaNonecap(nonecapKey, HCAPTCHA_SITE_KEY, PAGE_URL, '[cevBooking]');
+    if (token) return token;
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_nonecap_fail_fallback', status: 'warn' });
+  }
+
+  // ─── Tentative 2 : Anti-Captcha (domaines gouvernementaux supportés) ──
   const antiKey = process.env.ANTICAPTCHA_API_KEY ?? '';
   if (antiKey) {
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_anticaptcha_start', status: 'ok' });

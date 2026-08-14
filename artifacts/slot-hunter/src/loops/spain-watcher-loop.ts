@@ -29,6 +29,7 @@ import { initSpainRedis, acquireSpainScannerLock, releaseSpainScannerLock, SPAIN
 import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig, type ExtractedSlotInfo } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
 import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex, type SlotExplorationResult } from "../spain-slot-explorer.js";
+import { appendSpainScanBooking, serializeSpainScanTrace, type SpainScanTrace } from "../spain-scan-trace.js";
 import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
@@ -610,6 +611,9 @@ export async function startSpainWatcherLoop(): Promise<void> {
         `[SPAIN-WATCHER] [${cycleModeLabel}] Résultat: ${result.status}${result.slotInfo ? ` — ${result.slotInfo}` : ""}${result.errorMessage ? ` (${result.errorMessage})` : ""}`,
       );
 
+      // Trace diagnostique (main/initConfig/service/agenda/datetime + bookings ajoutés après)
+      let activeScanTrace: SpainScanTrace | undefined = (result as { _scanTrace?: SpainScanTrace })._scanTrace;
+
       // ─── Pool IP épuisé : toutes les IPs Decodo sont bloquées par Bookitit ──
       // Le bloc Bookitit est typiquement transitoire (quelques minutes).
       // Inutile de recréditer le pool toutes les 10s — on attend 5 min avant de retenter.
@@ -619,6 +623,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
         await reportSpainWatcherScan({
           status: "error",
           errorMessage: result.errorMessage,
+          scanTrace: serializeSpainScanTrace(activeScanTrace),
         }).catch(() => {});
         await new Promise((r) => setTimeout(r, backoffMs));
         continue;
@@ -829,6 +834,13 @@ export async function startSpainWatcherLoop(): Promise<void> {
                   `[SPAIN-WATCHER] 📋 ${dossier.applicantName}: ${bookingResult.status}${bookingResult.locator ? ` — locator: ${bookingResult.locator}` : ""}${bookingResult.errorMessage ? ` (${bookingResult.errorMessage})` : ""} (${bookingResult.durationMs}ms)`,
                 );
 
+                activeScanTrace = appendSpainScanBooking(activeScanTrace, {
+                  applicant: dossier.applicantName,
+                  status: bookingResult.status,
+                  detail: bookingResult.errorMessage ?? bookingResult.locator,
+                  ms: bookingResult.durationMs,
+                });
+
                 if (bookingResult.status === "booked") {
                   // ── Décrémenter la capacité locale du créneau ──
                   if (assignedSlot) {
@@ -919,6 +931,11 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 }
               } catch (bookErr) {
                 log("WARN", `[SPAIN-WATCHER] ❌ ${dossier.applicantName}: booking erreur: ${bookErr}`);
+                activeScanTrace = appendSpainScanBooking(activeScanTrace, {
+                  applicant: dossier.applicantName,
+                  status: "exception",
+                  detail: String(bookErr),
+                });
                 await sendHeartbeat({
                   applicationId: dossier.applicationId,
                   result: "error",
@@ -1005,6 +1022,7 @@ export async function startSpainWatcherLoop(): Promise<void> {
         errorMessage: result.errorMessage,
         detectedServices: detectedServicesJson,
         detectedSlots: detectedSlotsJson,
+        scanTrace: serializeSpainScanTrace(activeScanTrace),
       });
 
       // L'intervalle désigne le temps entre deux débuts de probe, pas le délai
