@@ -171,6 +171,7 @@ export const getStats = query({
   handler: async (ctx, args) => {
     const since = args.since ?? (Date.now() - 30 * 24 * 60 * 60 * 1000);
 
+    try {
     let q = ctx.db
       .query("slotDiscoveries")
       .withIndex("by_discovered", (qb) => qb.gte("discoveredAt", since))
@@ -273,6 +274,22 @@ export const getStats = query({
         lastSeenAt: (d as any).lastSeenAt ?? d.discoveredAt,
       })),
     };
+    } catch (err) {
+      // Fallback minimal si la query crash (documents corrompus, timeout, etc.)
+      console.error("[slotDiscoveries:getStats] Error:", err);
+      return {
+        totalCaptured: 0,
+        totalIgnored: 0,
+        totalDiscoveries: 0,
+        byDateFound: {},
+        byHour: {},
+        byDayOfWeek: {},
+        byReason: {},
+        byMode: {},
+        byOffice: {},
+        recent: [],
+      };
+    }
   },
 });
 
