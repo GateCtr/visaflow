@@ -169,7 +169,7 @@ export const getStats = query({
     since: v.optional(v.number()), // timestamp — par défaut 30 derniers jours
   },
   handler: async (ctx, args) => {
-    const since = args.since ?? (Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const since = args.since ?? (Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     try {
     let q = ctx.db
@@ -177,7 +177,7 @@ export const getStats = query({
       .withIndex("by_discovered", (qb) => qb.gte("discoveredAt", since))
       .order("desc");
 
-    const all = await q.take(2000);
+    const all = await q.take(500);
 
     // Filtrer par destination/office/mode en mémoire (index ne couvre pas combo)
     const filtered = all.filter((d) => {
