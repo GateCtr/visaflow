@@ -759,7 +759,16 @@ export async function startSpainWatcherLoop(): Promise<void> {
             const bookedCountBySlot = new Map<string, number>();
 
             const bookDossier = async (dossier: SpainDossier) => {
-              const matched = matchServiceForVisa(services, dossier.visaType);
+              let matched = matchServiceForVisa(services, dossier.visaType);
+
+              // Fallback : si services est vide (rendu SPA, getservices/ 0B après cache),
+              // utiliser le serviceId du scan qui a confirmé les créneaux via _services.
+              // Le portail Kinshasa n'a qu'un seul service réservable ("TRAMITACIÓN DE VISADOS")
+              // — le matching par visaType n'a pas de sens ici, juste prendre le service connu.
+              if (!matched && probeServices.length > 0) {
+                matched = probeServices[0];
+                log("INFO", `[SPAIN-WATCHER] ♻️ ${dossier.applicantName}: services vides → fallback probe service "${matched.serviceName}" (${matched.serviceId})`);
+              }
 
               if (!matched) {
                 log("WARN", `[SPAIN-WATCHER] ⚠️ ${dossier.applicantName}: aucun service ne matche "${dossier.visaType}" — skip`);

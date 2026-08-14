@@ -176,7 +176,7 @@ export const getStats = query({
       .withIndex("by_discovered", (qb) => qb.gte("discoveredAt", since))
       .order("desc");
 
-    const all = await q.take(5000);
+    const all = await q.take(2000);
 
     // Filtrer par destination/office/mode en mémoire (index ne couvre pas combo)
     const filtered = all.filter((d) => {
@@ -205,29 +205,22 @@ export const getStats = query({
     }
 
     // Regrouper par heure de découverte (heatmap horaire — quand le portail libère des créneaux)
-    // Utilise seenAt[] quand disponible (toutes les observations), sinon discoveredAt seul.
+    // Utilise discoveredAt uniquement (plus léger que seenAt[] pour éviter timeout Convex).
     const byHour: Record<number, { captured: number; ignored: number }> = {};
     for (const d of filtered) {
-      const timestamps: number[] = (d as any).seenAt ?? [d.discoveredAt];
-      for (const ts of timestamps) {
-        const hour = new Date(ts).getUTCHours();
-        if (!byHour[hour]) byHour[hour] = { captured: 0, ignored: 0 };
-        if (d.outcome === "captured") byHour[hour].captured++;
-        else byHour[hour].ignored++;
-      }
+      const hour = new Date(d.discoveredAt).getUTCHours();
+      if (!byHour[hour]) byHour[hour] = { captured: 0, ignored: 0 };
+      if (d.outcome === "captured") byHour[hour].captured++;
+      else byHour[hour].ignored++;
     }
 
     // Regrouper par jour de la semaine (0=dimanche, 6=samedi)
-    // Utilise seenAt[] pour plus de précision sur les jours actifs.
     const byDayOfWeek: Record<number, { captured: number; ignored: number }> = {};
     for (const d of filtered) {
-      const timestamps: number[] = (d as any).seenAt ?? [d.discoveredAt];
-      for (const ts of timestamps) {
-        const dow = new Date(ts).getUTCDay();
-        if (!byDayOfWeek[dow]) byDayOfWeek[dow] = { captured: 0, ignored: 0 };
-        if (d.outcome === "captured") byDayOfWeek[dow].captured++;
-        else byDayOfWeek[dow].ignored++;
-      }
+      const dow = new Date(d.discoveredAt).getUTCDay();
+      if (!byDayOfWeek[dow]) byDayOfWeek[dow] = { captured: 0, ignored: 0 };
+      if (d.outcome === "captured") byDayOfWeek[dow].captured++;
+      else byDayOfWeek[dow].ignored++;
     }
 
     // Regrouper par raison d'ignorement
