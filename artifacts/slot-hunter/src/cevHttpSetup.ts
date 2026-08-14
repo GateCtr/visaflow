@@ -2086,6 +2086,13 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
         if (token) {
           return token;
         }
+        // Si UNSOLVABLE, retenter une fois — parfois un autre worker réussit
+        if (errors.some(e => e.includes("UNSOLVABLE"))) {
+          console.log(`[CEV-SETUP] ♻️ UNSOLVABLE — retry immédiat (2ème worker peut réussir)`);
+          errors.length = 0; // reset errors pour le retry
+          const retryToken = await createAndPoll(baseTask, `${taskLabel}_retry`);
+          if (retryToken) return retryToken;
+        }
         if (!errors.some(e => e.includes("anticaptcha"))) {
           errors.push("anticaptcha_task_failed");
         }
