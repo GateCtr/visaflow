@@ -706,40 +706,76 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
         {stats.recent.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucune découverte récente.</p>
         ) : (
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {stats.recent.map((d) => (
-              <div key={d._id} className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${d.outcome === "captured" ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${d.outcome === "captured" ? "bg-green-500" : "bg-amber-500"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-primary">{d.dateFound}</span>
-                    {d.timeFound && <span className="text-[10px] text-slate-500">{d.timeFound}</span>}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${d.outcome === "captured" ? "bg-green-200 text-green-800" : "bg-amber-200 text-amber-800"}`}>
-                      {d.outcome === "captured" ? "Retenue" : "Ignorée"}
-                    </span>
-                    {d.reason && (
-                      <span className="text-[10px] text-muted-foreground">({REASON_LABELS[d.reason] ?? d.reason})</span>
-                    )}
-                    {d.mode && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${d.mode === "reschedule" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                        {d.mode === "reschedule" ? "♻️ resched." : "📅 sched."}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{d.office} — {DEST_LABELS[d.destination] ?? d.destination}</p>
-                </div>
-                <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                  {new Date(d.discoveredAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                </span>
-              </div>
-            ))}
-          </div>
+          <PaginatedDiscoveries items={stats.recent} />
         )}
       </div>
     </div>
   );
 }
 
+
+// ── Paginated Discoveries Component ──────────────────────────────────────────
+const PAGE_SIZE = 10;
+
+function PaginatedDiscoveries({ items }: { items: DiscoveryStats["recent"] }) {
+  const [page, setPage] = useState(0);
+  const totalPages = Math.ceil(items.length / PAGE_SIZE);
+  const pageItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  return (
+    <div>
+      <div className="space-y-2">
+        {pageItems.map((d) => (
+          <div key={d._id} className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${d.outcome === "captured" ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${d.outcome === "captured" ? "bg-green-500" : "bg-amber-500"}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-primary">{d.dateFound}</span>
+                {d.timeFound && <span className="text-[10px] text-slate-500">{d.timeFound}</span>}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${d.outcome === "captured" ? "bg-green-200 text-green-800" : "bg-amber-200 text-amber-800"}`}>
+                  {d.outcome === "captured" ? "Retenue" : "Ignoree"}
+                </span>
+                {d.reason && (
+                  <span className="text-[10px] text-muted-foreground">({REASON_LABELS[d.reason] ?? d.reason})</span>
+                )}
+                {d.mode && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${d.mode === "reschedule" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                    {d.mode === "reschedule" ? "resched." : "sched."}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{d.office} — {DEST_LABELS[d.destination] ?? d.destination}</p>
+            </div>
+            <span className="text-[10px] text-muted-foreground flex-shrink-0">
+              {new Date(d.discoveredAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+        ))}
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-border text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Precedent
+          </button>
+          <span className="text-xs text-muted-foreground">
+            Page {page + 1} / {totalPages} ({items.length} resultats)
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-border text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Suivant
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Export CSV Component ─────────────────────────────────────────────────────
 type ExportPeriod = "1m" | "3m" | "6m" | "1y";
