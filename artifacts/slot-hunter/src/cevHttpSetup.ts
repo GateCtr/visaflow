@@ -1985,90 +1985,13 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
     }
   }
 
-  // Résolution dynamique : env var + fallback botConfig Convex
-  // Priorité : NONECAP > TWOCAPTCHA > ANTICAPTCHA
+  // ── NoneCap en FALLBACK uniquement (coût variable 12-50 crédits/solve → trop cher en prioritaire) ──
+  // Priorité : 2Captcha ($0.003/solve fixe) > NoneCap (fallback sur UNSOLVABLE/timeout)
   const NONECAP_KEY = process.env.NONECAP_API_KEY || null;
   const TWOCAPTCHA_KEY = process.env.TWOCAPTCHA_API_KEY || null;
   const ANTICAPTCHA_KEY = await resolveAnticaptchaKey();
 
-  // ── NoneCap (prioritaire) — API REST simple, tokens haute qualité ──────────
-  if (NONECAP_KEY) {
-    botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "nonecap", useProxy: false, proxyExitIp, proxyDnsResolved: null } });
-    try {
-      const solveNoneCap = async (): Promise<string | null> => {
-        // POST /v1/solves?wait=60 — bloque jusqu'à 60s et retourne dès que résolu
-        const createRes = await fetch("https://api.nonecap.com/v1/solves?wait=60", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${NONECAP_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type: "hcaptcha",
-            sitekey: HCAPTCHA_SITEKEY,
-            url: pageUrl,
-          }),
-          signal: AbortSignal.timeout(70_000),
-        });
-
-        const data = await createRes.json() as {
-          id?: string;
-          status?: string;
-          token?: string | null;
-          error?: { code?: string; message?: string } | null;
-        };
-
-        console.log(`[CEV-SETUP] NoneCap response: status=${data.status} id=${data.id?.slice(0, 20)} token=${data.token ? "yes" : "no"}`);
-        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_create", status: data.token ? "ok" : (data.status === "pending" || data.status === "solving" ? "ok" : "fail"), data: { label: "NoneCap", solveId: data.id, status: data.status } });
-
-        // 200 + token = résolu immédiatement
-        if (data.token) return data.token;
-
-        // 202 = encore en cours, poll
-        if (data.id && (data.status === "pending" || data.status === "solving")) {
-          // Poll toutes les 5s pendant 120s max
-          for (let i = 0; i < 24; i++) {
-            await new Promise(r => setTimeout(r, 5_000));
-            try {
-              const pollRes = await fetch(`https://api.nonecap.com/v1/solves/${data.id}?wait=10`, {
-                headers: { "Authorization": `Bearer ${NONECAP_KEY}` },
-                signal: AbortSignal.timeout(15_000),
-              });
-              const pollData = await pollRes.json() as { status?: string; token?: string | null; error?: { code?: string } | null };
-              if (pollData.token) return pollData.token;
-              if (pollData.status === "failed" || pollData.status === "expired" || pollData.status === "cancelled") {
-                errors.push(`nonecap_${pollData.status}: ${pollData.error?.code ?? "unknown"}`);
-                return null;
-              }
-            } catch (pollErr) {
-              console.warn(`[CEV-SETUP] NoneCap poll error: ${pollErr}`);
-            }
-          }
-          errors.push("nonecap_timeout_120s");
-          return null;
-        }
-
-        // Erreur immédiate
-        if (data.error) {
-          errors.push(`nonecap_error: ${data.error.code ?? data.error.message}`);
-        }
-        return null;
-      };
-
-      const token = await solveNoneCap();
-      if (token) {
-        botLog({ applicationId: clientId, step: "cev_http_hcaptcha_solved", status: "ok", data: { label: "NoneCap", tokenLen: token.length } });
-        return token;
-      }
-      // NoneCap échoué — fallback vers 2Captcha/Anti-Captcha
-      console.log(`[CEV-SETUP] NoneCap échoué (${errors.join(", ")}) — fallback 2Captcha/Anti-Captcha`);
-    } catch (ncErr) {
-      errors.push(`nonecap_exception: ${ncErr instanceof Error ? ncErr.message : String(ncErr)}`);
-      console.warn(`[CEV-SETUP] NoneCap exception: ${ncErr} — fallback`);
-    }
-  }
-
-  // Sélection provider fallback : 2Captcha si disponible, sinon Anti-Captcha
+  // Sélection provider principal : 2Captcha si disponible, sinon Anti-Captcha
   const captchaProvider = TWOCAPTCHA_KEY ? "2captcha" : "anticaptcha";
   const captchaApiKey = TWOCAPTCHA_KEY || ANTICAPTCHA_KEY;
   const captchaBaseUrl = TWOCAPTCHA_KEY

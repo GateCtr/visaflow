@@ -30,7 +30,13 @@ import {
 import { cookieManager } from "./cookie-manager.js";
 import { solveSpainWidgetSession } from "./local-playwright-solver.js";
 import { applyStableGaProfile } from "./spain-redis-persistence.js";
-import { getCurrentDecodoUrl, getDecodoProxyForIndex, getDecodoPoolSize } from "./spain-decodo-pool.js";
+import {
+  getCurrentDecodoUrl,
+  getDecodoProxyForIndex,
+  getDecodoPoolSize,
+  rotateDecodoUrl,
+  isDecodoMultiPool,
+} from "./spain-decodo-pool.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -591,7 +597,8 @@ function flagResidentialPort(port: number, reason = "main/ 0B"): void {
     if (Date.now() - t <= BAD_PORT_TTL_MS) activeFlags++;
     else _badResidentialPorts.delete(p);
   }
-  console.log(`[spain-soax] 🚩 Port ${port} flaggé (${reason}) — ${activeFlags}/100 port(s) exclus pendant ${BAD_PORT_TTL_MS / 60_000}min`);
+  const poolSize = getDecodoPoolSize() || 100;
+  console.log(`[spain-soax] 🚩 Port ${port} flaggé (${reason}) — ${activeFlags}/${poolSize} port(s) exclus pendant ${BAD_PORT_TTL_MS / 60_000}min`);
   // Persistance Redis — survit aux redémarrages
   syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
 }
@@ -661,6 +668,82 @@ export function invalidateSpainCfSession(): void {
     _activeCfSession = undefined;
     removeSpainCfSessionFromRedis();
   }
+}
+
+/**
+ * Rotation IP après échec /main/ (body vide, CF intercept ou block Bookitit).
+ *
+ * invalidateSpainCfSession() seul ne change pas l'IP — ensureSpainCfSession() retombe
+ * alors sur le même port Decodo → boucle infinie de 0B malgré le compteur de rotation
+ * du scanner. Cette fonction aligne le comportement impit sur closeAndInvalidate() PB.
+ */
+export async function rotateSpainCfIpAfterMainFailure(
+  session: SpainCfSession | undefined,
+  reason: string,
+): Promise<void> {
+  invalidateSpainCfSession();
+  _spainImpit = undefined;
+  _spainImpitProxyUrl = undefined;
+
+  const mode = process.env.SPAIN_SESSION_MODE;
+
+  if (mode === "persistent-browser") {
+    const { spainPersistentBrowser } = await import("./spain-persistent-browser.js");
+    await spainPersistentBrowser.closeAndInvalidate();
+    return;
+  }
+
+  const useResidentialIndex =
+    mode === "capsolver-residential" || session?.source === "capsolver";
+
+  if (useResidentialIndex) {
+    let portNum: number | undefined;
+    if (session?.soaxProxyUrl) {
+      try {
+        portNum = parseInt(new URL(session.soaxProxyUrl).port || "0", 10);
+      } catch {
+        portNum = undefined;
+      }
+    }
+    if (!portNum || portNum <= 0) {
+      const currentUrl = getDecodoProxyForIndex(_residentialPortIndex);
+      if (currentUrl) {
+        try {
+          portNum = parseInt(new URL(currentUrl).port || "10001", 10);
+        } catch {
+          portNum = undefined;
+        }
+      }
+    }
+    if (portNum && portNum > 0) {
+      flagResidentialPort(portNum, reason);
+    }
+    _residentialPortIndex++;
+    syncResidentialPortStateToRedis(_residentialPortIndex, _badResidentialPorts);
+
+    const poolSize = getDecodoPoolSize() || 100;
+    const nextUrl = getDecodoProxyForIndex(_residentialPortIndex);
+    let nextPort = "?";
+    if (nextUrl) {
+      try {
+        nextPort = new URL(nextUrl).port || "?";
+      } catch {
+        nextPort = "?";
+      }
+    }
+    console.warn(
+      `[spain-soax] 🔄 Rotation IP après ${reason} — port ${portNum ?? "?"} → ${nextPort} ` +
+      `(index ${(_residentialPortIndex % poolSize) + 1}/${poolSize})`,
+    );
+    return;
+  }
+
+  if (isDecodoMultiPool()) {
+    rotateDecodoUrl();
+    return;
+  }
+
+  rotateSpainSoaxSession("spain-cf");
 }
 
 /**

@@ -22,12 +22,24 @@ import {
   ensureSpainCfSession,
   spainCfFetch,
   invalidateSpainCfSession,
+  rotateSpainCfIpAfterMainFailure,
   isSpainCfSessionExpiringSoon,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import { callBookititEndpointViaBrowser, spainPersistentBrowser } from "./spain-persistent-browser.js";
 import { DEFAULT_WIDGET_KEY } from "./spain-portals.js";
 import { getDecodoPoolSize } from "./spain-decodo-pool.js";
+import {
+  beginSpainScanTrace,
+  takeSpainScanTrace,
+  setSpainScanIpRotations,
+  recordSpainScanMain,
+  recordSpainScanInitConfig,
+  recordSpainScanService,
+  recordSpainScanAgenda,
+  recordSpainScanDatetime,
+  type SpainScanTrace,
+} from "./spain-scan-trace.js";
 
 function isBookititServiceRedirect(body: string, pageUrl?: string): boolean {
   if (!pageUrl) return false;
@@ -106,6 +118,8 @@ export interface SpainHttpScanResult {
     confirmation?: string | number;
     [key: string]: unknown;
   };
+  /** Trace diagnostique (main, initConfig, service, agenda, datetime, bookings). */
+  _scanTrace?: SpainScanTrace;
 }
 
 /**
@@ -1185,6 +1199,7 @@ async function confirmSlotsViaDatetimeOnce(
         cfgRaw = cfgRes ? await cfgRes.text() : "";
         console.log(`[spain-http] 🔧 getwidgetconfigurations/ init → HTTP ${cfgRes?.status ?? "null"} | ${cfgRaw.length}B`);
       }
+      recordSpainScanInitConfig(cfgRaw.length);
       // Petite pause pour laisser le serveur initialiser la session (~200ms observé en vrai Chrome)
       await new Promise<void>((r) => setTimeout(r, 220));
 
@@ -1251,11 +1266,13 @@ async function confirmSlotsViaDatetimeOnce(
       console.log(`[spain-http] 🔬 getservices/ raw (500c): ${svcRaw.slice(0, 500)}`);
       const svcPayload = parseJsonpPayload(svcRaw);
       console.log(`[spain-http] 🔬 getservices/ parsed type: ${typeof svcPayload} | isArray: ${Array.isArray(svcPayload)} | keys: ${svcPayload && typeof svcPayload === "object" ? Object.keys(svcPayload as object).slice(0, 10).join(",") : "n/a"}`);
-      
+
+      let allowAppointment: boolean | null = null;
       if (svcPayload && typeof svcPayload === "object") {
         const p = svcPayload as Record<string, unknown>;
         const allow = p["AllowAppointment"] ?? p["allowAppointment"];
         if (allow !== undefined) {
+          allowAppointment = allow === true || allow === "true" || allow === 1 || allow === "1";
           console.log(`[spain-http] 🔬 getservices/ AllowAppointment = ${JSON.stringify(allow)}`);
         }
       }
@@ -1281,6 +1298,7 @@ async function confirmSlotsViaDatetimeOnce(
         services = svcDetails.map((s) => ({ serviceId: s.id, serviceName: s.name }));
       }
       console.log(`[spain-http] ✅ getservices/ fallback → ${services.length} service(s) : ${services.map(s => `"${s.serviceName}" (${s.serviceId})`).join(", ")}`);
+      recordSpainScanService(svcRaw.length, allowAppointment, services);
     } catch (err) {
       console.log(`[spain-http] ⚠️ getservices/ fallback exception: ${err} → not_found`);
       return null;
@@ -1292,6 +1310,7 @@ async function confirmSlotsViaDatetimeOnce(
       const nameM = inner.match(/clsBktServiceDataName[^>]*>([^<]+)/i) ?? inner.match(/>([^<]{5,})</);
       return { serviceId, serviceName: nameM?.[1]?.trim() ?? "Service" };
     });
+    recordSpainScanService(0, null, services);
   }
 
   // jqCbGen conservé pour compatibilité avec du code non migré (alias de sharedCb).
@@ -1432,6 +1451,13 @@ async function confirmSlotsViaDatetimeOnce(
         // getagendas/ 0B — normal si pas de créneaux disponibles
         console.log(`[spain-http]    getagendas/ 0B — datetime/ appelé sans agendas[] (pas de RDV disponibles)`);
       }
+      recordSpainScanAgenda({
+        serviceId: svc.serviceId,
+        serviceName: svc.serviceName,
+        bytes: agRaw.length,
+        ok: agRaw.length > 0 && !!agendaId,
+        agendaId: agendaId || undefined,
+      });
     } catch (agErr) {
       console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
     }
@@ -1606,8 +1632,24 @@ async function confirmSlotsViaDatetimeOnce(
             console.log(`[spain-http] 🔎 datetime/ ${start} aucun créneau extrait — raw(400): ${rawSnip}`);
           }
         }
+        recordSpainScanDatetime({
+          serviceId: svc.serviceId,
+          serviceName: svc.serviceName,
+          month: start.slice(0, 7),
+          bytes: dtRaw.length,
+          slots: slotsThisMonth,
+          ok: dtRaw.length > 0,
+        });
       } catch (dtErr) {
         console.warn(`[spain-http] ⚠️ datetime/ exception: ${dtErr}`);
+        recordSpainScanDatetime({
+          serviceId: svc.serviceId,
+          serviceName: svc.serviceName,
+          month: start.slice(0, 7),
+          bytes: 0,
+          slots: 0,
+          ok: false,
+        });
       }
 
       mo++;
@@ -2665,6 +2707,12 @@ async function scanViaMainEndpoint(
     fireRumBeacon(session, 124_917, "/onlinebookings/main/", widgetReferer, buildCookieStr(), 3 + Math.floor(Math.random() * 9), "");
     if (mainBody.length === 0) {
       console.warn(`[spain-http] ⚠️ /main/ browser → 0B — closeAndInvalidate (rotation IP + browser)`);
+      recordSpainScanMain({
+        bytes: 0,
+        ok: false,
+        serviceContainer: false,
+        dialogConfirm: false,
+      });
       await spainPersistentBrowser.closeAndInvalidate();
       return null;
     }
@@ -2743,14 +2791,22 @@ async function scanViaMainEndpoint(
 
     if (mainBody.length === 0) {
       const isCfIntercept = mainContentType.includes("text/html");
+      const failureReason = isCfIntercept
+        ? "CF intercept /main/ 0B"
+        : "Bookitit block /main/ 0B";
       console.warn(
         `[spain-http] ⚠️ /main/ body vide (HTTP 200, cf-ray: ${mainCfRay || "absent"}` +
         (isCfIntercept ? ", CF intercept text/html" : "") +
-        `) → session CF invalide pour /main/ — session invalidée (retry avec JSD frais)`,
+        `) → session CF invalide pour /main/ — rotation IP + retry`,
       );
-      invalidateSpainCfSession();
-      // En mode persistent-browser, ensureSpainCfSession() gère la rotation IP
-      // en interne (closeAndInvalidate + retry) — aucune action supplémentaire ici.
+      recordSpainScanMain({
+        bytes: 0,
+        ok: false,
+        serviceContainer: false,
+        dialogConfirm: false,
+        cfRay: mainCfRay || undefined,
+      });
+      await rotateSpainCfIpAfterMainFailure(session, failureReason);
       return null;
     }
   }
@@ -2880,6 +2936,16 @@ async function scanViaMainEndpoint(
     ` | serviceLinks=${hasRenderedServiceLinks}` +
     ` | templates=${hasClientSideTemplates}`,
   );
+
+  recordSpainScanMain({
+    bytes: html.length,
+    ok: html.length >= 1000,
+    serviceContainer: hasServiceTextContainer,
+    dialogConfirm: hasServerAcceptDialog,
+    isSpa: isSpaPortal,
+    fromCache: mainFromCache,
+    cfRay: mainCfRay || undefined,
+  });
 
   if (isSpaPortal && !hasServiceTextContainer) {
     // Portail SPA sans idBktDefaultServicesTextBeforeServicesList.
@@ -3281,6 +3347,7 @@ export function _setTestSessionProvider(fn: SessionProvider | null): void {
 
 export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanResult> {
   const t0 = Date.now();
+  beginSpainScanTrace();
   // Propager le portail courant au browser fallback (évite Kinshasa par défaut).
   spainPersistentBrowser.setCurrentTargetUrl(portalUrl);
 
@@ -3293,16 +3360,16 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
       status: "cf_blocked",
       errorMessage: "Impossible d'obtenir le cookie CF (SOAX ou CapSolver indisponible)",
       scanDurationMs: Date.now() - t0,
+      _scanTrace: takeSpainScanTrace(),
     };
   }
 
-  // 2. Scan via /onlinebookings/main/ — rotation pool complète si Bookitit bloque l'IP.
+  // 2. Scan via /onlinebookings/main/ — rotation pool complète si /main/ retourne 0B.
   //
-  // Comportement réel du watcher : quand /main/ retourne 0B (Bookitit block, pas CF),
-  // closeAndInvalidate() a déjà été appelé en interne et a pivoté vers la prochaine IP.
-  // On tente toutes les IPs du pool avant de rendre la main, sans attendre l'intervalle
-  // watcher entre chaque tentative. CF se résout en ~1s (fast-track) pour toutes les IPs
-  // dédiées Decodo → seul Bookitit est le goulot ; la boucle est aussi rapide que possible.
+  // scanViaMainEndpoint() appelle rotateSpainCfIpAfterMainFailure() (PB: closeAndInvalidate,
+  // capsolver-residential: _residentialPortIndex++) avant de retourner null. On enchaîne
+  // les IPs du pool sans attendre l'intervalle watcher. CF se résout en ~1s (fast-track)
+  // pour les IPs dédiées Decodo → seul Bookitit est le goulot.
   let mainResult = await scanViaMainEndpoint(session, portalUrl);
 
   const poolSize = getDecodoPoolSize();
@@ -3328,10 +3395,13 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
   }
 
   if (mainResult) {
-    return mainResult;
+    setSpainScanIpRotations(ipRotations);
+    return { ...mainResult, _scanTrace: takeSpainScanTrace() };
   }
 
   // 3. Toutes les tentatives ont échoué.
+  setSpainScanIpRotations(ipRotations);
+  const scanTrace = takeSpainScanTrace();
   // ip_pool_blocked uniquement si TOUTES les rotations ont eu une session valide mais
   // /main/ retournait quand même 0B → blocage Bookitit sur toutes les IPs.
   // Si la session CF elle-même a échoué (sessionAcquisitionFailed), c'est une panne
@@ -3343,6 +3413,7 @@ export async function scanSpainHttp(portalUrl: string): Promise<SpainHttpScanRes
       ? `Toutes les IPs Decodo (${poolSize}) retournent 0B pour /main/ — Bookitit block transitoire, backoff 5 min`
       : "Scan /main/ échoué (session invalidée pour le prochain cycle)",
     scanDurationMs: Date.now() - t0,
+    _scanTrace: scanTrace,
   };
 }
 
@@ -3367,6 +3438,8 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
   _mainHtml?: string;
   /** Tous les créneaux disponibles — pour la stratégie multi-dossiers round-robin */
   _allSlots?: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
+  /** Trace diagnostique pour l'historique admin */
+  _scanTrace?: SpainScanTrace;
 }> {
   const result = await scanSpainHttp(portalUrl);
 
@@ -3377,14 +3450,15 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
         slotInfo: result.slotInfo,
         _mainHtml: result._mainHtml,
         _allSlots: result._allSlots,
+        _scanTrace: result._scanTrace,
       };
     case "not_found":
-      return { status: "not_found" };
+      return { status: "not_found", _scanTrace: result._scanTrace };
     case "ip_pool_blocked":
-      return { status: "ip_pool_blocked", errorMessage: result.errorMessage };
+      return { status: "ip_pool_blocked", errorMessage: result.errorMessage, _scanTrace: result._scanTrace };
     case "cf_blocked":
     case "session_expired":
     case "error":
-      return { status: "error", errorMessage: result.errorMessage };
+      return { status: "error", errorMessage: result.errorMessage, _scanTrace: result._scanTrace };
   }
 }
