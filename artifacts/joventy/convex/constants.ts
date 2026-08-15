@@ -529,14 +529,14 @@ export const VISA_PRICING = {
     successModel: "evisa" as const,
     visaTypes: [
       "E-Visa Albanie — Court séjour (30 jours)",
-      "E-Visa Albanie — Détenteur visa Schengen / USA / UK valide",
+      "E-Visa Albanie — Long séjour (90 jours)",
     ],
     requiredDocuments: [
       { key: "passport_scan", label: "Passeport valide (scan HD, 2 pages bio)", required: true },
       { key: "photo_id", label: "Photo d'identité fond blanc", required: true },
       { key: "flight_booking", label: "Billet d'avion aller-retour", required: false },
       { key: "hotel_booking", label: "Réservation d'hôtel ou attestation d'hébergement", required: false },
-      { key: "schengen_visa", label: "Visa Schengen / USA / UK valide (si applicable)", required: false },
+      { key: "travel_itinerary", label: "Itinéraire de voyage / preuve de séjour en Albanie", required: false },
     ],
     embassyAddress: "Portail e-Visa officiel Albanie — aucune ambassade à visiter",
     portalUrl: "https://e-albania.al",
@@ -551,7 +551,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a obtenu votre visa électronique pour l'Albanie. Réglez la prime de succès pour recevoir votre document officiel.",
       completedNote: "Votre e-Visa Albanie est disponible ci-dessous — imprimez-le et présentez-le à l'embarquement.",
     },
-    notes: "L'Albanie propose un visa électronique accessible en ligne. Les ressortissants congolais peuvent en bénéficier, notamment s'ils sont détenteurs d'un visa Schengen, USA ou UK valide. Traitement en 24-72h sur le portail officiel e-Albania.",
+    notes: "L'Albanie délivre un visa électronique accessible à tous les ressortissants congolais, sans conditions de visa préalable (Schengen, USA ou UK non requis). Traitement en 24-72h sur le portail officiel e-Albania.",
   },
 } as const;
 
