@@ -80,12 +80,14 @@ export default function Conditions() {
         une décision souveraine de l'ambassade.
       </p>
 
-      <h3>5.2 Service visa partiel — formulaires & vérification</h3>
+      <h3>5.2 Accompagnement Partiel</h3>
       <p>
-        <strong>600 $ forfaitaires</strong>, payés en un seul versement à l'ouverture du dossier.
-        Joventy remplit les formulaires officiels et vérifie les pièces justificatives. Le client
-        gère ensuite lui-même la soumission ou la prise de rendez-vous. <strong>Aucune prime de
-        succès n'est due</strong> dans le cadre de cette formule.
+        <strong>200 $ de frais d'engagement</strong> payés à l'ouverture du dossier, puis{" "}
+        <strong>400 $ de prime de succès due uniquement à l'obtention du visa</strong>.
+        Total : 600 $. Le client fournit ses pièces ou la majorité ; Joventy complète les documents
+        manquants, constitue le profil consulaire et capture le créneau. Pour les visas consulaires,
+        le client dépose lui-même son dossier à l'ambassade le jour du rendez-vous. Si le visa n'est
+        pas obtenu, aucune prime de succès n'est due.
       </p>
 
       <h3>5.3 Service créneau uniquement (slot_only)</h3>

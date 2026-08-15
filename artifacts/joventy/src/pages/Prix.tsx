@@ -181,13 +181,13 @@ export default function Prix() {
             <div className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">
               Accompagnement partiel
             </div>
-            <p className="text-4xl font-extrabold text-primary mb-1">600 $</p>
-            <p className="text-sm text-muted-foreground mb-4">600 $ — paiement unique à l'ouverture · aucune prime de succès</p>
-            <p className="text-sm text-muted-foreground mb-4">Vous fournissez la majorité ou la totalité de vos documents. Joventy prend en charge la composition du dossier, le profilage et, si besoin, la recherche du créneau.</p>
+            <p className="text-4xl font-extrabold text-primary mb-1">200 $</p>
+            <p className="text-sm text-muted-foreground mb-4">200 $ engagement · 400 $ prime de succès payée uniquement à l'obtention du visa · Total 600 $</p>
+            <p className="text-sm text-muted-foreground mb-4">Vous fournissez vos documents ou la majorité. Joventy complète les pièces manquantes, constitue le profil et capture le créneau. Pour les visas consulaires, vous déposez vous-même à l'ambassade.</p>
             <ul className="space-y-1.5 text-xs text-slate-600 mb-6 flex-1">
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Composition et vérification du dossier par un expert</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Profilage et conseils personnalisés</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Toutes destinations — visa consulaire inclus</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Vous fournissez vos pièces, Joventy complète les manquantes</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Profil consulaire et capture du créneau inclus</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Toutes destinations — prime due uniquement à l'obtention</li>
             </ul>
             <Link href="/register">
               <Button variant="outline" className="w-full font-bold">Démarrer — Accompagnement partiel</Button>

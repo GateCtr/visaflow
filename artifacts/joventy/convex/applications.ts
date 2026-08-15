@@ -227,8 +227,7 @@ export const create = mutation({
       successFee,
       paidAmount: 0,
       isEngagementPaid: false,
-      // dossier_only = tarif fixe (pas de prime de succès séparée)
-      isSuccessFeePaid: isDossierOnly,
+      isSuccessFeePaid: false,
     };
 
     const {
@@ -243,7 +242,7 @@ export const create = mutation({
 
     const tierLabel = isSlotOnly
       ? ` — Urgence : ${SLOT_URGENCY_TIERS[(args.slotUrgencyTier ?? "standard") as SlotUrgencyTier].label}. Dépôt : ${engagementFee}$ / Solde : ${successFee}$`
-      : isDossierOnly ? " (tarif fixe, pas de prime de succès)" : "";
+      : isDossierOnly ? " — Accompagnement Partiel (200$ engagement + 400$ prime succès)" : "";
 
     const trackingToken = Array.from({ length: 12 }, () =>
       "abcdefghjkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 31)]
