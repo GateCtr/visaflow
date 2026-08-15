@@ -238,10 +238,17 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
       }
 
       // 6. Attendre le prochain poll ou qu'un worker se termine
-      await Promise.race([
-        sleep(POLL_INTERVAL_MS),
-        waitForAnyWorker(workers),
-      ]);
+      // IMPORTANT : quand workers est vide, waitForAnyWorker() retourne une Promise
+      // résolue → Promise.race() repartirait immédiatement sans dormir (busy-loop).
+      // On n'inclut le race que s'il y a des workers actifs.
+      if (workers.size > 0) {
+        await Promise.race([
+          sleep(POLL_INTERVAL_MS),
+          waitForAnyWorker(workers),
+        ]);
+      } else {
+        await sleep(POLL_INTERVAL_MS);
+      }
 
       // 7. Second harvest après sleep (pour récupérer les résultats)
       await harvestFinishedWorkers(workers);
