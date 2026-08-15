@@ -42,5 +42,8 @@ Worker TEST CUBA, portail Cuba LMD, proxy es.decodo.com index 5419 :
 - `getservices/` → 2 services ✅ (dont "PRESENTACIÓN DE DOCUMENTACIÓN LEY MEMORIA DEMOCRÁTICA" bkt897578)
 - `getagendas/` → agenda=bkt316096 ✅
 - `datetime/` → 225 créneaux sept, 207 oct ✅ — booking déclenché sur 2026-09-01 09:00
+- `getsigninfields/` → ✅ nonce amorcé (réponse non-0B)
+- `signin/` → ✅ "Usuario o contraseña incorrectos" — serveur a bien traité la requête (faux identifiants attendus)
 - ISP proxies (`es.decodo.com`) fonctionnent pour Cuba aux indices > 5419 — les premiers indices (0-10) étaient brûlés
-- Fix associé : `pickDedicatedProxy` démarre désormais à `getDecodoCurrentIndex()` (index Redis persisté) plutôt qu'à 0
+- Fix pickDedicatedProxy : démarre à `getDecodoCurrentIndex()` (index Redis persisté) plutôt qu'à 0
+- Fix booking : suppression du `refreshPhpsessidForCapsolver` + re-init PHP qui n'étaient pas dans le dynamic test ; getsigninfields/signin/summary utilisent maintenant `callDirect(phpState.ds)` sur le même PHPSESSID
