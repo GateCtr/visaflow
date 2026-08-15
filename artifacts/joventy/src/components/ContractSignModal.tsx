@@ -341,16 +341,13 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                       Ils couvrent le travail administratif initial, la mise en surveillance du portail et la préparation du dossier.
                     </li>
                     <li className="pl-3 sm:pl-4">
-                      <strong>Prime de succès — Visa avec rendez-vous :</strong> due uniquement si un créneau consulaire
-                      est effectivement obtenu. Elle n'est jamais due en cas d'indisponibilité de créneaux.
-                    </li>
-                    <li className="pl-3 sm:pl-4">
-                      <strong>Prime de succès — E-Visa / Visa sans rendez-vous :</strong> due uniquement si le visa
-                      est accordé par l'autorité compétente. Elle n'est jamais due en cas de refus ou de non-réponse.
+                      <strong>Prime de succès :</strong> due uniquement à l'obtention effective du visa — visa consulaire
+                      (après décision d'octroi de l'ambassade) ou e-Visa (après approbation officielle de l'autorité
+                      émettrice). Elle n'est jamais due en cas d'indisponibilité, de refus ou de non-réponse.
                     </li>
                   </ul>
                   <p>
-                    Les deux services (Accompagnement Complet et Partiel) fonctionnent selon le même modèle : frais d'engagement à l'ouverture du dossier, puis prime de succès due uniquement à l'obtention du visa ou du créneau. Les paiements s'effectuent via Mobile Money (M-Pesa, Airtel Money, Orange Money) selon les instructions affichées sur la plateforme.
+                    Les deux services (Accompagnement Complet et Partiel) fonctionnent selon le même modèle : frais d'engagement à l'ouverture du dossier, puis prime de succès due uniquement à l'obtention effective du visa. Les paiements s'effectuent via Mobile Money (M-Pesa, Airtel Money, Orange Money) selon les instructions affichées sur la plateforme.
                   </p>
                 </section>
 
@@ -398,7 +395,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                     <li className="pl-3 sm:pl-4">Fournir des informations exactes, complètes et à jour lors de l'ouverture du dossier.</li>
                     <li className="pl-3 sm:pl-4">Transmettre sans délai les documents demandés par Joventy pour compléter le dossier.</li>
                     <li className="pl-3 sm:pl-4">Régler les frais d'engagement dans les 48 heures suivant l'ouverture du dossier, sous peine d'annulation automatique.</li>
-                    <li className="pl-3 sm:pl-4"><strong>Visa avec rendez-vous :</strong> se présenter au rendez-vous consulaire à la date et l'heure indiquées, muni de l'intégralité des documents requis, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du créneau.</li>
+                    <li className="pl-3 sm:pl-4"><strong>Visa avec rendez-vous :</strong> se présenter au rendez-vous consulaire à la date et l'heure indiquées, muni de l'intégralité des documents requis, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du visa.</li>
                     <li className="pl-3 sm:pl-4"><strong>E-Visa / Visa sans rendez-vous :</strong> s'assurer que tous les documents fournis sont authentiques et conformes aux exigences du pays de destination, et payer la prime de succès dans les 48 heures suivant la notification d'obtention du visa.</li>
                   </ul>
                 </section>
@@ -434,13 +431,9 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                       de la demande (créneau non disponible, refus de visa, annulation consulaire, etc.).
                     </li>
                     <li className="pl-3 sm:pl-4">
-                      <strong>Prime de succès — Visa avec rendez-vous :</strong> due uniquement après obtention
-                      effective d'un créneau. En l'absence de créneau, elle n'est jamais prélevée.
-                    </li>
-                    <li className="pl-3 sm:pl-4">
-                      <strong>Prime de succès — E-Visa / Visa sans rendez-vous :</strong> due uniquement après
-                      notification officielle d'obtention du visa. En cas de refus ou non-réponse de l'autorité
-                      compétente, elle n'est jamais prélevée.
+                      <strong>Prime de succès :</strong> due uniquement après obtention effective du visa — qu'il
+                      s'agisse d'un visa consulaire ou d'un e-Visa. En cas de refus, non-réponse ou indisponibilité,
+                      elle n'est jamais prélevée.
                     </li>
                     <li className="pl-3 sm:pl-4">
                       <strong>Annulation par le Client :</strong> en cas d'annulation avant toute action de Joventy,

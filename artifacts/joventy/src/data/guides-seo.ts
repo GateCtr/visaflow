@@ -1389,8 +1389,8 @@ const guides: Guide[] = [
           "Enfant de 6 à 12 ans : 45 €",
           "Enfant de moins de 6 ans : GRATUIT",
           "Modalité de paiement : renseignez-vous auprès de l'ambassade pour la devise acceptée (CDF, USD ou carte bancaire selon les cas)",
-          "Frais Joventy séparés : 500 USD d'engagement (à la création du dossier) + 1 000 USD de prime de succès (à la confirmation du créneau uniquement)",
-          "La prime de succès n'est DUE que lorsque votre rendez-vous à l'ambassade est confirmé",
+          "Frais Joventy séparés : 500 USD d'engagement (à la création du dossier) + 1 000 USD de prime de succès (à l'obtention effective du visa uniquement)",
+          "La prime de succès n'est DUE qu'à l'obtention effective du visa (décision d'octroi de l'ambassade)",
         ],
       },
       {
@@ -1413,7 +1413,7 @@ const guides: Guide[] = [
           "Réservation du créneau sur citaconsular.es dès réception des identifiants de l'ambassade",
           "Confirmation par WhatsApp avec la date, l'heure et les instructions pour le jour J",
           "Suivi de l'état du dossier via sutramiteconsular.maec.es",
-          "Prime de succès (1 000 USD) payable uniquement à la confirmation du créneau — aucun résultat, aucun solde dû",
+          "Prime de succès (1 000 USD) payable uniquement à l'obtention effective du visa — aucun résultat, aucun solde dû",
           "Paiement via M-Pesa, Airtel Money ou Orange Money",
         ],
       },
@@ -1441,7 +1441,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte le visa Espagne depuis Kinshasa ?",
-        a: "Les frais officiels consulaires sont payés directement à l'ambassade le jour du rendez-vous. Les frais Joventy sont : 500 USD d'engagement à la création du dossier + 1 000 USD de prime de succès uniquement à la confirmation du rendez-vous (total 1 500 USD).",
+        a: "Les frais officiels consulaires sont payés directement à l'ambassade le jour du rendez-vous. Les frais Joventy sont : 500 USD d'engagement à la création du dossier + 1 000 USD de prime de succès uniquement à l'obtention effective du visa (total 1 500 USD).",
       },
       {
         q: "Que faire si mon email à l'ambassade reste sans réponse ?",
@@ -1483,7 +1483,7 @@ const guides: Guide[] = [
     ],
     conversion: {
       heading: "Besoin d’un accompagnement pour l’Espagne ?",
-      body: "Joventy prépare le dossier, envoie l'inscription à l'ambassade et vous accompagne pour la réservation du créneau. Les frais d'engagement sont de 500 USD ; la prime de succès de 1 000 USD est due uniquement lorsque le rendez-vous est confirmé.",
+      body: "Joventy prépare le dossier, envoie l'inscription à l'ambassade et vous accompagne pour la réservation du créneau. Les frais d'engagement sont de 500 USD ; la prime de succès de 1 000 USD est due uniquement à l'obtention effective du visa.",
       primaryLabel: "Créer mon dossier Espagne — 500 USD engagement",
       primaryHref: "/register",
       whatsappLabel: "Poser une question sur WhatsApp",
