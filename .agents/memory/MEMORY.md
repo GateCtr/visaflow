@@ -35,3 +35,4 @@
 - [getsigninfields/ obligatoire avant signin/](spain-getsigninfields-required.md) — sans cet appel HTTP, signin/ retourne 0B ; appelé en amont, signin/ répond normalement (confirmé 2026-08-12 Saopolo HTTP pur).
 - [Spain Decodo pool Redis persistence](spain-decodo-pool-redis.md) — index rotation + IP blacklist (TTL) persistés dans Redis ; initDecodoPool() à appeler après initSpainRedis() dans le watcher loop.
 - [Spain scan trace pipeline fix](spain-scan-trace-pipeline.md) — scanTrace was silently dropped at 3 layers; all 3 fixed: schema, mutation args, and http.ts endpoint body/forward.
+- [Spain per-dossier worker session init](spain-worker-init-session.md) — initWorkerSession() standalone: même impit probe→solve→portail, UA Chrome/151 fixe, zéro globals; seule implémentation prouvée pour es.decodo.com CSV pool.

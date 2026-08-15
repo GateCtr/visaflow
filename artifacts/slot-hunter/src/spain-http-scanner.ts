@@ -1844,7 +1844,7 @@ function dateFrom(d: Date): string { return d.toISOString().slice(0, 10); }
  *
  * freeslots=-1 signifie que le serveur n'a pas retourné de nombre (disponibilité probable).
  */
-function extractAllSlotsFromDatetime(
+export function extractAllSlotsFromDatetime(
   payload: unknown,
 ): Array<{ date: string; time: string; agendaId?: string; freeslots: number }> {
   const slots: Array<{ date: string; time: string; agendaId?: string; freeslots: number }> = [];

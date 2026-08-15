@@ -23,6 +23,7 @@
 import {
   solveSpainCloudflare,
   createImpitWithProxy,
+  initWorkerSession,
   spainCfFetch,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
@@ -32,7 +33,7 @@ import {
   type SpainBookingConfig,
   type SpainBookingResult,
 } from "./spain-http-booking.js";
-import { extractServiceDetails } from "./spain-http-scanner.js";
+import { extractServiceDetails, extractAllSlotsFromDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
   releaseSlotClaim,
@@ -44,6 +45,7 @@ import {
   getDecodoProxyForIndex,
   getDecodoPoolSize,
   flagDecodoIp,
+  isDecodoIpBlacklisted,
 } from "./spain-decodo-pool.js";
 import {
   reportSlotFound,
@@ -54,6 +56,29 @@ import {
   type SlotDiscoveryEvent,
 } from "./convexClient.js";
 import { log } from "./scheduler-utils.js";
+
+// ─── Sticky session helper ────────────────────────────────────────────────────
+
+/**
+ * Injecte un identifiant de session sticky Decodo dans l'URL proxy.
+ * Format Decodo résidentiel : user-{id}-session-{sid}-sessionduration-60
+ *
+ * CRITIQUE : sans session sticky, impit et CapSolver ouvrent deux connexions TCP
+ * différentes → deux exit IP différentes → le cf_clearance de CapSolver est lié
+ * à l'exit IP CapSolver, pas à celle d'impit → GET impit avec ce cf_clearance
+ * reçoit HTTP 403. Source de vérité : ensureSpainImpitSession l.908-910.
+ */
+function addStickySession(url: string, sid: string): string {
+  try {
+    const u = new URL(url);
+    const user = decodeURIComponent(u.username);
+    const stickyUser = user.includes("-session-")
+      ? user.replace(/-session-[^-]+/, `-session-${sid}`)
+      : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${sid}$2`);
+    u.username = encodeURIComponent(stickyUser);
+    return u.toString();
+  } catch { return url; }
+}
 
 // ─── Types publics ────────────────────────────────────────────────────────────
 
@@ -151,6 +176,14 @@ interface WorkerScanResult {
   errorMessage?: string;
 }
 
+/** Cache service+agenda entre les cycles (règle §9 : 1 seul getagendas/ par PHPSESSID). */
+interface ServiceCache {
+  initialized: boolean;
+  serviceId: string;
+  serviceName: string;
+  agendaId: string;
+}
+
 // ─── Entrée publique ──────────────────────────────────────────────────────────
 
 /**
@@ -188,109 +221,84 @@ export async function runDossierWorker(
     return workerResult;
   }
 
-  // ── 2. Créer impit dédié + probe portail CF ───────────────────────────────────
-  // CRITIQUE : l'impit est créé ICI, avant le solve CF.
-  // Il servira pour (a) capturer le HTML du challenge CF, et (b) toutes les requêtes
-  // suivantes (session._ownImpit). Cela garantit une empreinte TLS cohérente :
-  // CapSolver reçoit le challenge issu de CET impit → le cf_clearance est lié à sa TLS.
-  const probeImpit = createImpitWithProxy(proxyUrl ?? "");
+  // ── 2-5. Session complète via initWorkerSession ──────────────────────────────
+  // Reproduit exactement le bloc capsolver-residential de ensureSpainImpitSession :
+  // sticky session → probe (UA+Accept) → CapSolver (html+proxy+UA) → GET portail
+  // (token+PHPSESSID) → POST token (srvsrc+version) → GET /main/ (validation).
+  // Même impit pour toutes les étapes = cohérence TLS = cf_clearance valide.
+  //
+  // Rotation : si initWorkerSession échoue (proxy bloqué ou /main/ 0B), on flag
+  // le port, on libère, on prend le suivant — max MAX_SESSION_RETRIES tentatives.
+  const portalUrlNoFrag = config.portalUrl.split("#")[0];
+  const MAX_SESSION_RETRIES = 3;
 
-  log(
-    "INFO",
-    `${tag} 🔎 Probe portail CF → ${proxyUrl ? maskProxy(proxyUrl) : "direct"} …`,
-  );
-  const { challengeHtml, ua: probeUA, proxyError: probeProxyError } = await captureChallengePage(
-    probeImpit,
-    config.portalUrl,
-    tag,
-  );
+  let session: SpainCfSession | null = null;
 
-  // Probe a détecté que le proxy est injoignable → blacklist immédiate avant solve
-  if (probeProxyError && proxyUrl) {
-    log("WARN", `${tag} 🚫 Probe proxy injoignable — blacklist ${maskProxy(proxyUrl)}`);
-    flagDecodoIp(proxyUrl, "probe-connect-error");
-    workerResult = {
-      dossierId: config.id,
-      status: "error",
-      errorMessage: `Proxy injoignable au probe CF: ${maskProxy(proxyUrl)}`,
-    };
-    return workerResult;
-  }
+  for (let attempt = 0; attempt < MAX_SESSION_RETRIES; attempt++) {
+    if (!proxyUrl) break; // mode direct sans proxy
 
-  // ── 3. Solve CF en passant le HTML capturé ───────────────────────────────────
-  // Sans HTML : cf_clearance lié au Chrome CapSolver → impit reçoit 403/0B (TLS différent)
-  // Avec HTML  : cf_clearance lié à la TLS impit → impit reçoit 200 (cohérence TLS)
-  log(
-    "INFO",
-    `${tag} 🔐 Solve CF (html: ${challengeHtml ? `${challengeHtml.length}B` : "absent"}) …`,
-  );
-  const solveResult = await solveSpainCloudflare(
-    config.portalUrl,
-    capsolverKey,
-    proxyUrl ?? "",
-    challengeHtml || undefined,
-    challengeHtml ? probeUA : undefined,
-  );
+    // Sticky session : même exit IP pour impit ET CapSolver
+    const stickyId = Math.random().toString(36).slice(2, 10);
+    const stickyProxy = addStickySession(proxyUrl, stickyId);
+    log("INFO", `${tag} 🔐 Session init (tentative ${attempt + 1}/${MAX_SESSION_RETRIES}) — ${maskProxy(stickyProxy)} sid=${stickyId}`);
 
-  if (!solveResult.success || !solveResult.session) {
-    // Si l'échec est dû au proxy injoignable → blacklist immédiate
-    if (proxyUrl && isProxyConnectError(solveResult.error)) {
-      log("WARN", `${tag} 🚫 Solve CF proxy injoignable — blacklist ${maskProxy(proxyUrl)}`);
-      flagDecodoIp(proxyUrl, `solve-proxy-error: ${solveResult.error?.slice(0, 60)}`);
+    const result = await initWorkerSession(stickyProxy, portalUrlNoFrag, capsolverKey);
+
+    if (result) {
+      session = result.session;
+      // proxyUrl = stickyProxy pour que le finally libère la bonne URL
+      proxyUrl = stickyProxy;
+      log("INFO", `${tag} ✅ Session établie — PHPSESSID ✅ | /main/ ${session.prefetchedMainHtml?.length ?? 0}B`);
+      break;
     }
-    workerResult = {
-      dossierId: config.id,
-      status: "error",
-      errorMessage: `CF solve échoué: ${solveResult.error}`,
-    };
+
+    // Échec → flag + libérer + prendre le suivant
+    log("WARN", `${tag} ❌ initWorkerSession échoué — flag + rotation (tentative ${attempt + 1})`);
+    flagDecodoIp(proxyUrl, "init-session-failed");
+    await releaseWorkerIp(proxyUrl, config.id).catch(() => {});
+
+    const nextProxy = await pickDedicatedProxy(config.id, tag);
+    if (!nextProxy) { log("WARN", `${tag} Pool Decodo épuisé`); proxyUrl = ""; break; }
+    proxyUrl = nextProxy;
+  }
+
+  if (!session) {
+    workerResult = { dossierId: config.id, status: "error", errorMessage: "Impossible d'établir session après retries" };
     return workerResult;
   }
 
-  // ── 4. Session complète : MÊME impit que le probe ───────────────────────────
-  // probeImpit = instance ayant fait le probe et dont la TLS est liée au cf_clearance
-  // Ne pas créer un nouvel impit ici — cela casserait la cohérence TLS.
-  const session: SpainCfSession = {
-    ...solveResult.session,
-    source: "capsolver",
-    _ownImpit: probeImpit,
-  };
-
-  // Pré-remplir bookititState minimal pour que callBookititEndpoint et
-  // makeBookititUrl fonctionnent sans aller chercher le portail à nouveau.
-  const publickey = extractPublickey(config.portalUrl);
-  if (publickey && !session.bookititState) {
-    session.bookititState = {
-      jqCallback: buildJQueryCallback(),
-      reqCounter: 0,
-      srvsrc: "https://www.citaconsular.es",
-      version: "4",
-      widgetUrl: ensureTrailingSlash(config.portalUrl),
-      publickey,
-      bookititBase: "https://www.citaconsular.es/onlinebookings/",
-    };
-  }
-
-  log("INFO", `${tag} ✅ CF résolu (${solveResult.durationMs}ms) — init portail…`);
-
-  // ── 5. Initialiser PHPSESSID via la séquence portail ─────────────────────────
-  const phpOk = await initPortalSession(session, config.portalUrl, tag);
-  if (!phpOk) {
-    log(
-      "WARN",
-      `${tag} ⚠️ Portail init incomplet — le PHPSESSID est absent ou invalide ; le scan peut échouer`,
-    );
+  // ── 5.5. getwidgetconfigurations/ — UNE SEULE FOIS après session établie ─────
+  // CRITIQUE : doit précéder getservices/ pour initialiser la session côté serveur Bookitit.
+  // Source de vérité : test-bookitit-dynamic.ts section 3.
+  {
+    const portalRef = ensureTrailingSlash(config.portalUrl);
+    const srvsrc    = session.bookititState?.srvsrc  ?? "https://www.citaconsular.es";
+    const version   = session.bookititState?.version ?? "4";
+    const pubkey    = extractPublickey(config.portalUrl);
+    try {
+      await callBookititEndpoint(session, "getwidgetconfigurations/", {
+        type: "default", publickey: pubkey, lang: "es", version, src: portalRef, srvsrc,
+      }, config.portalUrl);
+      await new Promise<void>((r) => setTimeout(r, 220));
+      log("INFO", `${tag} ✅ getwidgetconfigurations/ OK`);
+    } catch (e) {
+      log("WARN", `${tag} getwidgetconfigurations/ erreur (non-fatal): ${e}`);
+    }
   }
 
   // ── 6. Boucle de scan ────────────────────────────────────────────────────────
   const windowEnd = Date.now() + WORKER_WINDOW_MS;
   let cycleCount = 0;
+  // Cache service+agenda : getservices/ et getagendas/ appelés UNE SEULE FOIS
+  // par PHPSESSID (règle §9 Bookitit : getagendas/ suivants retournent 0B).
+  const serviceCache: ServiceCache = { serviceId: "", serviceName: "", agendaId: "", initialized: false };
 
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
 
     try {
-      const scan = await workerScanCycle(session, config, tag);
+      const scan = await workerScanCycle(session, config, tag, serviceCache);
 
       // ── Reporting découverte (fire-and-forget) ──────────────────────────
       if (scan.slots && scan.slots.length > 0) {
@@ -444,7 +452,7 @@ async function captureChallengePage(
   impit: any,
   portalUrl: string,
   tag: string,
-): Promise<{ challengeHtml: string; ua: string; proxyError: boolean }> {
+): Promise<{ challengeHtml: string; ua: string; proxyError: boolean; probeCookies: Array<{name: string; value: string}> }> {
   try {
     const res = await impit.fetch(portalUrl, {
       headers: {
@@ -466,13 +474,29 @@ async function captureChallengePage(
       html.includes("__cf_chl") ||
       html.includes("cf-mitigated");
 
+    // ── Capturer les Set-Cookie du probe (même pour 403) ─────────────────────
+    // Le test dynamique (test-bookitit-dynamic.ts l.71) fait Object.assign(jar, extractSetCookies)
+    // après le probe 403 — les cookies CF (__cf_bm, _cfuvid, etc.) sont ainsi inclus dans le
+    // Cookie header du GET portail post-solve. Sans eux, CF rejette la requête HTML (403).
+    const probeCookies: Array<{name: string; value: string}> = [];
+    try {
+      const rawSC = (res.headers as any).get?.("set-cookie") ?? "";
+      // Certains runtimes retournent plusieurs Set-Cookie séparés par \n
+      const parts = rawSC.split(/,(?=[^ ])/);
+      for (const part of parts) {
+        const m = part.trim().match(/^([^=;]+)=([^;]*)/);
+        if (m && m[1] && m[2]) probeCookies.push({ name: m[1].trim(), value: m[2].trim() });
+      }
+    } catch { /* non-fatal */ }
+
     log(
       "INFO",
       `${tag} Probe portail: HTTP ${res.status}, ${html.length}B ` +
-      (isCfChallenge ? "✅ CF challenge détecté" : "(pas de challenge — session directe)"),
+      (isCfChallenge ? "✅ CF challenge détecté" : "(pas de challenge — session directe)") +
+      (probeCookies.length ? ` | probe cookies: [${probeCookies.map(c => c.name).join(", ")}]` : ""),
     );
 
-    return { challengeHtml: html, ua: IMPIT_CHROME_UA, proxyError: false };
+    return { challengeHtml: html, ua: IMPIT_CHROME_UA, proxyError: false, probeCookies };
   } catch (e) {
     const errMsg = String(e);
     const proxyError = isProxyConnectError(errMsg);
@@ -480,7 +504,7 @@ async function captureChallengePage(
       proxyError ? "WARN" : "WARN",
       `${tag} Probe portail error${proxyError ? " (proxy injoignable)" : ""}: ${e} — solve CF sans HTML (risque 403)`,
     );
-    return { challengeHtml: "", ua: IMPIT_CHROME_UA, proxyError };
+    return { challengeHtml: "", ua: IMPIT_CHROME_UA, proxyError, probeCookies: [] };
   }
 }
 
@@ -508,75 +532,48 @@ async function rotateWorkerIp(
   capsolverKey: string,
   tag: string,
 ): Promise<string | null> {
-  log("WARN", `${tag} 🔄 Rotation IP (0B détecté) — libération ${maskProxy(currentProxyUrl)} …`);
+  log("WARN", `${tag} 🔄 Rotation IP (/main/ 0B) — libération ${maskProxy(currentProxyUrl)} …`);
 
-  // 1. Libérer l'IP courante
+  // 1. Libérer l'IP courante et la blacklister
   if (currentProxyUrl) {
+    flagDecodoIp(currentProxyUrl, "main-0b-rotation");
     await releaseWorkerIp(currentProxyUrl, config.id).catch(() => {});
   }
 
-  // 2. Sélectionner la prochaine IP disponible
+  // 2. Nouvelle IP + initWorkerSession complète (même séquence que l'init initiale)
+  const portalUrl = config.portalUrl.split("#")[0];
+
   const newProxy = await pickDedicatedProxy(config.id, tag);
-  if (newProxy === null) {
+  if (!newProxy) {
     log("WARN", `${tag} ❌ Rotation impossible — pool Decodo épuisé`);
     return null;
   }
 
-  log("INFO", `${tag} 🔄 Nouvelle IP : ${maskProxy(newProxy)} — probe CF …`);
+  const stickyId = Math.random().toString(36).slice(2, 10);
+  const stickyNewProxy = addStickySession(newProxy, stickyId);
+  log("INFO", `${tag} 🔄 Nouvelle IP : ${maskProxy(stickyNewProxy)} (sid=${stickyId})`);
 
-  // 3 + 4. Nouvel impit + probe portail
-  const newImpit = createImpitWithProxy(newProxy ?? "");
-  const { challengeHtml, ua, proxyError: probeProxyError } = await captureChallengePage(newImpit, config.portalUrl, tag);
-
-  // Probe a détecté que la nouvelle IP est injoignable → blacklist immédiate
-  if (probeProxyError && newProxy) {
-    log("WARN", `${tag} 🚫 Rotation probe proxy injoignable — blacklist ${maskProxy(newProxy)}`);
-    flagDecodoIp(newProxy, "rotation-probe-connect-error");
+  const result = await initWorkerSession(stickyNewProxy, portalUrl, capsolverKey);
+  if (!result) {
+    log("WARN", `${tag} ❌ initWorkerSession échoué sur nouvelle IP — libération`);
+    flagDecodoIp(newProxy, "rotation-init-session-failed");
     await releaseWorkerIp(newProxy, config.id).catch(() => {});
     return null;
   }
 
-  // 5. Solve CF avec le HTML du nouvel impit
-  const solveResult = await solveSpainCloudflare(
-    config.portalUrl,
-    capsolverKey,
-    newProxy ?? "",
-    challengeHtml || undefined,
-    challengeHtml ? ua : undefined,
-  );
+  // 3. Mettre à jour la session EN PLACE (préserve les refs extérieures)
+  const newSess = result.session;
+  session.cfClearance        = newSess.cfClearance;
+  session.soaxProxyUrl       = stickyNewProxy;
+  session.userAgent          = newSess.userAgent;
+  session.allCookies         = newSess.allCookies;
+  session._ownImpit          = newSess._ownImpit;
+  session.bookititState      = newSess.bookititState;
+  session.prefetchedMainHtml = newSess.prefetchedMainHtml;
+  session.phpSessionCreatedAt = newSess.phpSessionCreatedAt;
 
-  if (!solveResult.success || !solveResult.session) {
-    // Si l'échec est dû au proxy injoignable → blacklist immédiate
-    if (newProxy && isProxyConnectError(solveResult.error)) {
-      log("WARN", `${tag} 🚫 Rotation solve CF proxy injoignable — blacklist ${maskProxy(newProxy)}`);
-      flagDecodoIp(newProxy, `rotation-solve-proxy-error: ${solveResult.error?.slice(0, 60)}`);
-    }
-    log("WARN", `${tag} ❌ Rotation CF solve échoué: ${solveResult.error} — libération ${maskProxy(newProxy)}`);
-    if (newProxy) await releaseWorkerIp(newProxy, config.id).catch(() => {});
-    return null;
-  }
-
-  // 6. Mise à jour session EN PLACE — préserve les états internes (bookititState, etc.)
-  const newSession = solveResult.session;
-  session.cfClearance   = newSession.cfClearance;
-  session.soaxProxyUrl  = newProxy ?? "";
-  session._ownImpit     = newImpit; // même impit que le probe → TLS cohérent
-  // Fusionner les cookies CF dans la session courante
-  for (const c of newSession.allCookies) {
-    const idx = session.allCookies.findIndex((x) => x.name === c.name);
-    if (idx >= 0) session.allCookies[idx] = c;
-    else session.allCookies.push(c);
-  }
-
-  log("INFO", `${tag} ✅ Rotation CF réussie (${solveResult.durationMs}ms) — ré-init PHPSESSID …`);
-
-  // 7. Ré-initialiser le PHPSESSID avec le nouvel impit (session PHP liée à l'IP)
-  const phpOk = await initPortalSession(session, config.portalUrl, tag);
-  if (!phpOk) {
-    log("WARN", `${tag} ⚠️ PHPSESSID absent après rotation — scan peut échouer`);
-  }
-
-  return newProxy;
+  log("INFO", `${tag} ✅ Rotation réussie — PHPSESSID ✅ | /main/ ${newSess.prefetchedMainHtml?.length ?? 0}B`);
+  return stickyNewProxy;
 }
 
 // ─── IP Decodo dédiée ─────────────────────────────────────────────────────────
@@ -603,6 +600,9 @@ async function pickDedicatedProxy(
     const url = getDecodoProxyForIndex(i) ?? "";
     if (!url) continue;
 
+    // Skip les IPs blacklistées (portal-html-403, probe-error, etc.)
+    if (isDecodoIpBlacklisted(url)) continue;
+
     const reserved = await isIpReservedByOther(url, dossierId);
     if (reserved) continue;
 
@@ -620,105 +620,136 @@ async function pickDedicatedProxy(
 // ─── Init portail (GET + POST token → PHPSESSID) ──────────────────────────────
 
 /**
- * Effectue la séquence d'initialisation du portail Bookitit :
- *   GET portalUrl → extraire token + PHPSESSID depuis Set-Cookie
- *   POST token → confirmer PHPSESSID
+ * Effectue l'initialisation du portail Bookitit pour obtenir un PHPSESSID.
  *
- * Met à jour `session.allCookies` en place.
- * Retourne true si PHPSESSID obtenu.
+ * STRATÉGIE identique à solveViaImpit (spain-soax-solver.ts l.1542-1560) :
+ *   - Appel DIRECT via session._ownImpit (PAS spainCfFetch) avec headers
+ *     navigation Chrome minimaux + Cookie: cf_clearance=... uniquement.
+ *   - spainCfFetch ajoute un Referer "citaconsular.es/es/" qui déclenche 403
+ *     CF sur une navigation directe (le serveur attend Referer absent ou même domaine).
+ *   - PHPSESSID extrait depuis Set-Cookie de la réponse GET.
+ *
+ * Si GET → 403 (CF encore actif) : try POST widget direct (token de la page).
+ * Si GET → 200 sans PHPSESSID dans Set-Cookie : extraire token + POST widget.
+ *
+ * Retourne true si PHPSESSID obtenu dans session.allCookies.
  */
 async function initPortalSession(
   session: SpainCfSession,
   portalUrl: string,
   tag: string,
 ): Promise<boolean> {
-  const referer = ensureTrailingSlash(portalUrl);
+  const impit = session._ownImpit;
+  if (!impit) {
+    log("WARN", `${tag} initPortalSession: _ownImpit absent`);
+    return false;
+  }
 
-  // ── GET portail ─────────────────────────────────────────────────────────────
-  let getRes: Response | null = null;
+  // Cookie jar complet (cf_clearance + tout ce que le probe 403 a retourné)
+  const cookieStr = session.allCookies
+    .filter(c => c.name !== "PHPSESSID")
+    .map(c => `${c.name}=${c.value}`)
+    .join("; ");
+
+  // ── GET portail — IDENTIQUE à ensureSpainImpitSession l.975-976 ─────────────
+  // Seuls UA + Cookie sont fournis explicitement. Impit gère le reste (Sec-Ch-Ua,
+  // Sec-Fetch-*, fingerprint TLS) en interne — surcharger ces headers casse CF.
+  let html = "";
   try {
-    getRes = await spainCfFetch(portalUrl, session, {
-      headers: {
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-      },
-    });
+    const getRes = await (impit.fetch(portalUrl, {
+      headers: { "User-Agent": session.userAgent, "Cookie": cookieStr },
+    } as any) as unknown as Response);
+    const status = (getRes as any).status as number;
+    const body   = await (getRes as any).text() as string;
+    const setCookie = (getRes as any).headers?.get?.("set-cookie") ?? "";
+    const phpFromGet = setCookie.match(/PHPSESSID=([^;]+)/)?.[1] ?? "";
+    log("INFO", `${tag} initPortalSession GET → HTTP ${status} | ${body.length}B | PHPSESSID=${phpFromGet ? "✅" : "absent"}`);
+
+    if (phpFromGet) { upsertCookie(session, "PHPSESSID", phpFromGet); return true; }
+    if (status === 403) {
+      log("WARN", `${tag} initPortalSession GET 403 — proxy bloqué pour HTML (rotation nécessaire)`);
+      return false;
+    }
+    html = body;
   } catch (e) {
     log("WARN", `${tag} initPortalSession GET error: ${e}`);
     return false;
   }
 
-  if (!getRes?.ok) {
-    log("WARN", `${tag} initPortalSession GET → ${getRes?.status ?? "null"}`);
-    return false;
-  }
-
-  const html = await getRes.text();
-  mergeCookiesFromResponse(getRes, session);
-
-  // Extraire le token caché dans le formulaire HTML
+  // ── Extraire token CSRF + POST — IDENTIQUE à ensureSpainImpitSession l.1007-1031 ──
   const token =
-    html.match(/name=["']token["'][^>]+value=["']([^"']+)["']/i)?.[1] ??
-    html.match(/value=["']([^"']{20,})["'][^>]+name=["']token["']/i)?.[1];
+    html.match(/name="token"\s+value="([^"]+)"/i)?.[1] ??
+    html.match(/name=["']token["'][^>]+value=["']([^"']+)["']/i)?.[1];
 
   if (!token) {
-    const php = session.allCookies.find((c) => c.name === "PHPSESSID");
-    log(
-      "INFO",
-      `${tag} initPortalSession: pas de token (${html.length}B) — PHPSESSID=${php ? "✅" : "⚠️ absent"}`,
-    );
-    return !!php;
+    const existingPhp = session.allCookies.find(c => c.name === "PHPSESSID");
+    log("INFO", `${tag} initPortalSession: pas de token — PHPSESSID=${existingPhp ? "✅" : "absent"}`);
+    return !!existingPhp;
   }
 
-  // ── POST token ───────────────────────────────────────────────────────────────
-  let postRes: Response | null = null;
+  const baseHost = "https://www.citaconsular.es";
+  const targetUrl = ensureTrailingSlash(portalUrl);
   try {
-    postRes = await spainCfFetch(referer, session, {
+    const rPost = await (impit.fetch(targetUrl, {
       method: "POST",
       headers: {
+        "User-Agent":   session.userAgent,
         "Content-Type": "application/x-www-form-urlencoded",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        Origin: "https://www.citaconsular.es",
-        Referer: portalUrl,
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin",
+        "Cookie":       cookieStr,
+        "Referer":      portalUrl,
+        "Origin":       baseHost,
       },
       body: `token=${encodeURIComponent(token)}`,
-    });
+    } as any) as unknown as Response);
+    const bodyPost   = await (rPost as any).text() as string;
+    const setCookie  = (rPost as any).headers?.get?.("set-cookie") ?? "";
+    const phpFromPost = setCookie.match(/PHPSESSID=([^;]+)/)?.[1] ?? "";
+
+    // Extraire srvsrc + version depuis le POST (identique au test dynamique l.158-161)
+    const srvsrc  = bodyPost.match(/srvsrc:\s*'([^']+)'/)?.[1];
+    const version = bodyPost.match(/loadermaec\.js\?v=(\d+)/)?.[1];
+    if (srvsrc  && session.bookititState) session.bookititState.srvsrc  = srvsrc;
+    if (version && session.bookititState) session.bookititState.version = version;
+
+    if (phpFromPost) {
+      upsertCookie(session, "PHPSESSID", phpFromPost);
+      log("INFO", `${tag} initPortalSession POST → PHPSESSID ✅ | srvsrc=${srvsrc ?? "?"} | v=${version ?? "?"}`);
+      return true;
+    }
+    log("WARN", `${tag} initPortalSession POST → HTTP ${(rPost as any).status} — PHPSESSID absent`);
   } catch (e) {
     log("WARN", `${tag} initPortalSession POST error: ${e}`);
   }
 
-  if (postRes) {
-    mergeCookiesFromResponse(postRes, session);
-  }
+  return false;
+}
 
-  const php = session.allCookies.find((c) => c.name === "PHPSESSID");
-  log(
-    "INFO",
-    `${tag} initPortalSession: PHPSESSID=${php ? `✅ ${php.value.slice(0, 14)}…` : "⚠️ absent"}`,
-  );
-  return !!php;
+/** Insère ou met à jour un cookie dans session.allCookies. */
+function upsertCookie(session: SpainCfSession, name: string, value: string): void {
+  const idx = session.allCookies.findIndex((c) => c.name === name);
+  if (idx >= 0) session.allCookies[idx] = { name, value };
+  else session.allCookies.push({ name, value });
 }
 
 // ─── Cycle de scan ────────────────────────────────────────────────────────────
 
 /**
- * Un cycle de scan complet :
- *   /main/ → getservices/ → getagendas/ → datetime/ (DATETIME_MONTHS_AHEAD mois)
+ * Un cycle de scan complet — reproduit fidèlement l'ancien watcher (spain-http-scanner.ts
+ * confirmSlotsViaDatetimeOnce) et test-bookitit-dynamic.ts (source de vérité) :
  *
- * Utilise la session dédiée du worker (session._ownImpit) pour toutes les requêtes.
- * Ne touche pas à la session globale.
+ *   /main/
+ *   → [getservices/ + getagendas/]  ← UNE SEULE FOIS par PHPSESSID (cache ServiceCache)
+ *   → datetime/ mois par mois       ← start=aujourd'hui pour mo=0, 1er du mois sinon
+ *                                      arrêt sur 3 mois vides consécutifs (PAS maxDays)
+ *
+ * Règle §9 Bookitit : getagendas/ appelé 2× sur le même PHPSESSID → 0B.
+ * → serviceCache.initialized = true après le 1er appel ; cycles suivants sautent.
  */
 async function workerScanCycle(
   session: SpainCfSession,
   config: SpainDossierConfig,
   tag: string,
+  cache: ServiceCache,
 ): Promise<WorkerScanResult> {
   const publickey = extractPublickey(config.portalUrl);
   const portalRef = ensureTrailingSlash(config.portalUrl);
@@ -730,99 +761,159 @@ async function workerScanCycle(
   }
   const { mainHtml } = mainResult;
 
+  // srvsrc et version extraits dynamiquement depuis le POST token (initPortalSession).
+  // Fallback sur les valeurs Saopolo si bookititState absent.
+  const srvsrc  = session.bookititState?.srvsrc  ?? "https://www.citaconsular.es";
+  const version = session.bookititState?.version  ?? "4";
+
   const baseParams: Record<string, string> = {
     type: "default",
     publickey,
     lang: "es",
-    version: "4",
+    version,
     src: portalRef,
-    srvsrc: "https://www.citaconsular.es",
+    srvsrc,
   };
 
-  // ── getservices/ ─────────────────────────────────────────────────────────────
-  let serviceId = "";
-  let serviceName = "";
-  try {
-    const svcPayload = await callBookititEndpoint(
-      session,
-      "getservices/",
-      baseParams,
-      config.portalUrl,
-    );
-    const rawServices = svcPayload ? extractServiceDetails(svcPayload) : [];
-    // Tous les portails citaconsular.es sont mono-service — on prend toujours services[0].
-    // matchServiceForVisa n'est pas nécessaire ici (aucun portail multi-service en prod).
-    if (rawServices.length > 0) {
-      serviceId   = rawServices[0].id;
-      serviceName = rawServices[0].name;
+  // ── getservices/ + getagendas/ — une seule fois par PHPSESSID ─────────────
+  // Règle §9 (confirmée par l'ancien scanner) : getagendas/ appelé 2× sur le
+  // même PHPSESSID retourne 0B → on perd l'agendaId pour tous les cycles suivants.
+  // Solution : cache ServiceCache initialisé au 1er cycle, réutilisé ensuite.
+  if (!cache.initialized) {
+    // getservices/
+    try {
+      const svcPayload = await callBookititEndpoint(
+        session,
+        "getservices/",
+        baseParams,
+        config.portalUrl,
+      );
+      // Filtre identique à l'ancien scanner (spain-http-scanner.ts l.1324-1334) :
+      //   - Écarter les services dont le nom est purement HTML invisible (placeholder Bookitit)
+      //     ex : bkt853105 dont name = "<span style='display:none;'></span>"
+      //   - Prendre le premier service visible ; fallback Services[0]
+      const allSvcs: Array<{ id: string; name: string }> =
+        (svcPayload as any)?.Services ?? [];
+      const visibleSvcs = allSvcs.filter(
+        (s) => (s.name ?? "").replace(/<[^>]+>/g, "").trim().length > 0,
+      );
+      const target = (visibleSvcs.length > 0 ? visibleSvcs : allSvcs)[0];
+      if (target) {
+        cache.serviceId   = target.id;
+        cache.serviceName = (target.name ?? "").replace(/<[^>]+>/g, "").trim() || target.id;
+        log("INFO", `${tag} service: "${cache.serviceName}" (${cache.serviceId})`);
+      }
+    } catch (e) {
+      log("WARN", `${tag} getservices/ error: ${e}`);
     }
-  } catch (e) {
-    log("WARN", `${tag} getservices/ error: ${e}`);
+
+    if (!cache.serviceId) {
+      // Pas de service trouvé — ne pas marquer initialized pour retenter au prochain cycle
+      return { status: "not_found", mainHtml };
+    }
+
+    // getagendas/ — avec selectedPeople="1" (obligatoire — cf. test-bookitit-dynamic.ts l.198)
+    try {
+      const agPayload = await callBookititEndpoint(
+        session,
+        "getagendas/",
+        { ...baseParams, "services[]": cache.serviceId, selectedPeople: "1" },
+        config.portalUrl,
+      );
+      cache.agendaId = agPayload ? extractFirstAgendaId(agPayload) : "";
+      if (cache.agendaId) log("INFO", `${tag} agenda: ${cache.agendaId}`);
+      else log("INFO", `${tag} getagendas/ 0B — datetime/ appelé sans agendas[]`);
+    } catch (e) {
+      log("WARN", `${tag} getagendas/ error: ${e}`);
+    }
+
+    cache.initialized = true;
   }
 
-  if (!serviceId) {
-    // Parfois /main/ renvoie des données embed — tenter sans service fixe
-    return { status: "not_found", mainHtml };
-  }
+  const { serviceId, serviceName, agendaId } = cache;
 
-  // ── getagendas/ ──────────────────────────────────────────────────────────────
-  let agendaId = "";
-  try {
-    const agPayload = await callBookititEndpoint(
-      session,
-      "getagendas/",
-      { ...baseParams, "services[]": serviceId },
-      config.portalUrl,
-    );
-    agendaId = agPayload ? extractFirstAgendaId(agPayload) : "";
-  } catch (e) {
-    log("WARN", `${tag} getagendas/ error: ${e}`);
-  }
-
-  // ── datetime/ — N mois ────────────────────────────────────────────────────────
-  const groupSize = config.groupSize && config.groupSize > 1 ? config.groupSize : 1;
+  // ── datetime/ — boucle multi-mois, logique identique à l'ancien scanner ────
+  //
+  // RÈGLES (copiées de spain-http-scanner.ts confirmSlotsViaDatetimeOnce l.1466-1681) :
+  //   1. start mois 0 = aujourd'hui (pas le 1er du mois) — le serveur retourne
+  //      maxDays relatif à aujourd'hui, pas au 1er du mois.
+  //   2. Arrêt = 3 mois vides CONSÉCUTIFS (slotsThisMonth === 0), PAS maxDays.
+  //      → maxDays est la limite de visibilité de l'agenda, pas le stop condition.
+  //      → Utiliser maxDays comme stop condition faisait rater des mois entiers
+  //        (confirmé : septembre retourne maxDays=2026-09-18 mais les slots vont
+  //        jusqu'au 30 septembre).
+  //   3. Plafond absolu : 12 mois.
+  //   4. extractAllSlotsFromDatetime (pas extractAllSlotsFromPayload) — gère
+  //      freeslots=-1 (times=[], state=1) et la résolution jour-détail.
   const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const MAX_MONTHS = 12;
+  let consecutiveEmpty = 0;
+  const allSlots: WorkerSlot[] = [];
 
-  for (let offset = 0; offset < DATETIME_MONTHS_AHEAD; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const start = formatDate(d);
-    const end = formatDate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  for (let mo = 0; mo < MAX_MONTHS; mo++) {
+    const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+    // Mois courant : start=aujourd'hui (aligne sur le vrai navigateur)
+    // Mois suivants : start=1er du mois (navigation mensuelle standard)
+    const start = mo === 0 ? todayStr : tgt.toISOString().slice(0, 10);
+    const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-    const dtParams: Record<string, string | string[]> = {
+    const dtParams: Record<string, string> = {
       ...baseParams,
       "services[]": serviceId,
       ...(agendaId ? { "agendas[]": agendaId } : {}),
       start,
       end,
-      // Toujours "1" : les captures Burp montrent que le portail envoie toujours selectedPeople=1
-      // quel que soit le nombre de personnes. La disponibilité par groupe est lue dans freeslots,
-      // pas filtrée côté serveur via selectedPeople. groupSize est une abstraction interne.
       selectedPeople: "1",
     };
 
     let dtPayload: unknown = null;
     try {
-      dtPayload = await callBookititEndpoint(
-        session,
-        "datetime/",
-        dtParams,
-        config.portalUrl,
-      );
+      dtPayload = await callBookititEndpoint(session, "datetime/", dtParams, config.portalUrl);
+      log("INFO", `${tag} datetime/ ${start}→${end} — payload: ${dtPayload ? "reçu" : "0B/null"}`);
     } catch (e) {
-      log("WARN", `${tag} datetime/ month+${offset} error: ${e}`);
+      log("WARN", `${tag} datetime/ mo+${mo} error: ${e}`);
+      consecutiveEmpty++;
+      if (consecutiveEmpty >= 3) break;
       continue;
     }
 
-    if (!dtPayload) continue;
-
-    const slots = extractAllSlotsFromPayload(dtPayload, agendaId, groupSize);
-    if (slots.length > 0) {
-      // Trier par date ASC puis heure ASC
-      slots.sort(
-        (a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time),
-      );
-      return { status: "found", slots, mainHtml, serviceId, serviceName, agendaId };
+    if (!dtPayload) {
+      consecutiveEmpty++;
+      if (consecutiveEmpty >= 3) break;
+      continue;
     }
+
+    // extractAllSlotsFromDatetime = fonction de l'ancien scanner (spain-http-scanner.ts l.1847)
+    // Gère : times={} (heures explicites), times=[] + state=1 (jour ouvert sans heures → 09:00 freeslots=-1)
+    const monthSlots = extractAllSlotsFromDatetime(dtPayload);
+    const slotsThisMonth = monthSlots.length;
+
+    if (slotsThisMonth > 0) {
+      const preview = monthSlots.slice(0, 3).map((s) => `${s.date} ${s.time}`).join(", ");
+      log("INFO", `${tag} datetime/ ${start}→${end} — ${slotsThisMonth} créneau(x) : ${preview}${slotsThisMonth > 3 ? ` … +${slotsThisMonth - 3}` : ""}`);
+      for (const s of monthSlots) {
+        allSlots.push({
+          date:      s.date,
+          time:      s.time,
+          agendaId:  s.agendaId ?? agendaId,
+          freeslots: s.freeslots,
+        });
+      }
+      consecutiveEmpty = 0;
+    } else {
+      log("INFO", `${tag} datetime/ ${start}→${end} — aucun créneau`);
+      consecutiveEmpty++;
+      if (consecutiveEmpty >= 3) {
+        log("INFO", `${tag} datetime/ 3 mois vides consécutifs — arrêt`);
+        break;
+      }
+    }
+  }
+
+  if (allSlots.length > 0) {
+    allSlots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    return { status: "found", slots: allSlots, mainHtml, serviceId, serviceName, agendaId };
   }
 
   return { status: "not_found", mainHtml, serviceId, serviceName, agendaId };

@@ -140,6 +140,7 @@ function getPool(): string[] {
 // ─── Blacklist helpers ─────────────────────────────────────────────────────────
 
 /** Vérifie si une URL est actuellement blacklistée (TTL expirés auto-purgés). */
+export function isDecodoIpBlacklisted(url: string): boolean { return isBlacklisted(url); }
 function isBlacklisted(url: string): boolean {
   const ts = _blacklistedIps.get(url);
   if (ts === undefined) return false;

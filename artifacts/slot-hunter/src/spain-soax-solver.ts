@@ -1694,6 +1694,209 @@ export function createImpitWithProxy(proxyUrl: string): InstanceType<typeof Impi
   } as any);
 }
 
+// ─── UA fixe pour les workers (identique au bloc capsolver-residential) ────────
+const WORKER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+/**
+ * Établit une session Bookitit complète depuis un proxy donné.
+ *
+ * Reproduit EXACTEMENT le bloc capsolver-residential de ensureSpainImpitSession —
+ * seule implémentation prouvée qui passe le CF HTML de citaconsular.es :
+ *   1. Probe GET widget (UA + Accept seulement)
+ *   2. Si CF challenge : CapSolver AntiCloudflareTask (html + proxy + UA)
+ *   3. GET widget avec cf_clearance → token + PHPSESSID
+ *   4. POST token → srvsrc + version
+ *   5. GET /main/ → validation (>1000B)
+ *
+ * IMPORTANT : utilise le MÊME impit pour toutes les étapes — c'est la clé du succès.
+ * Le cf_clearance est lié à la TLS de cet impit + l'exit IP du proxy sticky.
+ *
+ * @param stickyProxyUrl  URL proxy avec session sticky déjà injectée (-session-{sid}-)
+ * @param targetUrl       URL du portail SANS fragment (#services stripped)
+ * @param capsolverApiKey Clé CapSolver
+ * @returns { session, impit } si succès, null si échec (proxy bloqué, solve raté, /main/ 0B)
+ */
+export async function initWorkerSession(
+  stickyProxyUrl: string,
+  targetUrl: string,
+  capsolverApiKey: string,
+): Promise<{ session: SpainCfSession; impit: InstanceType<typeof Impit> } | null> {
+
+  /** Helpers locaux identiques au bloc capsolver-residential */
+  const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
+    const jar: Record<string, string> = {};
+    const raw = headers.get("set-cookie") ?? "";
+    for (const part of raw.split(/,(?=[^ ])/)) {
+      const m = part.trim().match(/^([^=]+)=([^;]*)/);
+      if (m) jar[m[1].trim()] = m[2];
+    }
+    return jar;
+  };
+  const buildCookieStr = (j: Record<string, string>) =>
+    Object.entries(j).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+
+  const masked = stickyProxyUrl.replace(/:([^:@/]+)@/, ":***@");
+  console.log(`[spain-soax] 🔧 initWorkerSession — proxy: ${masked.slice(0, 60)}… url: ${targetUrl}`);
+
+  // Même impit pour TOUTES les étapes (probe + portail + JSONP)
+  const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 12_000 } as any);
+  const jar: Record<string, string> = {};
+
+  // ── Étape 1 : Probe GET widget (UA + Accept seulement — identique à l'ancien système) ──
+  let challengeHtml: string | undefined;
+  try {
+    const r1 = await (impit.fetch(targetUrl, {
+      headers: { "User-Agent": WORKER_UA, "Accept": "text/html,*/*;q=0.8" },
+    } as any) as unknown as Promise<Response>);
+    const body1 = await r1.text();
+    Object.assign(jar, extractCookies(r1.headers as any));
+    const isCf = r1.status === 403 || /just a moment|_cf_chl_opt/i.test(body1.slice(0, 3000));
+    if (isCf) {
+      challengeHtml = body1;
+      console.log(`[spain-soax] 🔧   ⚠️ CF challenge (${body1.length}B) → CapSolver…`);
+    } else {
+      console.log(`[spain-soax] 🔧   ✅ Pas de CF challenge (HTTP ${r1.status}, ${body1.length}B)`);
+    }
+  } catch (e) {
+    console.warn(`[spain-soax] 🔧   ❌ Probe échoué: ${e}`);
+    return null;
+  }
+
+  // ── Étape 2 : CapSolver si CF challenge (html + proxy + UA — identique à l'ancien) ──
+  if (challengeHtml !== undefined) {
+    const capResult = await solveSpainCloudflare(targetUrl, capsolverApiKey, stickyProxyUrl, challengeHtml, WORKER_UA);
+    if (!capResult.success || !capResult.session?.cfClearance) {
+      console.warn(`[spain-soax] 🔧   ❌ CapSolver échoué: ${capResult.error}`);
+      return null;
+    }
+    jar.cf_clearance = capResult.session.cfClearance;
+    console.log(`[spain-soax] 🔧   ✅ cf_clearance: ${jar.cf_clearance.slice(0, 30)}…`);
+  }
+
+  // ── Étape 3 : GET widget avec cf_clearance → token + PHPSESSID ──────────────
+  const jqCallback = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1_000_000_000)}`;
+  let reqCounter = Date.now();
+  let token: string | undefined;
+  try {
+    const rGet = await (impit.fetch(targetUrl, {
+      headers: { "User-Agent": WORKER_UA, "Cookie": buildCookieStr(jar) },
+    } as any) as unknown as Promise<Response>);
+    const bodyGet = await rGet.text();
+    Object.assign(jar, extractCookies(rGet.headers as any));
+    token = bodyGet.match(/name="token"\s+value="([^"]+)"/i)?.[1];
+    if (!token) {
+      console.warn(`[spain-soax] 🔧   ❌ Token absent (HTTP ${rGet.status}, ${bodyGet.length}B)`);
+      return null;
+    }
+    console.log(`[spain-soax] 🔧   ✅ Token: ${token.slice(0, 15)}… | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
+  } catch (e) {
+    console.warn(`[spain-soax] 🔧   ❌ GET portail (token) échoué: ${e}`);
+    return null;
+  }
+
+  // ── Étape 4 : POST token → srvsrc + version ──────────────────────────────────
+  const baseHost = new URL(targetUrl).origin;
+  let srvsrc = baseHost;
+  let version = "4";
+  try {
+    const rPost = await (impit.fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "User-Agent": WORKER_UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": buildCookieStr(jar),
+        "Referer": targetUrl,
+        "Origin": baseHost,
+      },
+      body: `token=${encodeURIComponent(token)}`,
+    } as any) as unknown as Promise<Response>);
+    const bodyPost = await rPost.text();
+    Object.assign(jar, extractCookies(rPost.headers as any));
+    srvsrc  = bodyPost.match(/srvsrc:\s*'([^']+)'/)?.[1]  ?? baseHost;
+    version = bodyPost.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
+    console.log(`[spain-soax] 🔧   ✅ POST token → HTTP ${rPost.status} | srvsrc=${srvsrc} | v=${version} | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
+  } catch (e) {
+    console.warn(`[spain-soax] 🔧   ❌ POST token échoué: ${e}`);
+    return null;
+  }
+
+  // ── Étape 5 : GET /main/ → validation session ─────────────────────────────────
+  const publickey    = targetUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "";
+  const bookititBase = `${baseHost}/onlinebookings`;
+  const ensureSlash  = (u: string) => u.endsWith("/") ? u : u + "/";
+
+  const makeUrl = (endpoint: string): string => {
+    reqCounter++;
+    return `${bookititBase}/${endpoint}?` + new URLSearchParams([
+      ["callback",  jqCallback],
+      ["type",      "default"],
+      ["publickey", publickey],
+      ["lang",      "es"],
+      ["version",   version],
+      ["src",       targetUrl],
+      ["srvsrc",    srvsrc],
+      ["_",         String(reqCounter)],
+    ]).toString();
+  };
+
+  let prefetchedMainHtml = "";
+  try {
+    const rMain = await (impit.fetch(makeUrl("main/"), {
+      headers: {
+        "User-Agent": WORKER_UA,
+        "Accept": "text/javascript, application/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "Referer": targetUrl,
+        "Cookie": buildCookieStr(jar),
+      },
+    } as any) as unknown as Promise<Response>);
+    prefetchedMainHtml = await rMain.text();
+    if (prefetchedMainHtml.length < 1000) {
+      console.warn(`[spain-soax] 🔧   ❌ /main/ trop court: ${prefetchedMainHtml.length}B`);
+      return null;
+    }
+    console.log(`[spain-soax] 🔧   ✅ /main/ → ${prefetchedMainHtml.length}B — session prête!`);
+  } catch (e) {
+    console.warn(`[spain-soax] 🔧   ❌ /main/ échoué: ${e}`);
+    return null;
+  }
+
+  // ── Build SpainCfSession ──────────────────────────────────────────────────────
+  const nowMs = Date.now();
+  const allCookies = Object.entries(jar).filter(([, v]) => v).map(([name, value]) => ({ name, value }));
+
+  const session: SpainCfSession = {
+    cfClearance:         jar.cf_clearance ?? "",
+    cfDomain:            ".citaconsular.es",
+    soaxProxyUrl:        stickyProxyUrl,
+    userAgent:           WORKER_UA,
+    createdAt:           nowMs,
+    expiresAt:           nowMs + CF_CLEARANCE_TTL_MS,
+    allCookies,
+    extraHeaders:        {},
+    source:              "capsolver",
+    prefetchedMainHtml,
+    phpSessionCreatedAt: nowMs,
+    bookititState: {
+      jqCallback,
+      reqCounter,
+      srvsrc,
+      version,
+      widgetUrl:    ensureSlash(targetUrl),
+      publickey,
+      bookititBase,
+    },
+    _ownImpit: impit,  // CRITIQUE : même impit que le probe → cohérence TLS garantie
+  };
+
+  return { session, impit };
+}
+
 /**
  * Retourne une instance impit configurée avec le proxy de la session CF active.
  * Le fingerprint TLS Chrome garantit la cohérence avec le solve CapSolver.
