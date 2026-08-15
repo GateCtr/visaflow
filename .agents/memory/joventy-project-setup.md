@@ -53,3 +53,11 @@ L'image Docker Railway doit utiliser exactement la même version Playwright que 
 **Why:** Railway a refusé de lancer Chromium lorsque le package Playwright 1.60.0 était exécuté dans l'image `mcr.microsoft.com/playwright:v1.58.2-jammy`.
 
 **How to apply:** Lors d'une mise à jour de `playwright`, mettre à jour simultanément le tag `mcr.microsoft.com/playwright:vX.Y.Z-jammy` dans les Dockerfiles Railway et effectuer un `docker build` avant le déploiement.
+
+## Double répertoire convex — piège critique (2026-08-15)
+Il existe DEUX répertoires convex dans le repo :
+- `/convex/` (racine) : utilisé par le **frontend Vite** via l'alias `@convex` défini dans `artifacts/joventy/vite.config.ts` (`convexRoot = path.resolve(__dirname, "../../convex")`)
+- `/artifacts/joventy/convex/` : utilisé par les **fonctions backend Convex** (deploy via `npx convex deploy`)
+
+**Toujours éditer les deux** quand on modifie des constantes partagées (SERVICE_PACKAGES, VISA_PARTIAL_SERVICE, VISA_FULL_SERVICE, etc.).
+Le typecheck passe même avec des divergences car tsconfig.json pointe aussi vers la racine (`"@convex/*": ["../../convex/*"]`).
