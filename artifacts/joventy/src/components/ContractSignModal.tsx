@@ -318,8 +318,12 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                     Ce service comprend, selon le package choisi :
                   </p>
                   <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30">
-                    <li className="pl-3 sm:pl-4"><strong>Accompagnement Complet :</strong> Joventy gère l'intégralité du dossier — constitution, formulaires officiels, profil consulaire, capture du créneau ou soumission e-Visa — et obtient le visa pour le Client. Prime de succès due uniquement à l'obtention.</li>
-                    <li className="pl-3 sm:pl-4"><strong>Accompagnement Partiel :</strong> Le Client fournit ses pièces ou la majorité ; Joventy complète les documents manquants, constitue le profil et capture le créneau. Pour les visas consulaires, le Client dépose lui-même son dossier à l'ambassade le jour du rendez-vous. Prime de succès due uniquement à l'obtention du visa.</li>
+                    <li className="pl-3 sm:pl-4">
+                      <strong>Accompagnement Complet :</strong> Le Client fournit uniquement son passeport, une photo d'identité et ses informations personnelles de base. Joventy prend en charge la totalité des autres éléments : réservations d'hôtel et de transport, justificatifs financiers, lettres de garantie, formulaires officiels, constitution du profil consulaire, et capture du créneau (ou soumission e-Visa). Prime de succès due uniquement à l'obtention.
+                    </li>
+                    <li className="pl-3 sm:pl-4">
+                      <strong>Accompagnement Partiel :</strong> Le Client fournit son passeport ainsi que ses propres justificatifs (réservations, relevés, attestations, etc.). Joventy complète uniquement les pièces manquantes, constitue le profil consulaire et capture le créneau — selon le même processus que l'Accompagnement Complet. Pour les visas consulaires, le Client dépose lui-même son dossier à l'ambassade le jour du rendez-vous. Prime de succès due uniquement à l'obtention du visa.
+                    </li>
                   </ul>
                 </section>
 
