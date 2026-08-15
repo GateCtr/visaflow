@@ -652,15 +652,25 @@ export interface SerializableDecodoPoolState {
   /** IPs blacklistées → timestamp du flagging (ms). Clé = URL complète du proxy. */
   blacklistedIps: Record<string, number>;
   savedAt: number;
+  /**
+   * Empreinte du pool au moment de la sauvegarde : "<taille>:<sha256-8hex>".
+   * Permet de détecter un changement de composition du pool (ajout/suppression d'IPs,
+   * réordonnancement) entre deux redémarrages. Si l'empreinte ne correspond pas,
+   * l'index sauvegardé et la blacklist sont invalidés.
+   */
+  poolFingerprint?: string;
 }
 
 /**
  * Sauvegarde l'état du pool Decodo dans Redis.
  * Fire-and-forget — appelé après chaque rotation et après chaque flag d'IP.
+ *
+ * @param poolFingerprint - Empreinte du pool courant (optionnel — absent = ancien comportement).
  */
 export function syncDecodoPoolStateToRedis(
   rotationIndex: number,
   blacklistedIps: Map<string, number>,
+  poolFingerprint?: string,
 ): void {
   if (!redisReady || !redisClient) return;
 
@@ -668,6 +678,7 @@ export function syncDecodoPoolStateToRedis(
     rotationIndex,
     blacklistedIps: Object.fromEntries(blacklistedIps),
     savedAt: Date.now(),
+    ...(poolFingerprint !== undefined ? { poolFingerprint } : {}),
   };
   redisClient
     .set(REDIS_SPAIN_DECODO_KEY, JSON.stringify(state), { EX: REDIS_SPAIN_DECODO_TTL_SEC })
@@ -712,6 +723,10 @@ export async function restoreDecodoPoolStateFromRedis(
       rotationIndex: parsed.rotationIndex,
       blacklistedIps: activeBlacklist,
       savedAt: parsed.savedAt,
+      // Préserver l'empreinte pour que initDecodoPool() puisse la comparer
+      ...(typeof parsed.poolFingerprint === "string"
+        ? { poolFingerprint: parsed.poolFingerprint }
+        : {}),
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -24,6 +24,7 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 import {
   syncDecodoPoolStateToRedis,
   restoreDecodoPoolStateFromRedis,
@@ -104,6 +105,17 @@ function parseDecodoPool(): string[] {
   if (single) return [single.trim()];
 
   return [];
+}
+
+// ─── Fingerprint ───────────────────────────────────────────────────────────────
+
+/**
+ * Calcule une empreinte du pool : "<taille>:<sha256-8hex des URLs concaténées>".
+ * Permet de détecter tout changement de composition (ajout, suppression, réordonnancement).
+ */
+function computePoolFingerprint(pool: string[]): string {
+  const hash = createHash("sha256").update(pool.join("\n")).digest("hex").slice(0, 8);
+  return `${pool.length}:${hash}`;
 }
 
 // ─── État du pool ──────────────────────────────────────────────────────────────
@@ -198,8 +210,32 @@ export async function initDecodoPool(): Promise<void> {
     return;
   }
 
+  const currentFingerprint = computePoolFingerprint(pool);
   const state = await restoreDecodoPoolStateFromRedis(getBlacklistTtlMs()).catch(() => null);
   if (state) {
+    // ── Vérification de l'empreinte du pool ────────────────────────────────
+    // Si le fichier CSV a changé (IPs ajoutées/supprimées/réordonnées), ou si
+    // l'état Redis ne contient pas d'empreinte (entrée écrite avant ce correctif),
+    // l'index sauvegardé peut pointer vers une IP différente ou être hors-limites.
+    // Dans tous ces cas on invalide index + blacklist et on repart à 0.
+    const fingerprintMissing = typeof state.poolFingerprint !== "string";
+    const fingerprintMismatch = !fingerprintMissing && state.poolFingerprint !== currentFingerprint;
+
+    if (fingerprintMissing || fingerprintMismatch) {
+      const reason = fingerprintMissing
+        ? "empreinte absente (état antérieur au correctif)"
+        : `empreinte: ${state.poolFingerprint} → ${currentFingerprint}`;
+      console.warn(
+        `[spain-decodo] ⚠️ Composition du pool non vérifiable depuis la dernière sauvegarde ` +
+        `(${reason}) — index et blacklist invalidés, démarrage à l'index 0`,
+      );
+      _index = 0;
+      _blacklistedIps = new Map();
+      // Persister l'état réinitialisé avec la nouvelle empreinte
+      syncDecodoPoolStateToRedis(_index, _blacklistedIps, currentFingerprint);
+      return;
+    }
+
     // Restaurer l'index (le sauvegarder pointe sur la DERNIÈRE IP utilisée,
     // donc on reprend à +1 pour ne pas taper deux fois la même IP au restart)
     const restoredIdx = (state.rotationIndex + 1) % pool.length;
@@ -271,7 +307,7 @@ export function flagDecodoIp(url: string | undefined, reason: string): void {
     `[spain-decodo] 🚫 IP blacklistée ${idxLabel} (${reason}, TTL ${ttlMin}min) — ${masked.slice(0, 60)}`,
   );
   _blacklistedIps.set(url, Date.now());
-  syncDecodoPoolStateToRedis(_index, _blacklistedIps);
+  syncDecodoPoolStateToRedis(_index, _blacklistedIps, computePoolFingerprint(pool));
 }
 
 /**
@@ -317,7 +353,7 @@ export function rotateDecodoUrl(): string | undefined {
   }
 
   // Persister le nouvel index dans Redis (fire-and-forget)
-  syncDecodoPoolStateToRedis(_index, _blacklistedIps);
+  syncDecodoPoolStateToRedis(_index, _blacklistedIps, computePoolFingerprint(pool));
 
   return url;
 }
