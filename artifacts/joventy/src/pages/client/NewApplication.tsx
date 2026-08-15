@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
-  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain", "germany", "morocco", "egypt", "china", "brazil"]),
+  destination: z.enum(["usa", "canada", "uk", "switzerland", "dubai", "turkey", "india", "schengen", "spain", "germany", "morocco", "egypt", "china", "brazil", "albania"]),
   visaType: z.string().min(1, "Type de visa requis"),
   applicantName: z.string().min(2, "Nom du demandeur requis"),
   passportNumber: z.string().min(5, "Numéro de passeport requis"),
@@ -44,6 +44,7 @@ const DESTINATIONS = [
   { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa en ligne (24-72h) ou visa consulaire — dossier complet",                  processType: "hybrid" as const },
   { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne ou visa consulaire — dossier complet",                          processType: "hybrid" as const },
   { id: "brazil",      name: "Brésil 🇧🇷",           desc: "Visa Brésil — dossier + créneau consulaire à l'ambassade de Kinshasa",           processType: "appointment" as const },
+  { id: "albania",     name: "Albanie 🇦🇱",          desc: "E-Visa Albanie — dossier complet + soumission en ligne, résultat 24-72h",          processType: "evisa" as const },
 ];
 
 // Note : l'Espagne gère ses propres rendez-vous via citaconsular.es —
@@ -67,15 +68,6 @@ const CEV_COUNTRIES = [
   { code: "SK", label: "🇸🇰 Slovaquie" },
 ];
 
-function getCevConsulaireFee(visaType: string, ageCategory: string): string {
-  if (visaType.includes("Long Séjour") || visaType.includes("Visa D")) {
-    return "180 € + redevance OE (variable)";
-  }
-  if (ageCategory === "child_under_6") return "Gratuit";
-  if (ageCategory === "child_6_12") return "45 €";
-  if (visaType.includes("Études")) return "Gratuit (court séjour éducatif)";
-  return "90 €";
-}
 
 const PACKAGE_ICONS: Record<string, React.ElementType> = {
   full_service: Star,
@@ -104,41 +96,33 @@ function getPackageInfo(
       const name =
         destination === "turkey"  ? "e-Visa Turquie" :
         destination === "dubai"   ? "visa électronique EAU (GDRFA)" :
-        destination === "morocco" ? "visa Maroc (e-Visa ou consulaire sans rendez-vous)" :
-        destination === "egypt"   ? "visa Égypte (e-Visa ou consulaire sans rendez-vous)" :
-        destination === "china"   ? "visa Chine (e-Visa ou dépôt VFS sans rendez-vous)" :
+        destination === "morocco" ? "visa Maroc" :
+        destination === "egypt"   ? "visa Égypte" :
+        destination === "china"   ? "visa Chine" :
+        destination === "albania" ? "e-Visa Albanie" :
                                     "e-Visa Inde";
       return {
         label: base.label,
         tagline: "Clé en main",
-        description: `Joventy remplit les formulaires officiels, vérifie les pièces que vous fournissez et soumet votre demande de ${name} en ligne. Aucun rendez-vous nécessaire.`,
+        description: `Joventy prend en charge l'intégralité de votre demande de ${name} : constitution du dossier, formulaires officiels et soumission sur le portail gouvernemental. Vous recevez votre visa directement — aucun déplacement. Paiement uniquement à l'obtention.`,
       };
     }
     const isVisaD = visaType.includes("Long Séjour") || visaType.includes("Visa D");
-    const creneauLabel =
-      destination === "usa"
-        ? "créneau à l'ambassade américaine de Kinshasa"
-        : destination === "canada"
-        ? "créneau au centre VFS IRCC de Kinshasa (collecte biométrique & dépôt)"
-        : destination === "uk"
-        ? "créneau au centre VFS UKVI de Kinshasa (UK Visas & Immigration)"
-        : destination === "switzerland"
-        ? `créneau au centre VFS Global Suisse de Kinshasa (Visa ${isVisaD ? "D long séjour" : "C court séjour"})`
-        : destination === "schengen" && isVisaD
-        ? "créneau au centre TLScontact France de Kinshasa (Visa D long séjour — france-visas.gouv.fr)"
-        : destination === "schengen"
-        ? "créneau au Centre Européen des Visas (CEV) Kinshasa"
-        : destination === "spain"
-        ? `créneau à l'ambassade d'Espagne à Kinshasa (portail citaconsular.es — Visa ${isVisaD ? "D long séjour" : "C court séjour"})`
-        : destination === "germany"
-        ? "créneau à l'ambassade d'Allemagne à Kinshasa (portail RK-Termin — visa national ou Schengen)"
-        : destination === "brazil"
-        ? "rendez-vous à l'ambassade du Brésil à Kinshasa"
-        : "créneau de dépôt au centre VFS Global Kinshasa";
+    const visaLabel =
+      destination === "usa"        ? "visa USA via l'ambassade américaine de Kinshasa"
+      : destination === "canada"   ? "visa Canada via le centre VFS IRCC de Kinshasa"
+      : destination === "uk"       ? "visa Royaume-Uni via le centre VFS UKVI de Kinshasa"
+      : destination === "switzerland" ? `visa Suisse ${isVisaD ? "long séjour" : "Schengen"} via VFS Global Kinshasa`
+      : destination === "schengen" && isVisaD ? "visa long séjour (Visa D) via le portail du pays cible"
+      : destination === "schengen" ? "visa Schengen via le Centre Européen des Visas (CEV) Kinshasa"
+      : destination === "spain"    ? `visa Espagne ${isVisaD ? "long séjour" : "Schengen"} via l'ambassade (citaconsular.es)`
+      : destination === "germany"  ? "visa Allemagne via l'ambassade (portail RK-Termin)"
+      : destination === "brazil"   ? "visa Brésil via l'ambassade du Brésil à Kinshasa"
+      : "visa via l'ambassade ou le centre VFS Kinshasa";
     return {
       label: base.label,
       tagline: "Clé en main",
-      description: `Joventy remplit les formulaires, vérifie les pièces que vous fournissez et recherche activement un ${creneauLabel}. Vous voulez seulement le rendez-vous et le dossier est déjà prêt ? Choisissez plutôt "Créneau Uniquement".`,
+      description: `Joventy gère votre ${visaLabel} de A à Z : dossier complet, formulaires officiels, profil consulaire et obtention de votre visa. Paiement uniquement à l'obtention — vous ne payez que si vous obtenez votre visa.`,
     };
   }
 
@@ -230,38 +214,32 @@ function getPackageInfo(
   if (pkgKey === "dossier_only") {
     if (isEvisa) {
       const portal =
-        destination === "dubai"  ? "portail officiel GDRFA / ICP" :
-        destination === "india"  ? "portail e-Visa indien" :
-                                   "portail e-Visa Turquie";
+        destination === "dubai"   ? "portail officiel GDRFA / ICP" :
+        destination === "albania" ? "portail e-Albania" :
+        destination === "india"   ? "portail e-Visa indien" :
+                                    "portail e-Visa officiel";
       return {
         label: base.label,
         tagline: base.tagline,
-        description: `Joventy remplit les formulaires officiels et vérifie les pièces que vous fournissez. Vous soumettez ensuite vous-même sur le ${portal}. Forfait 600 $ — paiement unique, aucune prime de succès.`,
+        description: `Vous rassemblez vos pièces justificatives, Joventy constitue le dossier, remplit les formulaires et soumet votre demande sur le ${portal}. Forfait fixe 600 $ — aucune prime de succès.`,
       };
     }
     const isVisaDDossier = visaType.includes("Long Séjour") || visaType.includes("Visa D");
     const rdv =
-      destination === "usa"
-        ? "à l'ambassade américaine"
-        : destination === "canada"
-        ? "au centre VFS IRCC (biométrie & dépôt)"
-        : destination === "uk"
-        ? "au centre VFS UKVI (UK Visas & Immigration)"
-        : destination === "switzerland"
-        ? "au centre VFS Global Suisse"
-        : destination === "spain"
-        ? "à l'ambassade d'Espagne (Visa C ou D — citaconsular.es)"
-        : destination === "schengen" && isVisaDDossier
-        ? "au centre TLScontact France de Kinshasa (Visa D long séjour)"
-        : destination === "schengen"
-        ? "au Centre Européen des Visas (CEV)"
-        : destination === "brazil"
-        ? "à l'ambassade du Brésil"
-        : "au centre VFS Global";
+      destination === "usa"           ? "à l'ambassade américaine de Kinshasa"
+      : destination === "canada"      ? "au centre VFS IRCC (collecte biométrique & dépôt)"
+      : destination === "uk"          ? "au centre VFS UKVI (UK Visas & Immigration)"
+      : destination === "switzerland" ? "au centre VFS Global Suisse de Kinshasa"
+      : destination === "spain"       ? "à l'ambassade d'Espagne (citaconsular.es)"
+      : destination === "schengen" && isVisaDDossier ? "au portail long séjour du pays cible (TLScontact / Visaonweb)"
+      : destination === "schengen"    ? "au Centre Européen des Visas (CEV) Kinshasa"
+      : destination === "germany"     ? "à l'ambassade d'Allemagne (portail RK-Termin)"
+      : destination === "brazil"      ? "à l'ambassade du Brésil à Kinshasa"
+      : "au centre VFS Global ou à l'ambassade";
     return {
       label: base.label,
       tagline: base.tagline,
-      description: `Joventy remplit les formulaires requis et vérifie les pièces que vous fournissez pour votre visa ${pricing.label}. Vous gérez ensuite votre rendez-vous ${rdv} de façon autonome. Forfait 600 $ — paiement unique, aucune prime de succès.`,
+      description: `Vous rassemblez vos pièces justificatives, Joventy constitue le dossier complet, remplit les formulaires officiels et gère votre rendez-vous ${rdv}. Forfait fixe 600 $ — aucune prime de succès.`,
     };
   }
 
@@ -294,7 +272,7 @@ export default function NewApplication() {
 
   const selectedDest = form.watch("destination");
   const selectedVisaType = form.watch("visaType");
-  const pricing = selectedDest ? VISA_PRICING[selectedDest] : null;
+  const pricing = selectedDest ? VISA_PRICING[selectedDest as keyof typeof VISA_PRICING] ?? null : null;
   const isTurkeyEvisa = selectedDest === "turkey" && selectedVisaType.toLowerCase().includes("e-visa");
   const isEvisaFlow = (pricing?.successModel === "evisa") || isTurkeyEvisa;
   const basePackages = selectedDest ? getAvailablePackages(selectedDest) : (["full_service", "dossier_only"] as ServicePackage[]);
@@ -313,7 +291,6 @@ export default function NewApplication() {
   const isSchengen = selectedDest === "schengen";
   const cevVisaClass = selectedVisaType.includes("Long Séjour") || selectedVisaType.includes("Visa D") ? "D" : "C" as "C" | "D";
   const isSchengenVisaD = isSchengen && cevVisaClass === "D";
-  const cevConsulaireFee = isSchengen && !isSchengenVisaD ? getCevConsulaireFee(selectedVisaType, cevApplicantAgeCategory) : null;
 
   // dossier_only = forfait fixe 600 $ (VISA_PARTIAL_SERVICE) — aucune prime de succès
   const effectiveEngagementFee = isDossierOnly ? VISA_PARTIAL_SERVICE.total : (pricing?.engagementFee ?? 0);
@@ -488,7 +465,7 @@ export default function NewApplication() {
                               </SelectGroup>
                             </>
                           ) : (
-                            (VISA_PRICING[selectedDest]?.visaTypes as readonly string[] ?? []).map((type) => (
+                            (VISA_PRICING[selectedDest as keyof typeof VISA_PRICING]?.visaTypes as readonly string[] ?? []).map((type) => (
                               <SelectItem key={type} value={type}>{type}</SelectItem>
                             ))
                           )}
@@ -555,39 +532,18 @@ export default function NewApplication() {
                       </select>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between bg-white rounded-lg px-4 py-3 border border-blue-100">
-                    <div>
-                      <p className="text-xs font-semibold text-primary">Frais consulaires CEV estimés</p>
-                      <p className="text-[10px] text-muted-foreground">Payés en € par carte bancaire directement au guichet CEV (non inclus dans les frais Joventy)</p>
-                    </div>
-                    <span className="text-lg font-bold text-blue-700">{cevConsulaireFee}</span>
-                  </div>
                 </div>
               )}
 
-              {/* TLScontact — Schengen Visa D long séjour (France) */}
+              {/* Visa D long séjour — portail selon pays cible */}
               {isSchengenVisaD && selectedVisaType && (
-                <div className="animate-in fade-in slide-in-from-top-4 space-y-3 bg-amber-50 border border-amber-200 rounded-xl p-5">
-                  <div>
-                    <h3 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-1">
-                      🇫🇷 Visa D — Long Séjour · Portail TLScontact France
-                    </h3>
-                    <p className="text-xs text-amber-700">Le Visa D long séjour est traité via TLScontact France Kinshasa (et non le CEV). La demande se fait en ligne sur <strong>france-visas.gouv.fr</strong>, puis le RDV biométrique est pris au centre TLScontact.</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="bg-white rounded-lg px-4 py-3 border border-amber-100">
-                      <p className="text-xs font-semibold text-amber-800">Portail de rendez-vous</p>
-                      <p className="text-xs text-amber-700 font-mono mt-0.5">fr.tlscontact.com/cd/CDG</p>
-                    </div>
-                    <div className="bg-white rounded-lg px-4 py-3 border border-amber-100">
-                      <p className="text-xs font-semibold text-amber-800">Frais estimés (hors Joventy)</p>
-                      <p className="text-xs text-amber-700 mt-0.5">~99 € (dossier France-Visas) + ~30 € (TLScontact)</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2 bg-white border border-amber-100 rounded-lg px-3 py-2.5 text-xs text-amber-800">
-                    <span className="font-bold shrink-0">Note :</span>
-                    <span>Pour un Visa D Belgique, une redevance de l'Office des Étrangers doit être payée sur un compte belge <strong>avant</strong> le rendez-vous. Joventy peut vous accompagner dans cette démarche.</span>
-                  </div>
+                <div className="animate-in fade-in slide-in-from-top-4 bg-amber-50 border border-amber-200 rounded-xl p-5">
+                  <h3 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2">
+                    🌍 Visa D — Long Séjour · Portail selon pays cible
+                  </h3>
+                  <p className="text-xs text-amber-700">
+                    Le Visa D long séjour n'est pas traité par le CEV. Selon votre pays cible, Joventy surveille le portail approprié : <strong>Visaonweb</strong> (Belgique), <strong>TLScontact</strong> (France) ou l'ambassade concernée pour les autres pays. Le portail exact sera confirmé à l'ouverture du dossier.
+                  </p>
                 </div>
               )}
             </div>
@@ -850,7 +806,7 @@ export default function NewApplication() {
                     <FileText className="w-4 h-4 text-secondary" /> Documents requis pour {pricing.label}
                   </h3>
                   <ul className="space-y-1">
-                    {pricing.requiredDocuments.map((doc) => (
+                    {pricing.requiredDocuments.map((doc: { key: string; label: string; required: boolean }) => (
                       <li key={doc.key} className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className={`w-3.5 h-3.5 ${doc.required ? "text-primary" : "text-slate-400"}`} />
                         <span className={doc.required ? "text-slate-700" : "text-slate-500"}>
