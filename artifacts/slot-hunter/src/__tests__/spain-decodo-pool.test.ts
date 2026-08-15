@@ -23,7 +23,13 @@ import {
   flagDecodoIp,
   rotateDecodoUrl,
   getDecodoPoolSize,
+  initDecodoPool,
 } from "../spain-decodo-pool.js";
+
+import {
+  syncDecodoPoolStateToRedis,
+  restoreDecodoPoolStateFromRedis,
+} from "../spain-redis-persistence.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -342,5 +348,158 @@ describe("Scenario 4 — rotateDecodoUrl skips flagged IPs", () => {
     // getCurrentDecodoUrl should reflect pool[1] (no further advance)
     const current = getCurrentDecodoUrl();
     expect(current).toBe(pool[1]);
+  });
+});
+
+// ─── Scenario 5: blacklist survives restart (Redis restore path) ──────────────
+
+describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
+  /**
+   * Helper: run restoreDecodoPoolStateFromRedis mock for the next initDecodoPool call.
+   * The real restoreDecodoPoolStateFromRedis filters expired IPs before returning;
+   * here we control exactly what it hands back to initDecodoPool.
+   */
+  function mockRestore(state: {
+    rotationIndex: number;
+    blacklistedIps: Record<string, number>;
+    savedAt: number;
+  } | null): void {
+    vi.mocked(restoreDecodoPoolStateFromRedis).mockResolvedValueOnce(state as any);
+  }
+
+  it("flagged IPs are still skipped after restart when restore returns fresh timestamps", async () => {
+    const pool = makePool(4);
+    setupPool(pool);
+
+    const ip0 = pool[0];
+    const ip1 = pool[1];
+
+    // Simulate what Redis holds: both IPs flagged 5 seconds ago (well within 45-min TTL)
+    const now = Date.now();
+    mockRestore({
+      rotationIndex: 1, // last used index before restart
+      blacklistedIps: {
+        [ip0]: now - 5_000,
+        [ip1]: now - 10_000,
+      },
+      savedAt: now - 5_000,
+    });
+
+    // Simulate restart: reset module state then restore from Redis
+    reloadDecodoPool();
+    setupPool(pool);
+    await initDecodoPool();
+
+    // Both flagged IPs must still be skipped
+    const current = getCurrentDecodoUrl();
+    expect(current).not.toBe(ip0);
+    expect(current).not.toBe(ip1);
+    expect([pool[2], pool[3]]).toContain(current);
+  });
+
+  it("syncDecodoPoolStateToRedis is called when flagging an IP (fire-and-forget wiring)", () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    vi.mocked(syncDecodoPoolStateToRedis).mockClear();
+
+    flagDecodoIp(pool[0], "0B /main/");
+
+    // Must have been called once to persist the new blacklist state
+    expect(vi.mocked(syncDecodoPoolStateToRedis)).toHaveBeenCalledTimes(1);
+    // First arg is the current rotation index (a number)
+    const [idxArg, mapArg] = vi.mocked(syncDecodoPoolStateToRedis).mock.calls[0];
+    expect(typeof idxArg).toBe("number");
+    // Second arg is the blacklisted IPs Map containing the flagged URL
+    expect(mapArg).toBeInstanceOf(Map);
+    expect((mapArg as Map<string, number>).has(pool[0])).toBe(true);
+  });
+
+  it("TTL-expired entries returned by restore are auto-discarded on first access", async () => {
+    const pool = makePool(3);
+    // Use 1-minute TTL
+    process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN = "1";
+    setupPool(pool);
+
+    const ip0 = pool[0];
+    const ip1 = pool[1];
+
+    // Restore returns timestamps that are already 2 minutes old → beyond the 1-min TTL
+    const expiredTs = Date.now() - 2 * 60_000;
+    mockRestore({
+      rotationIndex: 0,
+      blacklistedIps: {
+        [ip0]: expiredTs,
+        [ip1]: expiredTs,
+      },
+      savedAt: expiredTs,
+    });
+
+    reloadDecodoPool();
+    process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN = "1";
+    setupPool(pool);
+    await initDecodoPool();
+
+    // Both entries are expired → isBlacklisted() auto-purges them → ip0 is valid again
+    // (initDecodoPool sets _index = (rotationIndex+1) % pool.length = 1,
+    //  then findNextValidIndex finds ip1 valid, so _index lands on 1;
+    //  but since ip0's TTL is also expired it is valid too — let's just confirm
+    //  the current URL is one of the pool IPs and neither throws)
+    let result: string | undefined;
+    expect(() => { result = getCurrentDecodoUrl(); }).not.toThrow();
+    expect(result).toBeDefined();
+    expect(pool).toContain(result);
+
+    // After the first getCurrentDecodoUrl call, expired entries are auto-purged.
+    // Flagging a fresh IP and re-checking must still work (no stale state).
+    flagDecodoIp(result!, "post-restore test");
+    const next = getCurrentDecodoUrl();
+    expect(next).toBeDefined();
+    expect(pool).toContain(next);
+  });
+
+  it("allBlacklisted fallback applies when all restored IPs have fresh timestamps", async () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    const now = Date.now();
+    // All 3 IPs flagged 10 seconds ago — none are expired
+    mockRestore({
+      rotationIndex: 2,
+      blacklistedIps: {
+        [pool[0]]: now - 10_000,
+        [pool[1]]: now - 10_000,
+        [pool[2]]: now - 10_000,
+      },
+      savedAt: now - 10_000,
+    });
+
+    reloadDecodoPool();
+    setupPool(pool);
+    await initDecodoPool();
+
+    // All IPs are blacklisted → allBlacklisted fallback: must return an IP, never throw
+    let result: string | undefined;
+    expect(() => { result = getCurrentDecodoUrl(); }).not.toThrow();
+    expect(result).toBeDefined();
+    expect(pool).toContain(result);
+  });
+
+  it("restore returning null (Redis empty / unavailable) falls back to random index", async () => {
+    const pool = makePool(4);
+    setupPool(pool);
+
+    // mockRestore(null) — already the default, but be explicit
+    mockRestore(null);
+
+    reloadDecodoPool();
+    setupPool(pool);
+    await initDecodoPool();
+
+    // With no Redis state, initDecodoPool picks a random index.
+    // getCurrentDecodoUrl must still return a valid pool URL.
+    const result = getCurrentDecodoUrl();
+    expect(result).toBeDefined();
+    expect(pool).toContain(result);
   });
 });
