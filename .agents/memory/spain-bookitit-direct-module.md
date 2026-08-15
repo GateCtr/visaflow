@@ -31,10 +31,16 @@ Module créé pour encapsuler exactement les fonctions du dynamic test :
 
 Contient maintenant `ds: DynamicSession` — le DynamicSession doit être partagé entre `initPhpState` et `scanDatetimeDirect` pour maintenir le `reqCounter` cohérent.
 
-## Résultat confirmé (test live 2026-08-16)
+## Résultats confirmés (tests live 2026-08-16)
 
 Worker RANIA GHOUL, Kinshasa portal :
 - `getservices/` → 2 services ✅ (dont "TRAMITACIÓN DE VISADOS" bkt1181774)
 - `getagendas/` → agenda=(vide) ✅ (normal, portail hors publication)
 - `datetime/` → 0B correct ✅ (pas de créneaux publiés — comportement attendu)
-- Boucle 30s/cycle tourne → "exited" proprement en fin de fenêtre
+
+Worker TEST CUBA, portail Cuba LMD, proxy es.decodo.com index 5419 :
+- `getservices/` → 2 services ✅ (dont "PRESENTACIÓN DE DOCUMENTACIÓN LEY MEMORIA DEMOCRÁTICA" bkt897578)
+- `getagendas/` → agenda=bkt316096 ✅
+- `datetime/` → 225 créneaux sept, 207 oct ✅ — booking déclenché sur 2026-09-01 09:00
+- ISP proxies (`es.decodo.com`) fonctionnent pour Cuba aux indices > 5419 — les premiers indices (0-10) étaient brûlés
+- Fix associé : `pickDedicatedProxy` démarre désormais à `getDecodoCurrentIndex()` (index Redis persisté) plutôt qu'à 0

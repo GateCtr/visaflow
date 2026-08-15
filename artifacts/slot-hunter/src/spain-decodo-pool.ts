@@ -369,6 +369,11 @@ export function getDecodoPoolSize(): number {
   return getPool().length;
 }
 
+/** Retourne l'index courant dans le pool (restauré depuis Redis par initDecodoPool). */
+export function getDecodoCurrentIndex(): number {
+  return _index;
+}
+
 /**
  * Retourne l'URL à l'index donné (modulo taille du pool).
  * Utilisé par capsolver-residential pour la rotation manuelle avec tracking de ports mauvais.

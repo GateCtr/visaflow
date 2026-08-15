@@ -48,6 +48,7 @@ import {
 import {
   getDecodoProxyForIndex,
   getDecodoPoolSize,
+  getDecodoCurrentIndex,
   flagDecodoIp,
   isDecodoIpBlacklisted,
 } from "./spain-decodo-pool.js";
@@ -863,9 +864,13 @@ async function pickDedicatedProxy(
     return "";
   }
 
-  // Essayer chaque index du pool dans l'ordre
+  // Démarrer à l'index courant du pool (restauré depuis Redis par initDecodoPool)
+  // pour éviter de re-taper les premières IPs déjà usées/blacklistées.
+  const startIndex = getDecodoCurrentIndex();
+
   for (let i = 0; i < poolSize; i++) {
-    const url = getDecodoProxyForIndex(i) ?? "";
+    const idx = (startIndex + i) % poolSize;
+    const url = getDecodoProxyForIndex(idx) ?? "";
     if (!url) continue;
 
     // Skip les IPs blacklistées (portal-html-403, probe-error, etc.)
@@ -877,7 +882,7 @@ async function pickDedicatedProxy(
     // Tenter de réserver
     const ok = await reserveWorkerIp(url, dossierId);
     if (ok) {
-      log("INFO", `${tag} IP Decodo réservée : ${maskProxy(url)} (index ${i})`);
+      log("INFO", `${tag} IP Decodo réservée : ${maskProxy(url)} (index ${idx})`);
       return url;
     }
   }
