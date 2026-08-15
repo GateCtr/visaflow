@@ -3525,6 +3525,361 @@ const guides: Guide[] = [
       whatsappMessage: "Bonjour Joventy, je suis étranger (non-congolais) vivant en RDC et je veux un visa Schengen pour l'Allemagne. Je veux de l'aide pour le dossier et une alerte RK-Termin dès qu'un créneau est disponible à l'Ambassade d'Allemagne à Kinshasa.",
     },
   },
+
+  // ─── NOUVEAU : E-Visa Albanie ──────────────────────────────────────────────
+  {
+    slug: "e-visa-albanie-congolais-kinshasa-2026",
+    title: "E-Visa Albanie pour Congolais 2026 — Procédure complète depuis Kinshasa",
+    metaTitle: "E-Visa Albanie Congolais 2026 — Comment l'obtenir depuis Kinshasa | Joventy",
+    metaDescription:
+      "L'Albanie délivre un e-Visa aux ressortissants congolais sans visa Schengen préalable. Procédure, documents, délai 24-72h, tarifs et erreurs à éviter — guide complet 2026.",
+    publishedDate: "2026-08-15",
+    updatedDate: "2026-08-15",
+    readingTime: 6,
+    category: "E-Visa",
+    coverEmoji: "🇦🇱",
+    intro:
+      "L'Albanie est l'une des rares destinations européennes accessibles aux ressortissants congolais sans visa Schengen préalable. Grâce au portail e-Albania, vous pouvez obtenir un visa électronique en 24 à 72 heures depuis Kinshasa, sans rendez-vous consulaire. Ce guide détaille la procédure exacte, les documents requis et les erreurs qui font rejeter les demandes.",
+    sections: [
+      {
+        heading: "Albanie : e-Visa accessible sans Schengen ni USA",
+        body:
+          "Contrairement à la Turquie, au Maroc ou à Dubaï qui exigent souvent un visa Schengen ou USA valide, l'Albanie propose un e-Visa directement accessible à la quasi-totalité des nationalités, y compris les ressortissants de la RDC. C'est une opportunité rare pour un pays européen.",
+        list: [
+          "Pas de visa Schengen requis — la demande se fait directement sur le portail officiel albanais",
+          "Traitement en 24 à 72 heures ouvrables — vous recevez le visa par email",
+          "Valable pour un court séjour de 30 jours ou un long séjour de 90 jours",
+          "Aucun passage à l'ambassade — tout est géré en ligne depuis Kinshasa",
+          "Coût officiel : environ 30 à 50 USD selon la catégorie",
+        ],
+      },
+      {
+        heading: "Documents requis pour l'e-Visa Albanie",
+        body:
+          "Le portail e-Albania exige un dossier numérique complet. Un document manquant ou flou entraîne un rejet automatique sans remboursement des frais.",
+        list: [
+          "Passeport valide : au moins 6 mois de validité au-delà de la date de retour prévue, scan HD des deux pages biographiques",
+          "Photo d'identité récente : fond blanc, visage dégagé, format JPG conforme aux normes ICAO",
+          "Billet d'avion aller-retour ou itinéraire de voyage confirmé",
+          "Réservation d'hôtel ou attestation d'hébergement chez un particulier (avec copie de pièce d'identité de l'hôte)",
+          "Justificatif de ressources financières : relevé bancaire des 3 derniers mois montrant une capacité suffisante pour le séjour",
+        ],
+      },
+      {
+        heading: "Procédure pas à pas sur le portail e-Albania",
+        body:
+          "La demande se fait exclusivement sur le portail officiel e-albania.al. Voici les étapes dans l'ordre :",
+        list: [
+          "1. Créer un compte sur e-albania.al avec votre adresse email",
+          "2. Sélectionner la catégorie 'Visa' puis 'Court séjour (C-Type)' ou 'Long séjour' selon votre projet",
+          "3. Remplir le formulaire en ligne avec vos informations personnelles exactement comme sur votre passeport",
+          "4. Uploader les documents scannés — chaque fichier doit être lisible et inférieur à 2 Mo",
+          "5. Payer les frais officiels par carte bancaire internationale",
+          "6. Attendre la réponse par email (24 à 72 heures) — imprimer le visa reçu avant l'embarquement",
+        ],
+      },
+      {
+        heading: "Erreurs fréquentes qui font rejeter l'e-Visa",
+        body:
+          "La plupart des rejets d'e-Visa albanais sont évitables. Les causes les plus fréquentes chez les demandeurs congolais :",
+        list: [
+          "Photo non conforme : selfie au lieu de photo fond blanc, mauvais cadrage ou mauvaise luminosité",
+          "Passeport expirant dans moins de 6 mois après la date de retour prévue",
+          "Relevé bancaire insuffisant : solde trop faible ou mouvements suspects (dépôts atypiques juste avant la demande)",
+          "Incohérence entre les dates de vol et les dates du visa demandé",
+          "Réservation d'hôtel non confirmée ou réservation annulable sans garantie",
+          "Informations saisies différentes de celles du passeport (fautes d'orthographe sur le nom, date de naissance incorrecte)",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Les Congolais ont-ils besoin d'un visa Schengen pour aller en Albanie ?",
+        a: "Non. L'Albanie délivre un e-Visa directement aux ressortissants congolais via le portail e-albania.al, sans condition de visa Schengen, USA ou UK préalable. C'est l'une des rares destinations européennes accessibles sans visa préalable.",
+      },
+      {
+        q: "Combien de temps faut-il pour obtenir l'e-Visa Albanie ?",
+        a: "En général 24 à 72 heures ouvrables après soumission d'un dossier complet. En cas de dossier incomplet ou de document flou, la demande peut être suspendue ou rejetée, ce qui allonge considérablement le délai.",
+      },
+      {
+        q: "Peut-on entrer en Grèce ou en Italie avec un visa albanais ?",
+        a: "Non. L'Albanie n'est pas membre de l'espace Schengen. Un e-Visa albanais autorise uniquement l'entrée sur le territoire albanais — il ne permet pas de voyager dans les pays Schengen voisins.",
+      },
+      {
+        q: "Que fait Joventy exactement pour l'e-Visa Albanie ?",
+        a: "Joventy vérifie votre dossier (photo, passeport, relevé bancaire), remplit le formulaire officiel sur e-albania.al à votre place, soumet la demande et vous envoie le visa reçu. Frais Joventy : 500 USD d'engagement + 1 000 USD de prime de succès uniquement à l'obtention du visa.",
+      },
+      {
+        q: "L'e-Visa Albanie est-il refusable même avec un bon dossier ?",
+        a: "Oui, comme tout visa. Les refus sont rares pour les Congolais qui présentent un dossier complet et cohérent, mais ils existent — notamment en cas de doute sur l'intention de retour ou de relevé bancaire insuffisant. En cas de refus, la prime de succès n'est pas due.",
+      },
+    ],
+    relatedSlugs: [
+      "purger-21-jours-ebola-pays-neutre-visa-usa-2026",
+      "visa-affaires-dubai-turquie-kinshasa-commercents",
+      "erreurs-releves-bancaires-depot-suspect-visa",
+    ],
+    relatedDestination: "albania",
+    internalLinks: [
+      {
+        href: "/albania",
+        label: "E-Visa Albanie — tarifs et dossier Joventy",
+        description: "Ouvrir un dossier e-Visa Albanie avec Joventy.",
+      },
+      {
+        href: "/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026",
+        label: "Purger les 21 jours Ebola — pays neutres accessibles",
+        description: "Si votre visa USA exige une quarantaine dans un pays tiers.",
+      },
+    ],
+    conversion: {
+      heading: "Besoin d'un e-Visa Albanie depuis Kinshasa ?",
+      body: "Joventy prépare votre dossier, remplit le formulaire officiel e-Albania et soumet votre demande. Résultat en 24 à 72h. Prime de succès due uniquement à l'obtention.",
+      primaryLabel: "Créer mon dossier Albanie — 500 USD engagement",
+      primaryHref: "/register",
+      whatsappLabel: "Poser une question sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, je veux faire un e-Visa Albanie depuis Kinshasa. Est-ce que vous pouvez m'aider avec la procédure et les documents ?",
+    },
+  },
+
+  // ─── NOUVEAU : E-Visa Dubaï ───────────────────────────────────────────────
+  {
+    slug: "e-visa-dubai-congolais-kinshasa-2026",
+    title: "E-Visa Dubaï pour Congolais 2026 — Guide complet depuis Kinshasa",
+    metaTitle: "E-Visa Dubaï Congolais Kinshasa 2026 — Procédure, Documents, Délai | Joventy",
+    metaDescription:
+      "Les Congolais peuvent obtenir un e-Visa Dubaï (EAU) sans visa Schengen préalable. Guide complet : procédure ICP, documents, délai 48-72h, tarifs officiels et erreurs à éviter.",
+    publishedDate: "2026-08-15",
+    updatedDate: "2026-08-15",
+    readingTime: 7,
+    category: "E-Visa",
+    coverEmoji: "🇦🇪",
+    intro:
+      "Dubaï est la destination la plus demandée par les Congolais après l'Europe — pour le commerce, le tourisme ou la famille. Bonne nouvelle : les ressortissants de la RDC peuvent obtenir un e-Visa des Émirats arabes unis (EAU) sans avoir besoin d'un visa Schengen ou USA préalable. Ce guide vous explique la procédure exacte pour 2026, les documents requis et les pièges à éviter.",
+    sections: [
+      {
+        heading: "E-Visa Dubaï accessible directement aux Congolais",
+        body:
+          "Contrairement à certaines idées reçues, les ressortissants congolais n'ont pas besoin d'un visa Schengen ou USA pour demander un e-Visa Dubaï. Les Émirats arabes unis ont leur propre système de visa électronique géré par le portail ICP (Federal Authority for Identity and Citizenship).",
+        list: [
+          "E-Visa touristique 30 jours (renouvelable une fois sur place) : le plus courant",
+          "E-Visa 60 jours pour séjours prolongés ou voyages d'affaires",
+          "E-Visa transit 96 heures pour escales longues",
+          "Traitement habituel : 48 à 72 heures ouvrables",
+          "Coût officiel : 80 à 350 AED selon la durée (environ 22 à 95 USD)",
+        ],
+      },
+      {
+        heading: "Documents requis pour l'e-Visa EAU",
+        body:
+          "Le portail ICP est strict sur la qualité des documents. Un scan flou ou un passeport dont la validité est insuffisante entraîne un rejet immédiat.",
+        list: [
+          "Passeport valide : au moins 6 mois de validité à la date d'entrée prévue, scan HD des 2 pages biographiques",
+          "Photo d'identité récente : fond blanc, prise dans les 6 derniers mois, format JPG conforme",
+          "Billet d'avion aller-retour ou itinéraire de voyage confirmé avec dates précises",
+          "Réservation d'hôtel confirmée (non annulable de préférence) ou lettre d'invitation d'un résident EAU avec copie de son Emirates ID",
+          "Relevé bancaire des 3 derniers mois : suffisance financière requise (minimum recommandé : 500 USD disponibles par semaine de séjour)",
+          "Lettre de motivation expliquant le motif du voyage (tourisme, visite familiale ou affaires)",
+        ],
+      },
+      {
+        heading: "Profils commerçants : documents supplémentaires",
+        body:
+          "Pour les commerçants kinois qui se rendent à Dubaï pour des achats (electronics, textile, matériaux), des documents professionnels renforcent considérablement le dossier.",
+        list: [
+          "RCCM ou patente en cours de validité — preuve que vous êtes un professionnel établi en RDC",
+          "Invitation d'un fournisseur ou partenaire commercial à Dubaï (sur papier à en-tête)",
+          "Factures d'achats antérieurs à Dubaï si vous avez déjà voyagé pour affaires",
+          "Justificatif de domicile en RDC (facture d'électricité, eau, contrat de bail récent)",
+        ],
+      },
+      {
+        heading: "Erreurs fréquentes qui font rejeter l'e-Visa Dubaï",
+        body:
+          "Les rejets d'e-Visa EAU touchent souvent les mêmes points pour les demandeurs de Kinshasa :",
+        list: [
+          "Relevé bancaire insuffisant ou avec des dépôts suspects juste avant la demande (signe de préparation artificielle)",
+          "Photo non conforme : lunettes, fond coloré, visage non centré ou photo ancienne de plus de 6 mois",
+          "Hôtel non réservé ou réservation entièrement remboursable (perçue comme fictive)",
+          "Passeport avec moins de 6 mois de validité à la date d'arrivée",
+          "Incohérence entre les dates de vol et la durée du visa demandé",
+          "Lettre de motivation absente ou trop vague ('je veux visiter Dubaï' sans précision)",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Les Congolais ont-ils besoin d'un visa Schengen pour aller à Dubaï ?",
+        a: "Non. L'e-Visa Dubaï est accessible directement aux ressortissants de la RDC sans visa Schengen, USA ou UK préalable. La demande se fait en ligne via le portail officiel ICP des Émirats arabes unis.",
+      },
+      {
+        q: "Combien coûte un e-Visa Dubaï pour un Congolais ?",
+        a: "Les frais officiels EAU varient entre 80 et 350 AED (environ 22 à 95 USD) selon la durée du visa. Les frais Joventy sont séparés : 500 USD d'engagement + 1 000 USD de prime de succès uniquement à l'obtention du visa. Total Joventy : 1 500 USD.",
+      },
+      {
+        q: "Peut-on renouveler l'e-Visa Dubaï sur place ?",
+        a: "Oui, le visa touristique 30 jours est renouvelable une fois sur place pour 30 jours supplémentaires, moyennant des frais officiels. Ce renouvellement se fait depuis le territoire des EAU avant l'expiration du visa initial.",
+      },
+      {
+        q: "Quelles sont les chances de refus pour un Congolais ?",
+        a: "Les refus sont possibles en cas de dossier incomplet, de relevé bancaire insuffisant ou de profil perçu comme présentant un risque migratoire élevé. Un dossier bien préparé avec des preuves cohérentes réduit significativement ce risque. En cas de refus, la prime de succès n'est pas due.",
+      },
+      {
+        q: "Joventy peut-il aider pour un e-Visa Dubaï ?",
+        a: "Oui. Joventy prépare votre dossier complet, rédige la lettre de motivation, vérifie la conformité de chaque document et soumet la demande sur le portail ICP. Résultat attendu en 48 à 72 heures ouvrables.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-affaires-dubai-turquie-kinshasa-commercents",
+      "utiliser-registre-commerce-rccm-visa-business",
+      "erreurs-releves-bancaires-depot-suspect-visa",
+      "e-visa-albanie-congolais-kinshasa-2026",
+    ],
+    relatedDestination: "dubai",
+    internalLinks: [
+      {
+        href: "/dubai",
+        label: "E-Visa Dubaï — tarifs et dossier Joventy",
+        description: "Ouvrir un dossier e-Visa Dubaï avec Joventy.",
+      },
+      {
+        href: "/guides/visa-affaires-dubai-turquie-kinshasa-commercents",
+        label: "Visa d'affaires Dubaï — guide commerçants",
+        description: "Documents spécifiques pour les commerçants kinois.",
+      },
+    ],
+    conversion: {
+      heading: "Besoin d'un e-Visa Dubaï depuis Kinshasa ?",
+      body: "Joventy prépare votre dossier complet, rédige la lettre de motivation, vérifie chaque document et soumet la demande. Prime de succès due uniquement à l'obtention du visa.",
+      primaryLabel: "Créer mon dossier Dubaï — 500 USD engagement",
+      primaryHref: "/register",
+      whatsappLabel: "Poser une question sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, je veux faire un e-Visa Dubaï depuis Kinshasa. Quels documents dois-je préparer et combien de temps faut-il ?",
+    },
+  },
+
+  // ─── NOUVEAU : Visa USA suspendu Ebola ────────────────────────────────────
+  {
+    slug: "visa-usa-suspendu-ebola-kinshasa-que-faire-2026",
+    title: "Visa USA suspendu depuis Kinshasa (Ebola) — Que faire en 2026 ?",
+    metaTitle: "Visa USA Suspendu Kinshasa Ebola 2026 — Alternatives et Solutions | Joventy",
+    metaDescription:
+      "L'ambassade américaine a suspendu les opérations de visas à Kinshasa suite à l'épidémie Ebola en Ituri. Ce guide explique ce que ça change, les alternatives disponibles et comment préparer votre dossier pour être prêt à la reprise.",
+    publishedDate: "2026-08-15",
+    updatedDate: "2026-08-15",
+    readingTime: 8,
+    category: "Visa USA",
+    coverEmoji: "🇺🇸",
+    intro:
+      "Suite à l'épidémie d'Ebola en Ituri, l'ambassade américaine à Kinshasa a suspendu ses opérations de visas non-immigrants. Cette décision affecte directement les milliers de Congolais en attente d'un entretien B1/B2, F1 ou autre. Ce guide fait le point sur la situation en 2026, explique ce que vous pouvez faire dès maintenant et comment éviter de perdre du temps à la reprise.",
+    sections: [
+      {
+        heading: "Pourquoi les visas USA sont-ils suspendus depuis Kinshasa ?",
+        body:
+          "Le Département d'État américain a placé la RDC en Travel Advisory Level 4 (niveau maximum) en raison de l'épidémie d'Ebola active en Ituri. Cette classification entraîne des restrictions opérationnelles pour les ambassades américaines dans les pays concernés.",
+        list: [
+          "Level 4 signifie 'Do Not Travel' — le plus haut niveau d'alerte du Département d'État",
+          "Les opérations consulaires pour les visas non-immigrants (B1/B2, F1, H1B, etc.) sont suspendues",
+          "Les visas immigrants et les situations d'urgence documentées peuvent faire l'objet d'exceptions",
+          "La suspension peut être levée progressivement selon l'évolution de l'épidémie — aucune date garantie",
+          "Les demandes en cours ne sont pas annulées mais mises en attente",
+        ],
+      },
+      {
+        heading: "Ce que vous pouvez faire maintenant",
+        body:
+          "La suspension ne signifie pas que tout est bloqué. Plusieurs actions concrètes permettent d'avancer pendant cette période d'attente.",
+        list: [
+          "Préparer ou mettre à jour votre dossier complet : DS-160, photos, relevés bancaires, documents d'emploi — tout ce qui expirera si vous attendez la reprise sans agir",
+          "Payer les frais MRV si ce n'est pas déjà fait — ils sont valables un an et vous donnent la priorité à la reprise des créneaux",
+          "Surveiller le site officiel cd.usembassy.gov et la page travel.state.gov pour les annonces de reprise",
+          "Vérifier si votre passeport est encore valide pour les 6 prochains mois minimum",
+          "Contacter Joventy pour une pré-analyse de dossier — nous identifions les points faibles avant même que les créneaux ne s'ouvrent",
+        ],
+      },
+      {
+        heading: "Alternatives si votre voyage est urgent",
+        body:
+          "Si vous avez un visa USA déjà en cours de validité mais que vous devez d'abord purger les 21 jours Ebola, ou si vous cherchez une alternative visa pendant la suspension, plusieurs options existent.",
+        list: [
+          "🇦🇱 Albanie : e-Visa accessible directement aux Congolais, 24-72h, aucun visa Schengen requis — idéal pour un séjour temporaire en attendant",
+          "🇦🇪 Dubaï (EAU) : e-Visa accessible directement aux Congolais, traitement 48-72h",
+          "🇲🇦 Maroc : e-Visa si vous avez un visa Schengen ou USA valide — solution pour purger les 21 jours Ebola",
+          "🇹🇷 Turquie : accessible si vous avez un visa Schengen/USA valide",
+          "🇲🇺 Île Maurice : aucun visa requis pour les Congolais, entrée libre 60 jours",
+          "Voyager depuis un pays tiers : si vous résidez ou obtenez un visa dans un autre pays, vous pouvez parfois solliciter un visa USA depuis une autre ambassade américaine",
+        ],
+      },
+      {
+        heading: "Comment se préparer pour la reprise des créneaux",
+        body:
+          "Lorsque l'ambassade rouvrira les créneaux, ils seront pris en quelques minutes. Seuls les dossiers complets et déjà préparés pourront en profiter.",
+        list: [
+          "Avoir votre DS-160 soumis et votre numéro de confirmation prêt avant même la réouverture",
+          "Frais MRV déjà payés : vous gagnez une étape critique lors de la prise de rendez-vous",
+          "Dossier complet préparé par Joventy : relevés bancaires, lettre de motivation, photos — tout à jour",
+          "Activation du service de surveillance Joventy : notre équipe guette l'ouverture des créneaux 24h/24 et prend votre rendez-vous dès qu'un slot apparaît",
+          "Passeport valide pour les 6 prochains mois minimum",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Les visas USA à Kinshasa sont-ils définitivement suspendus ?",
+        a: "Non, la suspension est temporaire et liée à l'épidémie d'Ebola en Ituri. L'ambassade rouvrira les opérations lorsque la situation sanitaire s'améliorera. Les dates de reprise ne sont pas annoncées à l'avance — suivez cd.usembassy.gov pour les mises à jour officielles.",
+      },
+      {
+        q: "Ma demande de visa en cours est-elle annulée ?",
+        a: "Non. Les demandes en cours sont mises en attente, pas annulées. Vos frais MRV restent valables (1 an). Votre DS-160 reste actif. Votre dossier sera traité à la reprise des opérations.",
+      },
+      {
+        q: "Peut-on obtenir un visa USA depuis une ambassade américaine dans un autre pays ?",
+        a: "Oui, c'est possible mais chaque ambassade donne la priorité aux ressortissants de son pays hôte. Pour un Congolais, une demande dans un pays tiers nécessite généralement un titre de séjour dans ce pays. Certains demandeurs transitent par Nairobi, Johannesburg ou Addis-Abeba — contactez Joventy pour évaluer cette option selon votre situation.",
+      },
+      {
+        q: "Dois-je refaire mon DS-160 si la suspension dure longtemps ?",
+        a: "Le DS-160 est valable mais certaines informations (emploi, adresse, finances) doivent être à jour au moment de l'entretien. Si votre situation a changé significativement, il vaut mieux soumettre un nouveau DS-160 mis à jour avant le rendez-vous.",
+      },
+      {
+        q: "Joventy peut-il surveiller la reprise des créneaux pour moi ?",
+        a: "Oui. Joventy surveille le portail usvisaappt.com 24h/24 et prend votre rendez-vous dès qu'un créneau apparaît à Kinshasa à la reprise des opérations. C'est notre service 'Accompagnement Complet' ou 'Créneau Uniquement' selon que votre dossier est déjà prêt ou non.",
+      },
+    ],
+    relatedSlugs: [
+      "comment-obtenir-creneau-visa-usa-kinshasa",
+      "travel-advisory-level-4-rdc-visa-usa-2026",
+      "purger-21-jours-ebola-pays-neutre-visa-usa-2026",
+      "suspension-visa-canada-rdc-ebola-2026",
+      "e-visa-albanie-congolais-kinshasa-2026",
+      "e-visa-dubai-congolais-kinshasa-2026",
+    ],
+    relatedDestination: "usa",
+    internalLinks: [
+      {
+        href: "/guides/travel-advisory-level-4-rdc-visa-usa-2026",
+        label: "Travel Advisory Level 4 RDC — Impact sur le visa USA",
+        description: "Comprendre les restrictions et leur impact sur votre dossier.",
+      },
+      {
+        href: "/guides/purger-21-jours-ebola-pays-neutre-visa-usa-2026",
+        label: "Purger les 21 jours Ebola — pays accessibles",
+        description: "Si vous avez déjà un visa USA et devez faire quarantaine.",
+      },
+      {
+        href: "/guides/e-visa-albanie-congolais-kinshasa-2026",
+        label: "E-Visa Albanie — alternative accessible sans Schengen",
+        description: "Destination européenne accessible directement depuis Kinshasa.",
+      },
+    ],
+    conversion: {
+      heading: "Préparez votre dossier USA maintenant pour être prêt à la reprise",
+      body: "Joventy prépare votre dossier complet pendant la suspension et active la surveillance du portail usvisaappt.com. Dès la réouverture, votre créneau est pris en quelques minutes.",
+      primaryLabel: "Préparer mon dossier USA — 500 USD engagement",
+      primaryHref: "/register",
+      whatsappLabel: "Poser une question sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, les visas USA sont suspendus à Kinshasa. Est-ce que vous pouvez m'aider à préparer mon dossier maintenant pour être prêt à la reprise des créneaux ?",
+    },
+  },
 ];
 export function getAllGuides(): Guide[] {
   return guides;
