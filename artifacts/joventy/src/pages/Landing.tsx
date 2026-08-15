@@ -612,7 +612,7 @@ export default function Landing() {
           "totalTime": "P14D",
           "step": [
             { "@type": "HowToStep", "position": 1, "name": "Créer le dossier", "text": "Inscrivez-vous sur joventy.cd et créez votre dossier visa USA. Payez les frais d'engagement (500 $) via M-Pesa, Airtel Money ou Orange Money." },
-            { "@type": "HowToStep", "position": 2, "name": "Envoyer les documents", "text": "Transmettez vos documents via WhatsApp ou l'espace client : passeport, photo biométrique, relevés bancaires (3 mois), justificatif d'emploi, justificatif de domicile en RDC." },
+            { "@type": "HowToStep", "position": 2, "name": "Envoyer les documents", "text": "Transmettez votre passeport valide et une photo d'identité via l'espace client. Pour l'Accompagnement Complet, Joventy prend en charge tous les documents justificatifs (réservations, relevés, garanties, formulaires officiels)." },
             { "@type": "HowToStep", "position": 3, "name": "Remplissage du formulaire DS-160", "text": "L'équipe Joventy remplit le formulaire DS-160 à votre place et vous soumet le brouillon pour vérification et signature électronique." },
             { "@type": "HowToStep", "position": 4, "name": "Surveillance du portail et capture du créneau", "text": "Joventy surveille le portail usvisaappt.com 24h/24. Dès qu'un créneau est disponible à Kinshasa (ou dans un pays tiers si nécessaire), il est verrouillé et vous êtes notifié immédiatement via WhatsApp." },
             { "@type": "HowToStep", "position": 5, "name": "Paiement de la prime de succès", "text": "Une fois le créneau confirmé, vous payez la prime de succès (1 000 $) via Mobile Money." },
