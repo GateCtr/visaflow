@@ -3880,6 +3880,281 @@ const guides: Guide[] = [
       whatsappMessage: "Bonjour Joventy, les visas USA sont suspendus à Kinshasa. Est-ce que vous pouvez m'aider à préparer mon dossier maintenant pour être prêt à la reprise des créneaux ?",
     },
   },
+
+  // ── Guide 1 : dossier prêt → créneau uniquement ───────────────────────────
+  {
+    slug: "dossier-visa-pret-trouver-creneau-kinshasa",
+    title: "Mon dossier visa est prêt — comment obtenir un créneau rapidement depuis Kinshasa ?",
+    metaTitle: "Dossier visa prêt à Kinshasa — Obtenir un créneau rapidement | Joventy",
+    metaDescription:
+      "Votre dossier visa est complet mais vous ne trouvez pas de créneau ? Découvrez le package Créneau Uniquement Joventy (350 USD) et les délais réels par destination depuis Kinshasa en 2026.",
+    publishedDate: "2026-08-15",
+    updatedDate: "2026-08-15",
+    readingTime: 7,
+    category: "Créneau Visa",
+    coverEmoji: "📁",
+    intro:
+      "Vous avez tout préparé : passeport, relevés bancaires, lettre de motivation, assurance voyage, billets d'avion provisoires. Votre dossier est complet et prêt à déposer. Le seul obstacle qui reste entre vous et votre visa ? Un créneau de rendez-vous introuvable. C'est précisément pour ce profil que Joventy a créé le package Créneau Uniquement — 350 USD, zéro engagement, une seule mission : trouver votre date.",
+    sections: [
+      {
+        heading: "Pourquoi « dossier prêt » ne suffit pas — le vrai problème est le créneau",
+        body:
+          "Avoir un dossier complet est une excellente chose : cela signifie que vous êtes dans les derniers 20 % des demandeurs. La majorité des Kinois bloquent sur la constitution des pièces. Mais en 2026, le deuxième goulot d'étranglement est devenu le calendrier consulaire : les portails officiels affichent « aucune disponibilité » pendant des semaines ou des mois, quelle que soit la destination.",
+        list: [
+          "CEV (France, Belgique, Pays-Bas, Allemagne…) : les créneaux sont libérés aléatoirement, souvent la nuit ou tôt le matin",
+          "USA (usvisaappt.com) : les annulations apparaissent 72 h avant la date — impossible à attraper manuellement",
+          "Espagne (citaconsular.es) : inscription par email obligatoire, puis surveillance du portail 24h/24",
+          "Allemagne (rk-termin.de) : créneaux très rares, libérés en quelques secondes",
+          "UK (TLScontact) : délais souvent raisonnables mais la disponibilité varie par catégorie de visa",
+          "La réactivité compte plus que tout : un créneau libre est pris en 2 à 5 minutes par d'autres demandeurs",
+        ],
+      },
+      {
+        heading: "Package Créneau Uniquement Joventy — comment ça marche",
+        body:
+          "Si votre dossier est déjà prêt, vous n'avez pas besoin d'un accompagnement complet. Le package Créneau Uniquement est conçu exactement pour votre situation :",
+        list: [
+          "💰 350 USD — payés uniquement après obtention effective du créneau, aucun acompte à l'avance",
+          "🤖 Surveillance automatisée 24h/24 : nos outils scannent le portail officiel en continu, y compris la nuit",
+          "⚡ Réservation immédiate : dès qu'un créneau compatible avec votre profil apparaît, il est pris en priorité",
+          "📲 Confirmation WhatsApp instantanée : vous recevez le détail du rendez-vous dès qu'il est confirmé",
+          "📋 Zéro constitution de dossier : vous apportez vos pièces déjà prêtes le jour du rendez-vous",
+          "✅ Zéro risque financier : si Joventy ne trouve pas de créneau, vous ne payez rien",
+        ],
+      },
+      {
+        heading: "Délais typiques par destination depuis Kinshasa (2026)",
+        body:
+          "Voici les délais constatés par notre équipe en 2026 pour trouver un créneau disponible, selon la destination :",
+        list: [
+          "🇫🇷🇧🇪🇩🇪 CEV (Schengen via Centre Européen des Visas) : 3 à 21 jours selon la période — les créneaux libérés par annulation sont les plus rapides",
+          "🇺🇸 USA (usvisaappt.com) : 1 à 8 semaines — créneaux très rares, libérés par annulations imprévisibles",
+          "🇪🇸 Espagne (citaconsular.es) : 2 à 6 semaines — inscription email obligatoire en amont (Joventy gère)",
+          "🇩🇪 Allemagne (rk-termin.de) : 2 à 10 semaines — portail à accès très restreint",
+          "🇬🇧 UK (TLScontact Kinshasa) : 1 à 4 semaines selon la catégorie de visa",
+          "⚠️ Ces délais sont des moyennes — un créneau peut apparaître dans les 24h comme mettre 6 semaines. La surveillance continue est indispensable.",
+        ],
+      },
+      {
+        heading: "Tentative manuelle vs Joventy — la différence concrète",
+        body:
+          "Beaucoup de demandeurs essaient d'abord de trouver le créneau eux-mêmes. Voici pourquoi c'est difficile :",
+        list: [
+          "🕐 Les créneaux apparaissent à n'importe quelle heure — souvent entre 23h et 6h du matin",
+          "⏱️ Vous avez moins de 5 minutes pour cliquer, remplir et confirmer avant qu'un autre demandeur prenne le slot",
+          "🔄 Les portails exigent souvent une session active, un cookie valide et plusieurs étapes de confirmation",
+          "😓 Passer ses nuits à rafraîchir un portail n'est pas viable pendant des semaines",
+          "✅ Joventy automatise cette surveillance et maintient des sessions actives sur les portails 24h/24 — vous dormez, nous veillons",
+        ],
+      },
+      {
+        heading: "Comment démarrer — 3 étapes simples",
+        body:
+          "Le processus d'inscription au package Créneau Uniquement prend moins de 10 minutes :",
+        list: [
+          "1. Contactez Joventy sur WhatsApp (+243 840 808 122) ou créez votre dossier sur joventy.cd/register",
+          "2. Indiquez votre destination, votre catégorie de visa et votre flexibilité de dates — la surveillance démarre rapidement",
+          "3. Dès que le créneau est confirmé, vous recevez la date par WhatsApp et réglez les 350 USD via M-Pesa, Airtel Money ou Orange Money",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Mon dossier est prêt mais je ne sais pas exactement quelle date choisir — est-ce un problème ?",
+        a: "Non. Nous discutons de votre flexibilité au démarrage. Si vous pouvez voyager entre deux dates (ex : 15 septembre – 15 octobre), nous prenons le premier créneau disponible dans cette fenêtre. Si vous avez une date fixe, nous ciblons les créneaux compatibles avec votre itinéraire.",
+      },
+      {
+        q: "Est-ce que je dois vous transmettre mon dossier complet pour le package Créneau Uniquement ?",
+        a: "Non. Pour ce package, nous n'examinons pas votre dossier : nous cherchons uniquement un créneau de rendez-vous. Vous apportez vos pièces directement au consulat le jour du rendez-vous. Si vous souhaitez une vérification de votre dossier avant le dépôt, cela est disponible en option séparée.",
+      },
+      {
+        q: "Que se passe-t-il si aucun créneau n'est trouvé dans les délais convenus ?",
+        a: "Joventy s'engage sur un délai cible selon la destination. Si aucun créneau n'est obtenu dans ce délai, nous vous remboursons ou prolongeons la surveillance selon votre préférence. Contactez-nous pour connaître les délais garantis par destination.",
+      },
+      {
+        q: "Le package Créneau Uniquement couvre-t-il toutes les destinations ?",
+        a: "Oui : CEV (Schengen multi-pays), USA, Espagne, Allemagne, UK et autres destinations selon disponibilité. Contactez-nous si votre destination n'est pas listée — nous évaluons la faisabilité sous 24h.",
+      },
+      {
+        q: "Quelle est la différence avec l'accompagnement complet Joventy ?",
+        a: "L'accompagnement complet (1 500 USD au total : 500 USD engagement + 1 000 USD prime de succès à l'obtention du visa) inclut la constitution de votre dossier de A à Z (lettre de motivation, vérification des pièces, coaching entretien) en plus de la recherche du créneau. Si votre dossier est déjà prêt et vérifié, le package Créneau Uniquement à 350 USD — payés uniquement après obtention — est suffisant.",
+      },
+    ],
+    relatedSlugs: [
+      "comment-obtenir-creneau-visa-usa-kinshasa",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      "visa-angleterre-kinshasa-rdv-2026",
+      "rendez-vous-visa-urgent-kinshasa-3-semaines",
+    ],
+    internalLinks: [
+      {
+        href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
+        label: "Rendez-vous CEV Kinshasa — Comment ça fonctionne",
+        description: "Comprendre le portail CEV et pourquoi les créneaux sont si rares.",
+      },
+      {
+        href: "/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+        label: "Procédure Espagne Kinshasa 2026",
+        description: "Email + citaconsular.es — toutes les étapes officielles.",
+      },
+      {
+        href: "/guides/rendez-vous-visa-urgent-kinshasa-3-semaines",
+        label: "Voyage dans moins de 3 semaines — que faire ?",
+        description: "Quelles destinations restent jouables en urgence absolue.",
+      },
+    ],
+    conversion: {
+      heading: "Votre dossier est prêt — il ne manque que le créneau",
+      body: "Le package Créneau Uniquement Joventy surveille le portail officiel 24h/24 et réserve votre rendez-vous dès qu'un slot apparaît. 350 USD payés uniquement après obtention du créneau — aucun acompte, confirmation WhatsApp immédiate.",
+      primaryLabel: "Mon dossier est prêt — je veux juste le créneau (350 USD)",
+      primaryHref: "/register",
+      whatsappLabel: "Démarrer sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, mon dossier visa est prêt et complet. Je cherche uniquement un créneau de rendez-vous. Je suis intéressé par le package Créneau Uniquement à 350 USD. Pouvez-vous m'aider ?",
+    },
+  },
+
+  // ── Guide 2 : rendez-vous urgent < 3 semaines ─────────────────────────────
+  {
+    slug: "rendez-vous-visa-urgent-kinshasa-3-semaines",
+    title: "Rendez-vous visa urgent depuis Kinshasa — voyage dans moins de 3 semaines",
+    metaTitle: "Visa urgent Kinshasa — Voyage dans moins de 3 semaines | Joventy",
+    metaDescription:
+      "Voyage imminent dans moins de 3 semaines depuis Kinshasa ? Découvrez quelles destinations sont encore jouables en urgence et comment le tier Très Urgent Joventy peut vous obtenir un créneau rapidement.",
+    publishedDate: "2026-08-15",
+    updatedDate: "2026-08-15",
+    readingTime: 6,
+    category: "Créneau Visa",
+    coverEmoji: "⚡",
+    intro:
+      "Vous partez dans moins de 3 semaines et vous n'avez pas encore de rendez-vous visa ? La situation est tendue mais pas forcément bloquée. Tout dépend de votre destination et de l'état de votre dossier. Ce guide vous dit la vérité sur ce qui est encore jouable depuis Kinshasa en urgence, et comment le tier Très Urgent Joventy peut maximiser vos chances d'obtenir un créneau dans ce délai serré.",
+    sections: [
+      {
+        heading: "La réalité des délais en urgence — ce qu'il faut savoir immédiatement",
+        body:
+          "Avant toute chose, soyons honnêtes sur ce qui est possible en moins de 3 semaines depuis Kinshasa. Les délais consulaires officiels ne s'accélèrent pas sur commande — mais des créneaux d'annulation apparaissent chaque jour, et notre surveillance les attrape en temps réel.",
+        list: [
+          "⏱️ Le délai d'instruction (traitement du visa après le dépôt) s'ajoute au délai de créneau — calculez les deux",
+          "🇫🇷🇧🇪🇳🇱 Schengen CEV : créneau trouvable en 1-5 jours + 10-15 jours d'instruction = jouable si vous avez 3 semaines",
+          "🇬🇧 UK TLScontact Kinshasa : créneau 1-7 jours + instruction 5-10 jours (standard) = jouable",
+          "🇪🇸 Espagne : inscription email obligatoire (1-2 semaines) + créneau — difficile en moins de 3 semaines sauf si déjà inscrit",
+          "🇩🇪 Allemagne (rk-termin.de) : créneaux rares, délai imprévisible — risqué en moins de 3 semaines",
+          "🇺🇸 USA : délai moyen 4-8 semaines pour un créneau + instruction — hors délai sauf annulation exceptionnelle",
+        ],
+      },
+      {
+        heading: "Destinations encore jouables en urgence absolue (moins de 3 semaines)",
+        body:
+          "Toutes les destinations ne se valent pas en urgence. Voici celles où Joventy a obtenu des créneaux en moins de 7 jours en 2026 :",
+        list: [
+          "🇫🇷 France (CEV) : destination la plus rapide — créneaux libérés par annulations quotidiennes, instruction 10-12 jours",
+          "🇧🇪 Belgique (CEV) : profil similaire à la France, créneaux réguliers",
+          "🇳🇱 Pays-Bas (CEV) : créneaux disponibles, instruction 7-14 jours",
+          "🇮🇹 Italie (TLScontact) : créneaux variables, parfois rapides",
+          "🇬🇧 UK (TLScontact Kinshasa) : délais raisonnables, instruction Standard 5-10 jours",
+          "🇦🇪 Dubaï : e-Visa en 48-72h, aucun rendez-vous nécessaire — solution de secours si votre destination principale est bloquée",
+          "🇲🇦 Maroc : e-Visa en 24-72h si vous avez un visa Schengen ou USA valide",
+          "⚠️ Si votre destination n'est pas dans cette liste, contactez Joventy immédiatement — nous évaluons la faisabilité en moins de 2 heures",
+        ],
+      },
+      {
+        heading: "Tier Très Urgent Joventy — ce que ça change concrètement",
+        body:
+          "Le package Créneau Uniquement Joventy inclut une option Très Urgent pour les demandes en moins de 3 semaines. Voici ce qui est mis en place :",
+        list: [
+          "🚨 Priorité maximale dans notre file d'attente — votre dossier passe devant les autres demandes standard",
+          "🔄 Surveillance renforcée 24h/24 sur le portail de votre destination, y compris les heures creuses où les annulations apparaissent",
+          "📞 Notification WhatsApp + appel téléphonique direct dès qu'un créneau compatible apparaît",
+          "⚡ Réservation rapide dès l'apparition du créneau — chaque minute compte en urgence",
+          "🗓️ Sélection intelligente : nous privilégions les créneaux dans les jours suivants pour maximiser votre délai d'instruction",
+          "📋 Si votre dossier n'est pas encore prêt : nous pouvons paralléliser la constitution du dossier et la recherche du créneau",
+        ],
+      },
+      {
+        heading: "Votre dossier est-il vraiment prêt ? — checklist urgence",
+        body:
+          "En urgence, un dossier incomplet peut bloquer votre rendez-vous même si vous avez le créneau. Vérifiez ces points critiques avant de démarrer :",
+        list: [
+          "✅ Passeport valide pour 6 mois minimum après la date de retour prévue",
+          "✅ Photo d'identité aux normes consulaires (fond blanc, moins de 6 mois)",
+          "✅ Relevés bancaires des 3 derniers mois (solde suffisant selon la destination)",
+          "✅ Assurance voyage avec couverture minimale 30 000 € pour le Schengen",
+          "✅ Réservation de vol aller-retour (flexible/remboursable de préférence)",
+          "✅ Justificatif d'hébergement (réservation hôtel ou invitation officielle)",
+          "✅ Formulaire de demande rempli et signé (DS-160 pour USA, formulaire Schengen pour l'Europe, etc.)",
+          "⚠️ En cas de doute sur une pièce, contactez Joventy avant de déposer — un dossier refusé remet les compteurs à zéro",
+        ],
+      },
+      {
+        heading: "Plan d'action si vous partez dans moins de 3 semaines",
+        body:
+          "Voici exactement ce que vous devez faire maintenant, dans l'ordre :",
+        list: [
+          "1. Contactez Joventy immédiatement sur WhatsApp (+243 840 808 122) — mentionnez votre date de voyage et votre destination",
+          "2. Nous évaluons la faisabilité en moins de 2 heures et vous donnons un avis honnête",
+          "3. Si c'est jouable : nous activons la surveillance Très Urgent immédiatement — les 350 USD sont payés uniquement après obtention du créneau, aucun acompte",
+          "4. En parallèle : vérifiez que votre dossier est complet avec la checklist ci-dessus",
+          "5. Dès que le créneau est confirmé : Joventy vous envoie la convocation et les instructions de dépôt",
+          "6. Vous vous rendez au consulat avec votre dossier complet le jour J",
+          "7. Instruction consulaire : 7-15 jours selon la destination — prévu dans notre calcul de faisabilité",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "J'ai un vol réservé dans 15 jours — est-ce encore possible d'obtenir un visa ?",
+        a: "Cela dépend entièrement de votre destination. Pour la France ou la Belgique via le CEV, c'est techniquement possible si un créneau apparaît dans les 2 premiers jours ET que l'instruction prend moins de 12 jours. Pour l'USA, c'est très difficile. Contactez Joventy immédiatement (+243 840 808 122) — nous vous donnons un avis honnête sous 2 heures.",
+      },
+      {
+        q: "Est-ce que Joventy peut contacter le consulat pour demander un créneau d'urgence ?",
+        a: "Les consulats n'accordent pas de créneaux d'urgence sur demande directe pour les visas touristiques ou d'affaires standard. La seule voie légale est la surveillance et la réservation d'annulations disponibles sur le portail officiel — c'est exactement ce que fait notre système.",
+      },
+      {
+        q: "Mon vol est dans 10 jours. Que conseillez-vous ?",
+        a: "Avec 10 jours, les options sont très limitées pour la plupart des visas (créneau + instruction). Deux alternatives réalistes : (1) Dubaï ou Maroc si vous avez un visa Schengen ou USA valide — e-Visa en 24-72h, aucun rendez-vous ; (2) Repousser votre vol et activer la surveillance Joventy pour une fenêtre de 3 à 4 semaines. Contactez-nous pour évaluer votre cas.",
+      },
+      {
+        q: "Est-ce que le package Très Urgent coûte plus cher que le package standard ?",
+        a: "Le package Créneau Uniquement reste à 350 USD — payés uniquement après obtention du créneau — quelle que soit l'urgence. Le tier Très Urgent signifie une priorité maximale de traitement, sans surcoût.",
+      },
+      {
+        q: "Si aucun créneau n'est trouvé à temps, que se passe-t-il ?",
+        a: "Si Joventy ne trouve pas de créneau, vous ne payez rien — les 350 USD ne sont dus qu'à l'obtention effective du rendez-vous. Contactez-nous pour discuter de la prolongation de la surveillance ou des alternatives selon votre situation.",
+      },
+    ],
+    relatedSlugs: [
+      "dossier-visa-pret-trouver-creneau-kinshasa",
+      "rendez-vous-cev-kinshasa-visa-schengen",
+      "comment-obtenir-creneau-visa-usa-kinshasa",
+      "visa-angleterre-kinshasa-rdv-2026",
+      "e-visa-dubai-congolais-kinshasa-2026",
+    ],
+    internalLinks: [
+      {
+        href: "/guides/dossier-visa-pret-trouver-creneau-kinshasa",
+        label: "Dossier prêt — package Créneau Uniquement",
+        description: "Comment fonctionne le package 350 USD si votre dossier est déjà complet.",
+      },
+      {
+        href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
+        label: "Rendez-vous CEV Kinshasa — délais et fonctionnement",
+        description: "Tout sur le portail CEV et les créneaux Schengen depuis Kinshasa.",
+      },
+      {
+        href: "/guides/e-visa-dubai-congolais-kinshasa-2026",
+        label: "E-Visa Dubaï — alternative rapide sans rendez-vous",
+        description: "Solution de secours en 48h si votre destination principale est bloquée.",
+      },
+    ],
+    conversion: {
+      heading: "Voyage urgent — chaque heure compte",
+      body: "Si vous partez dans moins de 3 semaines, contactez Joventy maintenant sur WhatsApp. Nous évaluons la faisabilité en 2 heures et activons la surveillance Très Urgent immédiatement. Package Créneau Uniquement — 350 USD payés uniquement après obtention du créneau, aucun acompte.",
+      primaryLabel: "Démarrer en urgence — Créneau Uniquement 350 USD",
+      primaryHref: "/register",
+      whatsappLabel: "Urgence WhatsApp — réponse en moins de 2h",
+      whatsappMessage: "URGENT — Bonjour Joventy, je pars dans moins de 3 semaines depuis Kinshasa. Je n'ai pas encore de créneau de rendez-vous visa. Pouvez-vous évaluer la faisabilité et activer la surveillance en urgence ? Destination : [votre destination]",
+    },
+  },
 ];
 export function getAllGuides(): Guide[] {
   return guides;
