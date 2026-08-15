@@ -18,20 +18,20 @@ function FlagImg({ code, size = 32, className = "" }: { code: string; size?: num
 }
 
 const DESTINATIONS = [
-  { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", external: "185-210 USD (MRV ambassade)", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)" },
-  { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", external: "185 CAD+ (IRCC + biométrie)", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)" },
-  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null },
-  { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", external: "£115+ (UKVI)", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null },
-  { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (ambassade)", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null },
-  { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null },
-  { code: "de", name: "Visa Allemagne", types: "National, Schengen, Études, Travail", external: "75-80 € (consulat)", delay: "Variable (RK-Termin)", href: "/visa-schengen-kinshasa", alert: null },
-  { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null },
-  { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null },
-  { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null },
-  { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (consulaire) / 3-5j (e-Visa)", href: "/e-visa-egypte-kinshasa", alert: null },
-  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
-  { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },
-  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", external: "Frais consulaires brésiliens (variable)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null },
+  { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", external: "185-210 USD (MRV ambassade)", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)", note: null },
+  { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", external: "185 CAD+ (IRCC + biométrie)", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)", note: null },
+  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null, note: null },
+  { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", external: "£115+ (UKVI)", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null, note: null },
+  { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (ambassade)", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null, note: null },
+  { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null, note: null },
+  { code: "de", name: "Visa Allemagne", types: "National, Schengen, Études, Travail", external: "75-80 € (consulat)", delay: "Variable (RK-Termin)", href: "/visa-schengen-kinshasa", alert: null, note: null },
+  { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null, note: null },
+  { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null, note: null },
+  { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null, note: "ℹ️ E-Visa 100 % en ligne sur le portail officiel — aucun RDV consulaire requis. Idéal pour transit 21j (Ebola). Visa consulaire possible sans RDV à Kinshasa." },
+  { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/e-visa-egypte-kinshasa", alert: null, note: "ℹ️ E-Visa disponible en ligne sur visa2egypt.gov.eg — idéal pour transit 21j (Ebola). Visa consulaire sans RDV à l'ambassade d'Égypte à Kinshasa." },
+  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null, note: "ℹ️ Formulaire papier obligatoire — dépôt via VFS Global à Kinshasa (sans RDV). E-Visa disponible pour courts séjours (tourisme/transit). Frais VFS (~30 USD) en sus des frais consulaires." },
+  { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null, note: null },
+  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", external: "Frais consulaires brésiliens (variable)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null, note: "ℹ️ RDV consulaire obligatoire à l'ambassade du Brésil à Kinshasa. Formulaire en ligne sur le portail VBras. Délai variable selon disponibilité des créneaux (généralement 2-4 semaines)." },
 ];
 
 const INCLUDES = [
@@ -255,6 +255,7 @@ export default function Prix() {
                       <span className="font-semibold text-slate-800">{p.name}</span>
                     </Link>
                     {p.alert && <p className="text-[10px] text-red-600 font-medium mt-1">{p.alert}</p>}
+                    {p.note && <p className="text-[10px] text-blue-700 mt-1 leading-relaxed">{p.note}</p>}
                   </td>
                   <td className="px-4 py-4 text-xs text-muted-foreground hidden sm:table-cell">{p.types}</td>
                   <td className="px-4 py-4 text-xs text-muted-foreground hidden md:table-cell">{p.external}</td>
