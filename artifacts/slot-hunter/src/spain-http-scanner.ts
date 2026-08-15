@@ -1510,18 +1510,16 @@ async function confirmSlotsViaDatetimeOnce(
     let globalMaxDays: Date | null = null;
     let consecutiveEmpty = 0;
     const MAX_DT_MONTHS = 12;
-    // today au format YYYY-MM-DD (pour le start du premier mois)
-    const todayStr = now.toISOString().slice(0, 10);
     let mo = 0;
     while (mo < MAX_DT_MONTHS) {
       let slotsThisMonth = 0;
       const tgt = new Date(now.getFullYear(), now.getMonth() + mo, 1);
-      // Premier mois : start=aujourd'hui (aligne sur le vrai navigateur — le serveur
-      // retourne maxDays relatif à aujourd'hui, pas au 1er du mois).
-      // Créneaux d'annulation peuvent apparaître dès demain, indépendamment de la
-      // règle des 36j (qui s'applique uniquement aux nouvelles publications).
-      // Mois suivants : start=1er du mois (navigation mensuelle standard).
-      const start = mo === 0 ? todayStr : tgt.toISOString().slice(0, 10);
+      // Toujours start=1er du mois (identique à test-bookitit-dynamic.ts).
+      // Avec start=today, le serveur Bookitit retourne state=1+times=[] pour tous
+      // les jours → vue-jour calls nécessaires (2-3 extra datetime/) → PHP épuisé
+      // → getsigninfields/ → 0B. Avec start=YYYY-MM-01, le serveur retourne les
+      // times directement pour chaque jour → aucun vue-jour → getsigninfields/ ✅.
+      const start = tgt.toISOString().slice(0, 10);
       const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
       try {
         const dtQ = new URLSearchParams();
@@ -1712,9 +1710,29 @@ async function confirmSlotsViaDatetimeOnce(
     //
     // Limite : 10 dates max pour limiter les RTT supplémentaires au scan.
     {
-      const datesNeedDetail = [...new Set(
-        allSlots.slice(svcSlotsStart).filter(s => s.freeslots === -1).map(s => s.date),
-      )].slice(0, 10);
+      // Vue-jour : appel datetime/ start=date&end=date pour résoudre les heures
+      // des jours "state=1, times=[]" (phantômes du scan mensuel).
+      //
+      // GATE : on ne fait vue-jour QUE si le scan mensuel n'a retourné AUCUN
+      // vrai créneau (freeslots > 0). Sur un vrai navigateur, Bookitit ne fait
+      // jamais vue-jour avant getsigninfields/ — il utilise directement les times
+      // peuplés dans le scan mensuel (confirmé capture Burp 2026-08-15 : réponse
+      // septembre 10088B, times={...} pour chaque date disponible).
+      //
+      // Si vue-jour s'exécute, chaque appel supplémentaire datetime/ épuise la
+      // session PHP → getsigninfields/ → 0B. Le refreshPhpsessidForCapsolver dans
+      // le worker (avant getsigninfields/) gère ce cas résiduel.
+      const realSlotsInMonthly = allSlots.slice(svcSlotsStart).some(s => s.freeslots > 0);
+      const datesNeedDetail = realSlotsInMonthly
+        ? []  // scan mensuel a déjà des vrais créneaux — pas de vue-jour
+        : [...new Set(
+            allSlots.slice(svcSlotsStart).filter(s => s.freeslots === -1).map(s => s.date),
+          )].slice(0, 3);  // portail all-phantom : résoudre max 3 dates seulement
+
+      if (realSlotsInMonthly) {
+        const n = allSlots.slice(svcSlotsStart).filter(s => s.freeslots > 0).length;
+        console.log(`[spain-http] ✅ ${n} vrai(s) créneau(x) dans scan mensuel — vue-jour ignoré (même comportement que navigateur)`);
+      }
 
       if (datesNeedDetail.length > 0) {
         console.log(

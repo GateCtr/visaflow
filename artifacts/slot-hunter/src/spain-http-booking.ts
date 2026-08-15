@@ -283,7 +283,7 @@ export async function callBookititEndpoint(
     const orderedPairs: Array<[string, string]> = [
       ["callback", jqCb],
       ["type",      String(params["type"]      ?? "default")],
-      ["publickey", String(params["publickey"] ?? "")],
+      ["publickey", String(params["publickey"] ?? state?.publickey ?? "")],
       ["lang",      String(params["lang"]      ?? "es")],
     ];
     // services[] et agendas[] AVANT version/src/srvsrc

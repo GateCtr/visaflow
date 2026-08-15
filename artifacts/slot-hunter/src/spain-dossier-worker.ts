@@ -29,6 +29,7 @@ import {
 } from "./spain-soax-solver.js";
 import {
   callBookititEndpoint,
+  refreshPhpsessidForCapsolver,
   type SpainBookingResult,
 } from "./spain-http-booking.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
@@ -281,8 +282,14 @@ export async function runDossierWorker(
       if (scan.status === "found" && scan.slots && scan.slots.length > 0) {
         const groupSize = config.groupSize && config.groupSize > 1 ? config.groupSize : 1;
 
-        // Filtrer par fenêtre de dates
-        const eligible = scan.slots.filter((s) => isSlotInDateWindow(s.date, config, tag));
+        // Filtrer par fenêtre de dates ET exclure les slots fantômes (freeslots <= 0).
+        // freeslots=-1 = state=1 times=[] → heure par défaut non confirmée par le serveur.
+        // getsigninfields/ retourne 0B sur un slot fantôme (même comportement que dynamic test
+        // qui exclut explicitement free <= 0 dans allFoundSlots). Seuls les slots réels
+        // (freeslots >= 1, issus du times{} de la réponse datetime/) sont bookables.
+        const eligible = scan.slots.filter(
+          (s) => isSlotInDateWindow(s.date, config, tag) && s.freeslots > 0,
+        );
 
         if (eligible.length === 0) {
           log(
@@ -333,7 +340,54 @@ export async function runDossierWorker(
               selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
             };
 
-            // getsigninfields/ — amorce le nonce PHP (sans ça, signin/ → 0B, confirmé 2026-08-12)
+            // ── Refresh PHPSESSID + réinitialisation état PHP avant getsigninfields/ ──
+            // Après N cycles de scan sur le même PHPSESSID, la session PHP est épuisée
+            // → getsigninfields/ → 0B. Fix : reproduire EXACTEMENT la séquence du
+            // test-bookitit-dynamic.ts sur un PHPSESSID vierge :
+            //   1. GET widget → POST token → /main/  (refreshPhpsessidForCapsolver)
+            //   2. getwidgetconfigurations/           (initialise l'état PHP widget)
+            //   3. getservices/                       (contextualise le service PHP)
+            //   4. getagendas/                        (contextualise l'agenda PHP)
+            //   5. datetime/ pour LE mois du créneau  (active le nonce date/heure)
+            //   6. getsigninfields/                   (consomme le nonce → formulaire)
+            // "Rien entre datetime et getsigninfields/" = vrai dans le dynamic, car les
+            // 4 appels de setup sont AVANT le dernier datetime/, pas entre lui et sign.
+            log("INFO", `${tag} 🔄 Refresh PHPSESSID (GET widget → POST token → /main/)…`);
+            await refreshPhpsessidForCapsolver(session, config.portalUrl);
+
+            // 2. getwidgetconfigurations/ — initialise le widget côté PHP
+            log("INFO", `${tag} 🔧 Init PHP: getwidgetconfigurations/…`);
+            await callBookititEndpoint(session, "getwidgetconfigurations/", {}, widgetUrl);
+
+            // 3. getservices/ — contextualise le service dans la session PHP
+            log("INFO", `${tag} 🔧 Init PHP: getservices/…`);
+            await callBookititEndpoint(session, "getservices/", {}, widgetUrl);
+
+            // 4. getagendas/ — contextualise l'agenda dans la session PHP
+            log("INFO", `${tag} 🔧 Init PHP: getagendas/…`);
+            await callBookititEndpoint(session, "getagendas/", {
+              "services[]": scan.serviceId!,
+            }, widgetUrl);
+
+            // 5. datetime/ pour le mois du créneau — active le nonce date/heure PHP
+            {
+              const slotMonth = slot.date.slice(0, 7); // "YYYY-MM"
+              const lastDay = new Date(
+                Number(slotMonth.slice(0, 4)),
+                Number(slotMonth.slice(5, 7)),
+                0,
+              ).getDate();
+              log("INFO", `${tag} 🔧 Init PHP: datetime/ ${slotMonth}…`);
+              await callBookititEndpoint(session, "datetime/", {
+                "services[]": scan.serviceId!,
+                ...(slot.agendaId ? { "agendas[]": slot.agendaId } : {}),
+                start: `${slotMonth}-01`,
+                end:   `${slotMonth}-${String(lastDay).padStart(2, "0")}`,
+                selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+              }, widgetUrl);
+            }
+
+            // 6. getsigninfields/ — amorce le nonce PHP (sans ça, signin/ → 0B, confirmé 2026-08-12)
             log("INFO", `${tag} 🔑 getsigninfields/…`);
             const gsfPayload = await callBookititEndpoint(session, "getsigninfields/", baseBookParams, widgetUrl);
             if (!gsfPayload) log("WARN", `${tag} getsigninfields/ → 0B (signin/ risque 0B)`);
