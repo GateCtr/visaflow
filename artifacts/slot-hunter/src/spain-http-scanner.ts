@@ -1689,6 +1689,91 @@ async function confirmSlotsViaDatetimeOnce(
     if (!warm && health.datetimeResponded && agendaId) {
       setWarmProbe(publickey, services, agendaId);
     }
+    // ── Résolution des heures exactes — vue jour (day-detail) ───────────────────
+    //
+    // Le scan mois-par-mois (start=YYYY-MM-01, end=YYYY-MM-31) retourne pour chaque
+    // jour disponible : state=1 + times=[] (Bookitit ne détaille pas les heures en
+    // vue calendrier). Mais l'image widget du navigateur montre bien les heures et
+    // les places (09:15 / 1 Hueco libre, 09:30 / 1 Hueco libre, etc.).
+    //
+    // Le widget fait un 2ème appel datetime/ avec start=date&end=date (même date)
+    // pour obtenir la liste d'heures + freeslots de ce jour spécifique. On reproduit
+    // ce comportement ici pour chaque date unique avec freeslots=-1.
+    //
+    // Limite : 10 dates max pour limiter les RTT supplémentaires au scan.
+    {
+      const datesNeedDetail = [...new Set(
+        allSlots.slice(svcSlotsStart).filter(s => s.freeslots === -1).map(s => s.date),
+      )].slice(0, 10);
+
+      if (datesNeedDetail.length > 0) {
+        console.log(
+          `[spain-http] 🔍 Résolution heures/places (vue jour) — ${datesNeedDetail.length} date(s)` +
+          ` [${datesNeedDetail.slice(0, 3).join(", ")}${datesNeedDetail.length > 3 ? "…" : ""}]`,
+        );
+
+        const resolvedByDate = new Map<string, Array<{ date: string; time: string; agendaId?: string; freeslots: number }>>();
+
+        for (const date of datesNeedDetail) {
+          const ddQ = new URLSearchParams();
+          ddQ.append("callback",       sharedCb);
+          ddQ.append("type",           "default");
+          ddQ.append("publickey",      publickey);
+          ddQ.append("lang",           "es");
+          ddQ.append("services[]",     svc.serviceId);
+          if (agendaId) ddQ.append("agendas[]", agendaId);
+          ddQ.append("version",        "4");
+          ddQ.append("src",            widgetSrc);
+          ddQ.append("srvsrc",         srvsrc);
+          ddQ.append("start",          date);
+          ddQ.append("end",            date);          // ← même date = vue jour
+          ddQ.append("selectedPeople", "1");
+          ddQ.append("_",              String(nextReqCounter()));
+
+          const ddUrl = `${base}datetime/?${ddQ}`;
+          const ddRes = await spainCfFetch(ddUrl, session, { headers });
+          const ddRaw = ddRes?.ok ? await ddRes.text() : "";
+          console.log(`[spain-http] 📅 datetime/ vue-jour ${date} → ${ddRaw.length}B`);
+
+          if (ddRaw.length > 50) {
+            const ddParsed = parseJsonpPayload(ddRaw);
+            if (ddParsed && typeof ddParsed === "object") {
+              const daySlots = extractAllSlotsFromDatetime(ddParsed);
+              if (daySlots.length > 0 && daySlots.some(s => s.freeslots !== -1)) {
+                // ✅ Heures et places retournées par le serveur
+                resolvedByDate.set(date, daySlots);
+                const preview = daySlots.slice(0, 4).map(s => `${s.time}(${s.freeslots}pl)`).join(" ");
+                console.log(`[spain-http] ✅ ${date}: ${daySlots.length} heure(s) — ${preview}${daySlots.length > 4 ? " …" : ""}`);
+              } else if (daySlots.length > 0) {
+                // Le serveur retourne times=[] même en vue jour — limitation portail
+                // (certains Bookitit ne révèlent pas les heures avant le choix date UI)
+                resolvedByDate.set(date, daySlots);
+                console.log(`[spain-http] ℹ️ ${date}: times=[] même vue-jour — 09:00 conservé (portail masque les heures)`);
+              } else {
+                console.log(`[spain-http] ⚠️ ${date}: vue-jour vide — placeholder 09:00 conservé`);
+              }
+            }
+          } else if (ddRaw.length > 0) {
+            console.log(`[spain-http] ⚠️ ${date}: vue-jour trop courte (${ddRaw.length}B) — placeholder conservé`);
+          }
+        }
+
+        // Remplacer les placeholders par les slots résolus (seulement cette service)
+        if (resolvedByDate.size > 0) {
+          // Supprimer placeholders pour les dates résolues (dans la tranche de ce service)
+          for (let i = allSlots.length - 1; i >= svcSlotsStart; i--) {
+            if (resolvedByDate.has(allSlots[i].date)) allSlots.splice(i, 1);
+          }
+          // Insérer les slots résolus triés (date ASC, heure ASC)
+          const resolved = [...resolvedByDate.values()]
+            .flat()
+            .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+          allSlots.splice(svcSlotsStart, 0, ...resolved);
+          console.log(`[spain-http] ✅ Résolution terminée — ${resolved.length} créneau(x) avec heures/places`);
+        }
+      }
+    }
+
     if (allSlots.length > svcSlotsStart) {
       const firstSlot = allSlots[svcSlotsStart];
       const count = allSlots.length - svcSlotsStart;
