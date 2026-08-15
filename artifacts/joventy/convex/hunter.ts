@@ -63,6 +63,8 @@ export const setHunterConfig = mutation({
     cevScanIntervalSec: v.optional(v.number()),
     // Group booking — min places libres requises par créneau
     groupSize: v.optional(v.number()),
+    // Annulation automatique du RDV existant quand la limite Overview Cas 2 est atteinte
+    cevAutoCancelOnLimitReached: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -154,6 +156,8 @@ export const setHunterConfig = mutation({
         cevScanIntervalSec: args.cevScanIntervalSec ?? existing?.cevScanIntervalSec ?? undefined,
         // Group booking — min places libres requises par créneau
         groupSize: args.groupSize ?? undefined,
+        // Annulation automatique du RDV existant quand la limite Overview Cas 2 est atteinte
+        cevAutoCancelOnLimitReached: args.cevAutoCancelOnLimitReached ?? (existing as any)?.cevAutoCancelOnLimitReached ?? undefined,
       },
       updatedAt: Date.now(),
     });

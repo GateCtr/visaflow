@@ -49,6 +49,8 @@ interface HunterConfigData {
   cevScanIntervalSec?: number;
   // Group booking
   groupSize?: number;
+  // CEV — annulation automatique si limite Overview atteinte
+  cevAutoCancelOnLimitReached?: boolean;
 }
 
 interface Props {
@@ -106,6 +108,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [cevScanIntervalSec, setCevScanIntervalSec] = useState("225");
   // Group booking
   const [groupSize, setGroupSize] = useState("");
+  // CEV — annulation automatique
+  const [cevAutoCancel, setCevAutoCancel] = useState(false);
   // Visa Class (meute)
   const [visaClassInput, setVisaClassInput] = useState(broadcastVisaClass ?? "");
   const [savingVisaClass, setSavingVisaClass] = useState(false);
@@ -151,6 +155,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setCevScanIntervalSec(String(hc.cevScanIntervalSec ?? 225));
       // Group booking
       setGroupSize(hc.groupSize ? String(hc.groupSize) : "");
+      // CEV — annulation automatique
+      setCevAutoCancel(hc.cevAutoCancelOnLimitReached ?? false);
     }
   }, [hc]);
 
@@ -186,6 +192,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
         // Group booking
         groupSize: groupSize ? Number(groupSize) : undefined,
+        // CEV — annulation automatique
+        cevAutoCancelOnLimitReached: cevAutoCancel,
       });
       // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
       if (destination === "usa" && visaClassInput && visaClassInput !== (broadcastVisaClass ?? "")) {
@@ -387,6 +395,24 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
                     <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${cevUseProxy ? "translate-x-4" : "translate-x-0.5"}`} />
                   </button>
                   <span className="text-xs text-slate-700 font-medium">Proxy résidentiel</span>
+                </div>
+              </div>
+              {/* Auto-annulation quand limite Overview (Cas 2) atteinte */}
+              <div className="flex items-start gap-2 pt-1">
+                <button type="button" onClick={() => setCevAutoCancel(v => !v)}
+                  className={`mt-0.5 relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${cevAutoCancel ? "bg-rose-500" : "bg-slate-300"}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${cevAutoCancel ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+                <div>
+                  <span className="text-xs text-slate-700 font-medium">Auto-annulation si limite RDV atteinte</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Si activé : quand le portail indique "limite de rendez-vous atteinte" (Cas 2 Overview), le bot extrait automatiquement le lien d'annulation et envoie la demande — CEV enverra ensuite un email de confirmation à l'applicant.
+                  </p>
+                  {cevAutoCancel && (
+                    <p className="text-[10px] text-rose-700 mt-1 font-medium">
+                      ⚠️ L'annulation déclenche l'envoi d'un email à l'applicant. Il doit cliquer le lien pour finaliser.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
