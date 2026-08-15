@@ -29,12 +29,17 @@ import {
   SAOPOLO_PORTAL_URL,
   KINSHASA_PORTAL_URL,
 } from "../src/spain-portals.js";
+
+// Portail Cuba avec créneaux disponibles (test live 2026-08-15)
+const CUBA_LIVE_PORTAL_URL =
+  "https://www.citaconsular.es/es/hosteds/widgetdefault/28db94e270580be60f6e00285a7d8141f/";
 import { log } from "../src/scheduler-utils.js";
 
 // ── Configs fictives ──────────────────────────────────────────────────────────
 // On utilise de vraies URLs pour exercer le CF solve + initSession.
 // Les credentials sont fictifs → le worker échouera sur le solve ou la session,
 // mais on voit bien le parallélisme : chaque worker tourne de façon autonome.
+// Cuba live — créneaux disponibles → on doit voir datetime/ non-0B et signin/ rejeter les faux creds
 const FAKE_DOSSIERS: SpainDossierConfig[] = [
   {
     id: "test-parallel-A",
@@ -44,7 +49,7 @@ const FAKE_DOSSIERS: SpainDossierConfig[] = [
     password: "fake-pass-A",
     applicationId: "test-parallel-A",
     otpChannel: "email",
-    portalUrl: SAOPOLO_PORTAL_URL,
+    portalUrl: CUBA_LIVE_PORTAL_URL,
     slotDateFrom: "2026-09-01",
     slotDateDeadline: "2026-12-31",
     groupSize: 1,
@@ -57,7 +62,7 @@ const FAKE_DOSSIERS: SpainDossierConfig[] = [
     password: "fake-pass-B",
     applicationId: "test-parallel-B",
     otpChannel: "email",
-    portalUrl: SAOPOLO_PORTAL_URL,
+    portalUrl: CUBA_LIVE_PORTAL_URL,
     slotDateFrom: "2026-09-01",
     slotDateDeadline: "2026-12-31",
     groupSize: 1,
@@ -70,7 +75,7 @@ const FAKE_DOSSIERS: SpainDossierConfig[] = [
     password: "fake-pass-C",
     applicationId: "test-parallel-C",
     otpChannel: "email",
-    portalUrl: KINSHASA_PORTAL_URL,
+    portalUrl: CUBA_LIVE_PORTAL_URL,
     slotDateFrom: "2026-09-01",
     slotDateDeadline: "2026-12-31",
     groupSize: 1,

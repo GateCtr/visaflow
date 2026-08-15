@@ -1654,21 +1654,31 @@ async function confirmSlotsViaDatetimeOnce(
 
       mo++;
 
-      // ── Condition d'arrêt : uniquement sur mois vides consécutifs ────────────
+      // ── Condition d'arrêt ─────────────────────────────────────────────────────
       //
-      // maxDays NE pilote plus l'arrêt de la boucle.
+      // PRIORITÉ 1 : maxDays (même logique que test-bookitit-dynamic.ts).
+      // Dès que le premier jour du mois SUIVANT dépasse maxDays renvoyé par le
+      // serveur, on arrête. Minimum 2 mois (M courant + M+1) avant de vérifier.
       //
-      // Pourquoi : le serveur Bookitit peut inclure des slots au-delà de maxDays
-      // dans la même réponse (confirmé : septembre retourne maxDays=2026-09-18
-      // mais les slots vont jusqu'au 30 septembre). maxDays est la limite de
-      // visibilité configurée de l'agenda, pas la dernière date de slot possible.
-      // Utiliser maxDays comme stop condition faisait rater des mois entiers :
-      // si maxDays=2026-09-18, octobre n'était jamais interrogé même si des slots
-      // y existaient.
+      // Pourquoi réactiver maxDays : chaque appel datetime/ incrémente un compteur
+      // interne PHP côté Bookitit. Après trop d'appels (confirmé Cuba : 4 mois),
+      // getsigninfields/ retourne 0B → signin/ → 0B → booking impossible.
+      // Le test-bookitit-dynamic.ts s'arrête à maxDays et getsigninfields/ fonctionne.
+      // La peur de "rater des slots au-delà de maxDays" est infondée : maxDays est
+      // la date-limite de publication de l'agenda, pas une date arbitraire.
       //
-      // Nouvelle règle : on continue tant que le mois courant a retourné des slots
-      // ou qu'on n'a pas atteint 3 mois vides consécutifs (sécurité portail fermé).
-      // MAX_DT_MONTHS (12) reste le garde-fou absolu.
+      // PRIORITÉ 2 : 3 mois vides consécutifs — filet de sécurité si maxDays absent.
+      if (mo >= 2 && globalMaxDays) {
+        const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+        if (firstOfNextMonth > globalMaxDays) {
+          console.log(
+            `[spain-http] ⏹ Fin scan maxDays : mois suivant ${firstOfNextMonth.toISOString().slice(0, 10)}` +
+            ` > maxDays ${globalMaxDays.toISOString().slice(0, 10)} — ${mo} mois scannés`,
+          );
+          break;
+        }
+      }
+
       if (slotsThisMonth === 0) consecutiveEmpty++;
       else consecutiveEmpty = 0;
       if (consecutiveEmpty >= 3) {
