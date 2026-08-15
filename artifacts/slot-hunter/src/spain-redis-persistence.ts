@@ -640,6 +640,87 @@ export async function restoreApiPrefetchCacheFromRedis(): Promise<Map<string, st
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// DECODO POOL STATE (index de rotation + IPs blacklistées)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_SPAIN_DECODO_KEY = "visaflow:spain-decodo:pool-state";
+const REDIS_SPAIN_DECODO_TTL_SEC = 24 * 60 * 60; // 24h
+
+export interface SerializableDecodoPoolState {
+  /** Index courant dans le pool (prochaine IP à utiliser) */
+  rotationIndex: number;
+  /** IPs blacklistées → timestamp du flagging (ms). Clé = URL complète du proxy. */
+  blacklistedIps: Record<string, number>;
+  savedAt: number;
+}
+
+/**
+ * Sauvegarde l'état du pool Decodo dans Redis.
+ * Fire-and-forget — appelé après chaque rotation et après chaque flag d'IP.
+ */
+export function syncDecodoPoolStateToRedis(
+  rotationIndex: number,
+  blacklistedIps: Map<string, number>,
+): void {
+  if (!redisReady || !redisClient) return;
+
+  const state: SerializableDecodoPoolState = {
+    rotationIndex,
+    blacklistedIps: Object.fromEntries(blacklistedIps),
+    savedAt: Date.now(),
+  };
+  redisClient
+    .set(REDIS_SPAIN_DECODO_KEY, JSON.stringify(state), { EX: REDIS_SPAIN_DECODO_TTL_SEC })
+    .catch((err: Error) => {
+      console.warn(`[spain-redis] Decodo pool state sync échouée: ${err.message}`);
+    });
+}
+
+/**
+ * Restaure l'état du pool Decodo depuis Redis.
+ * Filtre automatiquement les IPs dont le blacklist TTL est expiré.
+ * Retourne null si pas de données ou Redis indisponible.
+ */
+export async function restoreDecodoPoolStateFromRedis(
+  blacklistTtlMs: number,
+): Promise<SerializableDecodoPoolState | null> {
+  if (!redisReady || !redisClient) return null;
+
+  try {
+    const data = await redisClient.get(REDIS_SPAIN_DECODO_KEY);
+    if (!data) return null;
+
+    const parsed = JSON.parse(data) as SerializableDecodoPoolState;
+    const now = Date.now();
+
+    // Filtrer les IPs dont le blacklist TTL est expiré
+    const activeBlacklist: Record<string, number> = {};
+    for (const [ip, ts] of Object.entries(parsed.blacklistedIps)) {
+      if (now - Number(ts) <= blacklistTtlMs) {
+        activeBlacklist[ip] = Number(ts);
+      }
+    }
+
+    const ageMin = Math.round((now - parsed.savedAt) / 60_000);
+    const blacklistCount = Object.keys(activeBlacklist).length;
+    console.log(
+      `[spain-redis] ✅ Decodo pool state restauré (index=${parsed.rotationIndex}, ` +
+      `blacklist=${blacklistCount} actifs, âge=${ageMin}min)`,
+    );
+
+    return {
+      rotationIndex: parsed.rotationIndex,
+      blacklistedIps: activeBlacklist,
+      savedAt: parsed.savedAt,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[spain-redis] ⚠️ Restauration Decodo pool state échouée: ${msg}`);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════════
 

@@ -26,6 +26,7 @@ import {
   tryRenewSpainPersistentBrowserSession,
 } from "../spain-persistent-browser.js";
 import { initSpainRedis, acquireSpainScannerLock, releaseSpainScannerLock, SPAIN_INSTANCE_ID } from "../spain-redis-persistence.js";
+import { initDecodoPool } from "../spain-decodo-pool.js";
 import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig, type ExtractedSlotInfo } from "../spain-http-booking.js";
 import { matchServiceForVisa } from "../spain-service-mapping.js";
 import { exploreAvailableSlots, formatExplorationForLogs, serializeExplorationForConvex, type SlotExplorationResult } from "../spain-slot-explorer.js";
@@ -444,7 +445,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
       log("INFO", "[SPAIN-WATCHER] ✅ Redis Spain connecté — session CF persistée entre redéploiements");
     }
 
-    // 2. Restaurer le rotation count SOAX (seulement en mode HTTP-only, pas persistent-browser)
+    // 2a. Initialiser le pool Decodo (restaure index de rotation + blacklist depuis Redis)
+    await initDecodoPool().catch((e) => {
+      log("WARN", `[SPAIN-WATCHER] initDecodoPool échoué (non-fatal): ${e}`);
+    });
+
+    // 2b. Restaurer le rotation count SOAX (seulement en mode HTTP-only, pas persistent-browser)
     if (SPAIN_HTTP_MODE && !SPAIN_PERSISTENT_BROWSER) {
       await restoreSpainSoaxStateFromRedis().catch((e) => {
         log("WARN", `[SPAIN-WATCHER] Restauration SOAX rotation échouée (non-fatal): ${e}`);

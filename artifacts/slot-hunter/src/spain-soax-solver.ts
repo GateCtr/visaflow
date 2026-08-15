@@ -36,6 +36,7 @@ import {
   getDecodoPoolSize,
   rotateDecodoUrl,
   isDecodoMultiPool,
+  flagDecodoIp,
 } from "./spain-decodo-pool.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
@@ -739,6 +740,8 @@ export async function rotateSpainCfIpAfterMainFailure(
   }
 
   if (isDecodoMultiPool()) {
+    // Blacklister l'IP courante avant de tourner — elle sera sautée pendant le TTL
+    flagDecodoIp(getCurrentDecodoUrl(), reason);
     rotateDecodoUrl();
     return;
   }

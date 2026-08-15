@@ -36,7 +36,7 @@ import { join, resolve } from "node:path";
 import * as https from "node:https";
 import { fetch as undiciFetch, ProxyAgent } from "undici";
 import { parseProxyForPuppeteer, randomViewport } from "./browser.js";
-import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool } from "./spain-decodo-pool.js";
+import { getCurrentDecodoUrl, rotateDecodoUrl, isDecodoMultiPool, flagDecodoIp } from "./spain-decodo-pool.js";
 import { solveCfChallenge, humanLikeCdpClick } from "./cf-challenge-solver.js";
 
 // ─── UA Chrome/Edge exclusivement pour le persistent browser ─────────────────
@@ -1523,6 +1523,14 @@ class SpainPersistentBrowserManager {
     }
 
     if (this._browser) {
+      // Blacklister l'IP Decodo courante avant rotation — sautée pendant le TTL blacklist.
+      // closeAndInvalidate() implique toujours un changement d'IP Decodo : l'IP courante
+      // a servi un 0B /main/ ou un échec de solve CF → on la marque pour éviter de la
+      // réutiliser immédiatement au prochain cycle.
+      if (isDecodoMultiPool()) {
+        flagDecodoIp(getCurrentDecodoUrl(), "persistent-browser closeAndInvalidate");
+      }
+
       const browserToClose = this._browser;
       // Mettre _browser = null AVANT close() pour que les appels concurrents
       // n'entrent pas dans cette branche et tentent un double close().

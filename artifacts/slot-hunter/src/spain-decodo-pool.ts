@@ -13,10 +13,26 @@
  *  3. Variable d'env DECODO_PROXY_URL (URL unique — fallback résidentiel/rotatif)
  *     Ex: http://user:pass@dc.decodo.com:10001
  *     → rotation via "-sessionid-XXXX" dans le username (comportement d'origine)
+ *
+ * PERSISTANCE REDIS :
+ *   - L'index de rotation est sauvegardé dans Redis après chaque rotation.
+ *     Au redémarrage, on reprend là où on s'était arrêté (fallback aléatoire si absent).
+ *   - Les IPs flaguées (0B /main/, block CF) sont mémorisées avec un TTL configurable
+ *     (SPAIN_DECODO_BLACKLIST_TTL_MIN, défaut 45 min). Elles sont sautées par la rotation
+ *     pendant le TTL. Si toutes les IPs sont flaguées, fallback round-robin complet.
  */
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  syncDecodoPoolStateToRedis,
+  restoreDecodoPoolStateFromRedis,
+} from "./spain-redis-persistence.js";
+
+/** TTL blacklist en ms — configurable via SPAIN_DECODO_BLACKLIST_TTL_MIN (défaut 45 min). */
+function getBlacklistTtlMs(): number {
+  return parseInt(process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN || "45", 10) * 60_000;
+}
 
 /** Parse le fichier CSV → tableau d'URLs http://user:pass@host:port
  *
@@ -90,10 +106,16 @@ function parseDecodoPool(): string[] {
   return [];
 }
 
+// ─── État du pool ──────────────────────────────────────────────────────────────
+
 // Index courant dans le pool (round-robin)
 let _index = 0;
 // Cache du pool (re-parsé si undefined)
 let _cachedPool: string[] | undefined;
+// IPs blacklistées : URL complète → timestamp du flagging (ms)
+let _blacklistedIps = new Map<string, number>();
+// true dès que initDecodoPool() a été appelé (évite double init)
+let _poolInitialized = false;
 
 function getPool(): string[] {
   // Re-parse au premier appel seulement (le fichier ne change pas à chaud)
@@ -103,10 +125,49 @@ function getPool(): string[] {
   return _cachedPool;
 }
 
+// ─── Blacklist helpers ─────────────────────────────────────────────────────────
+
+/** Vérifie si une URL est actuellement blacklistée (TTL expirés auto-purgés). */
+function isBlacklisted(url: string): boolean {
+  const ts = _blacklistedIps.get(url);
+  if (ts === undefined) return false;
+  if (Date.now() - ts > getBlacklistTtlMs()) {
+    _blacklistedIps.delete(url); // auto-expire en mémoire
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Trouve le premier index non-blacklisté en partant de `startIdx`.
+ * Retourne startIdx si toutes les IPs sont blacklistées (fallback round-robin).
+ *
+ * @param startIdx - Index de départ (inclusif)
+ * @param pool     - Pool d'URLs
+ * @returns { idx, allBlacklisted, skipped }
+ */
+function findNextValidIndex(
+  startIdx: number,
+  pool: string[],
+): { idx: number; allBlacklisted: boolean; skipped: number } {
+  let idx = startIdx % pool.length;
+  let skipped = 0;
+  while (isBlacklisted(pool[idx]) && skipped < pool.length) {
+    idx = (idx + 1) % pool.length;
+    skipped++;
+  }
+  const allBlacklisted = skipped >= pool.length;
+  return { idx, allBlacklisted, skipped };
+}
+
+// ─── API publique ──────────────────────────────────────────────────────────────
+
 /** Force le re-chargement du pool (utile si le fichier a changé). */
 export function reloadDecodoPool(): void {
   _cachedPool = undefined;
   _index = 0;
+  _blacklistedIps.clear();
+  _poolInitialized = false;
 }
 
 /** Retourne true si au moins une URL Decodo est configurée. */
@@ -115,17 +176,108 @@ export function hasDecodoProxy(): boolean {
 }
 
 /**
+ * Initialise le pool Decodo depuis Redis.
+ *
+ * - Restaure l'index de rotation (reprend au proxy suivant celui d'avant le restart).
+ * - Restaure la blacklist d'IPs flaguées (filtre les TTL expirés).
+ * - Fallback aléatoire si Redis vide/indisponible.
+ *
+ * Doit être appelé après initSpainRedis() au démarrage de l'application.
+ * Idempotent — les appels suivants sont ignorés.
+ */
+export async function initDecodoPool(): Promise<void> {
+  if (_poolInitialized) return;
+  _poolInitialized = true;
+
+  const pool = getPool();
+  if (pool.length <= 1) {
+    // Pool d'une seule IP ou vide → pas de rotation utile
+    if (pool.length === 1) {
+      console.log("[spain-decodo] ℹ️ Pool unique (1 IP) — persistance index ignorée");
+    }
+    return;
+  }
+
+  const state = await restoreDecodoPoolStateFromRedis(getBlacklistTtlMs()).catch(() => null);
+  if (state) {
+    // Restaurer l'index (le sauvegarder pointe sur la DERNIÈRE IP utilisée,
+    // donc on reprend à +1 pour ne pas taper deux fois la même IP au restart)
+    const restoredIdx = (state.rotationIndex + 1) % pool.length;
+    _blacklistedIps = new Map(
+      Object.entries(state.blacklistedIps).map(([k, v]) => [k, Number(v)]),
+    );
+
+    // Avancer l'index jusqu'à une IP non-blacklistée
+    const { idx, allBlacklisted, skipped } = findNextValidIndex(restoredIdx, pool);
+    _index = idx;
+
+    const blacklistCount = _blacklistedIps.size;
+    const source = "Redis";
+    console.log(
+      `[spain-decodo] ♻️ Index restauré (${source}) → [${_index + 1}/${pool.length}]` +
+      (skipped > 0 ? ` (${skipped} IP${skipped > 1 ? "s" : ""} blacklistée${skipped > 1 ? "s" : ""} sautée${skipped > 1 ? "s" : ""})` : "") +
+      (blacklistCount > 0 ? ` | blacklist: ${blacklistCount}/${pool.length} IP${blacklistCount > 1 ? "s" : ""}` : "") +
+      (allBlacklisted ? " ⚠️ POOL ÉPUISÉ — fallback round-robin" : ""),
+    );
+  } else {
+    // Fallback : index aléatoire (évite de concentrer le trafic sur l'IP n°1 à chaque restart)
+    _index = Math.floor(Math.random() * pool.length);
+    console.log(
+      `[spain-decodo] 🎲 Redis absent/vide — index aléatoire → [${_index + 1}/${pool.length}]`,
+    );
+  }
+}
+
+/**
  * Retourne l'URL Decodo courante (sans avancer le compteur).
  * C'est l'IP qui sera utilisée par le browser ET par impit pour les requêtes HTTP.
+ * Si l'IP courante est blacklistée, retourne la prochaine IP valide sans avancer l'index.
  */
 export function getCurrentDecodoUrl(): string | undefined {
   const pool = getPool();
   if (pool.length === 0) return undefined;
-  return pool[_index % pool.length];
+
+  const current = pool[_index % pool.length];
+  if (!isBlacklisted(current)) return current;
+
+  // IP courante blacklistée : chercher la prochaine valide sans modifier _index
+  const { idx, allBlacklisted } = findNextValidIndex((_index + 1) % pool.length, pool);
+  if (allBlacklisted) {
+    // Toutes les IPs blacklistées → fallback round-robin complet (retourner l'actuelle)
+    return current;
+  }
+  return pool[idx];
+}
+
+/**
+ * Marque une IP Decodo comme flaguée (blacklist temporaire avec TTL).
+ *
+ * L'IP sera sautée par getCurrentDecodoUrl() et rotateDecodoUrl() pendant le TTL.
+ * Sans effet si le pool contient ≤ 1 IP (pas de rotation possible).
+ *
+ * @param url    - URL complète du proxy (telle que retournée par getCurrentDecodoUrl)
+ * @param reason - Raison du flag (pour les logs)
+ */
+export function flagDecodoIp(url: string | undefined, reason: string): void {
+  if (!url) return;
+  const pool = getPool();
+  if (pool.length <= 1) return; // inutile si pool d'une seule IP
+
+  const ttlMin = Math.round(getBlacklistTtlMs() / 60_000);
+  const masked = url.replace(/:([^:@]+)@/, ":***@");
+  const ipIdx = pool.indexOf(url);
+  const idxLabel = ipIdx >= 0 ? `[${ipIdx + 1}/${pool.length}]` : `[?/${pool.length}]`;
+  console.warn(
+    `[spain-decodo] 🚫 IP blacklistée ${idxLabel} (${reason}, TTL ${ttlMin}min) — ${masked.slice(0, 60)}`,
+  );
+  _blacklistedIps.set(url, Date.now());
+  syncDecodoPoolStateToRedis(_index, _blacklistedIps);
 }
 
 /**
  * Avance vers la prochaine URL du pool et la retourne.
+ * Saute les IPs blacklistées. Si toutes les IPs sont blacklistées,
+ * revient au comportement round-robin complet (avec un warning).
  *
  * Pour un pool multi-URLs (IPs dédiées à ports fixes), cela change réellement l'IP.
  * Pour une URL unique, retourne la même URL — la rotation sessionid est gérée
@@ -134,14 +286,39 @@ export function getCurrentDecodoUrl(): string | undefined {
 export function rotateDecodoUrl(): string | undefined {
   const pool = getPool();
   if (pool.length === 0) return undefined;
-  if (pool.length > 1) {
-    _index = (_index + 1) % pool.length;
+  if (pool.length === 1) {
+    // Pool d'une seule IP : pas de rotation possible
+    return pool[0];
   }
-  const url = pool[_index % pool.length];
+
+  // Avancer d'au moins 1 position
+  const nextCandidate = (_index + 1) % pool.length;
+
+  // Trouver la prochaine IP non-blacklistée
+  const { idx, allBlacklisted, skipped } = findNextValidIndex(nextCandidate, pool);
+  _index = idx;
+
+  const url = pool[_index];
   const masked = url.replace(/:([^:@]+)@/, ":***@");
-  console.log(
-    `[spain-decodo] 🔄 Rotation IP — [${(_index % pool.length) + 1}/${pool.length}] ${masked.slice(0, 80)}`,
-  );
+
+  if (allBlacklisted) {
+    // Toutes les IPs sont flaguées → fallback round-robin complet avec warning
+    console.warn(
+      `[spain-decodo] ⚠️ Toutes les IPs blacklistées (${_blacklistedIps.size}/${pool.length}) — ` +
+      `fallback round-robin [${_index + 1}/${pool.length}] ${masked.slice(0, 60)}`,
+    );
+  } else {
+    const skipMsg = skipped > 0
+      ? ` (${skipped} IP${skipped > 1 ? "s" : ""} blacklistée${skipped > 1 ? "s" : ""} sautée${skipped > 1 ? "s" : ""})`
+      : "";
+    console.log(
+      `[spain-decodo] 🔄 Rotation IP — [${_index + 1}/${pool.length}] ${masked.slice(0, 80)}${skipMsg}`,
+    );
+  }
+
+  // Persister le nouvel index dans Redis (fire-and-forget)
+  syncDecodoPoolStateToRedis(_index, _blacklistedIps);
+
   return url;
 }
 
