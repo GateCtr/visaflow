@@ -520,6 +520,39 @@ export const VISA_PRICING = {
     },
     notes: "Le visa Brésil (tourisme VITUR, affaires VITEM II ou études VITEM IV) se dépose sur rendez-vous à l'Ambassade du Brésil à Kinshasa. Joventy prépare votre dossier complet et organise votre rendez-vous consulaire. Frais Joventy : service complet 500 USD engagement + 1 000 USD prime de succès = 1 500 USD total.",
   },
+  albania: {
+    label: "Albanie",
+    flag: "🇦🇱",
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
+    successModel: "evisa" as const,
+    visaTypes: [
+      "E-Visa Albanie — Court séjour (30 jours)",
+      "E-Visa Albanie — Détenteur visa Schengen / USA / UK valide",
+    ],
+    requiredDocuments: [
+      { key: "passport_scan", label: "Passeport valide (scan HD, 2 pages bio)", required: true },
+      { key: "photo_id", label: "Photo d'identité fond blanc", required: true },
+      { key: "flight_booking", label: "Billet d'avion aller-retour", required: false },
+      { key: "hotel_booking", label: "Réservation d'hôtel ou attestation d'hébergement", required: false },
+      { key: "schengen_visa", label: "Visa Schengen / USA / UK valide (si applicable)", required: false },
+    ],
+    embassyAddress: "Portail e-Visa officiel Albanie — aucune ambassade à visiter",
+    portalUrl: "https://e-albania.al",
+    portalName: "e-Albania (portail officiel albanais)",
+    portalDashboardUrl: "https://e-albania.al",
+    portalAppointmentUrl: "",
+    portalScheduleUrl: "",
+    processingType: "evisa",
+    successCopy: {
+      triggerLabel: "E-Visa obtenu",
+      clientCtaTitle: "Votre e-Visa Albanie est prêt !",
+      clientCtaBody: "Joventy a obtenu votre visa électronique pour l'Albanie. Réglez la prime de succès pour recevoir votre document officiel.",
+      completedNote: "Votre e-Visa Albanie est disponible ci-dessous — imprimez-le et présentez-le à l'embarquement.",
+    },
+    notes: "L'Albanie propose un visa électronique accessible en ligne. Les ressortissants congolais peuvent en bénéficier, notamment s'ils sont détenteurs d'un visa Schengen, USA ou UK valide. Traitement en 24-72h sur le portail officiel e-Albania.",
+  },
 } as const;
 
 export type Destination = keyof typeof VISA_PRICING;
