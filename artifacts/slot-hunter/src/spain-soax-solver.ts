@@ -689,7 +689,7 @@ export async function rotateSpainCfIpAfterMainFailure(
   const mode = process.env.SPAIN_SESSION_MODE;
 
   if (mode === "persistent-browser") {
-    const { spainPersistentBrowser } = await import("./spain-persistent-browser.js");
+    const { spainPersistentBrowser } = await import("./_legacy_spain-persistent-browser.js");
     await spainPersistentBrowser.closeAndInvalidate();
     return;
   }
@@ -776,7 +776,7 @@ export async function ensureSpainCfSession(
   // nativement (JSD, Turnstile, Managed) via l'interface CDP Captcha.
   // Avantages : fingerprint réel, pas de headless à gérer, résolution auto des captchas.
   if (process.env.SPAIN_SESSION_MODE === "2captcha-browser") {
-    const { ensureSpain2CaptchaBrowserSession } = await import("./spain-2captcha-browser.js");
+    const { ensureSpain2CaptchaBrowserSession } = await import("./_legacy_spain-2captcha-browser.js");
     return ensureSpain2CaptchaBrowserSession(targetUrl);
   }
 
@@ -785,7 +785,7 @@ export async function ensureSpainCfSession(
   // directement. cf_clearance + PHPSESSID obtenus avec le MÊME fingerprint TLS
   // que les appels JSONP suivants → cohérence garantie.
   if (process.env.SPAIN_SESSION_MODE === "impit") {
-    const { ensureSpainImpitSession, getSpainImpitInstance } = await import("./spain-impit-session.js");
+    const { ensureSpainImpitSession, getSpainImpitInstance } = await import("./_legacy_spain-impit-session.js");
     const session = await ensureSpainImpitSession(targetUrl);
     // ⚠️  Synchroniser l'instance impit solvante dans getSpainImpit() pour que
     // spainCfFetch réutilise la même TLS session (sinon → 0B Bookitit).
@@ -1157,7 +1157,7 @@ export async function ensureSpainCfSession(
   // AntiCloudflareTask produit un cf_clearance lié à son TLS, incompatible avec impit.
   if (process.env.SPAIN_SESSION_MODE === "persistent-browser") {
     const { ensureSpainPersistentBrowserSession, spainPersistentBrowser } =
-      await import("./spain-persistent-browser.js");
+      await import("./_legacy_spain-persistent-browser.js");
     const pbSession = await ensureSpainPersistentBrowserSession(targetUrl);
     // Si /main/ n'a pas été capturé (CF bloque cette IP Decodo pour /main/),
     // fermer le browser MAINTENANT (avant tout retry) pour forcer une nouvelle

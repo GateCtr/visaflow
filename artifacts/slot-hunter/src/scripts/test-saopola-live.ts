@@ -54,7 +54,7 @@ import { runSpainHttpProbe, scanSpainHttp } from "../spain-http-scanner.js";
 import { executeHttpBooking, type SpainBookingConfig, type ExtractedSlotInfo } from "../spain-http-booking.js";
 import { ensureSpainCfSession, spainCfFetch, getActiveSpainCfSession } from "../spain-soax-solver.js";
 import { initSpainRedis, removeSpainCfSessionFromRedis } from "../spain-redis-persistence.js";
-import { spainPersistentBrowser } from "../spain-persistent-browser.js";
+import { spainPersistentBrowser } from "../_legacy_spain-persistent-browser.js";
 
 // ─── Forcer le mode HTTP ──────────────────────────────────────────────────────
 // Nécessaire pour que ensureSpainCfSession / spainCfFetch soient actifs.

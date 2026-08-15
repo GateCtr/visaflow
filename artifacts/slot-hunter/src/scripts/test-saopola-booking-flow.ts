@@ -17,7 +17,7 @@
  */
 
 import "dotenv/config";
-import { spainPersistentBrowser } from "../spain-persistent-browser.js";
+import { spainPersistentBrowser } from "../_legacy_spain-persistent-browser.js";
 
 // ── Portail Saopolo ──────────────────────────────────────────────────────────
 const SAOPOLO_PORTAL =
@@ -182,7 +182,7 @@ async function main() {
   section("ÉTAPE 1 — Obtention session CF + widget (profil séparé)");
 
   spainPersistentBrowser.setCurrentTargetUrl(SAOPOLO_PORTAL);
-  const { ensureSpainPersistentBrowserSession } = await import("../spain-persistent-browser.js");
+  const { ensureSpainPersistentBrowserSession } = await import("../_legacy_spain-persistent-browser.js");
   const session = await ensureSpainPersistentBrowserSession(SAOPOLO_PORTAL);
 
   if (!session) {
@@ -255,7 +255,7 @@ async function main() {
   // ── Étape 5 : navigateToSelecttime ────────────────────────────────────────
   section("ÉTAPE 5 — navigateToSelecttime");
 
-  const { navigateToSelecttime } = await import("../spain-persistent-browser.js");
+  const { navigateToSelecttime } = await import("../_legacy_spain-persistent-browser.js");
   const navResult = await navigateToSelecttime(TARGET_DATE, TARGET_TIME, AGENDA_ID, SAOPOLO_PORTAL);
 
   log(navResult ? "OK" : "ERR", `navigateToSelecttime → hash=${navResult || "aucun"}`);

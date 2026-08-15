@@ -16,7 +16,7 @@
 //   → Pas de env vars SPAIN_BOOK_LOGIN/PASSWORD — tout vient de Convex (comme le bot USA)
 
 import { getSpainWatcherConfig, getActiveJobs, uploadFile, reportSpainWatcherScan, reportSlotFound, sendHeartbeat, attachConfirmationDoc, reportSlotDiscoveryBatch, pollRushPrepCommand, ackRushPrepCommand, type HunterJob, type SlotDiscoveryEvent } from "../convexClient.js";
-import { runSpainWatcherProbe } from "../spainPortal.js";
+import { runSpainWatcherProbe } from "../_legacy_spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import { isSpainCfSessionExpiringSoon, ensureSpainCfSession, getActiveSpainCfSession, restoreSpainSoaxStateFromRedis } from "../spain-soax-solver.js";
 import {
@@ -24,7 +24,7 @@ import {
   isSpainPersistentBrowserSessionExpiringSoon,
   getActiveSpainPersistentBrowserSession,
   tryRenewSpainPersistentBrowserSession,
-} from "../spain-persistent-browser.js";
+} from "../_legacy_spain-persistent-browser.js";
 import { initSpainRedis, acquireSpainScannerLock, releaseSpainScannerLock, SPAIN_INSTANCE_ID } from "../spain-redis-persistence.js";
 import { initDecodoPool } from "../spain-decodo-pool.js";
 import { executeHttpBooking, extractServicesFromHtml, createIsolatedBookingSession, type SpainBookingConfig, type ExtractedSlotInfo } from "../spain-http-booking.js";

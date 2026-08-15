@@ -45,7 +45,7 @@ import {
   createIsolatedBookingSession,
   type SpainBookingConfig,
 } from "./spain-http-booking.js";
-import { clickInteractiveSpainAcceptFlow } from "./spain-persistent-browser.js";
+import { clickInteractiveSpainAcceptFlow } from "./_legacy_spain-persistent-browser.js";
 import { pickBestServiceCandidate, pickBestServiceLinkCandidate } from "./spain-service-mapping.js";
 
 // ─── Test harness ─────────────────────────────────────────────────────────────

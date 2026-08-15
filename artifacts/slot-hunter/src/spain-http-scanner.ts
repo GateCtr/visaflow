@@ -26,7 +26,7 @@ import {
   isSpainCfSessionExpiringSoon,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
-import { callBookititEndpointViaBrowser, spainPersistentBrowser } from "./spain-persistent-browser.js";
+import { callBookititEndpointViaBrowser, spainPersistentBrowser } from "./_legacy_spain-persistent-browser.js";
 import { DEFAULT_WIDGET_KEY } from "./spain-portals.js";
 import { getDecodoPoolSize } from "./spain-decodo-pool.js";
 import {

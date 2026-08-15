@@ -43,7 +43,7 @@
  */
 
 import "dotenv/config";
-import { runSpainWatcherProbe } from "../spainPortal.js";
+import { runSpainWatcherProbe } from "../_legacy_spainPortal.js";
 import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import {
   ensureSpainCfSession,
@@ -53,7 +53,7 @@ import {
 import {
   ensureSpainPersistentBrowserSession,
   getActiveSpainPersistentBrowserSession,
-} from "../spain-persistent-browser.js";
+} from "../_legacy_spain-persistent-browser.js";
 import {
   initSpainRedis,
   acquireSpainScannerLock,

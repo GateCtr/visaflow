@@ -23,7 +23,8 @@ import { setCevDiscoveredConfig } from "./cevHttpBooking.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
 import { autoWhitelistIp } from "./ip-whitelist.js";
-import { runSpainSession } from "./spainPortal.js";
+// runSpainSession (spainPortal.ts) → archivé _legacy_spainPortal.ts (Task #52)
+// L'orchestrateur Spain startSpainWorkerOrchestrator() gère tous les dossiers Espagne.
 
 // ─── Extracted modules ──────────────────────────────────────────────────────
 import { startCevSetupLoop } from "./loops/cev-setup-loop.js";
@@ -869,15 +870,11 @@ async function main(): Promise<void> {
                : cevResult === "error"      ? "error"
                : "not_found";
       } else if (due.destination === "spain" || due.destination === "espagne" || due.destination === "es") {
-        const spainUrl = due.portalUrl ?? (due.hunterConfig as { scheduleUrl?: string } | undefined)?.scheduleUrl ?? "";
-        if (!spainUrl) {
-          log("WARN", `[${due.applicantName}] ⚠️ Espagne — URL Bookitit manquante. Renseignez-la dans la config Hunter admin.`);
-          await sendHeartbeat({ applicationId: due.id, result: "error", errorMessage: "URL Bookitit Espagne manquante — configurez scheduleUrl dans le panneau admin" });
-          result = "error";
-        } else {
-          log("INFO", `[${due.applicantName}] 🇪🇸 Espagne → ${spainUrl}`);
-          result = await runSpainSession(due);
-        }
+        // Les dossiers Espagne sont gérés par startSpainWorkerOrchestrator() (Task #52).
+        // Le scheduler séquentiel ne doit jamais atteindre ce branch quand
+        // SPAIN_HTTP_MODE=1 (spainWatcherActive filtre ces dossiers en amont).
+        log("WARN", `[${due.applicantName}] ⚠️ Dossier Espagne dans le scheduler séquentiel — devrait être géré par Spain Worker Orchestrator (SPAIN_HTTP_MODE=1 ?)`);
+        result = "error";
       } else {
         result = await runHunterSession(due);
       }

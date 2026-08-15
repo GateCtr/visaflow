@@ -31,7 +31,7 @@ import {
   callBookititEndpointViaBrowser,
   clickInteractiveSpainAcceptFlow,
   spainPersistentBrowser,
-} from "./spain-persistent-browser.js";
+} from "./_legacy_spain-persistent-browser.js";
 import { scanSpainHttp } from "./spain-http-scanner.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@
 process.env.REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 process.env.SPAIN_SESSION_MODE = "persistent-browser";
 
-import { spainPersistentBrowser } from "./spain-persistent-browser.js";
+import { spainPersistentBrowser } from "./_legacy_spain-persistent-browser.js";
 
 let passed = 0;
 let failed = 0;

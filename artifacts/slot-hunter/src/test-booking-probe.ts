@@ -11,7 +11,7 @@ process.env.REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 process.env.SPAIN_SESSION_MODE = "persistent-browser";
 
 import { ensureSpainCfSession, spainCfFetch } from "./spain-soax-solver.js";
-import { callBookititEndpointViaBrowser } from "./spain-persistent-browser.js";
+import { callBookititEndpointViaBrowser } from "./_legacy_spain-persistent-browser.js";
 
 const PORTAL_URL =
   "https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/";

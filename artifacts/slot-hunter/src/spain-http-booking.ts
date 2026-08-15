@@ -40,14 +40,14 @@ import {
   submitSigninFormViaDOM,
   acquireBrowserBookingLock,
   spainPersistentBrowser,
-} from "./spain-persistent-browser.js";
+} from "./_legacy_spain-persistent-browser.js";
 import {
   requestOtpChallenge,
   consumeOtpCode,
   reportSpainWatcherScan,
 } from "./convexClient.js";
 import { matchServiceForVisa } from "./spain-service-mapping.js";
-import { generateSpainConfirmationPdf, extractConfirmationData } from "./spain-confirmation-pdf.js";
+import { generateSpainConfirmationPdf, extractConfirmationData } from "./_legacy_spain-confirmation-pdf.js";
 import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────

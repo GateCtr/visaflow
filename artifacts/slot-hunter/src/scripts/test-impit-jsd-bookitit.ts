@@ -10,7 +10,7 @@
  */
 
 import "dotenv/config";
-import { ensureSpainImpitSession } from "../spain-impit-session.js";
+import { ensureSpainImpitSession } from "../_legacy_spain-impit-session.js";
 import { getSpainImpit, spainCfFetch, type SpainCfSession } from "../spain-soax-solver.js";
 
 const SAOPOLO_URL = "https://www.citaconsular.es/es/hosteds/widgetdefault/2d01502f12dc08400e22aea87fb00ae34/";

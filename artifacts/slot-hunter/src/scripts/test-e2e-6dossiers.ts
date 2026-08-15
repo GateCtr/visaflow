@@ -30,7 +30,7 @@ import { runSpainHttpProbe } from "../spain-http-scanner.js";
 import { executeHttpBooking, type SpainBookingConfig, type ExtractedSlotInfo } from "../spain-http-booking.js";
 import { ensureSpainCfSession, getActiveSpainCfSession } from "../spain-soax-solver.js";
 import { initSpainRedis, removeSpainCfSessionFromRedis } from "../spain-redis-persistence.js";
-import { spainPersistentBrowser } from "../spain-persistent-browser.js";
+import { spainPersistentBrowser } from "../_legacy_spain-persistent-browser.js";
 import { SAOPOLO_PORTAL_URL, SAOPOLO_WIDGET_KEY } from "../spain-portals.js";
 
 const PORTAL_URL = SAOPOLO_PORTAL_URL;

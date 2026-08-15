@@ -21,7 +21,7 @@ process.env.REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 process.env.SPAIN_SESSION_MODE = "persistent-browser";
 
 import { ensureSpainCfSession } from "./spain-soax-solver.js";
-import { callBookititEndpointViaBrowser } from "./spain-persistent-browser.js";
+import { callBookititEndpointViaBrowser } from "./_legacy_spain-persistent-browser.js";
 import { scanSpainHttp } from "./spain-http-scanner.js";
 
 const PORTAL_URL =
