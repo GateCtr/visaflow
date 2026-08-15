@@ -32,11 +32,54 @@ const CEV_BASE = "https://appointment.cloud.diplomatie.be";
 const HCAPTCHA_SITEKEY = "5f64399c-14a8-415e-ad1a-7ebccdc4943a";
 
 // ─── Clé Anti-Captcha : lecture DYNAMIQUE (pas de constante module-level) ────
-// Problème résolu : si la clé n'est pas dans l'env au démarrage du bot (ex: git pull
-// en cours de route, ou clé stockée dans botConfig Convex), le bot ne la voyait jamais.
-// Solution : lecture depuis process.env à chaque appel + fallback getBotConfigValue.
-let _anticaptchaKeyCache: string | null = null; // null = jamais chargé, "" = chargé mais vide, "key" = valide
+// ─── Résolveurs de clés captcha ───────────────────────────────────────────────
+// Chaque résolveur lit : env variable → cache mémoire → botConfig Convex.
+// Priorité d'usage CEV : NoneCap → 2Captcha → Anti-Captcha.
 
+// ── NoneCap ──
+let _nonecapKeyCache: string | null = null;
+export async function resolveNonecapKey(): Promise<string> {
+  const envKey = process.env.NONECAP_API_KEY?.trim() ?? "";
+  if (envKey) { _nonecapKeyCache = envKey; return envKey; }
+  if (_nonecapKeyCache) return _nonecapKeyCache;
+  try {
+    const botKey = await getBotConfigValue("nonecap_api_key");
+    if (botKey?.trim()) {
+      _nonecapKeyCache = botKey.trim();
+      console.log(`[CEV-SETUP] ✅ NONECAP_KEY chargé depuis botConfig Convex`);
+      return _nonecapKeyCache;
+    }
+  } catch { /* graceful */ }
+  _nonecapKeyCache = "";
+  return "";
+}
+export function invalidateNonecapCache(): void {
+  _nonecapKeyCache = null;
+}
+
+// ── 2Captcha ──
+let _twocaptchaKeyCache: string | null = null;
+export async function resolveTwocaptchaKey(): Promise<string> {
+  const envKey = process.env.TWOCAPTCHA_API_KEY?.trim() ?? "";
+  if (envKey) { _twocaptchaKeyCache = envKey; return envKey; }
+  if (_twocaptchaKeyCache) return _twocaptchaKeyCache;
+  try {
+    const botKey = await getBotConfigValue("twocaptcha_api_key");
+    if (botKey?.trim()) {
+      _twocaptchaKeyCache = botKey.trim();
+      console.log(`[CEV-SETUP] ✅ TWOCAPTCHA_KEY chargé depuis botConfig Convex`);
+      return _twocaptchaKeyCache;
+    }
+  } catch { /* graceful */ }
+  _twocaptchaKeyCache = "";
+  return "";
+}
+export function invalidateTwocaptchaCache(): void {
+  _twocaptchaKeyCache = null;
+}
+
+// ── Anti-Captcha (dernier recours pour CEV) ──
+let _anticaptchaKeyCache: string | null = null; // null = jamais chargé, "" = chargé mais vide, "key" = valide
 export async function resolveAnticaptchaKey(): Promise<string> {
   // 1. Lire process.env dynamiquement (capte les changements post-démarrage)
   const envKey = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
@@ -1985,12 +2028,12 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
     }
   }
 
-  // ── NoneCap prioritaire pour CEV (sitekey gouvernementale) ──
-  // Fallback : Anti-Captcha → 2Captcha
-  const NONECAP_KEY = process.env.NONECAP_API_KEY || null;
-  const TWOCAPTCHA_KEY = process.env.TWOCAPTCHA_API_KEY || null;
+  // ── Ordre priorité CEV : NoneCap → 2Captcha → Anti-Captcha (dernier recours) ──
+  const NONECAP_KEY   = await resolveNonecapKey();
+  const TWOCAPTCHA_KEY = await resolveTwocaptchaKey();
   const ANTICAPTCHA_KEY = await resolveAnticaptchaKey();
 
+  // 1. NoneCap (priorité absolue)
   if (NONECAP_KEY) {
     botLog({ applicationId: clientId, step: "cev_http_hcaptcha_start", status: "ok", data: { service: "nonecap" } });
     try {
@@ -2001,16 +2044,16 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
         return token;
       }
       errors.push("nonecap_failed");
-      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_nonecap_fail", status: "warn", data: { hint: "NoneCap échoué — fallback Anti-Captcha/2Captcha" } });
+      botLog({ applicationId: clientId, step: "cev_http_hcaptcha_nonecap_fail", status: "warn", data: { hint: "NoneCap échoué — fallback 2Captcha → Anti-Captcha" } });
     } catch (e) {
       errors.push(`nonecap_exception: ${String(e)}`);
     }
   }
 
-  // Sélection provider fallback : Anti-Captcha si disponible, sinon 2Captcha
-  const captchaProvider = ANTICAPTCHA_KEY ? "anticaptcha" : (TWOCAPTCHA_KEY ? "2captcha" : null);
-  const captchaApiKey = ANTICAPTCHA_KEY || TWOCAPTCHA_KEY;
-  const captchaBaseUrl = TWOCAPTCHA_KEY && !ANTICAPTCHA_KEY
+  // 2. 2Captcha (fallback #1), 3. Anti-Captcha (dernier recours)
+  const captchaProvider = TWOCAPTCHA_KEY ? "2captcha" : (ANTICAPTCHA_KEY ? "anticaptcha" : null);
+  const captchaApiKey   = TWOCAPTCHA_KEY || ANTICAPTCHA_KEY;
+  const captchaBaseUrl  = TWOCAPTCHA_KEY
     ? "https://api.2captcha.com"
     : "https://api.anti-captcha.com";
 

@@ -2,7 +2,7 @@ import type { Page } from 'puppeteer';
 import type { PuppeteerContextAdapter } from './browser.js';
 import type { HunterJob } from './convexClient';
 import { botLog, uploadScreenshot, recordCevClick, activateCevSession, persistCevLoopSession, restoreCevLoopSession } from './convexClient';
-import { resolveAnticaptchaKey } from './cevHttpSetup.js';
+import { resolveAnticaptchaKey, resolveNonecapKey, resolveTwocaptchaKey } from './cevHttpSetup.js';
 import { completeCevCaptcha, pollCevSlots, pollCevSlotsMultiMonth, isCevSessionValid, CevSession } from './cevPortal';
 import { launchBrowser, randomDelay, humanType, humanClick, humanScroll } from './browser.js';
 import { attachNetCapture } from './netCapture.js';
@@ -888,19 +888,30 @@ async function solveHcaptcha(
 
   botLog({ applicationId: clientId, step: 'cev_hcaptcha_solve_start', status: 'ok' });
 
-  // ─── Tentative 1 : NoneCap (prioritaire — sitekey gouvernementale CEV) ──
-  const nonecapKey = process.env.NONECAP_API_KEY ?? '';
+  // ─── Ordre priorité CEV : NoneCap → 2Captcha → Anti-Captcha (dernier recours) ──
+
+  // Tentative 1 : NoneCap (prioritaire)
+  const nonecapKey = await resolveNonecapKey();
   if (nonecapKey) {
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_nonecap_start', status: 'ok' });
     const { solveHcaptchaViaNonecap } = await import('./nonecap.js');
     const token = await solveHcaptchaViaNonecap(nonecapKey, HCAPTCHA_SITE_KEY, PAGE_URL, '[cevBooking]');
     if (token) return token;
-    botLog({ applicationId: clientId, step: 'cev_hcaptcha_nonecap_fail_fallback', status: 'warn' });
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_nonecap_fail_fallback', status: 'warn', data: { hint: 'NoneCap échoué — fallback 2Captcha' } });
   }
 
-  // ─── Tentative 2 : Anti-Captcha (domaines gouvernementaux supportés) ──
-  // resolveAnticaptchaKey() cherche dans env + Convex botConfig (prioritaire sur env seul)
-  const antiKey = (await resolveAnticaptchaKey()) ?? '';
+  // Tentative 2 : 2Captcha
+  const twoKey = await resolveTwocaptchaKey();
+  const twoKey2 = twoKey || twoCaptchaApiKey; // fallback sur le paramètre passé à la fonction
+  if (twoKey2) {
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_2captcha_start', status: 'ok' });
+    const token = await solveHcaptchaVia2captcha(twoKey2, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);
+    if (token) return token;
+    botLog({ applicationId: clientId, step: 'cev_hcaptcha_2captcha_fail_fallback', status: 'warn', data: { hint: '2Captcha échoué — fallback Anti-Captcha' } });
+  }
+
+  // Tentative 3 : Anti-Captcha (dernier recours)
+  const antiKey = await resolveAnticaptchaKey();
   if (antiKey) {
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_anticaptcha_start', status: 'ok' });
     const token = await solveHcaptchaViaAntiCaptcha(antiKey, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);
@@ -908,27 +919,7 @@ async function solveHcaptcha(
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_anticaptcha_fail_fallback', status: 'warn' });
   }
 
-  // ─── Tentative 2 : CapSolver (PRIORITAIRE avant 2captcha) ───────────────
-  // Essaie HCaptchaEnterpriseTaskProxyLess puis HCaptchaTaskProxyLess.
-  // 2captcha ne supporte pas hCaptcha sur le compte actuel → CapSolver est le solveur principal.
-  const capKey = capsolverApiKey ?? process.env.CAPSOLVER_API_KEY ?? '';
-  if (capKey) {
-    botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_start', status: 'ok' });
-    const token = await solveHcaptchaViaCapsolver(capKey, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);
-    if (token) return token;
-    botLog({ applicationId: clientId, step: 'cev_hcaptcha_capsolver_fail_fallback', status: 'warn', data: { hint: 'CapSolver : "We don\'t support this service" → restriction de PLAN sur ce sitekey gouvernemental (diplomatie.be). CapSolver ne supporte pas les sitekeys gouvernementaux sur le plan de base. Ajoutez ANTICAPTCHA_API_KEY sur Railway (anti-captcha.com supporte les domaines gov sans restriction de plan).' } });
-  }
-
-  // ─── Tentative 3 : 2captcha (dernier recours) ────────────────────────────
-  // Note : le compte 2captcha actuel ne supporte pas HCaptchaTaskProxyless.
-  // Configurer ANTICAPTCHA_API_KEY (anti-captcha.com) comme alternative fiable.
-  if (twoCaptchaApiKey) {
-    botLog({ applicationId: clientId, step: 'cev_hcaptcha_2captcha_start', status: 'ok' });
-    const token = await solveHcaptchaVia2captcha(twoCaptchaApiKey, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);
-    if (token) return token;
-  }
-
-  botLog({ applicationId: clientId, step: 'cev_hcaptcha_all_failed', status: 'fail', data: { hint: 'Tous les solveurs hCaptcha ont échoué. CapSolver instable sur ce cycle (ERROR_INVALID_TASK_DATA est transitoire — le bot retentera). Pour fiabilité maximale : ajouter ANTICAPTCHA_API_KEY sur Railway (anti-captcha.com supporte les sitekeys gouvernementaux sans restriction).' } });
+  botLog({ applicationId: clientId, step: 'cev_hcaptcha_all_failed', status: 'fail', data: { hint: 'Tous les solveurs hCaptcha ont échoué (NoneCap → 2Captcha → Anti-Captcha). Vérifier solde et clés API.' } });
   return null;
 }
 

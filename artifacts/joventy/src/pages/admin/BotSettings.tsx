@@ -217,6 +217,31 @@ const CONFIG_ITEMS: ConfigItem[] = [
     category: "protection",
     defaultValue: "1",
   },
+  // ─── Clés API Captcha (priorité : NoneCap → 2Captcha → Anti-Captcha)
+  {
+    key: "nonecap_api_key",
+    label: "NoneCap API Key (priorité 1)",
+    description: "Clé NoneCap pour hCaptcha CEV/Spain. Priorité absolue sur 2Captcha et Anti-Captcha. Stockée ici si non définie dans les secrets Replit/Railway.",
+    type: "text",
+    category: "protection",
+    defaultValue: "",
+  },
+  {
+    key: "twocaptcha_api_key",
+    label: "2Captcha API Key (priorité 2)",
+    description: "Clé 2Captcha pour hCaptcha CEV/Spain. Fallback après NoneCap, avant Anti-Captcha.",
+    type: "text",
+    category: "protection",
+    defaultValue: "",
+  },
+  {
+    key: "anticaptcha_api_key",
+    label: "Anti-Captcha API Key (dernier recours)",
+    description: "Clé Anti-Captcha pour hCaptcha CEV/Spain. Utilisé uniquement si NoneCap et 2Captcha échouent ou sont absents.",
+    type: "text",
+    category: "protection",
+    defaultValue: "",
+  },
   // ─── Prediction Early Bird
   {
     key: "prediction_min_observations",
@@ -641,11 +666,11 @@ function ConfigRow({
         {item.type === "text" && (
           <>
             <input
-              type="text"
+              type={item.key.endsWith("_api_key") ? "password" : "text"}
               value={value}
               onChange={(e) => onChange(e.target.value)}
-              placeholder="—"
-              className="w-32 lg:w-40 px-2 py-1 text-xs border border-slate-200 rounded-md font-mono bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-200 outline-none"
+              placeholder={item.key.endsWith("_api_key") ? "sk-…" : "—"}
+              className={`px-2 py-1 text-xs border border-slate-200 rounded-md font-mono bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-200 outline-none ${item.key.endsWith("_api_key") ? "w-48 lg:w-64" : "w-32 lg:w-40"}`}
             />
             <button
               onClick={() => onSave(value)}
