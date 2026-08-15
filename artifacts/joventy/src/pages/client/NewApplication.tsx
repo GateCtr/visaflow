@@ -46,12 +46,13 @@ const DESTINATIONS = [
   { id: "brazil",      name: "Brésil 🇧🇷",           desc: "Rendez-vous consulaire — ambassade du Brésil à Kinshasa",              processType: "appointment" as const },
 ];
 
+// Note : l'Espagne gère ses propres rendez-vous via citaconsular.es —
+// elle ne passe PAS par le CEV (visaonweb.be / diplomatie.be).
 const CEV_COUNTRIES = [
   { code: "BE", label: "🇧🇪 Belgique" },
   { code: "FR", label: "🇫🇷 France" },
   { code: "DE", label: "🇩🇪 Allemagne" },
   { code: "NL", label: "🇳🇱 Pays-Bas" },
-  { code: "ES", label: "🇪🇸 Espagne" },
   { code: "IT", label: "🇮🇹 Italie" },
   { code: "CH", label: "🇨🇭 Suisse" },
   { code: "PT", label: "🇵🇹 Portugal" },

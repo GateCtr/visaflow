@@ -809,7 +809,7 @@ export default function AdminApplicationDetail() {
             )}
           </div>
 
-          {/* CEV metadata — Schengen only */}
+          {/* CEV / Schengen metadata */}
           {app.destination === "schengen" && (() => {
             const cev = app as { cevVisaClass?: string; cevApplicantAgeCategory?: string; cevTargetCountry?: string };
             const ageCatLabel: Record<string, string> = {
@@ -817,26 +817,39 @@ export default function AdminApplicationDetail() {
               child_6_12: "Enfant 6-12 ans",
               child_under_6: "Enfant < 6 ans",
             };
+            const isVisaD = cev.cevVisaClass === "D" || app.visaType?.includes("Visa D") || app.visaType?.includes("Long Séjour");
             const rows = [
-              { label: "Classe visa CEV", value: cev.cevVisaClass ? `Visa ${cev.cevVisaClass}` : undefined },
-              { label: "Catégorie âge", value: cev.cevApplicantAgeCategory ? ageCatLabel[cev.cevApplicantAgeCategory] : undefined },
-              { label: "Pays Schengen cible", value: cev.cevTargetCountry },
+              {
+                label: "Type de visa / Portail",
+                value: isVisaD
+                  ? "Visa D — Long Séjour (TLScontact France)"
+                  : cev.cevVisaClass
+                  ? `Visa ${cev.cevVisaClass} — Court séjour (CEV)`
+                  : undefined,
+              },
+              { label: "Catégorie âge", value: !isVisaD && cev.cevApplicantAgeCategory ? ageCatLabel[cev.cevApplicantAgeCategory] : undefined },
+              { label: "Pays Schengen cible", value: !isVisaD ? cev.cevTargetCountry : undefined },
             ].filter((r) => r.value);
             if (rows.length === 0) return null;
             return (
-              <div className="mt-4 border border-indigo-200 bg-indigo-50/60 rounded-xl p-4">
+              <div className={`mt-4 border rounded-xl p-4 ${isVisaD ? "border-amber-200 bg-amber-50/60" : "border-indigo-200 bg-indigo-50/60"}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-sm">🇪🇺</span>
-                  <span className="text-sm font-bold text-primary">Informations CEV</span>
+                  <span className="text-sm font-bold text-primary">
+                    {isVisaD ? "Schengen — Visa D Long Séjour (TLScontact)" : "Schengen — Visa C Court Séjour (CEV)"}
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {rows.map((r) => (
-                    <div key={r.label} className="bg-white rounded-lg px-3 py-2 border border-indigo-100">
+                    <div key={r.label} className={`bg-white rounded-lg px-3 py-2 border ${isVisaD ? "border-amber-100" : "border-indigo-100"}`}>
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wide mb-0.5">{r.label}</p>
                       <p className="text-sm font-semibold text-primary">{r.value}</p>
                     </div>
                   ))}
                 </div>
+                {isVisaD && (
+                  <p className="text-xs text-amber-700 mt-3">⚠️ Portail TLScontact France (fr.tlscontact.com/cd/CDG/) — pas le CEV. Prérequis : dossier soumis sur france-visas.gouv.fr.</p>
+                )}
               </div>
             );
           })()}

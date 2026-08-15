@@ -51,8 +51,12 @@ const CRENEAU_DESTINATIONS = [
     id: "schengen",
     name: "Europe Schengen",
     flag: "🇪🇺",
-    desc: "Centre Européen des Visas (CEV) — 17 pays",
-    visaTypes: ["Visa C — Tourisme / Affaires", "Visa C — Études court séjour"],
+    desc: "CEV (Visa C court séjour) ou TLScontact France (Visa D long séjour)",
+    visaTypes: [
+      "Visa C — Tourisme / Affaires",
+      "Visa C — Études court séjour",
+      "Visa D — Long Séjour (études / regroupement familial)",
+    ],
   },
   {
     id: "spain",
@@ -93,12 +97,13 @@ const CRENEAU_DESTINATIONS = [
 
 type CreneauDest = (typeof CRENEAU_DESTINATIONS)[number]["id"];
 
+// Note : l'Espagne gère ses propres rendez-vous via citaconsular.es —
+// elle ne passe PAS par le CEV (visaonweb.be / diplomatie.be).
 const CEV_COUNTRIES = [
   { code: "BE", label: "🇧🇪 Belgique" },
   { code: "FR", label: "🇫🇷 France" },
   { code: "DE", label: "🇩🇪 Allemagne" },
   { code: "NL", label: "🇳🇱 Pays-Bas" },
-  { code: "ES", label: "🇪🇸 Espagne" },
   { code: "IT", label: "🇮🇹 Italie" },
   { code: "CH", label: "🇨🇭 Suisse" },
   { code: "PT", label: "🇵🇹 Portugal" },
@@ -109,6 +114,8 @@ const CEV_COUNTRIES = [
   { code: "FI", label: "🇫🇮 Finlande" },
   { code: "GR", label: "🇬🇷 Grèce" },
   { code: "PL", label: "🇵🇱 Pologne" },
+  { code: "CZ", label: "🇨🇿 République tchèque" },
+  { code: "SK", label: "🇸🇰 Slovaquie" },
 ];
 
 // Tous les uploads Espagne sont optionnels ici — ils peuvent être ajoutés
@@ -220,11 +227,17 @@ export default function NewCreneauApplication() {
     }
   };
 
+  // Visa D long séjour : TLScontact France (france-visas.gouv.fr), pas le CEV
+  const isSchengenVisaD = dest === "schengen" && (visaType.includes("Visa D") || visaType.includes("Long Séjour"));
+  // Visa C court séjour : CEV Kinshasa (visaonweb.be / VOWINT)
+  const isSchengenVisaC = dest === "schengen" && !isSchengenVisaD;
+
   const validateInfo = (): boolean => {
     if (!applicantName.trim()) { toast({ variant: "destructive", title: "Champ requis", description: "Veuillez renseigner le nom du demandeur." }); return false; }
-    if (!visaType && dest !== "schengen") { toast({ variant: "destructive", title: "Champ requis", description: "Veuillez choisir le type de visa." }); return false; }
-    if (dest !== "schengen" && !passportNumber.trim()) { toast({ variant: "destructive", title: "Champ requis", description: "Veuillez renseigner le numéro de passeport." }); return false; }
-    if (!travelDate && dest !== "schengen") { toast({ variant: "destructive", title: "Champ requis", description: "Veuillez indiquer la date de voyage." }); return false; }
+    if (!visaType) { toast({ variant: "destructive", title: "Champ requis", description: "Veuillez choisir le type de visa." }); return false; }
+    // Pour le CEV Visa C, le passeport est géré via VOWINT — non requis ici
+    if (!isSchengenVisaC && !passportNumber.trim()) { toast({ variant: "destructive", title: "Champ requis", description: "Veuillez renseigner le numéro de passeport." }); return false; }
+    if (!travelDate && !isSchengenVisaC) { toast({ variant: "destructive", title: "Champ requis", description: "Veuillez indiquer la date de voyage." }); return false; }
     return true;
   };
 
@@ -254,12 +267,18 @@ export default function NewCreneauApplication() {
     }
     setIsPending(true);
     try {
-      const finalVisaType = dest === "schengen" ? "Visa C — Tourisme / Affaires" : visaType;
-      const finalTravelDate = dest === "schengen" ? (travelDate || new Date(Date.now() + 90 * 864e5).toISOString().split("T")[0]) : travelDate;
+      // Pour Schengen Visa C (CEV), on laisse une date par défaut si absente
+      const finalTravelDate = isSchengenVisaC
+        ? (travelDate || new Date(Date.now() + 90 * 864e5).toISOString().split("T")[0])
+        : travelDate;
+      // Dériver la classe visa CEV à partir du type sélectionné
+      const derivedCevClass: "C" | "D" | undefined = dest === "schengen"
+        ? (isSchengenVisaD ? "D" : "C")
+        : undefined;
 
       const id = await createApplication({
         destination: dest as string,
-        visaType: finalVisaType,
+        visaType: visaType,
         applicantName: applicantName.trim(),
         passportNumber: passportNumber.trim() || undefined,
         travelDate: finalTravelDate,
@@ -267,9 +286,9 @@ export default function NewCreneauApplication() {
         purpose: "Demande de créneau consulaire via Joventy",
         servicePackage: "slot_only",
         slotUrgencyTier: "standard",
-        cevVisaClass: dest === "schengen" ? "C" : undefined,
-        cevApplicantAgeCategory: dest === "schengen" ? cevAgeCategory : undefined,
-        cevTargetCountry: dest === "schengen" ? cevTargetCountry : undefined,
+        cevVisaClass: derivedCevClass,
+        cevApplicantAgeCategory: isSchengenVisaC ? cevAgeCategory : undefined,
+        cevTargetCountry: isSchengenVisaC ? cevTargetCountry : undefined,
         slotBookingRefs: undefined,
         userWhatsapp: userWhatsapp.trim() || undefined,
         spainHasCredentials: dest === "spain" && emailSentToEmbassy ? true : undefined,
@@ -413,32 +432,37 @@ export default function NewCreneauApplication() {
               </div>
             )}
 
-            {/* Numéro de passeport — sauf Schengen (géré via VOWINT) */}
-            {dest !== "schengen" && (
+            {/* Type de visa — affiché pour TOUS les pays y compris Schengen */}
+            <div>
+              <label className="block text-sm font-semibold text-primary mb-1.5">Type de visa <span className="text-red-500">*</span></label>
+              <Select value={visaType} onValueChange={(v) => { setVisaType(v); }}>
+                <SelectTrigger className="h-11"><SelectValue placeholder="Sélectionnez le type de visa" /></SelectTrigger>
+                <SelectContent>
+                  {selectedDest.visaTypes.map((vt) => (
+                    <SelectItem key={vt} value={vt}>{vt}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Numéro de passeport — sauf Schengen Visa C (géré via VOWINT côté CEV) */}
+            {!isSchengenVisaC && (
               <div>
                 <label className="block text-sm font-semibold text-primary mb-1.5">Numéro de passeport <span className="text-red-500">*</span></label>
                 <Input value={passportNumber} onChange={(e) => setPassportNumber(e.target.value)} placeholder="Ex : AB1234567" className="h-11" />
               </div>
             )}
 
-            {/* Type de visa */}
-            {dest !== "schengen" && (
-              <div>
-                <label className="block text-sm font-semibold text-primary mb-1.5">Type de visa <span className="text-red-500">*</span></label>
-                <Select value={visaType} onValueChange={setVisaType}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Sélectionnez le type de visa" /></SelectTrigger>
-                  <SelectContent>
-                    {selectedDest.visaTypes.map((vt) => (
-                      <SelectItem key={vt} value={vt}>{vt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Champs Schengen/CEV */}
-            {dest === "schengen" && (
+            {/* Champs Schengen Visa C — CEV (visaonweb.be / VOWINT) */}
+            {isSchengenVisaC && (
               <div className="space-y-4">
+                <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-600" />
+                  <div>
+                    <p className="font-semibold">Visa C — Portail CEV (visaonweb.be)</p>
+                    <p className="text-xs mt-1 text-blue-700">Votre passeport et vos pièces justificatives sont gérés via le formulaire VOWINT. Le passeport n'est pas requis ici. Prérequis : avoir un dossier VOWINT en cours ou Joventy en crée un pour vous.</p>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-semibold text-primary mb-1.5">Pays de destination Schengen <span className="text-red-500">*</span></label>
                   <Select value={cevTargetCountry} onValueChange={setCevTargetCountry}>
@@ -469,6 +493,17 @@ export default function NewCreneauApplication() {
                     <span className="text-sm text-muted-foreground">{cevForm ? <span className="text-emerald-700 font-medium">{cevForm.name}</span> : "Cliquez pour uploader le formulaire CEV"}</span>
                   </div>
                   <input ref={cevFormRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => setCevForm(e.target.files?.[0] ?? null)} />
+                </div>
+              </div>
+            )}
+
+            {/* Champs Schengen Visa D — TLScontact France (france-visas.gouv.fr) */}
+            {isSchengenVisaD && (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+                <div>
+                  <p className="font-semibold">Visa D Long Séjour — Portail TLScontact France</p>
+                  <p className="text-xs mt-1 text-amber-800">Le Visa D n'est pas traité par le CEV. Joventy surveille le portail <strong>TLScontact France (CDG → Kinshasa)</strong> et capture votre créneau dès qu'une place se libère. Prérequis : avoir soumis votre dossier sur france-visas.gouv.fr. Frais : ~99 € (France-Visas) + ~30 € TLScontact, payés séparément.</p>
                 </div>
               </div>
             )}
@@ -533,8 +568,8 @@ export default function NewCreneauApplication() {
               </div>
             )}
 
-            {/* Date de voyage — sauf Schengen */}
-            {dest !== "schengen" && (
+            {/* Date de voyage — sauf Schengen Visa C (CEV gère sa propre date via VOWINT) */}
+            {!isSchengenVisaC && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-primary mb-1.5">Date de voyage souhaitée <span className="text-red-500">*</span></label>
@@ -645,10 +680,16 @@ export default function NewCreneauApplication() {
                   <span className="font-semibold text-primary">{new Date(travelDate).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</span>
                 </div>
               )}
-              {dest === "schengen" && (
+              {isSchengenVisaC && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Pays cible CEV</span>
                   <span className="font-semibold text-primary">{CEV_COUNTRIES.find((c) => c.code === cevTargetCountry)?.label ?? cevTargetCountry}</span>
+                </div>
+              )}
+              {isSchengenVisaD && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Portail</span>
+                  <span className="font-semibold text-primary">TLScontact France (Visa D)</span>
                 </div>
               )}
               <div className="flex justify-between text-sm">
