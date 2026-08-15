@@ -1665,4 +1665,42 @@ import { chat as victorChat } from './chat';
 http.route({ path: '/api/chat', method: 'POST', handler: victorChat });
 http.route({ path: '/api/chat', method: 'OPTIONS', handler: victorChat });
 
+
+// ─── CEV: tentative de claim d'un créneau (allocation multi‑dossiers) ───────
+http.route({
+  path: "/hunter/cev/try-claim-slot",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: { slotKey: string; maxClaims: number; ttlSec?: number };
+    try {
+      body = (await request.json()) as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+    if (!body.slotKey || typeof body.maxClaims !== "number") {
+      return new Response("Missing required fields", { status: 400 });
+    }
+
+    try {
+      const res = await ctx.runMutation(internal.hunter.internalTryClaimCevSlot, {
+        slotKey: body.slotKey,
+        maxClaims: Math.max(0, Math.floor(body.maxClaims)),
+        ttlSec: body.ttlSec ?? 10,
+      });
+      return new Response(JSON.stringify(res), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;

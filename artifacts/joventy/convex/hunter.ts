@@ -1020,3 +1020,54 @@ export const listBotConfig = query({
     return await ctx.db.query("botConfig").collect();
   },
 });
+
+// ─── INTERNAL: Allocation CEV — claim d'un créneau avec limite (free-1) ──────
+export const internalTryClaimCevSlot = internalMutation({
+  args: {
+    slotKey: v.string(),        // ex: "CEV:{center}:{category}:{YYYY-MM-DD}:{HH:mm}"
+    maxClaims: v.number(),      // ex: free-1 (borne basse 0)
+    ttlSec: v.optional(v.number()), // validité du claim (auto-expire)
+  },
+  handler: async (ctx, { slotKey, maxClaims, ttlSec }) => {
+    const KEY = "cev_slot_claims_v1";
+    const now = Date.now();
+    const ttlMs = Math.max(3_000, Math.min((ttlSec ?? 10) * 1000, 60_000));
+
+    const row = await ctx.db
+      .query("botConfig")
+      .withIndex("by_key", (q) => q.eq("key", KEY))
+      .first();
+
+    type Entry = { count: number; expiresAt: number };
+    let state: Record<string, Entry> = {};
+    if (row?.value) {
+      try { state = JSON.parse(row.value) as Record<string, Entry>; } catch { state = {}; }
+    }
+
+    // Nettoyage des slots expirés
+    const cleaned: Record<string, Entry> = {};
+    for (const [k, v] of Object.entries(state)) {
+      if (v && typeof v.expiresAt === 'number' && v.expiresAt > now) cleaned[k] = v;
+    }
+
+    const current = cleaned[slotKey];
+    const curCount = current && current.expiresAt > now ? current.count : 0;
+    const allowed = Math.max(0, Math.floor(maxClaims));
+
+    if (curCount >= allowed) {
+      // Refus — plafond atteint
+      const newValue = JSON.stringify(cleaned);
+      if (row) await ctx.db.patch(row._id, { value: newValue, updatedAt: now });
+      else await ctx.db.insert("botConfig", { key: KEY, value: newValue, updatedAt: now });
+      return { ok: false as const, count: curCount, max: allowed };
+    }
+
+    // Acceptation — incrément et set expiry
+    cleaned[slotKey] = { count: curCount + 1, expiresAt: now + ttlMs };
+    const newValue = JSON.stringify(cleaned);
+    if (row) await ctx.db.patch(row._id, { value: newValue, updatedAt: now });
+    else await ctx.db.insert("botConfig", { key: KEY, value: newValue, updatedAt: now });
+
+    return { ok: true as const, count: curCount + 1, max: allowed, expiresAt: now + ttlMs };
+  },
+});

@@ -28,7 +28,7 @@ if (!isBuild && !process.env.BASE_PATH) {
   );
 }
 
-const convexRoot = path.resolve(import.meta.dirname, "../../convex");
+const convexRoot = path.resolve(import.meta.dirname, "convex");
 
 export default defineConfig({
   base: basePath,

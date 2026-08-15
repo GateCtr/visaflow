@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { VISA_PRICING, SLOT_URGENCY_TIERS, VISA_PARTIAL_SERVICE, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
+import { VISA_PRICING, SLOT_URGENCY_TIERS, VISA_PARTIAL_SERVICE, SERVICE_PACKAGES, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
 import { getVisaCategory, getVisaClassForBroadcast } from "./visaClassifications";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -16,6 +16,21 @@ function getRole(identity: { [key: string]: unknown } | null): string {
 
 function makeLog(msg: string, author?: string) {
   return { msg, time: Date.now(), author: author ?? "système" };
+}
+
+/**
+ * Vérifie si l'identité Clerk est propriétaire d'un dossier.
+ * Gère les 3 variantes historiques de Clerk ID stockées dans userId.
+ */
+function isOwner(appUserId: string, identitySubject: string): boolean {
+  const getClerkId = (subject: string) =>
+    subject.includes("|") ? subject.split("|").pop()! : subject;
+  const clerkId = getClerkId(identitySubject);
+  return (
+    appUserId === clerkId ||
+    appUserId === `https://clerk.joventy.cd|${clerkId}` ||
+    appUserId === `https://active-midge-3.clerk.accounts.dev|${clerkId}`
+  );
 }
 
 export const list = query({
@@ -111,7 +126,7 @@ export const get = query({
     if (!app) return null;
 
     const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
-    if (!isAdmin && app.userId !== identity.subject) return null;
+    if (!isAdmin && !isOwner(app.userId, identity.subject)) return null;
 
     // Admins always receive full data.
     if (isAdmin) return app;
@@ -377,7 +392,7 @@ export const uploadPaymentProof = mutation({
 
     const app = await ctx.db.get(args.id);
     if (!app) throw new Error("Dossier introuvable");
-    if (app.userId !== identity.subject) throw new Error("Accès non autorisé");
+    if (!isOwner(app.userId, identity.subject)) throw new Error("Accès non autorisé");
 
     const logs = app.logs ?? [];
     const label = args.paymentType === "engagement" ? "frais d'engagement" : "prime de succès";
@@ -516,6 +531,160 @@ export const assignVisaClass = mutation({
     });
 
     console.log("[assignVisaClass] ✅ Patch applied successfully for app:", args.applicationId, "→ broadcastVisaClass:", args.broadcastVisaClass);
+    return args.applicationId;
+  },
+});
+
+// ─── Migration : anciens dossiers créneaux → tarification créneaux courante ───
+// Éligible : package slot_only, statut non final, tier ≠ standard ou acompte ≠ tarif standard courant
+const FINAL_STATUSES = ["slot_found_awaiting_success_fee", "completed", "rejected"] as const;
+
+export const migrateToNewSlotSystem = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    // ── Ownership check avec Clerk-ID legacy variations ──
+    const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
+    if (!isAdmin && !isOwner(app.userId, identity.subject)) throw new Error("Accès non autorisé");
+
+    // ── Vérifier éligibilité (package + statut) ──
+    if (app.servicePackage !== "slot_only") throw new Error("Ce dossier n'est pas un dossier créneau");
+    if ((FINAL_STATUSES as readonly string[]).includes(app.status)) {
+      throw new Error("Ce dossier est dans un état final et ne peut pas être migré");
+    }
+
+    const isEngagementPaid = app.priceDetails?.isEngagementPaid ?? false;
+    const isSuccessFeePaid = app.priceDetails?.isSuccessFeePaid ?? false;
+    const paidAmount = app.priceDetails?.paidAmount ?? 0;
+
+    // La prime de succès déjà réglée est un état financier final — ne pas modifier
+    if (isSuccessFeePaid) {
+      throw new Error("La prime de succès de ce dossier est déjà réglée — aucune migration nécessaire");
+    }
+
+    // ── Vérifier éligibilité pricing (server-side) — évite les migrations inutiles ──
+    const currentTierIsStandard = app.slotUrgencyTier === "standard";
+    const currentFeeIsPromo = (app.priceDetails?.engagementFee ?? 0) === SLOT_URGENCY_TIERS["standard"].depositAmount;
+    if (currentTierIsStandard && currentFeeIsPromo) {
+      throw new Error("Ce dossier est déjà sur le nouveau système de tarification");
+    }
+
+    const NEW_DEPOSIT = SLOT_URGENCY_TIERS["standard"].depositAmount;
+    const NEW_SUCCESS = SLOT_URGENCY_TIERS["standard"].successAmount;
+
+    let newPriceDetails: typeof app.priceDetails;
+    let newPrice: number;
+    let logMsg: string;
+
+    if (!isEngagementPaid) {
+      // Acompte non encore payé : normaliser à la nouvelle tarification promo complète
+      newPriceDetails = {
+        engagementFee: NEW_DEPOSIT,
+        successFee: NEW_SUCCESS,
+        paidAmount: 0,
+        isEngagementPaid: false,
+        isSuccessFeePaid: false,
+      };
+      newPrice = NEW_DEPOSIT + NEW_SUCCESS;
+      logMsg = `Migration tarification créneaux — nouveau tarif : $${NEW_DEPOSIT} acompte / $${NEW_SUCCESS} solde (total $${NEW_DEPOSIT + NEW_SUCCESS}).`;
+    } else {
+      // Acompte déjà payé : conserver le montant versé, ajuster uniquement le solde à $90
+      const actualPaidEngagement = app.priceDetails?.engagementFee ?? paidAmount;
+      newPriceDetails = {
+        engagementFee: actualPaidEngagement,  // ce qui a été réellement facturé et versé
+        successFee: NEW_SUCCESS,               // solde normalisé à $90
+        paidAmount,
+        isEngagementPaid: true,
+        isSuccessFeePaid: false,
+      };
+      newPrice = actualPaidEngagement + NEW_SUCCESS;
+      logMsg = `Migration nouveau système créneaux — acompte de $${actualPaidEngagement} conservé (déjà versé). Solde normalisé : $${NEW_SUCCESS} (total : $${newPrice}).`;
+    }
+
+    const logs = app.logs ?? [];
+    await ctx.db.patch(args.applicationId, {
+      slotUrgencyTier: "standard",
+      price: newPrice,
+      priceDetails: newPriceDetails,
+      updatedAt: Date.now(),
+      logs: [...logs, makeLog(logMsg, identity.name ?? "client")],
+    });
+
+    return args.applicationId;
+  },
+});
+
+// ─── Migration : dossier_only → slot_only (créneau standard, tarif courant) ────
+// Éligible : package dossier_only, statut non final, acompte non versé,
+// destination supportée par slot_only.
+const SLOT_ONLY_DESTINATIONS = new Set(
+  SERVICE_PACKAGES.slot_only.availableFor as readonly string[]
+);
+
+export const migrateToCreneau = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    // Ownership avec Clerk-ID legacy
+    const isAdmin = getRole(identity as Record<string, unknown>) === "admin";
+    if (!isAdmin && !isOwner(app.userId, identity.subject)) throw new Error("Accès non autorisé");
+
+    // Éligibilité : dossier_only uniquement
+    if (app.servicePackage !== "dossier_only") {
+      throw new Error("Ce dossier n'est pas sur le package Formulaires & Vérification");
+    }
+
+    // Statut non final
+    if ((FINAL_STATUSES as readonly string[]).includes(app.status)) {
+      throw new Error("Ce dossier est dans un état final et ne peut pas être modifié");
+    }
+
+    // L'acompte ne doit pas encore être versé (pas de comptabilité complexe)
+    if (app.priceDetails?.isEngagementPaid) {
+      throw new Error("L'acompte est déjà versé — contactez le support pour toute modification");
+    }
+
+    // Destination supportée par slot_only
+    if (!SLOT_ONLY_DESTINATIONS.has(app.destination)) {
+      throw new Error(
+        `La destination "${app.destination}" n'est pas disponible pour le service Créneau Uniquement`
+      );
+    }
+
+    const tierData = SLOT_URGENCY_TIERS["standard"]; // $60/$90/$150
+
+    const logs = app.logs ?? [];
+    await ctx.db.patch(args.applicationId, {
+      servicePackage: "slot_only",
+      slotUrgencyTier: "standard",
+      price: tierData.total,
+      priceDetails: {
+        engagementFee: tierData.depositAmount,
+        successFee: tierData.successAmount,
+        paidAmount: 0,
+        isEngagementPaid: false,
+        isSuccessFeePaid: false,
+      },
+      updatedAt: Date.now(),
+      logs: [
+        ...logs,
+        makeLog(
+          `Passage au service Créneau Uniquement (standard). Nouveau tarif : $${tierData.depositAmount} acompte / $${tierData.successAmount} solde (total $${tierData.depositAmount + tierData.successAmount}). La recherche de créneau démarrera après règlement de l'acompte.`,
+          identity.name ?? "client"
+        ),
+      ],
+    });
+
     return args.applicationId;
   },
 });

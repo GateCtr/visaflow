@@ -11,7 +11,7 @@
  */
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { buildQuestionFocusBlock as buildSharedQuestionFocusBlock } from "../../../convex/victorIntent.js";
+import { buildQuestionFocusBlock as buildSharedQuestionFocusBlock } from "./victorIntent.js";
 import { VISA_PRICING, VISA_FULL_SERVICE, VISA_PARTIAL_SERVICE, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination } from "./constants";
 
 // ─── Option 1 : Bearer token (Bedrock API key) ───────────────────────────────

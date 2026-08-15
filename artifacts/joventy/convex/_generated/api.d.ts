@@ -34,6 +34,7 @@ import type * as spainWatcher from "../spainWatcher.js";
 import type * as traffic from "../traffic.js";
 import type * as users from "../users.js";
 import type * as victor from "../victor.js";
+import type * as victorIntent from "../victorIntent.js";
 import type * as visaClassifications from "../visaClassifications.js";
 import type * as visaDocuments from "../visaDocuments.js";
 import type * as whatsapp from "../whatsapp.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   traffic: typeof traffic;
   users: typeof users;
   victor: typeof victor;
+  victorIntent: typeof victorIntent;
   visaClassifications: typeof visaClassifications;
   visaDocuments: typeof visaDocuments;
   whatsapp: typeof whatsapp;

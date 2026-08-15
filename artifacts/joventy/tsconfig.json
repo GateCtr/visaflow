@@ -12,7 +12,7 @@
     "types": ["node", "vite/client"],
     "paths": {
       "@/*": ["./src/*"],
-      "@convex/*": ["../../convex/*"]
+      "@convex/*": ["./convex/*"]
     }
   },
   "references": []

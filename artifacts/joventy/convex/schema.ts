@@ -123,6 +123,9 @@ const hunterConfig = v.object({
   cevSiphonedAt: v.optional(v.number()),
   /** Timestamp d'expiration estimé des cookies siphonnés */
   cevSiphonedValidUntil: v.optional(v.number()),
+  // Annulation automatique du RDV existant quand la limite Overview est atteinte (Cas 2)
+  // Quand true : détecte overviewState='limit_reached' → extrait le lien Annuler → suit le flow d'annulation
+  cevAutoCancelOnLimitReached: v.optional(v.boolean()),
 });
 
 export default defineSchema({

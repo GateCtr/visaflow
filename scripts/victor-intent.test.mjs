@@ -4,7 +4,7 @@ import {
   stripAccents,
   inferQuestionFocus,
   buildQuestionFocusBlock,
-} from "../convex/victorIntent.js";
+} from "../artifacts/joventy/convex/victorIntent.js";
 
 test("stripAccents removes diacritics", () => {
   assert.equal(stripAccents("rendez-vous immédiat"), "rendez-vous immediat");

@@ -16,12 +16,12 @@ VisaFlow is a visa-appointment booking automation system for applicants in Kinsh
 | `artifacts/joventy/` | `@workspace/joventy` | React + Vite frontend (admin dashboard + client portal). Port 5000. |
 | `artifacts/captcha-service/` | `@workspace/captcha-service` | Express captcha-solving microservice (2Captcha / CapSolver / Anti-Captcha). Port 3001. |
 | `artifacts/proxy-service/` | `@workspace/proxy-service` | Express residential-proxy / IP-rotation service. Port 3002. |
-| `convex/` | — | **Canonical Convex backend** (DB schema + serverless functions). Joventy's Vite config aliases `@convex` → `../../convex`. |
+| `artifacts/joventy/convex/` | — | **Canonical Convex backend** (DB schema + serverless functions). Joventy's Vite config aliases `@convex` → `artifacts/joventy/convex`. |
 | `lib/db/` | `@workspace/db` | Drizzle ORM schema (Postgres). Separate from Convex. |
 | `lib/api-spec/`, `lib/api-zod/`, `lib/api-client-react/` | — | OpenAPI spec, generated Zod schemas, React API client. |
 | `cloudflare-worker/` | — | Edge worker for OTP email routing / webhooks. |
 
-Note: `artifacts/joventy/convex/` is a **stale duplicate** — the deployed backend is the root `convex/`. Make backend changes there.
+Note: the former root `convex/` duplicate was removed (2026-08-15). `artifacts/joventy/convex/` is the single source of truth for both frontend (`@convex` alias) and the deployed backend. Make all backend changes there.
 
 Runtime is **tsx** (direct TypeScript execution, no build step) for all backend services; only Joventy is bundled (Vite).
 
@@ -56,7 +56,7 @@ Many `test-*.ts` files at the slot-hunter root and `src/` are **live integration
 
 ### Convex backend
 
-After changing anything under `convex/`, deploy it (functions are not picked up automatically):
+After changing anything under `artifacts/joventy/convex/`, deploy it (from `artifacts/joventy/`) (functions are not picked up automatically):
 
 ```bash
 npx convex deploy --prod          # requires CONVEX_DEPLOY_KEY

@@ -6,8 +6,7 @@ description: Architecture, structure et pièges du projet Joventy importé de Gi
 # Structure du projet Joventy
 
 ## Répertoires critiques
-- `./convex/` (racine) — source of truth des fonctions Convex. Toujours éditer ici, puis copier dans `artifacts/joventy/convex/` avant de déployer.
-- `artifacts/joventy/convex/` — copie déployée. Doit rester synchronisée avec `./convex/`.
+- `artifacts/joventy/convex/` — UNIQUE source de vérité Convex (frontend via alias `@convex` ET backend déployé). Le doublon racine `/convex/` a été supprimé le 2026-08-15 — ne jamais le recréer.
 - `artifacts/joventy/src/` — frontend React/Vite.
 
 ## Architecture 4 services
@@ -54,10 +53,5 @@ L'image Docker Railway doit utiliser exactement la même version Playwright que 
 
 **How to apply:** Lors d'une mise à jour de `playwright`, mettre à jour simultanément le tag `mcr.microsoft.com/playwright:vX.Y.Z-jammy` dans les Dockerfiles Railway et effectuer un `docker build` avant le déploiement.
 
-## Double répertoire convex — piège critique (2026-08-15)
-Il existe DEUX répertoires convex dans le repo :
-- `/convex/` (racine) : utilisé par le **frontend Vite** via l'alias `@convex` défini dans `artifacts/joventy/vite.config.ts` (`convexRoot = path.resolve(__dirname, "../../convex")`)
-- `/artifacts/joventy/convex/` : utilisé par les **fonctions backend Convex** (deploy via `npx convex deploy`)
-
-**Toujours éditer les deux** quand on modifie des constantes partagées (SERVICE_PACKAGES, VISA_PARTIAL_SERVICE, VISA_FULL_SERVICE, etc.).
-Le typecheck passe même avec des divergences car tsconfig.json pointe aussi vers la racine (`"@convex/*": ["../../convex/*"]`).
+## Double répertoire convex — résolu (2026-08-15)
+Le doublon racine `/convex/` a été supprimé ; `artifacts/joventy/convex/` est l'unique source de vérité (frontend et backend déployé). Ne jamais recréer un second dossier convex.

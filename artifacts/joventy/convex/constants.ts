@@ -650,7 +650,7 @@ export const SERVICE_PACKAGES = {
     key: "dossier_only" as const,
     label: "Accompagnement Partiel",
     tagline: "Paiement au succès",
-    description: "Vous fournissez votre passeport et vos propres documents justificatifs. Joventy complète uniquement les pièces manquantes, puis gère le reste : vérification, profil consulaire et capture du créneau. Prime de succès payée uniquement à l'obtention du visa.",
+    description: "Vous fournissez votre passeport et vos propres documents justificatifs. Joventy complète uniquement les pièces manquantes, puis gère la vérification, le profil consulaire et la capture du créneau. Prime de succès payée uniquement à l'obtention du visa.",
     hasSuccessFee: true,
     availableFor: "all" as const,
   },
