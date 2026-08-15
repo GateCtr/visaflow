@@ -51,6 +51,7 @@ const DEMO_MODE = process.env.SPAIN_HEADED === "1";
 
 import { SAOPOLO_PORTAL_URL, SAOPOLO_WIDGET_KEY } from "../spain-portals.js";
 import { runSpainHttpProbe, scanSpainHttp } from "../spain-http-scanner.js";
+import { executeHttpBooking, type SpainBookingConfig, type ExtractedSlotInfo } from "../spain-http-booking.js";
 import { ensureSpainCfSession, spainCfFetch, getActiveSpainCfSession } from "../spain-soax-solver.js";
 import { initSpainRedis, removeSpainCfSessionFromRedis } from "../spain-redis-persistence.js";
 import { spainPersistentBrowser } from "../spain-persistent-browser.js";
@@ -331,8 +332,87 @@ async function main() {
     }
   }
 
+  // ─── Étape 4 : BOOKING RÉEL (executeHttpBooking) ──────────────────────────
+  // Objectif : parcourir le flow scan → booking avec le VRAI code de booking
+  // et vérifier que le problème "services" ne se reproduit plus :
+  //   - _services doit être propagé par runSpainHttpProbe (fix plomberie)
+  //   - executeHttpBooking ne doit JAMAIS échouer à l'étape service quand un
+  //     targetServiceId est connu (fix garde-fou), même sans lien #selectservice
+  //     dans le HTML (rendu SPA = normal).
+  // Sans créneau réel, le flow échouera plus loin (datetime/selectslot/signin) —
+  // c'est attendu : le test valide que l'étape SERVICE est franchie.
+  section("Étape 4 — Booking réel (executeHttpBooking) — validation étape service");
+  let bookingServiceStageOk = false;
+  let bookingStatus = "(non exécuté)";
+  let bookingError = "";
+  {
+    const probeServices = ((probe as any)._services ?? []) as ExtractedSlotInfo[];
+    log("INFO", `_services propagés par le probe : ${probeServices.length > 0 ? probeServices.map(s => `"${s.serviceName}" (${s.serviceId})`).join(", ") : "aucun"}`);
+    if (probe.status === "found" && probeServices.length === 0) {
+      log("ERROR", "RÉGRESSION PLOMBERIE : probe=found mais _services vide (runSpainHttpProbe a perdu les services)");
+    }
+
+    // Service cible : _services du probe > getservices/ de l'étape 3b > hardcodé Saopolo
+    const targetServiceId = probeServices[0]?.serviceId || visaServiceId || "";
+    if (!targetServiceId) {
+      log("ERROR", "Aucun serviceId connu (ni probe ni getservices/) — impossible de tester le booking");
+    } else {
+      // Créneau cible : celui du probe si found, sinon une date future plausible
+      // (le booking échouera à datetime/selectslot — APRÈS l'étape service).
+      const targetDate = (probe as any).slot?.date
+        ?? new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const targetTime = (probe as any).slot?.time ?? "09:00";
+      log("STEP", `executeHttpBooking — service=${targetServiceId} créneau=${targetDate} ${targetTime}`);
+
+      const bookingConfig: SpainBookingConfig = {
+        login: process.env.SAOPOLO_TEST_LOGIN ?? "test.saopola@example.com",
+        password: process.env.SAOPOLO_TEST_PASSWORD ?? "TestPassword123!",
+        applicationId: "test-saopola-e2e",
+        applicantName: "TEST SAOPOLA E2E",
+        targetServiceId,
+        availableServices: probeServices, // peut être vide → doit quand même passer grâce au targetServiceId
+        targetDate,
+        targetTime,
+      } as SpainBookingConfig;
+
+      const tB = Date.now();
+      const bookingSessionCf = getActiveSpainCfSession() ?? session;
+      const mainHtmlForBooking = (probe as any)._mainHtml ?? "";
+      try {
+        const bres = await executeHttpBooking(bookingSessionCf, PORTAL_URL, mainHtmlForBooking, bookingConfig);
+        bookingStatus = bres.status;
+        bookingError = bres.errorMessage ?? "";
+        const elapsed = ((Date.now() - tB) / 1000).toFixed(1);
+        log("INFO", `executeHttpBooking → status=${bres.status} (${elapsed}s)${bres.errorMessage ? ` — ${bres.errorMessage}` : ""}`);
+
+        // ── Assertions anti-régression "services" ──
+        const msg = bres.errorMessage ?? "";
+        const serviceStageFailure =
+          msg.includes("Aucun service rendu dans le HTML") ||
+          msg.includes("non trouvé dans le HTML") ||
+          msg.includes("Configuration incomplète");
+        if (bres.status === "booked") {
+          bookingServiceStageOk = true;
+          log("OK", "🎉 BOOKED — flow complet réussi de bout en bout !");
+        } else if (serviceStageFailure) {
+          log("ERROR", `RÉGRESSION SERVICE : le booking a échoué à l'étape service — "${msg}"`);
+        } else {
+          bookingServiceStageOk = true;
+          log("OK", `✅ Étape SERVICE franchie — échec plus loin dans le flow (attendu sans créneau réel) : ${bres.status}${msg ? ` — ${msg}` : ""}`);
+        }
+      } catch (e) {
+        bookingStatus = "exception";
+        bookingError = String(e);
+        log("ERROR", `executeHttpBooking exception : ${e}`);
+      }
+    }
+  }
+
   // ─── Résumé ────────────────────────────────────────────────────────────────
   section("Résumé final");
+  log(bookingServiceStageOk ? "OK" : "ERROR",
+    `Étape service   : ${bookingServiceStageOk ? "✅ FRANCHIE (plus de blocage 'Aucun service rendu')" : "❌ ÉCHEC — régression services"}`);
+  log("INFO", `Booking status  : ${bookingStatus}${bookingError ? ` — ${bookingError}` : ""}`);
   log("INFO", `Portal testé    : ${PORTAL_URL}`);
   log("INFO", `Widget key      : ${WIDGET_KEY}`);
   log("INFO", `Service visa    : ${visaServiceId || "(non détecté)"}`);

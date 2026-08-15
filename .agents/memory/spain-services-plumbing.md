@@ -14,3 +14,4 @@ description: Why "aucun service connu" recurs and kills bookings despite the sca
 - `state=1` + `times=[]` = day open, real hour unknown; the "09:00" is a hardcoded default — label it as unconfirmed.
 - If `targetServiceId` is known (mono-service portal, bkt1181774 Kinshasa), booking must proceed without requiring the service in HTML or in a list.
 - Thursday logs (getservices/ JSONP fallback → 2 services, datetime/ confirmed 14 slots Sept) proved the scanner side is correct; only the probe wrapper lost the data.
+- Fix verified live on Saopola 2026-08-15 (test-saopola-live.ts, full scan→booking): _services propagated, service stage passed with 0 HTML links, flow reached signin/. Remaining blocker is signin (getsigninfields 0B in pure HTTP → hash-nav/browser path needed).
