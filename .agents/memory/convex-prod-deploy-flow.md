@@ -7,8 +7,11 @@ Joventy's `CONVEX_DEPLOYMENT` env var points directly at the `prod:` deployment 
 
 **Why:** After adding a new optional field + two new queries, the client's `useMutation` calls to the field-extended mutation threw "Server Error" until the functions were explicitly deployed, because the live deployment still had the old validator without the new field.
 
-**How to apply:** After changing any `convex/schema.ts` or `convex/*.ts` file, run:
-```
-CONVEX_DEPLOY_KEY=$CONVEX_DEPLOY_KEY npx convex deploy --yes
-```
-If `CONVEX_DEPLOY_KEY` secret is missing, request it from the user (Convex dashboard → Settings → Deploy Keys). Verify via `refresh_all_logs` / browser console that the previous "Server Error" for the affected mutation/query is gone after redeploying.
+**How to apply:** Deploying Joventy to production always requires TWO steps — never just one:
+
+1. `git push` → déclenche le build Vercel (frontend statique)
+2. `cd artifacts/joventy && CONVEX_DEPLOY_KEY=$(printenv CONVEX_DEPLOY_KEY) npx convex deploy --yes` → met à jour les fonctions backend
+
+Oublier l'étape 2 laisse le backend (chat.ts, emails.ts, applications.ts, etc.) sur l'ancienne version même si le frontend est à jour.
+
+If `CONVEX_DEPLOY_KEY` secret is missing, request it from the user (Convex dashboard → Settings → Deploy Keys).
