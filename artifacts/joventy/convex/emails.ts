@@ -609,7 +609,7 @@ export const sendEngagementValidatedClient = internalAction({
       ? "Notre système de surveillance va maintenant rechercher un créneau de rendez-vous à l'ambassade. Vous serez alerté dès qu'un créneau est disponible — restez connecté à votre espace Joventy."
       : isDossierOnly
         ? "L'équipe Joventy va maintenant compléter vos pièces manquantes, constituer votre profil consulaire et capturer votre créneau. Préparez vos documents et uploadez-les dans votre espace client — nous vous contacterons pour la suite."
-        : "L'équipe Joventy va maintenant examiner votre dossier. Préparez vos documents et uploadez-les dans votre espace client — nous vous contacterons pour la suite.";
+        : "L'équipe Joventy va maintenant constituer l'intégralité de votre dossier. Tenez votre passeport et une photo d'identité à portée de main — un conseiller vous contactera pour recueillir vos informations personnelles de base et lancer la préparation.";
 
     const formuleRow = infoTable(
       info("Formule", servicePackageLabel(args.servicePackage)) +

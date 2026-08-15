@@ -29,10 +29,10 @@ const CONTRACT_SECTIONS = [
         </p>
         <ul className="space-y-1.5 pl-3 border-l-2 border-[#F59E0B]/30">
           {[
-            ["Accompagnement Complet", "remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire ou soumission e-Visa."],
+            ["Accompagnement Complet", "le client fournit passeport, photo d'identité et informations personnelles. Joventy fournit tous les autres documents du dossier (réservations, justificatifs, garanties, formulaires officiels, etc.) et gère le profil consulaire/e-Visa et la capture du créneau."],
             ["Créneau Uniquement", "surveillance automatisée des portails consulaires et capture d'un créneau disponible."],
             ["E-Visa / Visa sans rendez-vous", "constitution, vérification et soumission du dossier sur le portail officiel compétent."],
-            ["Accompagnement Partiel", "vous fournissez vos documents ou la majorité ; Joventy complète les pièces manquantes, constitue votre profil et capture votre créneau. Prime de succès due uniquement à l'obtention de votre visa."],
+            ["Accompagnement Partiel", "le client fournit son passeport et ses propres documents justificatifs. Joventy complète uniquement les pièces manquantes, gère la vérification, le profil et la capture du créneau. Prime de succès due uniquement à l'obtention du visa."],
           ].map(([label, desc]) => (
             <li key={label} className="pl-3 text-sm"><strong>{label} :</strong> {desc}</li>
           ))}

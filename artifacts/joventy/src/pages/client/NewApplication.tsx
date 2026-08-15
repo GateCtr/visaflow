@@ -106,7 +106,7 @@ function getPackageInfo(
       return {
         label: base.label,
         tagline: "Clé en main",
-        description: `Joventy prend en charge l'intégralité de votre demande de ${name} : constitution du dossier, formulaires officiels et soumission sur le portail gouvernemental. Vous recevez votre visa directement — aucun déplacement. Paiement uniquement à l'obtention.`,
+        description: `Vous fournissez votre passeport, une photo d'identité et vos informations personnelles. Joventy prend en charge tous les documents requis et soumet votre demande de ${name} sur le portail officiel. Paiement uniquement à l'obtention du visa.`,
       };
     }
     const isVisaD = visaType.includes("Long Séjour") || visaType.includes("Visa D");
@@ -124,7 +124,7 @@ function getPackageInfo(
     return {
       label: base.label,
       tagline: "Clé en main",
-      description: `Joventy gère votre ${visaLabel} de A à Z : dossier complet, formulaires officiels, profil consulaire et obtention de votre visa. Paiement uniquement à l'obtention — vous ne payez que si vous obtenez votre visa.`,
+      description: `Vous fournissez votre passeport, une photo d'identité et vos informations de base. Joventy prend en charge tous les autres documents (réservations, justificatifs, garanties, formulaires officiels, etc.), gère le profil consulaire et capture votre créneau pour ${visaLabel}. Paiement uniquement à l'obtention.`,
     };
   }
 
@@ -223,7 +223,7 @@ function getPackageInfo(
       return {
         label: base.label,
         tagline: base.tagline,
-        description: `Vous fournissez vos documents ou la majorité. Joventy complète les pièces manquantes, constitue votre dossier et soumet votre demande sur le ${portal}. Prime de succès payée uniquement à l'obtention de votre visa.`,
+        description: `Vous fournissez votre passeport et vos propres justificatifs. Joventy complète les pièces manquantes et soumet votre demande sur le ${portal}. Prime de succès payée uniquement à l'obtention du visa.`,
       };
     }
     const isVisaDDossier = visaType.includes("Long Séjour") || visaType.includes("Visa D");
@@ -241,7 +241,7 @@ function getPackageInfo(
     return {
       label: base.label,
       tagline: base.tagline,
-      description: `Vous fournissez vos documents ou la majorité. Joventy complète les pièces manquantes, constitue votre profil et capture votre créneau. Vous déposez vous-même votre dossier à ${ambassade} le jour du rendez-vous. Prime de succès payée uniquement à l'obtention de votre visa.`,
+      description: `Vous fournissez votre passeport et vos propres documents justificatifs. Joventy complète les pièces manquantes, puis gère la vérification, le profil consulaire et la capture de votre créneau à ${ambassade}. Prime de succès payée uniquement à l'obtention du visa.`,
     };
   }
 

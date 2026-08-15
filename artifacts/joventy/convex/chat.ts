@@ -461,8 +461,8 @@ TARIFS RÉELS DU SITE (tous en USD, hors frais consulaires) :
 ${buildPricingCatalogBlock()}
 ${processingStatsBlock}
 MODÈLE TARIFAIRE :
-- ACCOMPAGNEMENT COMPLET : 500 USD d'engagement (payés à l'ouverture du dossier) + 1 000 USD prime de succès (payée uniquement à l'obtention du visa). Total : 1 500 USD. Toutes destinations. Joventy gère tout de A à Z.
-- ACCOMPAGNEMENT PARTIEL : 200 USD d'engagement + 400 USD prime de succès à l'obtention (total 600 USD). Le client fournit ses pièces ou la majorité, Joventy complète les documents manquants, constitue le profil, capture le créneau. Pour visas consulaires : le client dépose lui-même à l'ambassade le jour du rendez-vous. Prime due uniquement à l'obtention du visa.
+- ACCOMPAGNEMENT COMPLET : 500 USD d'engagement + 1 000 USD prime de succès (payée uniquement à l'obtention). Total : 1 500 USD. Le client fournit passeport, photo d'identité et informations personnelles de base. Joventy fournit TOUS les autres documents du dossier (réservations, justificatifs, garanties, formulaires officiels, etc.) et gère le profil consulaire/e-Visa + capture du créneau. Toutes destinations.
+- ACCOMPAGNEMENT PARTIEL : 200 USD d'engagement + 400 USD prime de succès (payée uniquement à l'obtention). Total : 600 USD. Le client fournit son passeport ET ses propres documents justificatifs. Joventy complète UNIQUEMENT les pièces manquantes, puis gère la vérification, le profil consulaire et la capture du créneau — même processus que le Complet mais le client apporte déjà ses docs.
 - CRÉNEAU UNIQUEMENT (slot_only) : 350 USD — payés UNIQUEMENT après obtention du créneau. Aucun acompte, zéro paiement à l'avance.
 - Paiement : M-Pesa, Airtel Money, Orange Money (pas de carte internationale)
 - Frais consulaires : séparés, payés directement au gouvernement
@@ -489,8 +489,8 @@ CHEMIN D'ACCÈS : Menu → "Nouveau Dossier" dans le tableau de bord, ou lien di
 
 ÉTAPE 2 — PACKAGE :
 • Deux packages proposés pour le visa :
-  - "Accompagnement Complet" (recommandé) : Joventy gère tout de A à Z — dossier, formulaires, profil, créneau, obtention du visa. 500 USD engagement + 1 000 USD prime de succès = 1 500 USD. Paiement uniquement à l'obtention du visa.
-  - "Accompagnement Partiel" : Le client fournit ses pièces ou la majorité, Joventy complète les manquantes, constitue le profil, capture le créneau. Pour visas consulaires : le client dépose lui-même à l'ambassade. Prime de succès payée uniquement à l'obtention.
+  - "Accompagnement Complet" (recommandé) : client fournit passeport + photo + infos de base — Joventy fournit tous les autres documents (réservations, justificatifs, garanties, formulaires, etc.), gère le profil et capture le créneau. 500 USD engagement + 1 000 USD prime de succès = 1 500 USD. Paiement uniquement à l'obtention.
+  - "Accompagnement Partiel" : client fournit passeport + ses propres justificatifs — Joventy complète uniquement les pièces manquantes, gère le profil et capture le créneau. 200 USD engagement + 400 USD prime de succès = 600 USD. Prime payée uniquement à l'obtention.
 • Note : le "Créneau Uniquement" (350 USD, aucun acompte) est accessible via le formulaire dédié "Demande de créneau", pas ici.
 • Tip pour débloquer : "Si tu vois 2 options, clique sur celle qui correspond à ta situation. Pas sûr ? Choisis 'Accompagnement Complet' — c'est le plus simple et le plus complet."
 
