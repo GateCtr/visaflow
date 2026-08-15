@@ -479,7 +479,7 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
   const paidAmount = app.priceDetails?.paidAmount ?? 0;
   const isEngagementPaid = app.priceDetails?.isEngagementPaid ?? false;
   const isSuccessFeePaid = app.priceDetails?.isSuccessFeePaid ?? false;
-  const total = engagementFee + (isDossierOnly ? 0 : successFee);
+  const total = engagementFee + successFee;
   const balanceDue = Math.max(0, total - paidAmount);
 
   const createdDate = new Date(app._creationTime).toLocaleDateString("fr-FR", {
@@ -658,24 +658,20 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
                     <StatusBadge paid={isEngagementPaid} />
                   </td>
                 </tr>
-                {!isDossierOnly && (
-                  <tr className="border-b border-slate-100">
-                    <td className="px-3 sm:px-4 py-3 text-slate-800 font-semibold text-sm">
-                      Prime de succès
-                    </td>
-                    <td className="px-3 sm:px-4 py-3 text-slate-500 text-xs">
-                      {successModel === "evisa"
-                        ? "Due uniquement si le visa est accordé par l'autorité compétente"
-                        : "Due uniquement après obtention effective d'un créneau consulaire"}
-                    </td>
-                    <td className="px-3 sm:px-4 py-3 text-right font-bold text-slate-900 whitespace-nowrap">
-                      {formatCurrency(successFee)}
-                    </td>
-                    <td className="px-3 sm:px-4 py-3 text-center">
-                      <StatusBadge paid={isSuccessFeePaid} />
-                    </td>
-                  </tr>
-                )}
+                <tr className="border-b border-slate-100">
+                  <td className="px-3 sm:px-4 py-3 text-slate-800 font-semibold text-sm">
+                    Prime de succès
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 text-slate-500 text-xs">
+                    Due uniquement à l'obtention de votre visa
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                    {formatCurrency(successFee)}
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 text-center">
+                    <StatusBadge paid={isSuccessFeePaid} />
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

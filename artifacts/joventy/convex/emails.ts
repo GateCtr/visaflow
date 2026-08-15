@@ -608,7 +608,7 @@ export const sendEngagementValidatedClient = internalAction({
     const nextStepText = isSlotOnly
       ? "Notre système de surveillance va maintenant rechercher un créneau de rendez-vous à l'ambassade. Vous serez alerté dès qu'un créneau est disponible — restez connecté à votre espace Joventy."
       : isDossierOnly
-        ? "L'équipe Joventy va maintenant préparer et vérifier vos formulaires officiels. Nous vous contacterons via la messagerie de votre espace client."
+        ? "L'équipe Joventy va maintenant compléter vos pièces manquantes, constituer votre profil consulaire et capturer votre créneau. Préparez vos documents et uploadez-les dans votre espace client — nous vous contacterons pour la suite."
         : "L'équipe Joventy va maintenant examiner votre dossier. Préparez vos documents et uploadez-les dans votre espace client — nous vous contacterons pour la suite.";
 
     const formuleRow = infoTable(

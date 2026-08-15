@@ -7,6 +7,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useAuth } from "@/lib/auth";
 import { VISA_PRICING, SERVICE_PACKAGES, VISA_PARTIAL_SERVICE, getAvailablePackages, type ServicePackage } from "@convex/constants";
+// Tarification Accompagnement Complet — miroir de VISA_FULL_SERVICE dans constants.ts
+const FULL_SERVICE_DEFAULTS = { engagementFee: 500, successFee: 1000, total: 1500 } as const;
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -423,7 +425,11 @@ export default function NewApplication() {
                             {VISA_PRICING[dest.id as keyof typeof VISA_PRICING] && (
                               <div className="mt-2 text-xs text-primary/70 font-medium">
                                 Engagement :{" "}
-                                {formatCurrency(VISA_PRICING[dest.id as keyof typeof VISA_PRICING].engagementFee)}
+                                {formatCurrency(
+                                  isDossierOnly
+                                    ? VISA_PARTIAL_SERVICE.engagementFee
+                                    : VISA_PRICING[dest.id as keyof typeof VISA_PRICING].engagementFee
+                                )}
                               </div>
                             )}
                           </div>
@@ -604,33 +610,33 @@ export default function NewApplication() {
                               {pkgInfo.slotNote}
                             </p>
                           )}
-                          {pricing && (
-                            <div className="mt-3 flex flex-wrap gap-3">
-                              {pkgKey === "dossier_only" ? (
-                                <>
+                          {(() => {
+                              const engFee = pkgKey === "dossier_only"
+                                ? VISA_PARTIAL_SERVICE.engagementFee
+                                : (pricing?.engagementFee ?? FULL_SERVICE_DEFAULTS.engagementFee);
+                              const sucFee = pkgKey === "dossier_only"
+                                ? VISA_PARTIAL_SERVICE.successFee
+                                : (pricing?.successFee ?? FULL_SERVICE_DEFAULTS.successFee);
+                              const tot = pkgKey === "dossier_only"
+                                ? VISA_PARTIAL_SERVICE.total
+                                : (pricing?.total ?? FULL_SERVICE_DEFAULTS.total);
+                              return (
+                                <div className="mt-3 flex flex-wrap gap-2">
                                   <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
                                     <span className="text-slate-500">Engagement : </span>
-                                    <span className="font-bold text-primary">{formatCurrency(VISA_PARTIAL_SERVICE.engagementFee)}</span>
+                                    <span className="font-bold text-primary">{formatCurrency(engFee)}</span>
                                   </div>
                                   <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
-                                    <span className="text-slate-500">Prime de succès : </span>
-                                    <span className="font-bold text-primary">{formatCurrency(VISA_PARTIAL_SERVICE.successFee)}</span>
+                                    <span className="text-slate-500">Prime : </span>
+                                    <span className="font-bold text-primary">{formatCurrency(sucFee)}</span>
                                   </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
-                                    <span className="text-slate-500">Engagement : </span>
-                                    <span className="font-bold text-primary">{formatCurrency(pricing.engagementFee)}</span>
+                                  <div className="text-xs bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+                                    <span className="text-slate-500">Total : </span>
+                                    <span className="font-bold text-secondary">{formatCurrency(tot)}</span>
                                   </div>
-                                  <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
-                                    <span className="text-slate-500">Prime de succès : </span>
-                                    <span className="font-bold text-primary">{formatCurrency(pricing.successFee)}</span>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
+                                </div>
+                              );
+                            })()}
                         </div>
                         <div
                           className={`w-5 h-5 rounded-full border-2 flex-shrink-0 mt-1 transition-all ${
