@@ -966,10 +966,10 @@ export default function ClientApplicationDetail() {
         </div>
       )}
 
-      {/* Spain OTP config card — shown when engagement paid, not completed/rejected */}
-      {app.destination === "spain" && isEngagementPaid && !isCompleted && !isRejected && appId && (
+      {/* Spain OTP config card — disabled (OTP flow retired) */}
+      {/* {app.destination === "spain" && isEngagementPaid && !isCompleted && !isRejected && appId && (
         <SpainOtpConfigCard appId={appId} />
-      )}
+      )} */}
 
       {/* Dossier only — completed card */}
       {isCompleted && isDossierOnly && (

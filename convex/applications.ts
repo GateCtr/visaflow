@@ -197,6 +197,8 @@ export const create = mutation({
     )),
     cevTargetCountry: v.optional(v.string()),
     userWhatsapp: v.optional(v.string()),
+    spainHasCredentials: v.optional(v.boolean()),
+    joventyWillSendSpainEmail: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();

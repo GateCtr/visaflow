@@ -767,7 +767,7 @@ export const setSlotHunting = mutation({
         applicationId: args.applicationId,
       });
 
-      if (app.destination === "spain") {
+      if (app.destination === "spain" && !(app as { spainHasCredentials?: boolean }).spainHasCredentials) {
         const travelDateFormatted = app.travelDate
           ? (() => {
               const d = new Date(app.travelDate + "T12:00:00");
@@ -777,14 +777,28 @@ export const setSlotHunting = mutation({
               return `${dd}${mm}${yyyy}`;
             })()
           : undefined;
-        await ctx.scheduler.runAfter(2000, internal.emails.sendSpainPreRegistrationClient, {
-          to: app.userEmail,
-          applicantName: app.applicantName,
-          applicationId: args.applicationId,
-          travelDate: travelDateFormatted,
-        });
+        const joventyWillSend = (app as { joventyWillSendSpainEmail?: boolean }).joventyWillSendSpainEmail;
+        if (!joventyWillSend) {
+          await ctx.scheduler.runAfter(2000, internal.emails.sendSpainPreRegistrationClient, {
+            to: app.userEmail,
+            applicantName: app.applicantName,
+            applicationId: args.applicationId,
+            travelDate: travelDateFormatted,
+          });
+        }
         const travelDateDisplay = travelDateFormatted ?? "JJMMAAAA";
-        const spainSystemMsg =
+        let spainSystemMsg: string;
+        if (joventyWillSend) {
+          spainSystemMsg =
+`🇪🇸 Bonne nouvelle ! Notre équipe se charge d'envoyer le mail d'inscription à l'ambassade d'Espagne en votre nom.
+
+Vous n'avez rien à faire pour l'instant. Dès que l'ambassade nous envoie vos identifiants (identifiant + mot de passe), notre robot de surveillance réservera automatiquement le premier créneau disponible correspondant à vos dates.
+
+ℹ️ Délai habituel : 15 à 45 jours ouvrables pour la réponse de l'ambassade.
+🔍 Suivi de dossier : sutramiteconsular.maec.es
+💶 Frais consulaires (90 €/adulte) payés directement à l'ambassade — non inclus dans le tarif Joventy`;
+        } else {
+          spainSystemMsg =
 `🇪🇸 ACTION REQUISE — Inscription auprès de l'ambassade d'Espagne
 
 Notre robot de surveillance est actif. Pour qu'il puisse réserver votre créneau sur citaconsular.es, vous devez d'abord obtenir vos identifiants auprès de l'ambassade en 2 étapes :
@@ -814,6 +828,7 @@ Dès que l'ambassade vous envoie votre identifiant et mot de passe, répondez à
 ℹ️ Horaires ambassade : lun–ven 8h30–14h (Kinshasa)
 🔍 Suivi de dossier : sutramiteconsular.maec.es
 💶 Frais consulaires (90 €/adulte) payés directement à l'ambassade — non inclus dans le tarif Joventy`;
+        }
         await ctx.scheduler.runAfter(3000, internal.messages.sendSystemMessage, {
           applicationId: args.applicationId,
           content: spainSystemMsg,

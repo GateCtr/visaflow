@@ -939,7 +939,7 @@ interface SpainScanTraceData {
   bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number }>;
 }
 
-function boolBadge(value: boolean | null | undefined, label?: string): JSX.Element {
+function boolBadge(value: boolean | null | undefined, label?: string) {
   const v = value === true;
   const nullish = value === null || value === undefined;
   const text = nullish ? "n/a" : v ? "true" : "false";

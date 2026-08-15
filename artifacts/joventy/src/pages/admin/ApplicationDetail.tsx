@@ -548,7 +548,8 @@ export default function AdminApplicationDetail() {
         setHunterNightMode((hcV3.nightModeEnabled as boolean) ?? true);
         setHunterPreferredProxy((hcV3.preferredProxy as string) ?? "");
       } else {
-        setHunterUsername("");
+        // Pre-fill username with passport number when no hunterConfig exists yet
+        setHunterUsername((app as { passportNumber?: string }).passportNumber ?? "");
         setHunterPassword("");
         setHunterActive(false);
         setHunterTwoCaptchaKey("");
@@ -836,6 +837,33 @@ export default function AdminApplicationDetail() {
                     </div>
                   ))}
                 </div>
+              </div>
+            );
+          })()}
+
+          {/* Spain email flags — visible for Spain slot_only dossiers */}
+          {app.destination === "spain" && isSlotOnly && (() => {
+            const joventyWillSend = (app as { joventyWillSendSpainEmail?: boolean }).joventyWillSendSpainEmail;
+            const hasCredentials = (app as { spainHasCredentials?: boolean }).spainHasCredentials;
+            if (!joventyWillSend && !hasCredentials) return null;
+            return (
+              <div className="mt-4 border border-orange-200 bg-orange-50/60 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🇪🇸</span>
+                  <span className="text-sm font-bold text-primary">Inscription ambassade Espagne</span>
+                </div>
+                {joventyWillSend && (
+                  <div className="flex items-center gap-2 text-sm text-orange-800 bg-orange-100 rounded-lg px-3 py-2">
+                    <span className="text-base">📬</span>
+                    <span><strong>Joventy envoie le mail</strong> — notre équipe doit contacter emb.kinshasa.citasvis@maec.es au nom du client. Joindre les documents du dossier.</span>
+                  </div>
+                )}
+                {hasCredentials && (
+                  <div className="flex items-center gap-2 text-sm text-green-800 bg-green-100 rounded-lg px-3 py-2">
+                    <span className="text-base">✅</span>
+                    <span><strong>Client a déjà ses identifiants</strong> — pas d'email d'inscription à envoyer. Configurer le hunter avec les identifiants fournis en messagerie.</span>
+                  </div>
+                )}
               </div>
             );
           })()}

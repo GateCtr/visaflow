@@ -170,6 +170,7 @@ export default function NewCreneauApplication() {
   const [nationality, setNationality] = useState("Congolaise (RDC)");
   // Spain-specific
   const [emailSentToEmbassy, setEmailSentToEmbassy] = useState(false);
+  const [joventyWillSendSpainEmail, setJoventyWillSendSpainEmail] = useState(false);
   const [spainFiles, setSpainFiles] = useState<Record<string, File | null>>({
     passport_scan: null, photo_passport: null, selfie_passport: null,
     flight_booking: null, hotel_booking: null, health_insurance: null,
@@ -199,7 +200,7 @@ export default function NewCreneauApplication() {
       setStep("info");
     } else if (step === "info") {
       if (!validateInfo()) return;
-      if (dest === "spain" && !emailSentToEmbassy) {
+      if (dest === "spain" && !emailSentToEmbassy && !joventyWillSendSpainEmail) {
         setStep("spain-uploads");
       } else {
         setStep("recap");
@@ -211,7 +212,7 @@ export default function NewCreneauApplication() {
 
   const goBack = () => {
     if (step === "recap") {
-      setStep(dest === "spain" && !emailSentToEmbassy ? "spain-uploads" : "info");
+      setStep(dest === "spain" && !emailSentToEmbassy && !joventyWillSendSpainEmail ? "spain-uploads" : "info");
     } else if (step === "spain-uploads") {
       setStep("info");
     } else if (step === "info") {
@@ -271,6 +272,8 @@ export default function NewCreneauApplication() {
         cevTargetCountry: dest === "schengen" ? cevTargetCountry : undefined,
         slotBookingRefs: undefined,
         userWhatsapp: userWhatsapp.trim() || undefined,
+        spainHasCredentials: dest === "spain" && emailSentToEmbassy ? true : undefined,
+        joventyWillSendSpainEmail: dest === "spain" && joventyWillSendSpainEmail ? true : undefined,
       });
 
       // Upload des documents (optionnels) — les résultats sont collectés pour informer l'utilisateur
@@ -312,7 +315,7 @@ export default function NewCreneauApplication() {
   const STEP_LABELS: { key: WizardStep; label: string }[] = [
     { key: "destination", label: "Destination" },
     { key: "info", label: "Vos informations" },
-    ...(dest === "spain" && !emailSentToEmbassy ? [{ key: "spain-uploads" as WizardStep, label: "Documents" }] : []),
+    ...(dest === "spain" && !emailSentToEmbassy && !joventyWillSendSpainEmail ? [{ key: "spain-uploads" as WizardStep, label: "Documents" }] : []),
     { key: "recap", label: "Confirmation" },
   ];
   const stepIdx = STEP_LABELS.findIndex((s) => s.key === step);
@@ -470,33 +473,63 @@ export default function NewCreneauApplication() {
               </div>
             )}
 
-            {/* Champs Espagne — instruction credentials via messagerie sécurisée */}
+            {/* Champs Espagne — gestion inscription ambassade */}
             {dest === "spain" && (
               <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 flex items-start gap-3">
-                  <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                  <div>
-                    <p className="font-semibold mb-1">Identifiants portail Espagne — partagés en toute sécurité</p>
-                    <p>L'ambassade vous envoie un identifiant + mot de passe par email. Après création du dossier, partagez-les avec notre équipe via la <strong>messagerie sécurisée</strong> de votre espace client. Vos identifiants ne sont jamais stockés dans votre dossier public.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                  <MessageCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
-                  <p className="text-xs text-emerald-800">
-                    <strong>Après création du dossier :</strong> rendez-vous dans "Messagerie" → votre dossier → envoyez votre n° de passeport + mot de passe portail à notre équipe.
-                  </p>
-                </div>
-                <label className="flex items-start gap-3 cursor-pointer group">
+                {/* Checkbox 1 — a déjà ses identifiants */}
+                <label className="flex items-start gap-3 cursor-pointer group p-4 rounded-xl border-2 border-border hover:border-secondary/40 transition-colors">
                   <input
                     type="checkbox"
                     checked={emailSentToEmbassy}
-                    onChange={(e) => setEmailSentToEmbassy(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary"
+                    onChange={(e) => {
+                      setEmailSentToEmbassy(e.target.checked);
+                      if (e.target.checked) setJoventyWillSendSpainEmail(false);
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary flex-shrink-0"
                   />
-                  <span className="text-sm text-primary group-hover:text-primary/80">
-                    J'ai déjà envoyé mon mail à l'ambassade et reçu mes identifiants
-                  </span>
+                  <div>
+                    <span className="text-sm font-semibold text-primary group-hover:text-primary/80">
+                      J'ai déjà envoyé mon mail à l'ambassade et reçu mes identifiants
+                    </span>
+                    <p className="text-xs text-muted-foreground mt-1">Cochez si vous avez déjà reçu votre identifiant + mot de passe de emb.kinshasa.citasvis@maec.es. Partagez-les via la messagerie sécurisée après création.</p>
+                  </div>
                 </label>
+
+                {/* Checkbox 2 — visible seulement si checkbox 1 non cochée */}
+                {!emailSentToEmbassy && (
+                  <label className="flex items-start gap-3 cursor-pointer group p-4 rounded-xl border-2 border-border hover:border-secondary/40 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={joventyWillSendSpainEmail}
+                      onChange={(e) => setJoventyWillSendSpainEmail(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-secondary focus:ring-secondary flex-shrink-0"
+                    />
+                    <div>
+                      <span className="text-sm font-semibold text-primary group-hover:text-primary/80">
+                        Je souhaite que Joventy envoie le mail à l'ambassade pour moi
+                      </span>
+                      <p className="text-xs text-muted-foreground mt-1">Notre équipe envoie le mail d'inscription à emb.kinshasa.citasvis@maec.es en votre nom et vous transmet les identifiants dès réception.</p>
+                    </div>
+                  </label>
+                )}
+
+                {/* Confirmation si checkbox 1 cochée */}
+                {emailSentToEmbassy && (
+                  <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                    <MessageCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
+                    <p className="text-xs text-emerald-800">
+                      <strong>Après création du dossier :</strong> transmettez votre identifiant + mot de passe à notre équipe via la messagerie sécurisée. Notre robot lancera la recherche dès réception.
+                    </p>
+                  </div>
+                )}
+
+                {/* Info si ni l'un ni l'autre */}
+                {!emailSentToEmbassy && !joventyWillSendSpainEmail && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
+                    <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+                    <p>À l'étape suivante, vous pourrez uploader les documents requis pour le mail à l'ambassade (optionnel — peut être fait depuis votre fiche dossier). Notre équipe vous enverra les instructions par email.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -540,8 +573,8 @@ export default function NewCreneauApplication() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-3">
               <Mail className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-700" />
               <div>
-                <p className="font-semibold mb-1">Envoyez votre mail à l'ambassade d'abord</p>
-                <p className="mb-2">Pour obtenir vos identifiants de connexion, envoyez un email à <strong>emb.kinshasa.citasvis@maec.es</strong> avec l'objet <strong>"RENDEZ-VOUS VISA EST"</strong> et les documents ci-dessous en pièces jointes.</p>
+                <p className="font-semibold mb-1">Documents pour l'inscription auprès de l'ambassade</p>
+                <p className="mb-2">Ces documents seront joints au mail envoyé à <strong>emb.kinshasa.citasvis@maec.es</strong> avec l'objet <strong>"RENDEZ-VOUS VISA EST"</strong>. Vous pouvez les uploader maintenant ou depuis votre fiche dossier.</p>
                 <a href="https://www.joventy.cd/guides/espagne-mail-ambassade" target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-amber-700 hover:text-amber-900 font-semibold underline">
                   Voir le guide complet <ExternalLink className="w-3 h-3" />

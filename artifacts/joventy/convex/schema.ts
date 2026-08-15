@@ -195,6 +195,11 @@ export default defineSchema({
       configuredAt: v.number(),
       lastUsedAt: v.optional(v.number()),
     })),
+    // Spain — flags sur l'inscription auprès de l'ambassade
+    // true si le client a déjà envoyé le mail à l'ambassade et reçu ses identifiants
+    spainHasCredentials: v.optional(v.boolean()),
+    // true si le client souhaite que Joventy envoie le mail à sa place
+    joventyWillSendSpainEmail: v.optional(v.boolean()),
     // Schengen / CEV spécifique (drive le calcul des frais consulaires)
     cevVisaClass: v.optional(v.union(v.literal("A"), v.literal("C"), v.literal("D"))),
     cevApplicantAgeCategory: v.optional(v.union(

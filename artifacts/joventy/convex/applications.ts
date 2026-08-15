@@ -181,6 +181,8 @@ export const create = mutation({
     )),
     cevTargetCountry: v.optional(v.string()),
     userWhatsapp: v.optional(v.string()),
+    spainHasCredentials: v.optional(v.boolean()),
+    joventyWillSendSpainEmail: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -282,6 +284,8 @@ export const create = mutation({
       cevVisaClass: cevVisaClass ?? undefined,
       cevApplicantAgeCategory: cevApplicantAgeCategory ?? undefined,
       cevTargetCountry: cevTargetCountry ?? undefined,
+      spainHasCredentials: args.spainHasCredentials ?? undefined,
+      joventyWillSendSpainEmail: args.joventyWillSendSpainEmail ?? undefined,
       // Segmentation visa USA (micro-meutes homogènes)
       usVisaCode: usVisaCode ?? undefined,
       usVisaCategory: usVisaCategory ?? undefined,
@@ -327,6 +331,36 @@ export const create = mutation({
       body: `${args.applicantName} — ${args.destination.toUpperCase()} ${args.visaType}`,
       applicationId: id,
     });
+
+    // Spain slot_only: status is immediately slot_hunting (bypasses payment gate).
+    // Schedule Spain pre-registration communication now — setSlotHunting won't be called again.
+    if (destKey === "spain" && isSlotOnly && userEmail && !args.spainHasCredentials) {
+      const travelDateFormatted = args.travelDate
+        ? (() => {
+            const d = new Date(args.travelDate + "T12:00:00");
+            const dd = String(d.getDate()).padStart(2, "0");
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const yyyy = d.getFullYear();
+            return `${dd}${mm}${yyyy}`;
+          })()
+        : undefined;
+      if (!args.joventyWillSendSpainEmail) {
+        await ctx.scheduler.runAfter(4000, internal.emails.sendSpainPreRegistrationClient, {
+          to: userEmail,
+          applicantName: args.applicantName,
+          applicationId: id,
+          travelDate: travelDateFormatted,
+        });
+      }
+      const travelDateDisplay = travelDateFormatted ?? "JJMMAAAA";
+      const spainSystemMsg = args.joventyWillSendSpainEmail
+        ? `🇪🇸 Bonne nouvelle ! Notre équipe se charge d'envoyer le mail d'inscription à l'ambassade d'Espagne en votre nom.\n\nVous n'avez rien à faire pour l'instant. Dès que l'ambassade nous envoie vos identifiants, notre robot réservera automatiquement le premier créneau disponible.\n\nℹ️ Délai habituel : 15 à 45 jours ouvrables.\n💶 Frais consulaires (90 €/adulte) payés directement à l'ambassade — non inclus dans le tarif Joventy`
+        : `🇪🇸 ACTION REQUISE — Inscription auprès de l'ambassade d'Espagne\n\nNotre robot est prêt. Pour réserver votre créneau sur citaconsular.es, obtenez d'abord vos identifiants auprès de l'ambassade :\n\n📧 Adresse : emb.kinshasa.citasvis@maec.es\n📌 Objet : RENDEZ-VOUS VISA EST\nCorps : NOM PRÉNOM;PASSEPORT;${travelDateDisplay};EST\n\n📎 Pièces jointes : photo tenant le passeport, formulaire candidature, réservation vol, assurance Schengen (min 30 000€).\n⚠️ Ne renvoyez pas avant 14 jours. Max 1 Mo.\n\nÉtape 2 : dès réception de vos identifiants, transmettez-les via cette messagerie.`;
+      await ctx.scheduler.runAfter(5000, internal.messages.sendSystemMessage, {
+        applicationId: id,
+        content: spainSystemMsg,
+      });
+    }
 
     return id;
   },
