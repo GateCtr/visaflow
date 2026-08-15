@@ -1,0 +1,346 @@
+/**
+ * spain-decodo-pool.test.ts — Unit tests for the Decodo IP pool blacklist logic
+ *
+ * Scenarios covered (per task spec):
+ *   1. flag IP → getCurrentDecodoUrl returns next IP
+ *   2. flag all IPs → getCurrentDecodoUrl falls back to round-robin (returns an IP, doesn't throw)
+ *   3. simulate TTL expiry (mock Date.now) → previously flagged IP becomes valid again
+ *   4. rotateDecodoUrl skips flagged IPs and logs the skip count
+ */
+
+import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
+
+// ─── Mock Redis persistence (fire-and-forget calls — no real Redis in tests) ──
+
+vi.mock("../spain-redis-persistence.js", () => ({
+  syncDecodoPoolStateToRedis: vi.fn().mockResolvedValue(undefined),
+  restoreDecodoPoolStateFromRedis: vi.fn().mockResolvedValue(null),
+}));
+
+import {
+  reloadDecodoPool,
+  getCurrentDecodoUrl,
+  flagDecodoIp,
+  rotateDecodoUrl,
+  getDecodoPoolSize,
+} from "../spain-decodo-pool.js";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Build a comma-separated DECODO_PROXY_URLS string from N fake URLs. */
+function makePool(n: number): string[] {
+  return Array.from({ length: n }, (_, i) => `http://user:pass@10.0.0.${i + 1}:10000`);
+}
+
+/**
+ * Configure the module with a fresh pool and reset all internal state.
+ * Must be called before each test that needs a specific pool size.
+ *
+ * We set DECODO_PROXY_FILE to a guaranteed-nonexistent path so the real
+ * decodo-proxies.csv in the working directory is not picked up during tests.
+ */
+function setupPool(urls: string[]): void {
+  process.env.DECODO_PROXY_FILE = "/tmp/__test_nonexistent_proxies__.csv";
+  process.env.DECODO_PROXY_URLS = urls.join(",");
+  delete process.env.DECODO_PROXY_URL;
+  reloadDecodoPool();
+}
+
+// ─── Setup / teardown ─────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  vi.restoreAllMocks(); // restore any Date.now spy
+});
+
+afterEach(() => {
+  // Clean up env to avoid leaking into other test files
+  delete process.env.DECODO_PROXY_URLS;
+  delete process.env.DECODO_PROXY_URL;
+  delete process.env.DECODO_PROXY_FILE;
+  delete process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN;
+  // Reset pool state
+  reloadDecodoPool();
+  vi.restoreAllMocks();
+});
+
+// ─── Scenario 1: flag IP → getCurrentDecodoUrl returns next IP ────────────────
+
+describe("Scenario 1 — flag IP → getCurrentDecodoUrl skips it", () => {
+  it("returns the second IP after the first one is flagged (2-IP pool)", () => {
+    const pool = makePool(2);
+    setupPool(pool);
+
+    // Sanity: pool is configured
+    expect(getDecodoPoolSize()).toBe(2);
+
+    // Get the current IP (should be pool[0])
+    const first = getCurrentDecodoUrl();
+    expect(first).toBe(pool[0]);
+
+    // Flag the current IP
+    flagDecodoIp(first, "0B /main/ response");
+
+    // getCurrentDecodoUrl must now return a DIFFERENT IP (pool[1])
+    const afterFlag = getCurrentDecodoUrl();
+    expect(afterFlag).toBeDefined();
+    expect(afterFlag).not.toBe(first);
+    expect(afterFlag).toBe(pool[1]);
+  });
+
+  it("returns the third IP after the first two are flagged (3-IP pool)", () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    const ip0 = pool[0];
+    const ip1 = pool[1];
+    const ip2 = pool[2];
+
+    // Flag first two IPs
+    flagDecodoIp(ip0, "test-flag");
+    flagDecodoIp(ip1, "test-flag");
+
+    // getCurrentDecodoUrl must skip both and return the third
+    const result = getCurrentDecodoUrl();
+    expect(result).toBe(ip2);
+  });
+
+  it("does not advance _index — subsequent calls return the same skipped IP", () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    const first = getCurrentDecodoUrl(); // pool[0]
+    flagDecodoIp(first, "test");
+
+    // Both calls return the same fallback (no index mutation)
+    const a = getCurrentDecodoUrl();
+    const b = getCurrentDecodoUrl();
+    expect(a).toBe(b);
+    expect(a).not.toBe(first);
+  });
+
+  it("has no effect on a 1-IP pool (single IP is never blacklisted)", () => {
+    const pool = makePool(1);
+    setupPool(pool);
+
+    const ip = getCurrentDecodoUrl();
+    expect(ip).toBe(pool[0]);
+
+    // flagDecodoIp is a no-op for single-IP pools
+    flagDecodoIp(ip, "test");
+
+    // The IP is still returned
+    expect(getCurrentDecodoUrl()).toBe(pool[0]);
+  });
+});
+
+// ─── Scenario 2: flag all IPs → fallback round-robin (no throw) ───────────────
+
+describe("Scenario 2 — flag all IPs → fallback round-robin", () => {
+  it("returns an IP (doesn't throw) when all 3 IPs are flagged", () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    // Flag all IPs
+    for (const url of pool) {
+      flagDecodoIp(url, "all-flagged");
+    }
+
+    // Must return a value (not undefined, not throw)
+    let result: string | undefined;
+    expect(() => {
+      result = getCurrentDecodoUrl();
+    }).not.toThrow();
+    expect(result).toBeDefined();
+    expect(typeof result).toBe("string");
+    // The returned value must be one of the pool IPs (fallback round-robin)
+    expect(pool).toContain(result);
+  });
+
+  it("returns an IP (doesn't throw) when all 5 IPs are flagged", () => {
+    const pool = makePool(5);
+    setupPool(pool);
+
+    for (const url of pool) {
+      flagDecodoIp(url, "all-flagged-5");
+    }
+
+    let result: string | undefined;
+    expect(() => {
+      result = getCurrentDecodoUrl();
+    }).not.toThrow();
+    expect(result).toBeDefined();
+    expect(pool).toContain(result);
+  });
+
+  it("rotateDecodoUrl also returns an IP (doesn't throw) when all IPs are flagged", () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    for (const url of pool) {
+      flagDecodoIp(url, "all-flagged-rotate");
+    }
+
+    let result: string | undefined;
+    expect(() => {
+      result = rotateDecodoUrl();
+    }).not.toThrow();
+    expect(result).toBeDefined();
+    expect(pool).toContain(result);
+  });
+});
+
+// ─── Scenario 3: TTL expiry (mock Date.now) → flagged IP becomes valid again ──
+
+describe("Scenario 3 — TTL expiry → flagged IP becomes valid again", () => {
+  it("IP re-appears in rotation after TTL expires (default 45 min)", () => {
+    const pool = makePool(2);
+    // Use 1-minute TTL for the test
+    process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN = "1";
+    setupPool(pool);
+
+    const start = Date.now();
+
+    // Freeze time at `start` during flagging
+    vi.spyOn(Date, "now").mockReturnValue(start);
+    const ip0 = pool[0];
+    flagDecodoIp(ip0, "ttl-test");
+
+    // Confirm ip0 is currently skipped
+    expect(getCurrentDecodoUrl()).not.toBe(ip0);
+
+    // Advance time by TTL + 1 ms (61 001 ms > 60 000 ms TTL)
+    vi.spyOn(Date, "now").mockReturnValue(start + 61_001);
+
+    // After TTL expiry, ip0 must be accepted again
+    // Reset index to 0 so ip0 is the current candidate
+    reloadDecodoPool();
+    process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN = "1";
+    setupPool(pool);
+
+    // Flag ip0 at `start`
+    vi.spyOn(Date, "now").mockReturnValue(start);
+    flagDecodoIp(ip0, "ttl-test-2");
+    expect(getCurrentDecodoUrl()).not.toBe(ip0); // still blacklisted
+
+    // Advance past TTL
+    vi.spyOn(Date, "now").mockReturnValue(start + 61_001);
+    const result = getCurrentDecodoUrl();
+    // Now ip0 should be valid again (auto-expired from blacklist on read)
+    expect(result).toBe(ip0);
+  });
+
+  it("IP remains skipped while within TTL window", () => {
+    const pool = makePool(3);
+    process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN = "10";
+    setupPool(pool);
+
+    const start = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(start);
+
+    const ip0 = pool[0];
+    flagDecodoIp(ip0, "within-ttl");
+
+    // 5 minutes later — still within 10-minute TTL
+    vi.spyOn(Date, "now").mockReturnValue(start + 5 * 60_000);
+    const result = getCurrentDecodoUrl();
+    expect(result).not.toBe(ip0);
+  });
+
+  it("IP becomes valid exactly after TTL boundary", () => {
+    const pool = makePool(2);
+    process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN = "5";
+    setupPool(pool);
+
+    const start = 1_700_000_000_000;
+    const ttlMs = 5 * 60_000;
+
+    vi.spyOn(Date, "now").mockReturnValue(start);
+    const ip0 = pool[0];
+    flagDecodoIp(ip0, "boundary");
+
+    // At exactly TTL — still blacklisted (> check, not >=)
+    vi.spyOn(Date, "now").mockReturnValue(start + ttlMs);
+    expect(getCurrentDecodoUrl()).not.toBe(ip0);
+
+    // One millisecond past TTL — expired and auto-purged
+    vi.spyOn(Date, "now").mockReturnValue(start + ttlMs + 1);
+    expect(getCurrentDecodoUrl()).toBe(ip0);
+  });
+});
+
+// ─── Scenario 4: rotateDecodoUrl skips flagged IPs ────────────────────────────
+
+describe("Scenario 4 — rotateDecodoUrl skips flagged IPs", () => {
+  it("skips 1 flagged IP and advances to the next valid one (3-IP pool)", () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    // Currently at pool[0]. Flag pool[1] so rotation must skip it.
+    flagDecodoIp(pool[1], "skip-test");
+
+    // rotateDecodoUrl should advance from pool[0] → skip pool[1] → land on pool[2]
+    const result = rotateDecodoUrl();
+    expect(result).toBe(pool[2]);
+  });
+
+  it("skips 2 flagged IPs and wraps around correctly (3-IP pool)", () => {
+    const pool = makePool(3);
+    setupPool(pool);
+
+    // Flag pool[1] and pool[2]. Rotation from pool[0] → skip pool[1] → skip pool[2] → wrap → pool[0]
+    flagDecodoIp(pool[1], "skip-2-a");
+    flagDecodoIp(pool[2], "skip-2-b");
+
+    const result = rotateDecodoUrl();
+    expect(result).toBe(pool[0]);
+  });
+
+  it("rotateDecodoUrl returns the same URL for a 1-IP pool (no rotation possible)", () => {
+    const pool = makePool(1);
+    setupPool(pool);
+
+    expect(rotateDecodoUrl()).toBe(pool[0]);
+    expect(rotateDecodoUrl()).toBe(pool[0]);
+  });
+
+  it("successive rotateDecodoUrl calls cycle through valid IPs only (4-IP pool, 2 flagged)", () => {
+    const pool = makePool(4);
+    setupPool(pool);
+
+    // Flag pool[1] and pool[3] — only pool[0] and pool[2] should appear
+    flagDecodoIp(pool[1], "cycle-skip");
+    flagDecodoIp(pool[3], "cycle-skip");
+
+    const results: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const url = rotateDecodoUrl();
+      expect(url).toBeDefined();
+      results.push(url!);
+    }
+
+    // None of the results should be flagged IPs
+    for (const r of results) {
+      expect(r).not.toBe(pool[1]);
+      expect(r).not.toBe(pool[3]);
+    }
+
+    // All results must come from the valid IPs
+    const validIps = new Set([pool[0], pool[2]]);
+    for (const r of results) {
+      expect(validIps.has(r)).toBe(true);
+    }
+  });
+
+  it("rotateDecodoUrl advances _index so the next getCurrentDecodoUrl reflects the new position", () => {
+    const pool = makePool(4);
+    setupPool(pool);
+
+    // Start at pool[0]. Rotate to pool[1].
+    const rotated = rotateDecodoUrl();
+    expect(rotated).toBe(pool[1]);
+
+    // getCurrentDecodoUrl should reflect pool[1] (no further advance)
+    const current = getCurrentDecodoUrl();
+    expect(current).toBe(pool[1]);
+  });
+});
