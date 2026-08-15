@@ -473,7 +473,7 @@ Si on te demande pourquoi il y a des frais d'engagement (non remboursables) pour
 2. "C'est une garantie de sérieux des deux côtés : les clients engagés ont de meilleurs dossiers, et nous on met 100 % des ressources dessus."
 3. "Compare avec une agence classique : eux prennent 400-800 USD sans aucune garantie de résultat. Nous, si on n'obtient rien, tu ne paies que les frais d'engagement — pas la prime."
 4. "Le frais d'engagement représente un tiers du tarif total. Les deux tiers restants ne sont dus qu'au succès."
-Si l'objection persiste : "Je comprends l'hésitation. WhatsApp-nous : +243 840 808 122, on peut en parler directement."
+Si l'objection persiste : "Je comprends l'hésitation. WhatsApp-nous : [+243 840 808 122](https://wa.me/243840808122), on peut en parler directement."
 Pour le créneau uniquement : zéro acompte — tu ne paies rien avant qu'on ait ton rendez-vous. Si on n'a rien, tu ne paies rien.
 
 PROCESSUS DE CRÉATION DE DOSSIER — GUIDE ÉTAPE PAR ÉTAPE (pour aider les clients connectés) :
@@ -522,13 +522,13 @@ Si on demande l'adresse physique ou un bureau où venir :
 - Sans loyer de bureau à Gombe, nos tarifs restent compétitifs
 - Tu peux suivre ton dossier en temps réel depuis ton téléphone
 - Notre équipe est basée à Kinshasa (Akollad Groupe, RCCM CD/KNG/RCCM/25-A-07960) — entité légale congolaise reconnue
-Pour nous joindre : WhatsApp +243 840 808 122 ou contact@joventy.cd (réponse en 24h). Disponibles 7j/7, 8h-20h heure Kinshasa."
+Pour nous joindre : WhatsApp [+243 840 808 122](https://wa.me/243840808122) ou contact@joventy.cd (réponse en 24h). Disponibles 7j/7, 8h-20h heure Kinshasa."
 
 INFORMATIONS JOVENTY :
 - Entité légale : Akollad Groupe — RCCM CD/KNG/RCCM/25-A-07960, NIF A2557944L, Kinshasa, RDC
 - 150+ dossiers traités, 4.8/5 satisfaction (127 avis)
 - Service 100 % en ligne, 24h/24
-- WhatsApp : +243 840 808 122 | Email : contact@joventy.cd
+- WhatsApp : [+243 840 808 122](https://wa.me/243840808122) | Email : contact@joventy.cd
 - Disponible : 7j/7, 8h-20h heure Kinshasa`;
 }
 
@@ -663,7 +663,7 @@ export const chat = httpAction(async (ctx, request) => {
       console.error("Victor: aucune credential Bedrock configurée");
       return new Response(
         JSON.stringify({
-          text: "Je rencontre un problème technique momentané. Pour être assisté directement, contactez-nous sur WhatsApp : +243 840 808 122 — nous répondons 7j/7, 8h-20h heure Kinshasa.",
+          text: "Je rencontre un problème technique momentané. Pour être assisté directement, contactez-nous sur WhatsApp : [+243 840 808 122](https://wa.me/243840808122) — nous répondons 7j/7, 8h-20h heure Kinshasa.",
         }),
         { status: 200, headers: corsHeaders }
       );
@@ -674,7 +674,7 @@ export const chat = httpAction(async (ctx, request) => {
       console.error("Bedrock error:", bedrockRes.status, errText);
       return new Response(
         JSON.stringify({
-          text: "Je suis momentanément indisponible. Contactez-nous directement via le WhatsApp du site : +243 840 808 122 — nous répondons 7j/7, 8h-20h heure Kinshasa.",
+          text: "Je suis momentanément indisponible. Contactez-nous directement via WhatsApp : [+243 840 808 122](https://wa.me/243840808122) — nous répondons 7j/7, 8h-20h heure Kinshasa.",
         }),
         { status: 200, headers: corsHeaders }
       );
