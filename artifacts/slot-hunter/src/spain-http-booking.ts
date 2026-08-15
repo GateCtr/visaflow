@@ -434,13 +434,31 @@ export async function createIsolatedBookingSession(
   if (cfSession.source === "capsolver") {
     const phpSessId = cfSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
     if (phpSessId) {
-      console.log("[spain-booking] ℹ️ Mode capsolver — PHPSESSID existant réutilisé (lié au solve CF)");
+      // ─── Contrainte architecturale capsolver-residential ──────────────────────
+      // Le PHPSESSID est créé par le flow CF complet (GET widget → CapSolver solve
+      // → POST token → GET /main/). Il est impossible d'obtenir un nouveau PHPSESSID
+      // sans re-solve : /main/ sans PHPSESSID retourne 0B (testé, confirmé).
+      //
+      // Conséquence : tous les dossiers partagent le MÊME PHPSESSID.
+      //   → L'état PHP widget (services→agendas→datetime→getsigninfields→signin)
+      //     est partagé entre les dossiers.
+      //   → getsigninfields/ peut 0B pour les dossiers #2+ si l'état a avancé.
+      //   → Le booking séquentiel garde chaque dossier indépendant au niveau de
+      //     la session HTTP (pas de cross-contamination des requêtes), mais pas
+      //     au niveau de l'état PHP server-side.
+      //
+      // ⚠️ Ne PAS utiliser createFreshSpainImpit ici : cf_clearance est lié au
+      // fingerprint TLS du singleton impit utilisé pendant le solve CapSolver.
+      // Un impit frais a un fingerprint différent → CF rejette silencieusement
+      // les appels JSONP avec 0B. On laisse _ownImpit absent → spainCfFetch
+      // utilise getSpainImpit(session) = singleton (même TLS que le solve).
+      console.log("[spain-booking] ℹ️ Mode capsolver — PHPSESSID partagé (singleton impit, état PHP commun)");
       return {
         session: {
           ...cfSession,
           allCookies: cfSession.allCookies.map(c => ({ ...c })),
           extraHeaders: { ...cfSession.extraHeaders },
-          _ownImpit: createFreshSpainImpit(cfSession),
+          // _ownImpit intentionnellement absent → singleton impit (cohérence TLS solve)
         },
       };
     }
