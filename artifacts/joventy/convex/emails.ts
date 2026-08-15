@@ -1,5 +1,12 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
+import { SERVICE_PACKAGES } from "./constants";
+
+/** Convertit une clé servicePackage en libellé client lisible. */
+function servicePackageLabel(pkg: string | undefined): string {
+  const key = (pkg ?? "full_service") as keyof typeof SERVICE_PACKAGES;
+  return SERVICE_PACKAGES[key]?.label ?? pkg ?? "full_service";
+}
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 const FROM = "Joventy <hello@joventy.cd>";
@@ -523,7 +530,7 @@ export const sendNewApplicationAdmin = internalAction({
       info("Demandeur", args.applicantName) +
       info("Destination", destLabel(args.destination)) +
       info("Type de visa", args.visaType) +
-      info("Package", args.servicePackage ?? "full_service") +
+      info("Package", servicePackageLabel(args.servicePackage)) +
       (args.userFullName ? info("Client", args.userFullName) : "") +
       (args.userEmail ? info("Email client", args.userEmail) : "");
 
@@ -559,8 +566,9 @@ export const sendApplicationConfirmationClient = internalAction({
       info("Demandeur", args.applicantName) +
       info("Destination", destLabel(args.destination)) +
       info("Type de visa", args.visaType) +
+      info("Formule", servicePackageLabel(args.servicePackage)) +
       (isSlotOnly
-        ? info("Formule", "Créneau uniquement — 350 USD après obtention")
+        ? ""
         : info("Frais d'engagement", `${args.engagementFee} USD`));
 
     const nextStep = isSlotOnly
@@ -603,10 +611,16 @@ export const sendEngagementValidatedClient = internalAction({
         ? "L'équipe Joventy va maintenant préparer et vérifier vos formulaires officiels. Nous vous contacterons via la messagerie de votre espace client."
         : "L'équipe Joventy va maintenant examiner votre dossier. Préparez vos documents et uploadez-les dans votre espace client — nous vous contacterons pour la suite.";
 
+    const formuleRow = infoTable(
+      info("Formule", servicePackageLabel(args.servicePackage)) +
+      info("Destination", destLabel(args.destination))
+    );
+
     const body = `
       <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Paiement confirmé ✅</h2>
       <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Vos frais d'engagement pour le visa <strong>${destLabel(args.destination)}</strong> de <strong>${args.applicantName}</strong> ont été validés. Votre dossier est maintenant <strong>actif</strong>.</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0;">${nextStepText}</p>
+      ${formuleRow}
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:12px 0 0;">${nextStepText}</p>
       ${cta(`${APP_URL}/dashboard`, "Voir mon dossier")}
     `;
     await sendEmail({
