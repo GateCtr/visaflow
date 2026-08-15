@@ -480,7 +480,7 @@ function extractBookititBaseFromHtml(html: string): string | null {
 
 // ─── JSONP HTTP Caller (via impit + cf_clearance) ───────────────────────────
 
-function parseJsonpPayload(text: string): unknown | null {
+export function parseJsonpPayload(text: string): unknown | null {
   if (!text || typeof text !== "string") return null;
 
   let src = text.trim();
@@ -1050,7 +1050,7 @@ type ConfirmSlotsResult = {
  *    cache + re-scan à froid IMMÉDIAT. Un cache ne peut donc jamais produire
  *    un faux "not_found" par session périmée.
  */
-async function confirmSlotsViaDatetime(
+export async function confirmSlotsViaDatetime(
   session: SpainCfSession,
   renderedHtml: string,
   publickey: string,

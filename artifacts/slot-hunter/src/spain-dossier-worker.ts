@@ -28,12 +28,11 @@ import {
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import {
-  callBookititEndpoint,
   executeHttpBooking,
   type SpainBookingConfig,
   type SpainBookingResult,
 } from "./spain-http-booking.js";
-import { extractServiceDetails, extractAllSlotsFromDatetime } from "./spain-http-scanner.js";
+import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
   releaseSlotClaim,
@@ -167,7 +166,7 @@ interface WorkerSlot {
 }
 
 interface WorkerScanResult {
-  status: "found" | "not_found" | "error";
+  status: "found" | "not_found" | "error" | "ajax_unavailable";
   slots?: WorkerSlot[];
   mainHtml?: string;
   serviceId?: string;
@@ -176,13 +175,6 @@ interface WorkerScanResult {
   errorMessage?: string;
 }
 
-/** Cache service+agenda entre les cycles (règle §9 : 1 seul getagendas/ par PHPSESSID). */
-interface ServiceCache {
-  initialized: boolean;
-  serviceId: string;
-  serviceName: string;
-  agendaId: string;
-}
 
 // ─── Entrée publique ──────────────────────────────────────────────────────────
 
@@ -267,38 +259,20 @@ export async function runDossierWorker(
     return workerResult;
   }
 
-  // ── 5.5. getwidgetconfigurations/ — UNE SEULE FOIS après session établie ─────
-  // CRITIQUE : doit précéder getservices/ pour initialiser la session côté serveur Bookitit.
-  // Source de vérité : test-bookitit-dynamic.ts section 3.
-  {
-    const portalRef = ensureTrailingSlash(config.portalUrl);
-    const srvsrc    = session.bookititState?.srvsrc  ?? "https://www.citaconsular.es";
-    const version   = session.bookititState?.version ?? "4";
-    const pubkey    = extractPublickey(config.portalUrl);
-    try {
-      await callBookititEndpoint(session, "getwidgetconfigurations/", {
-        type: "default", publickey: pubkey, lang: "es", version, src: portalRef, srvsrc,
-      }, config.portalUrl);
-      await new Promise<void>((r) => setTimeout(r, 220));
-      log("INFO", `${tag} ✅ getwidgetconfigurations/ OK`);
-    } catch (e) {
-      log("WARN", `${tag} getwidgetconfigurations/ erreur (non-fatal): ${e}`);
-    }
-  }
-
   // ── 6. Boucle de scan ────────────────────────────────────────────────────────
+  // Chaque cycle appelle confirmSlotsViaDatetime (flux complet de l'ancien scanner).
+  // confirmSlotsViaDatetime gère : getwidgetconfigurations/ → getservices/ → getagendas/ → datetime/.
+  // Règle §9 Bookitit : getagendas/ ne peut être appelé qu'une fois par PHPSESSID.
+  // Après chaque cycle sans slot, on crée une nouvelle session (nouveau PHPSESSID).
   const windowEnd = Date.now() + WORKER_WINDOW_MS;
   let cycleCount = 0;
-  // Cache service+agenda : getservices/ et getagendas/ appelés UNE SEULE FOIS
-  // par PHPSESSID (règle §9 Bookitit : getagendas/ suivants retournent 0B).
-  const serviceCache: ServiceCache = { serviceId: "", serviceName: "", agendaId: "", initialized: false };
 
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
 
     try {
-      const scan = await workerScanCycle(session, config, tag, serviceCache);
+      const scan = await workerScanCycle(session, config, tag);
 
       // ── Reporting découverte (fire-and-forget) ──────────────────────────
       if (scan.slots && scan.slots.length > 0) {
@@ -734,189 +708,76 @@ function upsertCookie(session: SpainCfSession, name: string, value: string): voi
 // ─── Cycle de scan ────────────────────────────────────────────────────────────
 
 /**
- * Un cycle de scan complet — reproduit fidèlement l'ancien watcher (spain-http-scanner.ts
- * confirmSlotsViaDatetimeOnce) et test-bookitit-dynamic.ts (source de vérité) :
+ * Un cycle de scan complet — appelle directement confirmSlotsViaDatetime,
+ * le MÊME flux que l'ancien watcher. Ne reproduit rien : réutilise tel quel.
  *
- *   /main/
- *   → [getservices/ + getagendas/]  ← UNE SEULE FOIS par PHPSESSID (cache ServiceCache)
- *   → datetime/ mois par mois       ← start=aujourd'hui pour mo=0, 1er du mois sinon
- *                                      arrêt sur 3 mois vides consécutifs (PAS maxDays)
+ * confirmSlotsViaDatetime gère intégralement :
+ *   getwidgetconfigurations/ → getservices/ → getagendas/ → datetime/ (multi-mois)
  *
- * Règle §9 Bookitit : getagendas/ appelé 2× sur le même PHPSESSID → 0B.
- * → serviceCache.initialized = true après le 1er appel ; cycles suivants sautent.
+ * Règle §9 Bookitit : getagendas/ ne peut être appelé qu'une seule fois par PHPSESSID.
+ * → Chaque cycle doit avoir sa propre session (rotation dans runDossierWorker).
  */
 async function workerScanCycle(
   session: SpainCfSession,
   config: SpainDossierConfig,
   tag: string,
-  cache: ServiceCache,
 ): Promise<WorkerScanResult> {
-  const publickey = extractPublickey(config.portalUrl);
-  const portalRef = ensureTrailingSlash(config.portalUrl);
+  const bookititState = session.bookititState;
+  if (!bookititState) return { status: "error", errorMessage: "workerScanCycle: bookititState absent" };
 
-  // ── /main/ ──────────────────────────────────────────────────────────────────
-  const mainResult = await callMain(session, publickey, portalRef, config.portalUrl, tag);
-  if (!mainResult.ok) {
-    return { status: "error", errorMessage: mainResult.error };
+  const publickey = bookititState.publickey;
+  const referer   = bookititState.widgetUrl;
+
+  // cookieStr — fidèle à buildCookieStr() de scanViaMainEndpoint :
+  // GA cookies synthétiques (si source != playwright) + PHPSESSID + cf_clearance.
+  const browserCookies = session.allCookies.filter((c) => c.name !== "cf_clearance");
+  if (session.source !== "playwright" && !browserCookies.some((c) => c.name === "_ga")) {
+    const seed = session.createdAt;
+    browserCookies.push({
+      name: "_ga",
+      value: `GA1.1.${100_000_000 + (seed % 900_000_000)}.${Math.floor(seed / 1000) - 15 * 24 * 3600}`,
+    });
   }
-  const { mainHtml } = mainResult;
+  if (session.source !== "playwright" && !browserCookies.some((c) => c.name === "_ga_F3TYSDL945")) {
+    const ts = String(Math.floor(session.createdAt / 1000));
+    browserCookies.push({ name: "_ga_F3TYSDL945", value: `GS2.1.s${ts}$o1$g0$t${ts}$j60$l0$h0` });
+  }
+  const cookieStr = [
+    ...browserCookies.map((c) => `${c.name}=${c.value}`),
+    ...(session.cfClearance ? [`cf_clearance=${session.cfClearance}`] : []),
+  ].join("; ");
 
-  // srvsrc et version extraits dynamiquement depuis le POST token (initPortalSession).
-  // Fallback sur les valeurs Saopolo si bookititState absent.
-  const srvsrc  = session.bookititState?.srvsrc  ?? "https://www.citaconsular.es";
-  const version = session.bookititState?.version  ?? "4";
+  // mainHtml — prefetchedMainHtml si disponible (confirmSlotsViaDatetimeOnce l'utilise
+  // pour extraire les liens #selectservice ; "" → fallback getservices/ automatique).
+  const mainHtml = session.prefetchedMainHtml ?? "";
+  session.prefetchedMainHtml = undefined;
 
-  const baseParams: Record<string, string> = {
-    type: "default",
-    publickey,
-    lang: "es",
-    version,
-    src: portalRef,
-    srvsrc,
+  log("INFO", `${tag} 🔍 scan via confirmSlotsViaDatetime — publickey=${publickey}`);
+
+  const result = await confirmSlotsViaDatetime(session, mainHtml, publickey, cookieStr, referer);
+
+  if (!result) return { status: "not_found", mainHtml };
+  if (result === "ajax_unavailable") return { status: "ajax_unavailable", mainHtml };
+
+  const allSlots = (result.allSlots ?? []).map((s) => ({
+    date:      s.date,
+    time:      s.time,
+    agendaId:  s.agendaId ?? "",
+    freeslots: s.freeslots,
+  }));
+
+  if (allSlots.length === 0) {
+    return { status: "not_found", mainHtml, serviceId: result.serviceId, serviceName: result.serviceName };
+  }
+
+  return {
+    status:      "found",
+    slots:       allSlots,
+    mainHtml,
+    serviceId:   result.serviceId,
+    serviceName: result.serviceName,
+    agendaId:    allSlots[0]?.agendaId ?? "",
   };
-
-  // ── getservices/ + getagendas/ — une seule fois par PHPSESSID ─────────────
-  // Règle §9 (confirmée par l'ancien scanner) : getagendas/ appelé 2× sur le
-  // même PHPSESSID retourne 0B → on perd l'agendaId pour tous les cycles suivants.
-  // Solution : cache ServiceCache initialisé au 1er cycle, réutilisé ensuite.
-  if (!cache.initialized) {
-    // getservices/
-    try {
-      const svcPayload = await callBookititEndpoint(
-        session,
-        "getservices/",
-        baseParams,
-        config.portalUrl,
-      );
-      // Filtre identique à l'ancien scanner (spain-http-scanner.ts l.1324-1334) :
-      //   - Écarter les services dont le nom est purement HTML invisible (placeholder Bookitit)
-      //     ex : bkt853105 dont name = "<span style='display:none;'></span>"
-      //   - Prendre le premier service visible ; fallback Services[0]
-      const allSvcs: Array<{ id: string; name: string }> =
-        (svcPayload as any)?.Services ?? [];
-      const visibleSvcs = allSvcs.filter(
-        (s) => (s.name ?? "").replace(/<[^>]+>/g, "").trim().length > 0,
-      );
-      const target = (visibleSvcs.length > 0 ? visibleSvcs : allSvcs)[0];
-      if (target) {
-        cache.serviceId   = target.id;
-        cache.serviceName = (target.name ?? "").replace(/<[^>]+>/g, "").trim() || target.id;
-        log("INFO", `${tag} service: "${cache.serviceName}" (${cache.serviceId})`);
-      }
-    } catch (e) {
-      log("WARN", `${tag} getservices/ error: ${e}`);
-    }
-
-    if (!cache.serviceId) {
-      // Pas de service trouvé — ne pas marquer initialized pour retenter au prochain cycle
-      return { status: "not_found", mainHtml };
-    }
-
-    // getagendas/ — avec selectedPeople="1" (obligatoire — cf. test-bookitit-dynamic.ts l.198)
-    try {
-      const agPayload = await callBookititEndpoint(
-        session,
-        "getagendas/",
-        { ...baseParams, "services[]": cache.serviceId, selectedPeople: "1" },
-        config.portalUrl,
-      );
-      cache.agendaId = agPayload ? extractFirstAgendaId(agPayload) : "";
-      if (cache.agendaId) log("INFO", `${tag} agenda: ${cache.agendaId}`);
-      else log("INFO", `${tag} getagendas/ 0B — datetime/ appelé sans agendas[]`);
-    } catch (e) {
-      log("WARN", `${tag} getagendas/ error: ${e}`);
-    }
-
-    cache.initialized = true;
-  }
-
-  const { serviceId, serviceName, agendaId } = cache;
-
-  // ── datetime/ — boucle multi-mois, logique identique à l'ancien scanner ────
-  //
-  // RÈGLES (copiées de spain-http-scanner.ts confirmSlotsViaDatetimeOnce l.1466-1681) :
-  //   1. start mois 0 = aujourd'hui (pas le 1er du mois) — le serveur retourne
-  //      maxDays relatif à aujourd'hui, pas au 1er du mois.
-  //   2. Arrêt = 3 mois vides CONSÉCUTIFS (slotsThisMonth === 0), PAS maxDays.
-  //      → maxDays est la limite de visibilité de l'agenda, pas le stop condition.
-  //      → Utiliser maxDays comme stop condition faisait rater des mois entiers
-  //        (confirmé : septembre retourne maxDays=2026-09-18 mais les slots vont
-  //        jusqu'au 30 septembre).
-  //   3. Plafond absolu : 12 mois.
-  //   4. extractAllSlotsFromDatetime (pas extractAllSlotsFromPayload) — gère
-  //      freeslots=-1 (times=[], state=1) et la résolution jour-détail.
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const MAX_MONTHS = 12;
-  let consecutiveEmpty = 0;
-  const allSlots: WorkerSlot[] = [];
-
-  for (let mo = 0; mo < MAX_MONTHS; mo++) {
-    const tgt   = new Date(now.getFullYear(), now.getMonth() + mo, 1);
-    // Mois courant : start=aujourd'hui (aligne sur le vrai navigateur)
-    // Mois suivants : start=1er du mois (navigation mensuelle standard)
-    const start = mo === 0 ? todayStr : tgt.toISOString().slice(0, 10);
-    const end   = new Date(tgt.getFullYear(), tgt.getMonth() + 1, 0).toISOString().slice(0, 10);
-
-    const dtParams: Record<string, string> = {
-      ...baseParams,
-      "services[]": serviceId,
-      ...(agendaId ? { "agendas[]": agendaId } : {}),
-      start,
-      end,
-      selectedPeople: "1",
-    };
-
-    let dtPayload: unknown = null;
-    try {
-      dtPayload = await callBookititEndpoint(session, "datetime/", dtParams, config.portalUrl);
-      log("INFO", `${tag} datetime/ ${start}→${end} — payload: ${dtPayload ? "reçu" : "0B/null"}`);
-    } catch (e) {
-      log("WARN", `${tag} datetime/ mo+${mo} error: ${e}`);
-      consecutiveEmpty++;
-      if (consecutiveEmpty >= 3) break;
-      continue;
-    }
-
-    if (!dtPayload) {
-      consecutiveEmpty++;
-      if (consecutiveEmpty >= 3) break;
-      continue;
-    }
-
-    // extractAllSlotsFromDatetime = fonction de l'ancien scanner (spain-http-scanner.ts l.1847)
-    // Gère : times={} (heures explicites), times=[] + state=1 (jour ouvert sans heures → 09:00 freeslots=-1)
-    const monthSlots = extractAllSlotsFromDatetime(dtPayload);
-    const slotsThisMonth = monthSlots.length;
-
-    if (slotsThisMonth > 0) {
-      const preview = monthSlots.slice(0, 3).map((s) => `${s.date} ${s.time}`).join(", ");
-      log("INFO", `${tag} datetime/ ${start}→${end} — ${slotsThisMonth} créneau(x) : ${preview}${slotsThisMonth > 3 ? ` … +${slotsThisMonth - 3}` : ""}`);
-      for (const s of monthSlots) {
-        allSlots.push({
-          date:      s.date,
-          time:      s.time,
-          agendaId:  s.agendaId ?? agendaId,
-          freeslots: s.freeslots,
-        });
-      }
-      consecutiveEmpty = 0;
-    } else {
-      log("INFO", `${tag} datetime/ ${start}→${end} — aucun créneau`);
-      consecutiveEmpty++;
-      if (consecutiveEmpty >= 3) {
-        log("INFO", `${tag} datetime/ 3 mois vides consécutifs — arrêt`);
-        break;
-      }
-    }
-  }
-
-  if (allSlots.length > 0) {
-    allSlots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-    return { status: "found", slots: allSlots, mainHtml, serviceId, serviceName, agendaId };
-  }
-
-  return { status: "not_found", mainHtml, serviceId, serviceName, agendaId };
 }
 
 // ─── Appel /main/ ─────────────────────────────────────────────────────────────
