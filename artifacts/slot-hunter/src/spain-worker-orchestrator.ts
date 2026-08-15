@@ -57,6 +57,30 @@ const RESTART_AFTER_ERROR_MS = ((): number => {
 /** Renouvellement du lock Redis (doit être < TTL lock = 50 s) */
 const LOCK_RENEWAL_MS = 30_000;
 
+/**
+ * Fenêtre de publication des créneaux Bookitit.
+ * Le portail publie généralement entre la 5ème et la 25ème minute de chaque heure.
+ * On se réveille à WINDOW_START_MIN (défaut: 4) pour être prêt, et on laisse le
+ * worker tourner pendant WORKER_WINDOW_MS (25 min dans spain-dossier-worker.ts).
+ * Hors fenêtre → l'orchestrateur ne lance pas de nouveau worker.
+ *
+ * Override via env : SPAIN_WINDOW_START_MIN (0-59)
+ */
+const WINDOW_START_MIN = ((): number => {
+  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "4");
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 4));
+})();
+
+/**
+ * Durée de la fenêtre active (minutes). Doit correspondre à WORKER_WINDOW_MS dans
+ * spain-dossier-worker.ts (défaut 25 min). Utilisée uniquement pour le guard spawn.
+ * Override via env : SPAIN_WINDOW_DURATION_MIN
+ */
+const WINDOW_DURATION_MIN = ((): number => {
+  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "25");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 25);
+})();
+
 // ─── État interne ─────────────────────────────────────────────────────────────
 
 interface RunningWorker {
@@ -191,12 +215,25 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           continue;
         }
 
-        // Vérifier le cooldown (délai après booking/erreur)
+        // Vérifier le cooldown (délai après booking/erreur/fenêtre)
         const cooldown = getCooldownRemaining(config.id, workers);
         if (cooldown > 0) {
           log(
             "INFO",
-            `[SPAIN-ORCH] Dossier ${config.applicantName} : cooldown ${Math.ceil(cooldown / 1_000)}s — skip`,
+            `[SPAIN-ORCH] Dossier ${config.applicantName} : cooldown ${Math.ceil(cooldown / 60_000)}min — skip`,
+          );
+          continue;
+        }
+
+        // Guard fenêtre horaire : ne lancer un worker que si on est dans la fenêtre
+        // de publication des créneaux [HH:WINDOW_START_MIN … HH:WINDOW_START_MIN+WINDOW_DURATION_MIN[
+        if (!isInScanWindow()) {
+          const waitMs = msUntilNextWindowStart();
+          const nextWakeMin = String(WINDOW_START_MIN).padStart(2, "0");
+          log(
+            "INFO",
+            `[SPAIN-ORCH] ⏰ Hors fenêtre — ${config.applicantName} : prochain scan dans ` +
+            `${Math.round(waitMs / 60_000)}min (HH:${nextWakeMin})`,
           );
           continue;
         }
@@ -299,10 +336,18 @@ async function harvestFinishedWorkers(
           `[SPAIN-ORCH] ✅ ${w.config.applicantName} BOOKÉÉ — cooldown ${cooldownMs / 60_000}min avant re-vérification`,
         );
         break;
-      case "exited":
-        // Fenêtre expirée → relance immédiate (nouveau CF solve)
-        cooldownMs = 0;
+      case "exited": {
+        // Fenêtre expirée → dormir jusqu'au prochain HH:WINDOW_START_MIN
+        // (le portail publie entre la 5ème et la 25ème minute — inutile de scanner hors fenêtre)
+        cooldownMs = msUntilNextWindowStart();
+        const nextWakeMin = String(WINDOW_START_MIN).padStart(2, "0");
+        log(
+          "INFO",
+          `[SPAIN-ORCH] 💤 ${w.config.applicantName} fenêtre terminée — prochain scan dans ` +
+          `${Math.round(cooldownMs / 60_000)}min (prochaine fenêtre HH:${nextWakeMin})`,
+        );
         break;
+      }
       case "error":
         cooldownMs = RESTART_AFTER_ERROR_MS;
         break;
@@ -406,4 +451,35 @@ async function fetchActiveDossiers(): Promise<SpainDossierConfig[]> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Calcule le nombre de ms jusqu'à la prochaine occurrence de HH:WINDOW_START_MIN:00.
+ * Exemple : si WINDOW_START_MIN=4 et qu'il est 10h29, on attend 35 min jusqu'à 11h04.
+ */
+function msUntilNextWindowStart(): number {
+  const now = new Date();
+  // Position actuelle dans l'heure (en minutes décimales)
+  const minInHour = now.getMinutes() + now.getSeconds() / 60 + now.getMilliseconds() / 60_000;
+
+  let minutesUntil: number;
+  if (minInHour < WINDOW_START_MIN) {
+    // Avant le début de la fenêtre de cette heure
+    minutesUntil = WINDOW_START_MIN - minInHour;
+  } else {
+    // Après le début → attendre la prochaine heure
+    minutesUntil = 60 - minInHour + WINDOW_START_MIN;
+  }
+
+  return Math.round(minutesUntil * 60_000);
+}
+
+/**
+ * Retourne true si on est actuellement dans la fenêtre de publication des créneaux :
+ * [WINDOW_START_MIN, WINDOW_START_MIN + WINDOW_DURATION_MIN[
+ */
+function isInScanWindow(): boolean {
+  const now = new Date();
+  const minInHour = now.getMinutes() + now.getSeconds() / 60;
+  return minInHour >= WINDOW_START_MIN && minInHour < WINDOW_START_MIN + WINDOW_DURATION_MIN;
 }
