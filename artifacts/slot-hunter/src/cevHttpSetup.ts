@@ -202,6 +202,15 @@ export interface CevHttpSetupResult {
    */
   probeError?: boolean;
   /**
+   * Précise la cause de l'échec probe :
+   *   'session_expired' — le serveur a répondu SessionExpired pendant les retries
+   *                       → la session VOWINT est peut-être encore valide, refaire
+   *                         GetEAppointmentUrl pour obtenir une nouvelle redirectUrl.
+   *   'transient'       — 504/timeout réseau pur (serveur saturé)
+   *                       → retry possible si quota non épuisé.
+   */
+  probeErrorType?: "transient" | "session_expired";
+  /**
    * État de la page Overview (quand un autre dossier du même type passeport a déjà un RDV).
    *   'new_appointment_available' — lien "Nouveau rendez-vous" détecté et suivi (Cas 1)
    *   'limit_reached'            — seul "Annuler" disponible, limite atteinte (Cas 2)
@@ -1432,8 +1441,10 @@ export async function setupCevSessionHttp(
       // ── Retry la chaîne de redirects (comportement navigateur : F5, pas re-clic "prendre RDV") ──
       // Après captcha résolu, la session CEV est encore ouverte côté serveur malgré le 504/timeout.
       // Si on refait GetEAppointmentUrl → "multiple session". Il faut retenter le même redirectUrl.
-      // Si le retry retourne SessionExpired → session morte → prochain cycle fera un re-login propre.
+      // Si le retry retourne SessionExpired → session morte → le loop peut refaire GetEAppointmentUrl
+      // (nouvelle redirectUrl) si la session VOWINT est encore valide (cache 4h).
       let retrySuccess = false;
+      let sessionExpiredSeen = false;
       for (let probeRetry = 1; probeRetry <= 3; probeRetry++) {
         const waitMs = probeRetry * 2_000; // 2s, 4s, 6s
         console.log(`[CEV-SETUP] ⚡ Probe 504/timeout (${errMsg.slice(0, 80)}) — retry ${probeRetry}/3 dans ${waitMs / 1000}s (même redirectUrl, pas de re-login)…`);
@@ -1459,8 +1470,9 @@ export async function setupCevSessionHttp(
           if (retryLoc.includes("SessionExpired") || retryStatus === 200) {
             const retryBody = retryStatus === 200 ? await retryRes.text().catch(() => "") : "";
             if (retryLoc.includes("SessionExpired") || retryBody.includes("SessionExpired")) {
-              console.log(`[CEV-SETUP] ⚡ Probe retry → SessionExpired — session morte (prochain cycle = re-login propre)`);
-              break; // sortir du retry loop → probeError sera retourné
+              sessionExpiredSeen = true;
+              console.log(`[CEV-SETUP] ⚡ Probe retry → SessionExpired — le loop peut refaire GetEAppointmentUrl si VOWINT encore valide`);
+              break; // sortir du retry loop → probeError sera retourné avec probeErrorType='session_expired'
             }
             // 200 avec body = page finale (SelectSlot ou autre)
             if (retryBody.length > 500) {
@@ -1498,14 +1510,16 @@ export async function setupCevSessionHttp(
       }
       
       if (!retrySuccess) {
+        const probeErrorType: "transient" | "session_expired" = sessionExpiredSeen ? "session_expired" : "transient";
         botLog({
           applicationId: clientId,
           step: "cev_http_redirect_probe_error",
           status: "warn",
-          data: { error: errMsg },
+          data: { error: errMsg, probeErrorType },
         });
-        // En cas d'échec réseau (timeout, 503, 504) — signaler probeError
-        // pour que le loop retente immédiatement avec le dossier suivant.
+        // En cas d'échec réseau (timeout, 503, 504) ou SessionExpired :
+        //   'transient'       → le loop peut retenter le même dossier (clic supplémentaire) si quota OK
+        //   'session_expired' → VOWINT peut encore être valide ; refaire GetEAppointmentUrl donne une nouvelle redirectUrl
         return {
           success: true,
           sessionCookie: cevSessionCookie,
@@ -1515,6 +1529,7 @@ export async function setupCevSessionHttp(
           slotsAvailable: false,
           needsPlaywrightNavigation: false,
           probeError: true,
+          probeErrorType,
         };
       }
     }

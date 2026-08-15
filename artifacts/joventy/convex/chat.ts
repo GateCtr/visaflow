@@ -662,7 +662,7 @@ export const chat = httpAction(async (ctx, request) => {
       console.error("Victor: aucune credential Bedrock configurée");
       return new Response(
         JSON.stringify({
-          text: "Je rencontre un problème technique momentané. Un assistant validateur peut prendre la relève si vous le souhaitez.",
+          text: "Je rencontre un problème technique momentané. Pour être assisté directement, contactez-nous sur WhatsApp : +243 840 808 122 — nous répondons 7j/7, 8h-20h heure Kinshasa.",
         }),
         { status: 200, headers: corsHeaders }
       );
@@ -673,7 +673,7 @@ export const chat = httpAction(async (ctx, request) => {
       console.error("Bedrock error:", bedrockRes.status, errText);
       return new Response(
         JSON.stringify({
-          text: "Je suis momentanément indisponible. Un assistant validateur avec un niveau de validation élevé va vous contacter très prochainement.",
+          text: "Je suis momentanément indisponible. Contactez-nous directement via le WhatsApp du site : +243 840 808 122 — nous répondons 7j/7, 8h-20h heure Kinshasa.",
         }),
         { status: 200, headers: corsHeaders }
       );

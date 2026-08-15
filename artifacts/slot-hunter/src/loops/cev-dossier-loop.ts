@@ -1057,6 +1057,12 @@ interface ScanResult {
   status: "no_slot" | "slot_found" | "rate_limited" | "error" | "no_slot_poll" | "limit_reached" | "probe_error" | "transient_error";
   /** Message d'erreur brut — renseigné pour 'error' et 'transient_error'. */
   error?: string;
+  /**
+   * Cause de l'échec probe (status='probe_error') :
+   *   'session_expired' — SessionExpired détecté pendant les retries redirectUrl → refaire GetEAppointmentUrl
+   *   'transient'       — 504/réseau pur → retry si quota non épuisé
+   */
+  probeErrorType?: "transient" | "session_expired";
   sessionCookie?: string;
   integrationUrl?: string;
   /** URL finale SelectSlot capturée lors du setup (à usage unique — utiliser pour booking) */
@@ -1258,9 +1264,9 @@ async function performScan(
     }
   }
 
-  // Probe échouée (timeout/503/504/réseau) → signaler pour retry immédiat
+  // Probe échouée (timeout/503/504/réseau ou SessionExpired) → signaler pour retry
   if (result.probeError) {
-    return { status: "probe_error" };
+    return { status: "probe_error", probeErrorType: result.probeErrorType ?? "transient" };
   }
 
   return { status: "no_slot" };
@@ -2104,6 +2110,11 @@ async function runAccountLoop(job: any): Promise<void> {
   let consecutiveTransient = 0;
   /** Dernière rafale de surcharge — évite d'en enchaîner plusieurs d'affilée. */
   let lastSurgeAt = 0;
+  /**
+   * Dossier à retenter en priorité au prochain tour (après probe_error).
+   * null = sélection normale round-robin via localPool.getNextAvailable().
+   */
+  let probeRetryDossier: DossierSlot | null = null;
 
   // ─── Mode SURCHARGE (surge burst) ────────────────────────────────────────
   //
@@ -2317,8 +2328,11 @@ async function runAccountLoop(job: any): Promise<void> {
         }
       }
 
-      // ─── One-Shot: récupérer le prochain dossier (round-robin) ─────────────
-      const dossier = localPool.getNextAvailable();
+      // ─── One-Shot: récupérer le prochain dossier (round-robin ou retry probe) ──
+      // Si une probe_error a demandé un retry sur le même dossier, l'utiliser en priorité.
+      const isProbeRetry = probeRetryDossier !== null;
+      const dossier: DossierSlot | null = probeRetryDossier ?? localPool.getNextAvailable();
+      probeRetryDossier = null; // consommer le token de retry (1 seul retry par probe_error)
       if (!dossier) {
         // Aucun dossier cliquable : soit tous en pause (slot déjà trouvé), soit
         // tous à court de quota horaire. On attend la première libération plutôt
@@ -2502,20 +2516,76 @@ async function runAccountLoop(job: any): Promise<void> {
           continue; // Skip la pause One-Shot : on reste en mode "insistance"
         }
 
-        case "probe_error":
-          // Probe échouée (timeout/503/504/réseau) — retry immédiat avec le dossier suivant.
-          // Même signature qu'une éjection : ça alimente le détecteur de surcharge.
+        case "probe_error": {
+          // Le clic GetEAppointmentUrl a bien été consommé côté VOWINT → le comptabiliser.
+          recordScan(uniqueJobId, dossier.vowintRef);
+          localPool.recordClick(dossier);
+
+          const probeErrType = result.probeErrorType ?? "transient";
+          const remaining = localPool.remainingClicks(dossier);
+
+          // ── Stratégie de retry selon la cause ───────────────────────────────
+          // 'session_expired' : la redirectUrl est expirée mais la session VOWINT (4h) est
+          //   peut-être encore valide → refaire GetEAppointmentUrl donne une nouvelle redirectUrl
+          //   sans recaptcha. On autorise le retry même si le quota normal (4/h) est épuisé
+          //   (on n'est pas encore au 5e clic VOWINT).
+          // 'transient' (504/réseau) : le serveur est saturé mais le clic a bien été compté.
+          //   Si des clics restent (remaining > 0) → retry immédiat même dossier.
+          //   Si quota épuisé (remaining === 0) → on autorise quand même 1 retry (5e clic)
+          //   si c'est la 1ère probe_error consécutive (!isProbeRetry).
+          //
+          // Dans les deux cas, on n'autorise qu'UN SEUL retry par probe_error (isProbeRetry).
+          // Si le retry probe-errore à son tour → dossier suivant.
+          const canRetry =
+            probeErrType === "session_expired"
+              ? !isProbeRetry                          // 1 retry pour récupérer une nouvelle redirectUrl
+              : !isProbeRetry;                         // 1 retry (5e clic si 504 persiste)
+
+          if (canRetry) {
+            logger.warn(
+              `  ⚡ Probe ${probeErrType} sur #${dossier.index} ${dossier.vowintRef} ` +
+              `(clics restants: ${remaining}) — clic compté, retry même dossier dans 3s…`,
+            );
+            botLog({
+              applicationId: logApplicationId,
+              step: "cev_dossier_probe_error_retry",
+              status: "warn",
+              data: {
+                dossier: dossier.vowintRef,
+                dossierIndex: dossier.index,
+                probeErrType,
+                remaining,
+                action: "retry_same_dossier",
+              },
+            });
+            probeRetryDossier = dossier; // forcer le même dossier au prochain tour
+            nextScanAllowedAt = Date.now() + 3_000;
+            continue;
+          }
+
+          // 2e probe_error consécutive (ou quota + TooMany) → dossier suivant
           consecutiveTransient++;
-          logger.warn(`  ⚡ Probe timeout/erreur sur #${dossier.index} ${dossier.vowintRef} — retry immédiat avec prochain dossier`);
+          const transientDelayMsProbe = Math.min(30_000, 2_000 * 2 ** Math.min(consecutiveTransient - 1, 4));
+          logger.warn(
+            `  ⚡ Probe ${probeErrType} (2e consécutive ou quota épuisé) sur #${dossier.index} ` +
+            `${dossier.vowintRef} — passage au dossier suivant dans ${Math.round(transientDelayMsProbe / 1000)}s`,
+          );
           botLog({
             applicationId: logApplicationId,
-            step: "cev_dossier_probe_error_retry",
+            step: "cev_dossier_probe_error_skip",
             status: "warn",
-            data: { dossier: dossier.vowintRef, dossierIndex: dossier.index, scanCount: state.scanCount },
+            data: {
+              dossier: dossier.vowintRef,
+              dossierIndex: dossier.index,
+              probeErrType,
+              remaining,
+              consecutiveTransient,
+              action: "skip_next_dossier",
+            },
           });
-          // Petite pause anti-spam (3s) avant de retenter — pas le cycle complet 120s
-          nextScanAllowedAt = Date.now() + 3_000;
-          continue; // Skip le sleep normal, passer directement au dossier suivant
+          nextScanAllowedAt = Date.now() + transientDelayMsProbe;
+          continue;
+        }
 
         case "limit_reached": {
           logger.warn(`  ⚠️ CAS 2 OVERVIEW — Limite de RDV atteinte pour ce dossier ${dossier.vowintRef}`);
