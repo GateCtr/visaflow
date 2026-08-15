@@ -29,9 +29,10 @@ interface Props {
   servicePackage: string;
   isDossierOnly: boolean;
   isSlotOnly: boolean;
+  isEvisaModel?: boolean;
 }
 
-export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly }: Props) {
+export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly, isEvisaModel = false }: Props) {
   const [trackingCopied, setTrackingCopied] = useState(false);
   const [refCopied, setRefCopied] = useState(false);
   const trackingToken = (app as { trackingToken?: string }).trackingToken;
@@ -89,6 +90,15 @@ export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly }: P
             >
               <Package className="w-2.5 h-2.5" />
               {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Complet"}
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                isEvisaModel
+                  ? "bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200/60"
+                  : "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200/60"
+              }`}
+            >
+              {isEvisaModel ? "E-Visa" : "Visa Complet"}
             </span>
           </div>
         </div>

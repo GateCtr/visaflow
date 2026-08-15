@@ -97,6 +97,7 @@ export default function ApplicationDetailPage() {
         servicePackage={servicePackage}
         isDossierOnly={isDossierOnly}
         isSlotOnly={isSlotOnly}
+        isEvisaModel={isEvisaModel}
       />
 
       {/* ═══ TAB BAR + CHAT TOGGLE ═══ */}

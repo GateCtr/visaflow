@@ -749,6 +749,11 @@ export default function AdminApplicationDetail() {
                 <Package className="w-3 h-3" />
                 {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
               </span>
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                isEvisaModel ? "bg-teal-100 text-teal-700" : "bg-sky-100 text-sky-700"
+              }`}>
+                {isEvisaModel ? "E-Visa" : "Visa Complet"}
+              </span>
               {(app as { trackingToken?: string }).trackingToken && (
                 <button
                   onClick={() => {
