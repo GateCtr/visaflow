@@ -652,9 +652,10 @@ async function workerScanCycle(
       ...(agendaId ? { "agendas[]": agendaId } : {}),
       start,
       end,
-      // Passer le groupSize réel : Bookitit filtre les créneaux dont freeSlots < selectedPeople.
-      // Sans ça, on verrait des créneaux indisponibles pour le groupe (et on les clamerait à tort).
-      selectedPeople: String(groupSize),
+      // Toujours "1" : les captures Burp montrent que le portail envoie toujours selectedPeople=1
+      // quel que soit le nombre de personnes. La disponibilité par groupe est lue dans freeslots,
+      // pas filtrée côté serveur via selectedPeople. groupSize est une abstraction interne.
+      selectedPeople: "1",
     };
 
     let dtPayload: unknown = null;
