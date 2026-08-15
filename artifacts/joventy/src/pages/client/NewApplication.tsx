@@ -333,15 +333,15 @@ export default function NewApplication() {
 
   const nextStep = async () => {
     let fieldsToValidate: (keyof FormValues)[] = [];
-    if (step === 1) fieldsToValidate = ["destination", "visaType"];
+    if (step === 2) fieldsToValidate = ["destination", "visaType"];
     if (step === 3) fieldsToValidate = ["applicantName", "passportNumber", "travelDate", "purpose"];
     const isValid = await form.trigger(fieldsToValidate);
     if (isValid) setStep(step + 1);
   };
 
   const STEP_LABELS = [
-    { label: "Destination & Visa", icon: MapPin },
     { label: "Package de service", icon: Package },
+    { label: "Destination & Visa", icon: MapPin },
     { label: "Voyageur", icon: Plane },
     { label: "Tarif & Confirmation", icon: CreditCard },
   ];
@@ -379,8 +379,8 @@ export default function NewApplication() {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
 
-            {/* STEP 1 — Destination */}
-            <div className={step === 1 ? "block space-y-6" : "hidden"}>
+            {/* STEP 2 — Destination */}
+            <div className={step === 2 ? "block space-y-6" : "hidden"}>
               <h2 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-secondary" /> Choix de la destination
               </h2>
@@ -548,8 +548,8 @@ export default function NewApplication() {
               )}
             </div>
 
-            {/* STEP 2 — Package de service */}
-            <div className={step === 2 ? "block space-y-6" : "hidden"}>
+            {/* STEP 1 — Package de service */}
+            <div className={step === 1 ? "block space-y-6" : "hidden"}>
               <h2 className="text-xl font-bold text-primary mb-1 flex items-center gap-2">
                 <Package className="w-5 h-5 text-secondary" /> Choisissez votre package
               </h2>
@@ -609,11 +609,12 @@ export default function NewApplication() {
                               {pkgKey === "dossier_only" ? (
                                 <>
                                   <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
-                                    <span className="text-slate-500">Forfait unique : </span>
-                                    <span className="font-bold text-primary">{formatCurrency(VISA_PARTIAL_SERVICE.total)}</span>
+                                    <span className="text-slate-500">Engagement : </span>
+                                    <span className="font-bold text-primary">{formatCurrency(VISA_PARTIAL_SERVICE.engagementFee)}</span>
                                   </div>
-                                  <div className="text-xs bg-green-100 text-green-700 rounded-lg px-3 py-1.5 font-semibold">
-                                    Pas de prime de succès
+                                  <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
+                                    <span className="text-slate-500">Prime de succès : </span>
+                                    <span className="font-bold text-primary">{formatCurrency(VISA_PARTIAL_SERVICE.successFee)}</span>
                                   </div>
                                 </>
                               ) : (
@@ -743,36 +744,20 @@ export default function NewApplication() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center pb-3 border-b border-white/10">
                       <div>
-                        <p className="font-semibold">{isDossierOnly ? "Forfait unique" : "Frais d'engagement"}</p>
-                        <p className="text-xs text-slate-300">{isDossierOnly ? "Paiement unique à l'ouverture — aucune prime de succès" : "À payer maintenant pour activer le dossier"}</p>
+                        <p className="font-semibold">Frais d'engagement</p>
+                        <p className="text-xs text-slate-300">À payer maintenant pour activer le dossier</p>
                       </div>
                       <span className="text-xl font-bold text-secondary">{formatCurrency(effectiveEngagementFee)}</span>
                     </div>
-                    {isDossierOnly ? (
-                      <div className="flex justify-between items-center text-green-300">
-                        <div>
-                          <p className="font-semibold">Prime de succès</p>
-                          <p className="text-xs text-green-400">Non applicable — tarif forfaitaire</p>
-                        </div>
-                        <span className="text-xl font-bold line-through opacity-50">0 $</span>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-semibold">Prime de succès</p>
+                        <p className="text-xs text-slate-300">Due uniquement à l'obtention de votre visa</p>
                       </div>
-                    ) : (
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold">Prime de succès</p>
-                          <p className="text-xs text-slate-300">
-                            {pricing.successModel === "evisa"
-                              ? "Due uniquement si votre visa est obtenu"
-                              : "Due uniquement si votre créneau de RDV est obtenu"}
-                          </p>
-                        </div>
-                        <span className="text-xl font-bold text-white">{formatCurrency(effectiveSuccessFee)}</span>
-                      </div>
-                    )}
+                      <span className="text-xl font-bold text-white">{formatCurrency(effectiveSuccessFee)}</span>
+                    </div>
                     <div className="flex justify-between items-center pt-3 border-t border-white/10">
-                      <p className="font-bold text-lg">
-                        {isDossierOnly ? "Total forfait" : "Total programme"}
-                      </p>
+                      <p className="font-bold text-lg">Total programme</p>
                       <span className="text-2xl font-bold text-secondary">
                         {formatCurrency(effectiveTotal)}
                       </span>
