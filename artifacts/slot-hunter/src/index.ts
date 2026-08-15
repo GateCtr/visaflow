@@ -28,9 +28,10 @@ import { runSpainSession } from "./spainPortal.js";
 // ─── Extracted modules ──────────────────────────────────────────────────────
 import { startCevSetupLoop } from "./loops/cev-setup-loop.js";
 import { startCevPollingLoop } from "./loops/cev-polling-loop.js";
+import { startSpainWorkerOrchestrator } from "./spain-worker-orchestrator.js";
 import { startCevStealthLoop } from "./loops/cev-stealth-loop.js";
 import { startCevDossierLoop } from "./loops/cev-dossier-loop.js";
-import { startSpainWatcherLoop } from "./loops/spain-watcher-loop.js";
+// spain-watcher-loop.ts → archivé comme _legacy_spain-watcher-loop.ts (Task #52)
 import { startGermanyLoop } from "./loops/germany-loop.js";
 import { startV3Loop } from "./loops/v3-loop.js";
 import { initParallelWatchers, startParallelReloginLoop } from "./loops/parallel-loop.js";
@@ -131,8 +132,8 @@ async function main(): Promise<void> {
     });
   }
 
-  startSpainWatcherLoop().catch((err) => {
-    console.error("[SPAIN-WATCHER] Boucle crashée:", err);
+  startSpainWorkerOrchestrator().catch((err) => {
+    console.error("[SPAIN-ORCH] Orchestrateur crashé:", err);
   });
 
   startGermanyLoop().catch((err) => {

@@ -281,6 +281,34 @@ export async function acquireSpainScannerLock(): Promise<boolean> {
 }
 
 /**
+ * Renouvelle le TTL du verrou **si et seulement si** cette instance en est propriétaire.
+ * Utilise Lua pour l'atomicité : GET (vérification propriétaire) → EXPIRE.
+ *
+ * @returns true si le TTL a été renouvelé, false si une autre instance détient le lock.
+ *          En cas d'erreur Redis retourne true (comportement dégradé : on assume propriétaire).
+ */
+export async function renewSpainScannerLock(): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // dégradé → assume propriétaire
+
+  try {
+    const result = await (redisClient as any).eval(
+      `if redis.call("get", KEYS[1]) == ARGV[1] then
+         return redis.call("expire", KEYS[1], ARGV[2])
+       else
+         return 0
+       end`,
+      {
+        keys: [REDIS_SPAIN_LOCK_KEY],
+        arguments: [SPAIN_INSTANCE_ID, String(REDIS_SPAIN_LOCK_TTL_SEC)],
+      },
+    );
+    return result === 1;
+  } catch {
+    return true; // erreur transiente → assume propriétaire
+  }
+}
+
+/**
  * Libère le verrou uniquement si cette instance l'a acquis.
  * Utilise un script Lua pour garantir l'atomicité check+delete.
  */
@@ -733,6 +761,180 @@ export async function restoreDecodoPoolStateFromRedis(
     console.warn(`[spain-redis] ⚠️ Restauration Decodo pool state échouée: ${msg}`);
     return null;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PER-WORKER SLOT CAPACITY CLAIM  (Task #52 — agent autonome par dossier)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_SLOT_CAP_PREFIX = "spain:slot:cap:";
+const REDIS_SLOT_CAP_TTL_SEC = 90; // TTL court — créneaux durent quelques secondes en pratique
+
+/**
+ * Tentative atomique de réservation d'une place dans un créneau.
+ *
+ * Lua script : GET → créer (si absent) ou vérifier capacité restante → SET.
+ * Structure valeur : JSON { free: N, booked: M, claimedBy: { dossierId: groupSize } }
+ *
+ * Retourne true si ce dossier a pu réserver.
+ * En cas d'erreur Redis → retourne true (mode dégradé : on laisse tenter).
+ */
+export async function tryClaimWorkerSlot(
+  date: string,
+  time: string,
+  agendaId: string,
+  dossierId: string,
+  groupSize: number,
+  freeSlots: number,
+): Promise<boolean> {
+  if (!redisReady || !redisClient) return true;
+
+  const key = `${REDIS_SLOT_CAP_PREFIX}${date}:${time}:${agendaId}`;
+  const lua = `
+    local key     = KEYS[1]
+    local dossier = ARGV[1]
+    local need    = tonumber(ARGV[2])
+    local free    = tonumber(ARGV[3])
+    local ttl     = tonumber(ARGV[4])
+    local raw     = redis.call("GET", key)
+    if raw == false then
+      local val = cjson.encode({free=free, booked=need, claimedBy={[dossier]=need}})
+      redis.call("SET", key, val, "EX", ttl)
+      return 1
+    end
+    local data = cjson.decode(raw)
+    if data.claimedBy and data.claimedBy[dossier] ~= nil then return 1 end
+    if (data.booked or 0) + need <= (data.free or free) then
+      data.booked = (data.booked or 0) + need
+      if not data.claimedBy then data.claimedBy = {} end
+      data.claimedBy[dossier] = need
+      redis.call("SET", key, cjson.encode(data), "EX", ttl)
+      return 1
+    end
+    return 0
+  `;
+  try {
+    const result = await redisClient.eval(lua, {
+      keys: [key],
+      arguments: [dossierId, String(groupSize), String(freeSlots), String(REDIS_SLOT_CAP_TTL_SEC)],
+    });
+    return result === 1;
+  } catch (e) {
+    console.warn(`[spain-redis] tryClaimWorkerSlot: ${e}`);
+    return true; // dégradé
+  }
+}
+
+/**
+ * Libère la réservation d'un dossier sur un créneau de façon atomique.
+ *
+ * IMPORTANT : cette fonction supprime UNIQUEMENT la réservation du dossier appelant.
+ * Si d'autres dossiers ont aussi réservé des places sur le même créneau (capacity > 1),
+ * leurs réservations sont conservées et `booked` est décrémenté du seul `groupSize`
+ * de ce dossier. La clé Redis n'est supprimée que si aucun claim ne reste.
+ *
+ * @param dossierId - ID du dossier dont on libère la réservation.
+ */
+export async function releaseWorkerSlot(
+  date: string,
+  time: string,
+  agendaId: string,
+  dossierId: string,
+): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  const key = `${REDIS_SLOT_CAP_PREFIX}${date}:${time}:${agendaId}`;
+  const lua = `
+    local key     = KEYS[1]
+    local dossier = ARGV[1]
+    local ttl     = tonumber(ARGV[2])
+    local raw     = redis.call("GET", key)
+    if raw == false then return 0 end
+    local data = cjson.decode(raw)
+    if not data.claimedBy or data.claimedBy[dossier] == nil then return 0 end
+    local freed = data.claimedBy[dossier]
+    data.booked = math.max(0, (data.booked or 0) - freed)
+    data.claimedBy[dossier] = nil
+    -- Vérifier si des claims restent
+    local remaining = 0
+    for _ in pairs(data.claimedBy) do remaining = remaining + 1 end
+    if remaining == 0 then
+      redis.call("DEL", key)
+    else
+      redis.call("SET", key, cjson.encode(data), "EX", ttl)
+    end
+    return 1
+  `;
+  try {
+    await (redisClient as any).eval(lua, {
+      keys: [key],
+      arguments: [dossierId, String(REDIS_SLOT_CAP_TTL_SEC)],
+    });
+  } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PER-WORKER IP RESERVATION  (Task #52 — isolation IP par dossier)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_IP_RESERVE_PREFIX = "spain:ip:reserved:";
+const REDIS_IP_RESERVE_TTL_SEC = 30 * 60; // 30 min — durée fenêtre worker
+
+/**
+ * Réserve un proxy Decodo pour un dossier (NX : échoue si déjà réservé par un autre).
+ * Retourne true si la réservation a réussi (ou en mode dégradé sans Redis).
+ */
+export async function reserveWorkerIp(proxyUrl: string, dossierId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return true;
+  const key = `${REDIS_IP_RESERVE_PREFIX}${encodeURIComponent(proxyUrl)}`;
+  try {
+    const res = await redisClient.set(key, dossierId, { NX: true, EX: REDIS_IP_RESERVE_TTL_SEC });
+    return res === "OK";
+  } catch (e) {
+    console.warn(`[spain-redis] reserveWorkerIp: ${e}`);
+    return true; // dégradé
+  }
+}
+
+/**
+ * Vérifie si une IP est déjà réservée par un autre dossier.
+ */
+export async function isIpReservedByOther(proxyUrl: string, dossierId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return false;
+  const key = `${REDIS_IP_RESERVE_PREFIX}${encodeURIComponent(proxyUrl)}`;
+  try {
+    const val = await redisClient.get(key);
+    return val !== null && val !== dossierId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Libère la réservation IP d'un worker avec vérification d'appartenance (atomic Lua).
+ *
+ * Seul le dossier qui a réservé l'IP peut la libérer.
+ * Si un nouveau worker a reclamé l'IP après expiration du TTL, cette fonction
+ * ne la supprime pas (la valeur Redis sera différente de dossierId).
+ *
+ * @param proxyUrl  URL du proxy Decodo à libérer.
+ * @param dossierId ID du dossier qui détient la réservation.
+ */
+export async function releaseWorkerIp(proxyUrl: string, dossierId: string): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  const key = `${REDIS_IP_RESERVE_PREFIX}${encodeURIComponent(proxyUrl)}`;
+  const lua = `
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      redis.call("DEL", KEYS[1])
+      return 1
+    end
+    return 0
+  `;
+  try {
+    await (redisClient as any).eval(lua, {
+      keys: [key],
+      arguments: [dossierId],
+    });
+  } catch {}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -1682,6 +1682,19 @@ export function createFreshSpainImpit(session: SpainCfSession): InstanceType<typ
 }
 
 /**
+ * Crée un impit Chrome standalone avec un proxy URL spécifique.
+ * Utilisé par les workers autonomes pour le probe CF AVANT d'avoir une session complète.
+ * L'impit créé ici doit être transmis en tant que session._ownImpit pour garantir
+ * la cohérence TLS (le cf_clearance est lié à l'empreinte TLS de CE impit).
+ */
+export function createImpitWithProxy(proxyUrl: string): InstanceType<typeof Impit> {
+  return new Impit({
+    browser: "chrome",
+    proxyUrl: proxyUrl || undefined,
+  } as any);
+}
+
+/**
  * Retourne une instance impit configurée avec le proxy de la session CF active.
  * Le fingerprint TLS Chrome garantit la cohérence avec le solve CapSolver.
  */

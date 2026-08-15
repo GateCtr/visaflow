@@ -467,11 +467,13 @@ function buildBookingCookieHeader(session: SpainCfSession): string {
  * @param session  Session capsolver existante (cf_clearance + cookies)
  * @param portalUrl  URL du portail Bookitit (contient la publickey)
  */
-async function refreshPhpsessidForCapsolver(
+export async function refreshPhpsessidForCapsolver(
   session: SpainCfSession,
   portalUrl: string,
 ): Promise<boolean> {
-  const impit = getSpainImpit(session); // singleton — même TLS que le CF solve
+  // Utiliser _ownImpit si présent (worker autonome Task #52 — impit dédié lié au cf_clearance)
+  // Sinon fallback sur le singleton global (ancienne architecture solve CapSolver).
+  const impit = (session._ownImpit ?? getSpainImpit(session)) as { fetch: (...a: any[]) => Promise<any> };
   const portalPublickey = (
     session.portalKey
     ?? portalUrl.match(/widgetdefault\/([^/?#]+)/)?.[1]
