@@ -118,6 +118,46 @@ const CEV_COUNTRIES = [
   { code: "SK", label: "🇸🇰 Slovaquie" },
 ];
 
+// Visa D long séjour — hors CEV, hors Allemagne (déjà destination séparée)
+const VISA_D_COUNTRIES = [
+  {
+    code: "BE",
+    label: "🇧🇪 Belgique",
+    portal: "Visaonweb (visaonweb.diplomatie.be)",
+    info: "Le Visa D Belgique passe par le portail Visaonweb, identique au Visa C mais dans la catégorie long séjour. Joventy crée ou gère votre dossier VOWINT long séjour et surveille les disponibilités.",
+  },
+  {
+    code: "FR",
+    label: "🇫🇷 France",
+    portal: "TLScontact (france-visas.gouv.fr)",
+    info: "Pré-enregistrement requis sur france-visas.gouv.fr avant la prise de créneau. Joventy surveille le portail TLScontact France (CDG → Kinshasa) et capture votre rendez-vous dès qu'une place se libère.",
+  },
+  {
+    code: "NL",
+    label: "🇳🇱 Pays-Bas",
+    portal: "Ambassade des Pays-Bas (ind.nl)",
+    info: "Le Visa D Pays-Bas (MVV) est traité par l'IND. La demande se dépose directement auprès de l'ambassade à Kinshasa. Joventy prépare votre dossier et gère le rendez-vous.",
+  },
+  {
+    code: "IT",
+    label: "🇮🇹 Italie",
+    portal: "Ambassade d'Italie (Prenot@mi)",
+    info: "Le Visa D Italie (études, travail, regroupement) se dépose via le portail Prenot@mi de l'ambassade. Joventy gère le dossier et la prise de rendez-vous consulaire.",
+  },
+  {
+    code: "PT",
+    label: "🇵🇹 Portugal",
+    portal: "Ambassade du Portugal",
+    info: "Le Visa D Portugal (D7, études, travail) est traité directement par l'ambassade du Portugal à Kinshasa. Joventy prépare votre dossier et organise le rendez-vous.",
+  },
+  {
+    code: "OTHER",
+    label: "🇪🇺 Autre pays Schengen",
+    portal: "Ambassade du pays concerné",
+    info: "Pour les autres pays Schengen (Autriche, Suède, Grèce…), le Visa D est traité directement par l'ambassade ou le consulat à Kinshasa. Contactez Joventy pour confirmation du circuit selon votre pays cible.",
+  },
+];
+
 // Tous les uploads Espagne sont optionnels ici — ils peuvent être ajoutés
 // depuis la fiche dossier après paiement. La validation obligatoire est
 // effectuée par notre équipe avant l'activation du bot.
@@ -185,6 +225,7 @@ export default function NewCreneauApplication() {
   // Schengen-specific
   const [cevTargetCountry, setCevTargetCountry] = useState("BE");
   const [cevAgeCategory, setCevAgeCategory] = useState<"adult" | "child_6_12" | "child_under_6">("adult");
+  const [visaDTargetCountry, setVisaDTargetCountry] = useState("FR");
   const [cevForm, setCevForm] = useState<File | null>(null);
   const cevFormRef = useRef<HTMLInputElement>(null);
   // Shared
@@ -288,7 +329,7 @@ export default function NewCreneauApplication() {
         slotUrgencyTier: "standard",
         cevVisaClass: derivedCevClass,
         cevApplicantAgeCategory: isSchengenVisaC ? cevAgeCategory : undefined,
-        cevTargetCountry: isSchengenVisaC ? cevTargetCountry : undefined,
+        cevTargetCountry: isSchengenVisaC ? cevTargetCountry : isSchengenVisaD ? visaDTargetCountry : undefined,
         slotBookingRefs: undefined,
         userWhatsapp: userWhatsapp.trim() || undefined,
         spainHasCredentials: dest === "spain" && emailSentToEmbassy ? true : undefined,
@@ -515,14 +556,33 @@ export default function NewCreneauApplication() {
               </div>
             )}
 
-            {/* Champs Schengen Visa D — TLScontact France (france-visas.gouv.fr) */}
+            {/* Champs Schengen Visa D — sélecteur pays + portail spécifique */}
             {isSchengenVisaD && (
-              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
-                <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+              <div className="space-y-3">
                 <div>
-                  <p className="font-semibold">Visa D Long Séjour — Portail TLScontact France</p>
-                  <p className="text-xs mt-1 text-amber-800">Le Visa D n'est pas traité par le CEV. Joventy surveille le portail <strong>TLScontact France (CDG → Kinshasa)</strong> et capture votre créneau dès qu'une place se libère. Prérequis : avoir soumis votre dossier sur france-visas.gouv.fr. Frais : ~99 € (France-Visas) + ~30 € TLScontact, payés séparément.</p>
+                  <label className="block text-sm font-semibold text-primary mb-1.5">Pays de destination <span className="text-red-500">*</span></label>
+                  <Select value={visaDTargetCountry} onValueChange={setVisaDTargetCountry}>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-72 overflow-y-auto">
+                      {VISA_D_COUNTRIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                {(() => {
+                  const d = VISA_D_COUNTRIES.find((c) => c.code === visaDTargetCountry);
+                  if (!d) return null;
+                  return (
+                    <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+                      <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+                      <div>
+                        <p className="font-semibold">Visa D Long Séjour — {d.portal}</p>
+                        <p className="text-xs mt-1 text-amber-800">{d.info}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -706,8 +766,8 @@ export default function NewCreneauApplication() {
               )}
               {isSchengenVisaD && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Portail</span>
-                  <span className="font-semibold text-primary">TLScontact France (Visa D)</span>
+                  <span className="text-muted-foreground">Pays cible (Visa D)</span>
+                  <span className="font-semibold text-primary">{VISA_D_COUNTRIES.find((c) => c.code === visaDTargetCountry)?.label ?? visaDTargetCountry}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm">

@@ -30,20 +30,20 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const DESTINATIONS = [
-  { id: "usa",         name: "États-Unis 🇺🇸",      desc: "Rendez-vous consulaire — ambassade américaine de Kinshasa",              processType: "appointment" as const },
-  { id: "canada",      name: "Canada 🇨🇦",           desc: "Rendez-vous biométrique IRCC — centre de collecte Kinshasa",             processType: "appointment" as const },
-  { id: "uk",          name: "Royaume-Uni 🇬🇧",      desc: "Rendez-vous consulaire — visa standard, étudiant, travail, famille",     processType: "appointment" as const },
-  { id: "schengen",    name: "Europe Schengen 🇪🇺",  desc: "Rendez-vous CEV — 17 pays Schengen depuis Kinshasa",                    processType: "appointment" as const },
-  { id: "germany",     name: "Allemagne 🇩🇪",        desc: "Rendez-vous ambassade d'Allemagne — visa national & Schengen",           processType: "appointment" as const },
-  { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Rendez-vous consulaire — visa Schengen court séjour ou long séjour",    processType: "appointment" as const },
-  { id: "spain",       name: "Espagne 🇪🇸",          desc: "Rendez-vous consulaire — ambassade d'Espagne à Kinshasa",               processType: "appointment" as const },
-  { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                           processType: "evisa" as const },
-  { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne (si visa USA/Schengen/UK valide) ou visa sticker ambassade",  processType: "evisa" as const },
-  { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                         processType: "evisa" as const },
-  { id: "china",       name: "Chine 🇨🇳",            desc: "E-Visa court séjour ou visa L/M/F — dépôt sans rendez-vous",            processType: "hybrid" as const },
-  { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa en ligne (24-72h) ou consulaire sans rendez-vous",               processType: "hybrid" as const },
-  { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne ou consulaire sans rendez-vous",                        processType: "hybrid" as const },
-  { id: "brazil",      name: "Brésil 🇧🇷",           desc: "Rendez-vous consulaire — ambassade du Brésil à Kinshasa",              processType: "appointment" as const },
+  { id: "usa",         name: "États-Unis 🇺🇸",      desc: "Visa USA — dossier DS-160 + créneau biométrie à l'ambassade de Kinshasa",         processType: "appointment" as const },
+  { id: "canada",      name: "Canada 🇨🇦",           desc: "Visa Canada — dossier IRCC complet + créneau biométrie depuis Kinshasa",          processType: "appointment" as const },
+  { id: "uk",          name: "Royaume-Uni 🇬🇧",      desc: "Visa UK — dossier UKVI (standard, étudiant, travail, famille) pris en charge",    processType: "appointment" as const },
+  { id: "schengen",    name: "Europe Schengen 🇪🇺",  desc: "Visa Schengen — dossier + créneau CEV (Visa C) ou TLScontact/Visaonweb (Visa D)", processType: "appointment" as const },
+  { id: "germany",     name: "Allemagne 🇩🇪",        desc: "Visa Allemagne — national (études, travail, famille) ou Schengen court séjour",   processType: "appointment" as const },
+  { id: "switzerland", name: "Suisse 🇨🇭",           desc: "Visa Suisse — Schengen court séjour ou long séjour, dossier complet",            processType: "appointment" as const },
+  { id: "spain",       name: "Espagne 🇪🇸",          desc: "Visa Espagne — dossier + créneau ambassade (citaconsular.es)",                   processType: "appointment" as const },
+  { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                                    processType: "evisa" as const },
+  { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne (si visa USA/Schengen/UK valide) ou visa sticker ambassade",      processType: "evisa" as const },
+  { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                                  processType: "evisa" as const },
+  { id: "china",       name: "Chine 🇨🇳",            desc: "E-Visa court séjour ou visa L/M/F — dossier complet pris en charge",             processType: "hybrid" as const },
+  { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa en ligne (24-72h) ou visa consulaire — dossier complet",                  processType: "hybrid" as const },
+  { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne ou visa consulaire — dossier complet",                          processType: "hybrid" as const },
+  { id: "brazil",      name: "Brésil 🇧🇷",           desc: "Visa Brésil — dossier + créneau consulaire à l'ambassade de Kinshasa",           processType: "appointment" as const },
 ];
 
 // Note : l'Espagne gère ses propres rendez-vous via citaconsular.es —
@@ -436,7 +436,7 @@ export default function NewApplication() {
                                 <span className="text-[10px] bg-green-100 text-green-700 font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide">E-Visa</span>
                               )}
                               {dest.processType === "appointment" && (
-                                <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide">Consulaire</span>
+                                <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide">Visa Complet</span>
                               )}
                               {dest.processType === "hybrid" && (
                                 <span className="text-[10px] bg-amber-100 text-amber-700 font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide">E-Visa / VFS</span>
