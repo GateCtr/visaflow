@@ -2,9 +2,9 @@ export const VISA_PRICING = {
   usa: {
     label: "États-Unis",
     flag: "🇺🇸",
-    engagementFee: 250,
-    successFee: 750,
-    total: 1000,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: ["B1/B2 (Tourisme/Affaires)", "F1 (Étudiant)", "F2 (Conjoint/Enfant F1)", "K1 (Fiancé(e))", "H1B (Travail)", "H4 (Conjoint H1B)", "J1 (Échange)", "L1A (Transfert cadre)", "L1B (Transfert spécialisé)", "O1 (Aptitudes extraordinaires)", "IR1 (Conjoint citoyen US)", "CR1 (Conjoint récent citoyen US)", "IR2 (Enfant citoyen US)", "DV (Visa Diversité/Loterie)", "E2 (Investisseur)"],
     requiredDocuments: [
@@ -45,9 +45,9 @@ export const VISA_PRICING = {
   canada: {
     label: "Canada",
     flag: "🇨🇦",
-    engagementFee: 250,
-    successFee: 750,
-    total: 1000,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: [
       "Biométrie (Biometric Enrolment)",
@@ -82,9 +82,9 @@ export const VISA_PRICING = {
   uk: {
     label: "Royaume-Uni",
     flag: "🇬🇧",
-    engagementFee: 200,
-    successFee: 600,
-    total: 800,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: [
       "Standard Visitor Visa",
@@ -121,9 +121,9 @@ export const VISA_PRICING = {
   switzerland: {
     label: "Suisse",
     flag: "🇨🇭",
-    engagementFee: 150,
-    successFee: 450,
-    total: 600,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: [
       "Visa C — Tourisme / Affaires (Schengen)",
@@ -160,9 +160,9 @@ export const VISA_PRICING = {
   dubai: {
     label: "Dubaï (EAU)",
     flag: "🇦🇪",
-    engagementFee: 80,
-    successFee: 120,
-    total: 200,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "evisa" as const,
     visaTypes: ["Touriste 30j", "Touriste 60j", "Résidence", "Affaires"],
     requiredDocuments: [
@@ -189,9 +189,9 @@ export const VISA_PRICING = {
   turkey: {
     label: "Turquie",
     flag: "🇹🇷",
-    engagementFee: 80,
-    successFee: 120,
-    total: 200,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: ["E-Visa (si visa USA/Schengen)", "Visa Sticker (VFS Kinshasa)"],
     requiredDocuments: [
@@ -220,9 +220,9 @@ export const VISA_PRICING = {
   india: {
     label: "Inde",
     flag: "🇮🇳",
-    engagementFee: 100,
-    successFee: 150,
-    total: 250,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "evisa" as const,
     visaTypes: ["e-Visa Touriste", "Médical (e-Medical)", "Études (Regular Visa)"],
     requiredDocuments: [
@@ -250,9 +250,9 @@ export const VISA_PRICING = {
   spain: {
     label: "Espagne",
     flag: "🇪🇸",
-    engagementFee: 150,
-    successFee: 450,
-    total: 600,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: [
       "Visa C — Tourisme / Affaires",
@@ -293,9 +293,9 @@ export const VISA_PRICING = {
   schengen: {
     label: "Europe Schengen",
     flag: "🇪🇺",
-    engagementFee: 150,
-    successFee: 450,
-    total: 600,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: [
       "Visa C — Tourisme / Affaires",
@@ -335,9 +335,9 @@ export const VISA_PRICING = {
   germany: {
     label: "Allemagne",
     flag: "🇩🇪",
-    engagementFee: 150,
-    successFee: 450,
-    total: 600,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: [
       "Visa National — Études (Studium)",
@@ -381,9 +381,9 @@ export const VISA_PRICING = {
   morocco: {
     label: "Maroc",
     flag: "🇲🇦",
-    engagementFee: 150,
-    successFee: 200,
-    total: 350,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "evisa" as const,
     visaTypes: [
       "E-Visa Maroc (portail officiel)",
@@ -411,14 +411,14 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a obtenu votre visa marocain. Réglez la prime de succès pour recevoir votre document officiel.",
       completedNote: "Votre visa Maroc est disponible ci-dessous. Imprimez-le avant l'embarquement.",
     },
-    notes: "Deux voies : (1) E-Visa en ligne via evisa.marocmfa.ma — disponible pour ressortissants RDC, frais 77-110 USD, délai 24-72h. (2) Visa consulaire sans rendez-vous à l'Ambassade du Maroc à Kinshasa (dépôt direct) — frais ~15-25 USD, délai 3-5 jours. Idéal pour purger les 21 jours Ebola avant USA/Canada. Frais Joventy : 150 USD engagement + 200 USD prime de succès.",
+    notes: "Deux voies : (1) E-Visa en ligne via evisa.marocmfa.ma — disponible pour ressortissants RDC, frais 77-110 USD, délai 24-72h. (2) Visa consulaire sans rendez-vous à l'Ambassade du Maroc à Kinshasa (dépôt direct) — frais ~15-25 USD, délai 3-5 jours. Idéal pour purger les 21 jours Ebola avant USA/Canada. Frais Joventy : 500 USD engagement + 1 000 USD prime de succès (total 1 500 USD).",
   },
   egypt: {
     label: "Égypte",
     flag: "🇪🇬",
-    engagementFee: 150,
-    successFee: 200,
-    total: 350,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "evisa" as const,
     visaTypes: [
       "E-Visa Égypte (portail officiel visa2.egypt.gov.eg)",
@@ -445,14 +445,14 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a obtenu votre visa égyptien. Réglez la prime de succès pour recevoir votre document officiel.",
       completedNote: "Votre visa Égypte est disponible ci-dessous. Imprimez-le avant l'embarquement.",
     },
-    notes: "Deux voies : (1) E-Visa en ligne via visa2.egypt.gov.eg — disponible pour ressortissants RDC depuis 2024, entrée simple 30j ~25 USD, multi-entrées 60j ~60 USD, délai 3-5 jours ouvrables. (2) Visa consulaire sans rendez-vous à l'Ambassade d'Égypte à Kinshasa (dépôt direct) — frais ~60 USD, délai 24-72h. Option la plus économique pour transit 21 jours Ebola (budget dès 1 300 USD pour 21j). Frais Joventy : 150 USD engagement + 200 USD prime de succès.",
+    notes: "Deux voies : (1) E-Visa en ligne via visa2.egypt.gov.eg — disponible pour ressortissants RDC depuis 2024, entrée simple 30j ~25 USD, multi-entrées 60j ~60 USD, délai 3-5 jours ouvrables. (2) Visa consulaire sans rendez-vous à l'Ambassade d'Égypte à Kinshasa (dépôt direct) — frais ~60 USD, délai 24-72h. Option la plus économique pour transit 21 jours Ebola (budget dès 1 300 USD pour 21j). Frais Joventy : 500 USD engagement + 1 000 USD prime de succès (total 1 500 USD).",
   },
   china: {
     label: "Chine",
     flag: "🇨🇳",
-    engagementFee: 120,
-    successFee: 380,
-    total: 500,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "evisa" as const,
     visaTypes: [
       "E-Visa Chine (portail officiel — court séjour)",
@@ -483,14 +483,14 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a obtenu votre visa chinois. Réglez la prime de succès pour recevoir votre passeport avec le visa apposé.",
       completedNote: "Votre visa Chine est disponible ci-dessous. Vérifiez les dates de validité avant l'embarquement.",
     },
-    notes: "Deux voies : (1) E-Visa Chine en ligne via portail officiel — disponible pour RDC depuis l'expansion 2025, court séjour ≤15 jours, délai 4-7 jours. (2) Visa standard via VFS Global Kinshasa sans rendez-vous (dépôt direct) — frais consulaires ~140 USD + frais VFS ~30 USD, délai 4-7 jours ouvrables. Types principaux : L (tourisme), M (affaires), F (échange), X2 (études <180j). Frais Joventy : 120 USD engagement + 380 USD prime de succès.",
+    notes: "Deux voies : (1) E-Visa Chine en ligne via portail officiel — disponible pour RDC depuis l'expansion 2025, court séjour ≤15 jours, délai 4-7 jours. (2) Visa standard via VFS Global Kinshasa sans rendez-vous (dépôt direct) — frais consulaires ~140 USD + frais VFS ~30 USD, délai 4-7 jours ouvrables. Types principaux : L (tourisme), M (affaires), F (échange), X2 (études <180j). Frais Joventy : 500 USD engagement + 1 000 USD prime de succès (total 1 500 USD).",
   },
   brazil: {
     label: "Brésil",
     flag: "🇧🇷",
-    engagementFee: 200,
-    successFee: 400,
-    total: 600,
+    engagementFee: 500,
+    successFee: 1000,
+    total: 1500,
     successModel: "appointment" as const,
     visaTypes: [
       "VITUR — Tourisme",
@@ -518,7 +518,7 @@ export const VISA_PRICING = {
       clientCtaBody: "Joventy a obtenu votre visa brésilien. Réglez la prime de succès pour recevoir votre document officiel.",
       completedNote: "Votre visa Brésil est disponible ci-dessous. Imprimez-le avant l'embarquement.",
     },
-    notes: "Le visa Brésil (tourisme VITUR, affaires VITEM II ou études VITEM IV) se dépose sur rendez-vous à l'Ambassade du Brésil à Kinshasa. Joventy prépare votre dossier complet et organise votre rendez-vous consulaire. Frais Joventy : 200 USD engagement + 400 USD prime de succès.",
+    notes: "Le visa Brésil (tourisme VITUR, affaires VITEM II ou études VITEM IV) se dépose sur rendez-vous à l'Ambassade du Brésil à Kinshasa. Joventy prépare votre dossier complet et organise votre rendez-vous consulaire. Frais Joventy : 500 USD engagement + 1 000 USD prime de succès (total 1 500 USD).",
   },
 } as const;
 
@@ -527,23 +527,39 @@ export type SuccessModel = "appointment" | "evisa";
 export type ServicePackage = "full_service" | "slot_only" | "dossier_only";
 
 // ─── Tarification créneaux (système simplifié) ────────────────────────────
-export const CRENEAU_PROMO_PRICING = {
-  normalPrice: 350,       // Prix normal affiché (barré)
-  promoPrice: 150,        // Prix promotionnel actuel
-  depositAmount: 60,      // Acompte obligatoire à l'ouverture
-  successAmount: 90,      // Solde dû à l'obtention du créneau
+export const CRENEAU_PRICING = {
+  total: 350,             // Prix unique — payé à l'obtention du créneau
+  depositAmount: 0,       // Aucun acompte — paiement uniquement après résultat
+  successAmount: 350,     // Montant dû à l'obtention du créneau
   processingWeeksMin: 3,  // Délai minimum en semaines
+} as const;
+
+/** @deprecated Utiliser CRENEAU_PRICING */
+export const CRENEAU_PROMO_PRICING = CRENEAU_PRICING;
+
+// ─── Service visa complet / partiel ───────────────────────────────────────
+export const VISA_FULL_SERVICE = {
+  engagementFee: 500,   // Acompte obligatoire à l'ouverture du dossier
+  successFee: 1000,     // Prime de succès payée uniquement à l'obtention
+  total: 1500,
+} as const;
+
+// Tarif fixe — 600 USD payés à l'ouverture, aucune prime de succès séparée
+export const VISA_PARTIAL_SERVICE = {
+  engagementFee: 600,
+  successFee: 0,
+  total: 600,
 } as const;
 
 export const SLOT_URGENCY_TIERS = {
   standard: {
     key: "standard" as const,
     label: "Créneau",
-    tagline: "3 semaines min",
-    desc: "Délai minimum de traitement : 3 semaines",
-    depositAmount: CRENEAU_PROMO_PRICING.depositAmount,
-    successAmount: CRENEAU_PROMO_PRICING.successAmount,
-    total: CRENEAU_PROMO_PRICING.promoPrice,
+    tagline: "Paiement après résultat",
+    desc: "350 USD — payés uniquement une fois le créneau obtenu. Aucun acompte.",
+    depositAmount: 0,
+    successAmount: 350,
+    total: 350,
     variableNote: null,
   },
   prioritaire: {
@@ -551,8 +567,8 @@ export const SLOT_URGENCY_TIERS = {
     label: "Prioritaire",
     tagline: "1 à 3 mois",
     desc: "Date souhaitée dans 1 à 3 mois",
-    depositAmount: 120,
-    successAmount: 230,
+    depositAmount: 0,
+    successAmount: 350,
     total: 350,
     variableNote: null,
   },
@@ -561,9 +577,9 @@ export const SLOT_URGENCY_TIERS = {
     label: "Urgent",
     tagline: "3 à 6 semaines",
     desc: "Date souhaitée dans 3 à 6 semaines",
-    depositAmount: 150,
-    successAmount: 300,
-    total: 450,
+    depositAmount: 0,
+    successAmount: 350,
+    total: 350,
     variableNote: null,
   },
   tres_urgent: {
@@ -571,10 +587,10 @@ export const SLOT_URGENCY_TIERS = {
     label: "Très Urgent",
     tagline: "< 3 semaines / ASAP",
     desc: "Date souhaitée dans moins de 3 semaines ou dès que possible",
-    depositAmount: 200,
-    successAmount: 400,
-    total: 600,
-    variableNote: "Prime indicative — peut dépasser 600 $ selon disponibilité. Confirmée par Joventy.",
+    depositAmount: 0,
+    successAmount: 350,
+    total: 350,
+    variableNote: "Tarif fixe 350 USD — paiement uniquement à l'obtention du créneau.",
   },
 } as const;
 

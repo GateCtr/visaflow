@@ -17,20 +17,21 @@ function FlagImg({ code, size = 32, className = "" }: { code: string; size?: num
   return <img src={`https://flagcdn.com/w${snapped}/${code.toLowerCase()}.png`} width={snapped} alt={altText} className={`rounded-sm object-cover flex-shrink-0 ${className}`} />;
 }
 
-const PRICING = [
-  { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", engagement: 250, success: 750, external: "185-210 USD (MRV ambassade)", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)" },
-  { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", engagement: 250, success: 750, external: "185 CAD+ (IRCC + biométrie)", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)" },
-  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null },
-  { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", engagement: 200, success: 600, external: "£115+ (UKVI)", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null },
-  { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null },
-  { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", engagement: 150, success: 450, external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null },
-  { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", engagement: 150, success: 200, external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null },
-  { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", engagement: 150, success: 200, external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null },
-  { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null },
-  { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", engagement: 150, success: 200, external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (consulaire) / 3-5j (e-Visa)", href: "/e-visa-egypte-kinshasa", alert: null },
-  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", engagement: 120, success: 380, external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
-  { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", engagement: 100, success: 150, external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },
-  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", engagement: 200, success: 400, external: "Frais consulaires brésiliens (variable)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null },
+const DESTINATIONS = [
+  { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", external: "185-210 USD (MRV ambassade)", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)" },
+  { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", external: "185 CAD+ (IRCC + biométrie)", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)" },
+  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null },
+  { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", external: "£115+ (UKVI)", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null },
+  { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (ambassade)", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null },
+  { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null },
+  { code: "de", name: "Visa Allemagne", types: "National, Schengen, Études, Travail", external: "75-80 € (consulat)", delay: "Variable (RK-Termin)", href: "/visa-schengen-kinshasa", alert: null },
+  { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null },
+  { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null },
+  { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null },
+  { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (consulaire) / 3-5j (e-Visa)", href: "/e-visa-egypte-kinshasa", alert: null },
+  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null },
+  { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null },
+  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", external: "Frais consulaires brésiliens (variable)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null },
 ];
 
 const INCLUDES = [
@@ -61,9 +62,9 @@ export default function Prix() {
     "offers": {
       "@type": "AggregateOffer",
       "priceCurrency": "USD",
-      "lowPrice": "100",
-      "highPrice": "1000",
-      "offerCount": PRICING.length.toString(),
+      "lowPrice": "350",
+      "highPrice": "1500",
+      "offerCount": DESTINATIONS.length.toString(),
     },
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -101,10 +102,10 @@ export default function Prix() {
     <PublicLayout solidNav>
       <Helmet>
         <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
-        <meta name="description" content="Tarifs transparents pour l'assistance visa depuis Kinshasa : USA 250+750$, Schengen 150+450$, Dubaï 150+200$, Maroc/Égypte 150+200$. Paiement M-Pesa. Prime de succès uniquement si résultat obtenu." />
+        <meta name="description" content="Tarifs Joventy 2026 depuis Kinshasa : créneau consulaire 350$ (paiement après résultat), service visa complet 1 500$ (500+1 000$), service partiel 600$. Toutes destinations. Paiement M-Pesa." />
         <link rel="canonical" href="https://joventy.cd/prix" />
         <meta property="og:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta property="og:description" content="Tarifs transparents : USA 250+750$, Schengen 150+450$, Dubaï 150+200$. Paiement M-Pesa, prime de succès uniquement si résultat." />
+        <meta property="og:description" content="Créneau 350$ (après résultat) · Service visa complet 1 500$ · Service partiel 600$. Toutes destinations. Paiement M-Pesa." />
         <meta property="og:url" content="https://joventy.cd/prix" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
@@ -112,7 +113,7 @@ export default function Prix() {
         <meta property="og:site_name" content="Joventy" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta name="twitter:description" content="Tarifs transparents : USA 250+750$, Schengen 150+450$, Dubaï 150+200$. Paiement M-Pesa, prime de succès uniquement si résultat." />
+        <meta name="twitter:description" content="Créneau 350$ (après résultat) · Service visa complet 1 500$ · Service partiel 600$. Toutes destinations. Paiement M-Pesa." />
         <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
@@ -125,32 +126,93 @@ export default function Prix() {
             Tarifs Joventy — Assistance Visa depuis Kinshasa
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed max-w-2xl mx-auto mb-6">
-            Un modèle simple et transparent : <strong>frais d'engagement</strong> (payés à la création du dossier) + <strong>prime de succès</strong> (payée uniquement si nous obtenons un résultat). Paiement exclusivement via M-Pesa, Airtel Money ou Orange Money.
+            Trois formules claires, toutes destinations. <strong>Pas de résultat = pas de prime de succès.</strong> Paiement exclusivement via M-Pesa, Airtel Money ou Orange Money.
           </p>
           <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-sm font-medium px-4 py-2 rounded-full">
             <CheckCircle2 className="w-4 h-4" />
-            Pas de résultat = pas de prime de succès
+            Paiement uniquement après résultat obtenu
           </div>
         </div>
       </section>
 
-      {/* TABLE DES TARIFS */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+      {/* 3 FORMULES */}
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
+        <h2 className="text-2xl font-bold text-primary text-center mb-8">Nos formules — toutes destinations</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Créneau */}
+          <div className="bg-white border-2 border-secondary rounded-2xl p-6 shadow-sm flex flex-col">
+            <div className="inline-flex items-center gap-1.5 bg-secondary/10 text-secondary text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Créneau uniquement
+            </div>
+            <p className="text-4xl font-extrabold text-primary mb-1">350 $</p>
+            <p className="text-sm text-green-700 font-semibold mb-4">Payé APRÈS obtention du créneau</p>
+            <p className="text-sm text-muted-foreground mb-4">Votre dossier est déjà prêt ? Joventy surveille 24h/24 et verrouille votre créneau consulaire dès qu'une place se libère.</p>
+            <ul className="space-y-1.5 text-xs text-slate-600 mb-6 flex-1">
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Aucun acompte à l'avance</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Paiement uniquement après créneau obtenu</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> USA, Schengen, Canada, UK, Espagne, Allemagne…</li>
+            </ul>
+            <Link href="/register">
+              <Button className="w-full bg-secondary text-primary hover:bg-orange-500 font-bold">Demander un créneau</Button>
+            </Link>
+          </div>
+
+          {/* Service complet */}
+          <div className="bg-primary rounded-2xl p-6 shadow-lg flex flex-col text-white relative overflow-hidden">
+            <div className="absolute top-3 right-3 bg-secondary text-primary text-[10px] font-extrabold px-2.5 py-1 rounded-full">RECOMMANDÉ</div>
+            <div className="inline-flex items-center gap-1.5 bg-white/10 text-white text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">
+              Service complet
+            </div>
+            <p className="text-4xl font-extrabold mb-1">1 500 $</p>
+            <p className="text-sm text-white/80 mb-4">500 $ à l'ouverture · 1 000 $ à l'obtention</p>
+            <p className="text-sm text-white/80 mb-4">Joventy s'occupe de tout : formulaires officiels, dossier complet, recherche de créneau ou soumission e-Visa.</p>
+            <ul className="space-y-1.5 text-xs text-white/80 mb-6 flex-1">
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-secondary flex-shrink-0" /> Remplissage DS-160, formulaires Schengen, UKVI…</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-secondary flex-shrink-0" /> Préparation et vérification du dossier complet</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-secondary flex-shrink-0" /> Toutes destinations</li>
+            </ul>
+            <Link href="/register">
+              <Button className="w-full bg-secondary text-primary hover:bg-orange-400 font-bold">Démarrer mon dossier</Button>
+            </Link>
+          </div>
+
+          {/* Service partiel */}
+          <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
+            <div className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">
+              Service partiel
+            </div>
+            <p className="text-4xl font-extrabold text-primary mb-1">600 $</p>
+            <p className="text-sm text-muted-foreground mb-4">600 $ — paiement unique à l'ouverture · aucune prime de succès</p>
+            <p className="text-sm text-muted-foreground mb-4">Joventy prépare vos formulaires officiels et vérifie votre dossier. Vous gérez votre créneau ou soumission ensuite.</p>
+            <ul className="space-y-1.5 text-xs text-slate-600 mb-6 flex-1">
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Formulaires remplis et vérifiés par un expert</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Sans prime si aucun créneau obtenu de votre côté</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Toutes destinations</li>
+            </ul>
+            <Link href="/register">
+              <Button variant="outline" className="w-full font-bold">Démarrer — Formulaires</Button>
+            </Link>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-6 text-center italic">* Tous les prix sont en USD. Les frais consulaires (payés directement au gouvernement) ne sont pas inclus.</p>
+      </section>
+
+      {/* TABLE DES DESTINATIONS */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
+        <h2 className="text-xl font-bold text-primary mb-4">Frais consulaires par destination</h2>
+        <p className="text-sm text-muted-foreground mb-6">Les tarifs Joventy sont identiques pour toutes les destinations. Ci-dessous les frais gouvernementaux à votre charge selon la destination choisie.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-muted border-b-2 border-primary/20">
                 <th className="text-left px-4 py-3 font-bold text-primary">Destination</th>
                 <th className="text-left px-4 py-3 font-bold text-primary hidden sm:table-cell">Types de visa</th>
-                <th className="text-center px-4 py-3 font-bold text-primary">Engagement</th>
-                <th className="text-center px-4 py-3 font-bold text-primary">Prime succès</th>
-                <th className="text-center px-4 py-3 font-bold text-primary">Total max</th>
                 <th className="text-left px-4 py-3 font-bold text-primary hidden md:table-cell">Frais consulaires</th>
-                <th className="text-center px-4 py-3 font-bold text-primary hidden lg:table-cell">Délai</th>
+                <th className="text-center px-4 py-3 font-bold text-primary hidden lg:table-cell">Délai estimé</th>
               </tr>
             </thead>
             <tbody>
-              {PRICING.map((p) => (
+              {DESTINATIONS.map((p) => (
                 <tr key={p.code} className="border-b border-border hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-4">
                     <Link href={p.href} className="flex items-center gap-2 hover:text-primary transition-colors">
@@ -160,9 +222,6 @@ export default function Prix() {
                     {p.alert && <p className="text-[10px] text-red-600 font-medium mt-1">{p.alert}</p>}
                   </td>
                   <td className="px-4 py-4 text-xs text-muted-foreground hidden sm:table-cell">{p.types}</td>
-                  <td className="px-4 py-4 text-center font-bold text-primary">{p.engagement} $</td>
-                  <td className="px-4 py-4 text-center font-bold text-secondary">{p.success} $</td>
-                  <td className="px-4 py-4 text-center font-bold text-lg text-primary">{p.engagement + p.success} $</td>
                   <td className="px-4 py-4 text-xs text-muted-foreground hidden md:table-cell">{p.external}</td>
                   <td className="px-4 py-4 text-xs text-center text-muted-foreground hidden lg:table-cell">{p.delay}</td>
                 </tr>
@@ -170,7 +229,6 @@ export default function Prix() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-muted-foreground mt-4 italic">* Tous les prix sont en USD. Les frais consulaires sont payés directement au gouvernement/organisme concerné et ne sont pas inclus dans les tarifs Joventy.</p>
       </section>
 
       {/* TRANSIT EBOLA */}
@@ -178,23 +236,23 @@ export default function Prix() {
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-4">
             <AlertTriangle className="w-6 h-6 text-red-600" />
-            <h2 className="text-xl font-bold text-primary">Tarif spécial — Transit 21 jours (Ebola 2026)</h2>
+            <h2 className="text-xl font-bold text-primary">Transit 21 jours (Ebola 2026) — Visa urgent</h2>
           </div>
           <p className="text-sm text-muted-foreground mb-5">
-            Pour les personnes devant purger 21 jours dans un pays neutre avant d'entrer aux USA, au Canada ou au Mexique. Joventy obtient votre visa de transit en urgence.
+            Pour les personnes devant purger 21 jours dans un pays neutre avant d'entrer aux USA, au Canada ou au Mexique. Joventy obtient votre visa de transit en 24-72h.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
-              { flag: "ma", name: "Maroc", price: "150 + 200 $", visa: "E-Visa 77-110$", delay: "24-72h" },
-              { flag: "eg", name: "Égypte", price: "150 + 200 $", visa: "Visa ~60$", delay: "24-72h" },
-              { flag: "ae", name: "Dubaï", price: "150 + 200 $", visa: "E-Visa ~90$", delay: "48-72h" },
+              { flag: "ma", name: "Maroc", visa: "E-Visa 77-110$", delay: "24-72h" },
+              { flag: "eg", name: "Égypte", visa: "Visa ~60$", delay: "24-72h" },
+              { flag: "ae", name: "Dubaï", visa: "E-Visa ~90$", delay: "48-72h" },
             ].map((t) => (
               <div key={t.flag} className="bg-white border border-red-200 rounded-xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <FlagImg code={t.flag} size={24} />
                   <span className="font-bold text-primary">{t.name}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Frais Joventy : <span className="font-bold text-primary">{t.price}</span></p>
+                <p className="text-xs text-muted-foreground">Frais Joventy : <span className="font-bold text-primary">voir formules ci-dessus</span></p>
                 <p className="text-xs text-muted-foreground">Frais visa : {t.visa}</p>
                 <p className="text-xs text-muted-foreground">Délai : {t.delay}</p>
               </div>

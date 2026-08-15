@@ -12,7 +12,7 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildQuestionFocusBlock as buildSharedQuestionFocusBlock } from "../../../convex/victorIntent.js";
-import { VISA_PRICING, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination } from "./constants";
+import { VISA_PRICING, VISA_FULL_SERVICE, VISA_PARTIAL_SERVICE, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination } from "./constants";
 
 // ─── Option 1 : Bearer token (Bedrock API key) ───────────────────────────────
 
@@ -187,7 +187,7 @@ function inferDestinationFromMessage(message: string): Destination | null {
 }
 
 function buildSlotOnlyPricingSummary(): string {
-  return `Standard ${SLOT_URGENCY_TIERS.standard.total} USD, Prioritaire ${SLOT_URGENCY_TIERS.prioritaire.total} USD, Urgent ${SLOT_URGENCY_TIERS.urgent.total} USD, Très Urgent ${SLOT_URGENCY_TIERS.tres_urgent.total} USD`;
+  return `350 USD — paiement uniquement après obtention du créneau (aucun acompte)`;
 }
 
 function buildDestinationPricingReply(destination: Destination): string {
@@ -196,21 +196,21 @@ function buildDestinationPricingReply(destination: Destination): string {
   const slotSummary = buildSlotOnlyPricingSummary();
 
   if (slotAvailable) {
-    return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul est un créneau consulaire, pas un rendez-vous en personne chez Joventy. Son barème d'urgence est : ${slotSummary}.`;
+    return `Pour ${pricing.label}, le service complet est à ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} engagement + ${VISA_FULL_SERVICE.successFee} au succès). Le service partiel (formulaires uniquement) est à ${VISA_PARTIAL_SERVICE.total} USD. Le créneau seul : ${slotSummary} — aucun acompte, paiement après résultat uniquement.`;
   }
 
-  return `Pour ${pricing.label}, le service complet est à ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Le service Formulaires & Vérification est à ${pricing.engagementFee} USD sans prime de succès. Le créneau seul n'est pas proposé pour cette destination.`;
+  return `Pour ${pricing.label}, le service complet est à ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} engagement + ${VISA_FULL_SERVICE.successFee} au succès). Le service partiel (formulaires uniquement) est à ${VISA_PARTIAL_SERVICE.total} USD. Le créneau seul n'est pas proposé pour cette destination.`;
 }
 
 function buildPricingCatalogBlock(): string {
-  return (Object.entries(VISA_PRICING) as Array<[Destination, (typeof VISA_PRICING)[Destination]]>)
+  const slotSummary = buildSlotOnlyPricingSummary();
+  const lines = (Object.entries(VISA_PRICING) as Array<[Destination, (typeof VISA_PRICING)[Destination]]>)
     .map(([destination, pricing]) => {
       const slotAvailable = getAvailablePackages(destination).includes("slot_only");
-      const slotSummary = buildSlotOnlyPricingSummary();
       const slotLine = slotAvailable ? `Créneau consulaire seul : ${slotSummary}.` : "Créneau consulaire seul : indisponible.";
-      return `• ${pricing.label} : service complet ${pricing.total} USD (${pricing.engagementFee} + ${pricing.successFee}). Formulaires & Vérification ${pricing.engagementFee} USD. ${slotLine}`;
-    })
-    .join("\n");
+      return `• ${pricing.label} : service complet ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} + ${VISA_FULL_SERVICE.successFee}). Service partiel ${VISA_PARTIAL_SERVICE.total} USD (${VISA_PARTIAL_SERVICE.engagementFee} + ${VISA_PARTIAL_SERVICE.successFee}). ${slotLine}`;
+    });
+  return lines.join("\n");
 }
 
 function extractBudgetAmount(message: string): number | null {
@@ -242,10 +242,10 @@ function buildBudgetQualificationReply(destination: Destination | null, budgetAm
   const slotSummary = buildSlotOnlyPricingSummary();
 
   if (slotAvailable) {
-    return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD; si tu veux seulement le créneau consulaire, on passe par le barème d'urgence : ${slotSummary}. Tu as déjà ton dossier prêt ou tu veux qu'on s'occupe de tout ?`;
+    return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Service complet ${VISA_FULL_SERVICE.total} USD, service partiel ${VISA_PARTIAL_SERVICE.total} USD. Créneau seul : ${slotSummary}. Tu as déjà ton dossier prêt ou tu veux qu'on s'occupe de tout ?`;
   }
 
-  return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Le service complet est à ${pricing.total} USD et le service Formulaires & Vérification à ${pricing.engagementFee} USD. Il n'y a pas d'option créneau seul pour cette destination, donc si tu veux aller vite je te conseille le service complet. Tu veux tourisme, affaires ou études ?`;
+  return `Avec ${budgetLabel}, tu es large pour ${pricing.label}. Service complet ${VISA_FULL_SERVICE.total} USD, service partiel ${VISA_PARTIAL_SERVICE.total} USD. Il n'y a pas d'option créneau seul pour cette destination — je te conseille le service complet. Tu veux tourisme, affaires ou études ?`;
 }
 
 function inferQuestionFocus(message: string): QuestionFocus {
@@ -318,17 +318,17 @@ function buildSystemPrompt(pageContext: string, isAuth: boolean, message: string
 1. Demande s'il a déjà envoyé l'email de demande à l'ambassade d'Espagne à Kinshasa (visa.kinshasa@maec.es)
 2. Si NON : explique qu'il faut d'abord envoyer un email avec passeport + photo + motif + dates souhaitées, et attendre les identifiants CEV (peut prendre 2-4 semaines)
 3. Si OUI mais pas encore reçu les identifiants : demande combien de temps il attend, rassure, explique que Joventy peut accélérer en suivant la file d'attente
-4. Si OUI et il a ses identifiants CEV (login + mot de passe) : explique que Joventy peut utiliser ces identifiants pour surveiller les créneaux 24h/24 et réserver automatiquement dès qu'un slot s'ouvre — c'est le service créneau au barème d'urgence (250 USD standard, puis 350, 450 ou 600 USD). Pousse vers /dashboard/applications/new
+4. Si OUI et il a ses identifiants CEV (login + mot de passe) : explique que Joventy peut utiliser ces identifiants pour surveiller les créneaux 24h/24 et réserver automatiquement dès qu'un slot s'ouvre — c'est le service créneau 350 USD, payé UNIQUEMENT après obtention (aucun acompte). Pousse vers /dashboard/applications/new
 Ne propose le CTA /dashboard/applications/new QUE si le visiteur a ses identifiants CEV. Sinon, guide-le d'abord vers l'email à l'ambassade.`;
 
     } else if (slug.includes("usa") || slug.includes("etats-unis")) {
-      pageCtx = `GUIDE VISA USA. IMPORTANT : les créneaux USA sont actuellement suspendus à Kinshasa (alerte Ebola). Guide le visiteur vers des alternatives : Dubaï (350 USD, 48-72h), Turquie (350 USD), Schengen. Si le visiteur a besoin de voyager absolument aux USA, explique les démarches depuis un autre pays.`;
+      pageCtx = `GUIDE VISA USA. IMPORTANT : les créneaux USA sont actuellement suspendus à Kinshasa (alerte Ebola). Guide le visiteur vers des alternatives : Dubaï (service complet 1 500 USD — visa accordé en 48-72h), Turquie (service complet 1 500 USD ou créneau seul 350 USD après obtention), Schengen (service complet 1 500 USD ou créneau seul 350 USD après obtention). Si le visiteur a besoin de voyager absolument aux USA, explique les démarches depuis un autre pays.`;
 
     } else if (slug.includes("canada")) {
       pageCtx = `GUIDE VISA CANADA. Services suspendus jusqu'au 28 août 2026 (restrictions IRCC). Guide vers des alternatives selon le besoin du visiteur. Si le besoin peut attendre, note la date de reprise.`;
 
     } else if (slug.includes("schengen") || slug.includes("france") || slug.includes("belgique") || slug.includes("allemagne") || slug.includes("europe")) {
-      pageCtx = `GUIDE VISA SCHENGEN. C'est notre spécialité (94 % d'acceptation). Guide le visiteur : demande le pays Schengen exact, le motif (tourisme, famille, études, business), et si c'est un premier visa ou un renouvellement. Ensuite explique le processus : Joventy prépare le dossier complet, prend le RDV, et accompagne jusqu'à l'obtention. Tarif : 600 USD (150 + 450 à succès).`;
+      pageCtx = `GUIDE VISA SCHENGEN. C'est notre spécialité (94 % d'acceptation). Guide le visiteur : demande le pays Schengen exact, le motif (tourisme, famille, études, business), et si c'est un premier visa ou un renouvellement. Ensuite explique le processus : Joventy prépare le dossier complet, prend le RDV, et accompagne jusqu'à l'obtention. Tarif service complet : 1 500 USD (500 engagement + 1 000 à succès). Ou créneau seul : 350 USD, payé après résultat uniquement.`;
 
     } else if (slug.includes("rendez-vous") || slug.includes("creneau") || slug.includes("rdv")) {
       pageCtx = `GUIDE PRISE DE RENDEZ-VOUS. Identifie d'abord quelle ambassade et quel pays. Puis guide selon la destination (voir les guides spécifiques). Explique que Joventy surveille automatiquement les créneaux disponibles 24h/24.`;
@@ -404,7 +404,7 @@ RÈGLES DE TON — CRITIQUE :
 • Parle naturellement : "Ok", "Écoute", "Honnêtement", "C'est faisable", "Là c'est compliqué", "Bonne nouvelle"
 • Chaque phrase doit avoir une raison d'être. Zéro rembourrage.
 • Exemples de bon ton :
-  "Schengen c'est notre spécialité — 600 USD (150 engagement + 450 au succès). Tu vises quel pays ?"
+  "Schengen c'est notre spécialité — service complet 1 500 USD (500 engagement + 1 000 au succès). Tu vises quel pays ?"
   "USA en ce moment c'est bloqué à Kinshasa (alerte Ebola). Alternatives : Dubaï, Turquie ou Schengen ?"
   "T'as déjà envoyé le mail à l'ambassade d'Espagne ?"
 
@@ -443,7 +443,7 @@ RÈGLES CTAs — LIS ATTENTIVEMENT :
 • Format STRICT : [CTA:Texte du bouton:/chemin] — respecte exactement ce format.
 • ${authCTANote}
 • ❌ INTERDIT : "pour consulter [CTA:nos tarifs:/prix]" ou "vous pouvez [CTA:commencer:/register]" — le CTA au milieu casse la phrase
-• ✅ CORRECT : "Schengen c'est 600 USD au total, paiement au succès.\n[CTA:Démarrer mon dossier:/dashboard/applications/new]"
+• ✅ CORRECT : "Schengen service complet : 1 500 USD (500 engagement + 1 000 à succès).\n[CTA:Démarrer mon dossier:/dashboard/applications/new]"
 • ✅ CORRECT (sans CTA) : "T'as déjà les identifiants CEV reçus par l'ambassade ?" — ici pas de CTA, on est en mode qualification
 
 STATUT AUTHENTIFICATION :
@@ -461,18 +461,20 @@ TARIFS RÉELS DU SITE (tous en USD, hors frais consulaires) :
 ${buildPricingCatalogBlock()}
 ${processingStatsBlock}
 MODÈLE TARIFAIRE :
-- Frais d'engagement : payés à l'ouverture du dossier (non remboursables si résultat obtenu)
-- Prime de succès : payée UNIQUEMENT si Joventy obtient le résultat. Pas de résultat = remboursement garanti.
+- SERVICE VISA (complet) : 500 USD d'engagement (payés à l'ouverture du dossier) + 1 000 USD prime de succès (payée uniquement à l'obtention). Total : 1 500 USD. Toutes destinations.
+- SERVICE VISA (partiel — formulaires uniquement) : 600 USD forfait unique payés à l'ouverture. Aucune prime de succès. Le client gère ensuite son dépôt/rendez-vous de façon autonome.
+- CRÉNEAU UNIQUEMENT (slot_only) : 350 USD — payés UNIQUEMENT après obtention du créneau. Aucun acompte, zéro paiement à l'avance.
 - Paiement : M-Pesa, Airtel Money, Orange Money (pas de carte internationale)
 - Frais consulaires : séparés, payés directement au gouvernement
 
 POURQUOI LE FRAIS D'ENGAGEMENT ? — ARGUMENTS SOLIDES :
-Si on te demande pourquoi il y a des frais d'engagement (non remboursables) :
+Si on te demande pourquoi il y a des frais d'engagement (non remboursables) pour le service visa :
 1. "Le frais d'engagement couvre notre travail réel : vérification du dossier, préparation des formulaires officiels, paramétrage du suivi automatisé — travail qui est fait quelle que soit l'issue."
 2. "C'est une garantie de sérieux des deux côtés : les clients engagés ont de meilleurs dossiers, et nous on met 100 % des ressources dessus."
-3. "Compare avec une agence classique : eux prennent 200-400 USD sans aucune garantie de résultat. Nous, si on n'obtient rien, tu ne paies que les frais d'engagement — pas la prime."
-4. "Les frais d'engagement représentent 15-25 % du tarif total. Le reste (75-85 %) n'est dû qu'au succès."
+3. "Compare avec une agence classique : eux prennent 400-800 USD sans aucune garantie de résultat. Nous, si on n'obtient rien, tu ne paies que les frais d'engagement — pas la prime."
+4. "Le frais d'engagement représente un tiers du tarif total. Les deux tiers restants ne sont dus qu'au succès."
 Si l'objection persiste : "Je comprends l'hésitation. WhatsApp-nous : +243 840 808 122, on peut en parler directement."
+Pour le créneau uniquement : zéro acompte — tu ne paies rien avant qu'on ait ton rendez-vous. Si on n'a rien, tu ne paies rien.
 
 PROCESSUS DE CRÉATION DE DOSSIER — GUIDE ÉTAPE PAR ÉTAPE (pour aider les clients connectés) :
 Si un client connecté dit qu'il ne sait pas ouvrir un dossier, qu'il ne trouve pas le formulaire, ou qu'il est bloqué,
@@ -485,12 +487,11 @@ CHEMIN D'ACCÈS : Menu → "Nouveau Dossier" dans le tableau de bord, ou lien di
 • Puis sélectionner le type de visa (liste proposée automatiquement selon la destination)
 • Tip pour débloquer : "Clique sur ta destination — un badge 'Consulaire' ou 'E-Visa' apparaît selon le type de process. Puis le menu type de visa s'ouvre en bas."
 
-ÉTAPE 2 — PACKAGE & URGENCE :
+ÉTAPE 2 — PACKAGE :
 • Trois packages proposés :
-  - "Service Complet" (recommandé) : Joventy remplit les formulaires + cherche le créneau. Frais d'engagement + prime de succès.
-  - "Créneau Uniquement" : si le client a DÉJÀ son dossier prêt (DS-160 pour USA, VOWINT pour Schengen, etc.). Tarif selon urgence.
-  - "Formulaires & Vérification" : Joventy remplit seulement les formulaires, tarif fixe, pas de prime de succès.
-• Si "Créneau Uniquement" → un 2e sélecteur s'affiche pour choisir l'urgence (Standard / Prioritaire / Urgent / Très Urgent)
+  - "Service Complet" (recommandé) : Joventy remplit les formulaires + cherche le créneau. 500 USD engagement + 1 000 USD prime de succès = 1 500 USD.
+  - "Créneau Uniquement" : si le client a DÉJÀ son dossier prêt (DS-160 pour USA, VOWINT pour Schengen, etc.). 350 USD — payés UNIQUEMENT après obtention, aucun acompte.
+  - "Formulaires & Vérification" : Joventy remplit seulement les formulaires. 600 USD forfait unique, aucune prime de succès.
 • Tip pour débloquer : "Si tu vois 3 options avec des boutons radio, clique sur celle qui correspond à ta situation. Pas sûr ? Choisis 'Service Complet' — c'est le plus simple."
 
 ÉTAPE 3 — INFORMATIONS DU VOYAGEUR :

@@ -998,7 +998,7 @@ const guides: Guide[] = [
       { heading: "Les conditions spéciales FIFA World Cup", body: "Le Département d'État américain a mis en place des dispositions pour les supporters :", list: ["Exemption de visa bond pour les détenteurs d'un FIFA Pass ou billet officiel", "Les consulats sont invités à traiter les demandes World Cup en priorité — mentionnez-le dans votre DS-160", "Un visa B1/B2 standard suffit — pas de visa spécial requis", "La durée de séjour demandée doit correspondre aux dates de matchs de la RDC", "Apportez votre preuve d'achat de billet FIFA à l'entretien consulaire"] },
       { heading: "Comment préparer votre dossier visa USA World Cup", body: "Votre dossier doit être irréprochable vu le contexte Level 4 :", list: ["Remplissez le DS-160 en mentionnant explicitement « FIFA World Cup 2026 — supporter » comme motif", "Préparez une preuve d'achat de billets FIFA (confirmation email ou FIFA Pass)", "Réservez un hébergement dans la ville du match de la RDC", "Préparez un itinéraire précis : date d'arrivée, match(s), date de retour", "Documents financiers solides — montrez que vous pouvez financer le séjour ET que vous rentrerez", "Preuve de liens avec la RDC : emploi, famille, propriété"] },
       { heading: "Le défi sanitaire : la règle des 21 jours (obligatoire)", body: "C'est le point le plus critique — sans respecter cette règle, vous serez refoulé à l'arrivée :", list: ["Les USA interdisent l'entrée à tout non-citoyen américain ayant été en RDC dans les 21 jours précédents (ordre CDC du 18 mai 2026)", "Le Canada a suspendu tous les visas + quarantaine 21 jours obligatoire", "Le Mexique restreint l'entrée par avion pour les voyageurs ayant séjourné en RDC dans les 21 derniers jours", "Solution OBLIGATOIRE : quitter la RDC au moins 21 jours AVANT votre vol vers les USA/Canada/Mexique", "Passez ces 21 jours en Europe (Schengen), Dubaï, Turquie, ou un autre pays tiers non-concerné", "C'est exactement ce que l'équipe nationale a fait : départ de Kinshasa le 20 mai, 21 jours en Europe, puis USA", "Joventy peut organiser un itinéraire combiné : Kinshasa → Transit 21j → USA (World Cup)"] },
-      { heading: "Combien ça coûte au total ?", body: "Budget estimé pour un supporter congolais :", list: ["Frais de visa USA (B1/B2) : 185 USD", "Frais Joventy (engagement + prime de succès) : 250 + 750 USD", "Billet FIFA (catégorie 4, la moins chère) : à partir de 60 USD par match", "Vol Kinshasa → USA (via Europe) : 1 500 à 3 000 USD", "Hébergement USA (2 semaines) : 800 à 2 000 USD", "Séjour intermédiaire 21 jours (si nécessaire) : 500 à 1 500 USD", "Total estimé : 3 500 à 8 000 USD selon les options"] },
+      { heading: "Combien ça coûte au total ?", body: "Budget estimé pour un supporter congolais :", list: ["Frais de visa USA (B1/B2) : 185 USD", "Frais Joventy service complet (engagement + prime de succès) : 500 + 1 000 USD (total 1 500 USD)", "Billet FIFA (catégorie 4, la moins chère) : à partir de 60 USD par match", "Vol Kinshasa → USA (via Europe) : 1 500 à 3 000 USD", "Hébergement USA (2 semaines) : 800 à 2 000 USD", "Séjour intermédiaire 21 jours (si nécessaire) : 500 à 1 500 USD", "Total estimé : 3 500 à 8 000 USD selon les options"] },
     ],
     faq: [
       { q: "Peut-on obtenir un visa USA depuis Kinshasa malgré le Travel Advisory Level 4 ?", a: "Oui, vous pouvez obtenir le visa. L'ambassade continue les entretiens. MAIS même avec un visa valide, vous ne pouvez pas entrer aux USA si vous étiez en RDC dans les 21 jours précédents. Il faut obligatoirement transiter 21 jours dans un pays tiers." },
@@ -1106,7 +1106,7 @@ const guides: Guide[] = [
       { heading: "Rappel : pourquoi 21 jours obligatoires hors RDC ?", body: "La période d'incubation du virus Ebola est de 2 à 21 jours. Les autorités sanitaires des USA, du Canada et du Mexique exigent donc que tout voyageur ait quitté la zone à risque depuis au moins 21 jours complets avant d'entrer sur leur territoire :", list: ["🇺🇸 USA : ordre CDC du 18 mai 2026 — interdiction d'entrée pour tout non-citoyen ayant été en RDC/Ouganda/Sud-Soudan dans les 21 jours (y compris détenteurs de Green Card)", "🇨🇦 Canada : suspension des visas + quarantaine obligatoire 21 jours (27 mai — 28 août 2026)", "🇲🇽 Mexique : restriction d'entrée par voie aérienne, 21 jours minimum hors zone (Aeromexico, Volaris, Viva — 60 jours)", "La règle s'applique à TOUS — Congolais, étrangers, et même les détenteurs de Green Card américaine", "21 jours = 21 jours complets après votre DERNIÈRE journée en RDC (le jour de départ ne compte pas)", "Vous devez pouvoir PROUVER votre séjour hors RDC (billets d'avion, tampons passeport, réservations hôtel)"] },
       { heading: "Les meilleurs pays neutres pour purger les 21 jours", body: "Tous les pays ne sont pas des options valables. Les pays voisins de la RDC sont classés « à haut risque » par l'Africa CDC (Congo-Brazza, Angola, Burundi, Kenya, Rwanda, Tanzanie) et pourraient être ajoutés à la liste à tout moment. Privilégiez ces destinations :", list: ["🇦🇪 DUBAÏ (EAU) — TOP CHOIX : e-Visa en 48-72h, aucune restriction Ebola, vols directs depuis Kinshasa, communauté congolaise présente", "🇲🇦 MAROC (Casablanca/Marrakech) — EXCELLENT : e-Visa disponible pour les détenteurs de visa Schengen ou USA multi-entrées (77 à 110 USD, traitement 24 à 72h). Francophone, vols fréquents, pas de restriction Ebola", "🇹🇷 TURQUIE (Istanbul) — TRÈS BON : e-Visa en 24-48h pour détenteurs de visa USA ou Schengen valide. Pas de restriction, vols fréquents, hébergement abordable", "🇪🇬 ÉGYPTE (Le Caire) — ÉCONOMIQUE : visa obtenu via ambassade par Joventy en 24-72h. Hébergement très économique, aucune restriction Ebola", "🇫🇷 FRANCE / 🇧🇪 BELGIQUE — IDÉAL SI VISA SCHENGEN : si vous avez un visa Schengen multi-entrées valide, séjour immédiat sans démarche. Grande diaspora congolaise", "🇬🇧 ROYAUME-UNI — OPTION : si vous avez un visa UK valide, Londres est sûre et bien connectée aux USA", "🇲🇺 ÎLE MAURICE — SANS VISA : les Congolais n'ont PAS besoin de visa pour Maurice (séjour gratuit jusqu'à 90 jours). Destination calme pour 21 jours", "⚠️ ÉVITEZ les pays voisins de la RDC — même s'ils ne sont pas interdits aujourd'hui, ils peuvent l'être demain"] },
       { heading: "Option 1 : Vous avez déjà un visa Schengen ou USA multi-entrées", body: "Si vous possédez un visa Schengen ou USA à entrées multiples encore valide, vous avez des options immédiates :", list: ["Visa Schengen multi-entrées valide → envolez-vous vers la France, Belgique, Allemagne ou Espagne. Séjour 21 jours sans aucune démarche supplémentaire", "Visa USA ou Schengen valide → e-Visa Maroc en 24-72h (77-110 USD). Le Maroc accepte les détenteurs de visa USA ou Schengen pour son e-Visa", "Visa USA multi-entrées valide → votre visa reste valable mais vous ne pouvez pas entrer aux USA avant les 21 jours. Utilisez le Maroc (e-Visa), la Turquie (e-Visa gratuit avec visa USA valide) ou Dubaï pour le transit", "Visa Turquie (e-Visa) → accessible immédiatement aux détenteurs d'un visa USA ou Schengen valide. Obtention en 24h en ligne", "Île Maurice → aucun visa nécessaire pour les Congolais. Billet d'avion suffisant (séjour gratuit 90 jours)", "Conseil : choisissez un pays avec des vols directs vers votre destination finale (USA/Canada/Mexique)"] },
-      { heading: "Option 2 : Vous n'avez PAS de visa — Joventy vous aide", body: "Si vous n'avez ni visa Schengen ni visa pour un pays neutre, Joventy peut vous obtenir rapidement un visa pour passer vos 21 jours. C'est une situation d'urgence — nos tarifs reflètent la mobilisation express de notre équipe. Contactez-nous sur WhatsApp :", list: ["🇲🇦 E-Visa Maroc (si visa USA ou Schengen valide) : Joventy soumet votre demande e-Visa → résultat en 24 à 72h. Frais visa : 77-110 USD. Frais Joventy : 150 USD engagement + 200 USD prime de succès", "🇪🇬 Visa Égypte : Joventy prépare votre dossier et obtient votre visa via l'ambassade → résultat en 24-72h. Frais Joventy : 150 USD engagement + 200 USD prime de succès", "🇦🇪 E-Visa Dubaï : Joventy soumet votre demande sur le portail ICP des EAU → résultat en 48-72h. Frais Joventy : 150 USD engagement + 200 USD prime de succès", "🇹🇷 E-Visa Turquie : si éligible (visa USA ou Schengen valide), obtention en 24h. Frais Joventy : 150 USD + 200 USD", "🇪🇺 Visa Schengen express : Joventy prend votre créneau CEV en urgence et prépare votre dossier complet. Frais : 200 USD + 500 USD. Délai : 2-4 semaines", "🇲🇺 Île Maurice : AUCUN VISA NÉCESSAIRE — il suffit d'un billet d'avion et d'un passeport valide (gratuit, 90 jours max)", "📱 Contactez Joventy maintenant sur WhatsApp : +243 840 808 122 — réponse en moins de 2h", "Notre équipe analyse votre situation, vos visas existants et votre budget pour vous proposer la solution la plus rapide"] },
+      { heading: "Option 2 : Vous n'avez PAS de visa — Joventy vous aide", body: "Si vous n'avez ni visa Schengen ni visa pour un pays neutre, Joventy peut vous obtenir rapidement un visa pour passer vos 21 jours. C'est une situation d'urgence — nos tarifs reflètent la mobilisation express de notre équipe. Contactez-nous sur WhatsApp :", list: ["🇲🇦 E-Visa Maroc (si visa USA ou Schengen valide) : Joventy soumet votre demande e-Visa → résultat en 24 à 72h. Frais visa : 77-110 USD. Frais Joventy service complet : 500 USD engagement + 1 000 USD prime de succès", "🇪🇬 Visa Égypte : Joventy prépare votre dossier et obtient votre visa via l'ambassade → résultat en 24-72h. Frais Joventy service complet : 500 USD engagement + 1 000 USD prime de succès", "🇦🇪 E-Visa Dubaï : Joventy soumet votre demande sur le portail ICP des EAU → résultat en 48-72h. Frais Joventy service complet : 500 USD engagement + 1 000 USD prime de succès", "🇹🇷 E-Visa Turquie : si éligible (visa USA ou Schengen valide), obtention en 24h. Frais Joventy service complet : 500 USD engagement + 1 000 USD prime de succès", "🇪🇺 Visa Schengen express : Joventy prend votre créneau CEV en urgence et prépare votre dossier complet. Frais Joventy service complet : 500 USD + 1 000 USD. Délai : 2-4 semaines", "🇲🇺 Île Maurice : AUCUN VISA NÉCESSAIRE — il suffit d'un billet d'avion et d'un passeport valide (gratuit, 90 jours max)", "📱 Contactez Joventy maintenant sur WhatsApp : +243 840 808 122 — réponse en moins de 2h", "Notre équipe analyse votre situation, vos visas existants et votre budget pour vous proposer la solution la plus rapide"] },
       { heading: "Budget estimé : 21 jours dans un pays neutre", body: "Voici les budgets réalistes pour 21 jours (vol depuis Kinshasa + hébergement + vie quotidienne). En période d'urgence, les prix des vols sont plus élevés que la normale :", list: ["🇲🇦 Maroc (Casablanca) : Vol 600-900 USD + hébergement 500-1000 USD + vie 400-600 USD + visa 77-110 USD = TOTAL 1 600 à 2 600 USD", "🇪🇬 Égypte (Le Caire) : Vol 500-800 USD + hébergement 400-700 USD + vie 300-500 USD + visa ~60 USD = TOTAL 1 300 à 2 100 USD", "🇦🇪 Dubaï : Vol 700-1100 USD + hébergement 800-1500 USD + vie 500-900 USD + e-Visa ~90 USD = TOTAL 2 100 à 3 600 USD", "🇹🇷 Istanbul : Vol 600-900 USD + hébergement 500-1000 USD + vie 400-600 USD + e-Visa ~50 USD = TOTAL 1 550 à 2 550 USD", "🇫🇷 Paris : Vol 800-1300 USD + hébergement 1000-1800 USD + vie 600-1000 USD = TOTAL 2 400 à 4 100 USD", "🇧🇪 Bruxelles : Vol 800-1200 USD + hébergement 900-1500 USD + vie 500-800 USD = TOTAL 2 200 à 3 500 USD", "🇲🇺 Île Maurice : Vol 600-1000 USD + hébergement 500-900 USD + vie 400-600 USD = TOTAL 1 500 à 2 500 USD (pas de visa)", "💡 Astuce : Airbnb et locations meublées sont 30-50% moins chers qu'un hôtel pour 21 nuits. Réservez tôt — les prix augmentent avec la demande Ebola."] },
       { heading: "Plan d'action étape par étape", body: "Voici exactement ce que vous devez faire :", list: ["1. Contactez Joventy sur WhatsApp (+243 840 808 122) — nous analysons vos visas existants, votre budget et votre urgence", "2. Si besoin d'un visa pour le pays neutre → Joventy lance la demande immédiatement (Dubaï 48h, Turquie 24h)", "3. Réservez votre vol Kinshasa → pays neutre DÈS que le visa de transit est confirmé", "4. Réservez un hébergement pour 22 nuits minimum (21 jours + 1 jour de marge de sécurité)", "5. À votre arrivée dans le pays neutre, conservez TOUTES les preuves de présence (hôtel, achats, billets)", "6. Le jour 22 après votre départ de RDC, prenez votre vol vers les USA/Canada/Mexique", "7. À l'arrivée, les agents frontaliers vérifieront vos dates — montrez vos preuves si demandé"] },
       { heading: "Documents à conserver comme preuve de transit", body: "Les compagnies aériennes ET les agents frontaliers vérifieront que vous respectez les 21 jours. Gardez :", list: ["Carte d'embarquement du vol Kinshasa → pays neutre (avec date de départ de RDC)", "Tampon d'entrée dans le passeport du pays neutre", "Confirmation de réservation hôtel/Airbnb pour 21+ nuits", "Reçus de paiement dans le pays neutre (restaurants, commerces — prouvent votre présence physique)", "Relevé de carte bancaire montrant des transactions sur 21+ jours dans le pays neutre", "⚠️ La compagnie aérienne peut refuser votre embarquement vers les USA si vous ne pouvez pas prouver les 21 jours"] },
@@ -1307,7 +1307,7 @@ const guides: Guide[] = [
     conversion: {
       heading: "Vous avez une date de voyage à planifier ?",
       body: "Joventy peut vous aider à préparer le dossier Espagne, envoyer l’inscription à l’ambassade et suivre la recherche du rendez-vous. La date de voyage est ensuite ajustée selon le créneau réellement confirmé et les délais d’instruction.",
-      primaryLabel: "Créer mon dossier Espagne — 150 USD",
+      primaryLabel: "Créer mon dossier Espagne — 500 USD engagement",
       primaryHref: "/register",
       whatsappLabel: "Calculer mon calendrier sur WhatsApp",
       whatsappMessage: "Bonjour Joventy, je prépare un visa Espagne depuis Kinshasa. Je veux calculer une date de voyage réaliste selon le délai d'inscription, la recherche du créneau, les 36 jours moyens jusqu'au rendez-vous et le délai d'instruction.",
@@ -1389,7 +1389,7 @@ const guides: Guide[] = [
           "Enfant de 6 à 12 ans : 45 €",
           "Enfant de moins de 6 ans : GRATUIT",
           "Modalité de paiement : renseignez-vous auprès de l'ambassade pour la devise acceptée (CDF, USD ou carte bancaire selon les cas)",
-          "Frais Joventy séparés : 150 USD d'engagement (à la création du dossier) + 450 USD de prime de succès (à la confirmation du créneau uniquement)",
+          "Frais Joventy séparés : 500 USD d'engagement (à la création du dossier) + 1 000 USD de prime de succès (à la confirmation du créneau uniquement)",
           "La prime de succès n'est DUE que lorsque votre rendez-vous à l'ambassade est confirmé",
         ],
       },
@@ -1413,7 +1413,7 @@ const guides: Guide[] = [
           "Réservation du créneau sur citaconsular.es dès réception des identifiants de l'ambassade",
           "Confirmation par WhatsApp avec la date, l'heure et les instructions pour le jour J",
           "Suivi de l'état du dossier via sutramiteconsular.maec.es",
-          "Prime de succès (450 USD) payable uniquement à la confirmation du créneau — aucun résultat, aucun solde dû",
+          "Prime de succès (1 000 USD) payable uniquement à la confirmation du créneau — aucun résultat, aucun solde dû",
           "Paiement via M-Pesa, Airtel Money ou Orange Money",
         ],
       },
@@ -1441,7 +1441,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte le visa Espagne depuis Kinshasa ?",
-        a: "Les frais consulaires payés à l'ambassade sont : 90 € pour un adulte, 45 € pour un enfant de 6-12 ans, gratuit pour les moins de 6 ans. Les frais Joventy sont : 150 USD d'engagement à la création du dossier + 450 USD de prime de succès uniquement à la confirmation du rendez-vous.",
+        a: "Les frais consulaires payés à l'ambassade sont : 90 € pour un adulte, 45 € pour un enfant de 6-12 ans, gratuit pour les moins de 6 ans. Les frais Joventy sont : 500 USD d'engagement à la création du dossier + 1 000 USD de prime de succès uniquement à la confirmation du rendez-vous (total 1 500 USD).",
       },
       {
         q: "Que faire si mon email à l'ambassade reste sans réponse ?",
@@ -1483,8 +1483,8 @@ const guides: Guide[] = [
     ],
     conversion: {
       heading: "Besoin d’un accompagnement pour l’Espagne ?",
-      body: "Joventy prépare le dossier, envoie l’inscription à l’ambassade et vous accompagne pour la réservation du créneau. Les frais d’engagement sont de 150 USD ; la prime de succès de 450 USD est due uniquement lorsque le rendez-vous est confirmé.",
-      primaryLabel: "Créer mon dossier Espagne — 150 USD",
+      body: "Joventy prépare le dossier, envoie l'inscription à l'ambassade et vous accompagne pour la réservation du créneau. Les frais d'engagement sont de 500 USD ; la prime de succès de 1 000 USD est due uniquement lorsque le rendez-vous est confirmé.",
+      primaryLabel: "Créer mon dossier Espagne — 500 USD engagement",
       primaryHref: "/register",
       whatsappLabel: "Poser une question sur WhatsApp",
       whatsappMessage: "Bonjour Joventy, je souhaite préparer un dossier de visa Espagne depuis Kinshasa et comprendre les délais de rendez-vous.",
@@ -1749,7 +1749,7 @@ const guides: Guide[] = [
           "Conseil sur les relevés bancaires : quels mois montrer, comment les présenter",
           "Accompagnement jusqu'au dépôt et suivi du dossier post-rendez-vous",
           "📱 Tout se passe par WhatsApp : +243 840 808 122",
-          "💳 Paiement via M-Pesa, Airtel Money ou Orange Money — frais d'engagement 200 $ + prime de succès 600 $",
+          "💳 Paiement via M-Pesa, Airtel Money ou Orange Money — frais d'engagement 500 $ + prime de succès 1 000 $ (total 1 500 $)",
         ],
       },
     ],
@@ -1760,7 +1760,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte un visa UK (Angleterre) depuis Kinshasa en 2026 ?",
-        a: "Les frais consulaires UK pour un Standard Visitor Visa sont de £115 (6 mois). Pour un visa multi-entrées 2 ans : £432, 5 ans : £796, 10 ans : £963. S'ajoutent les frais de service BLS (~50-80 USD) et les frais Joventy (200 $ engagement + 600 $ prime de succès). Le traitement prioritaire UKVI (5 jours ouvrables) coûte environ £500 supplémentaires.",
+        a: "Les frais consulaires UK pour un Standard Visitor Visa sont de £115 (6 mois). Pour un visa multi-entrées 2 ans : £432, 5 ans : £796, 10 ans : £963. S'ajoutent les frais de service BLS (~50-80 USD) et les frais Joventy (500 $ engagement + 1 000 $ prime de succès, total 1 500 $). Le traitement prioritaire UKVI (5 jours ouvrables) coûte environ £500 supplémentaires.",
       },
       {
         q: "Quel est le délai pour obtenir un visa UK depuis Kinshasa ?",
@@ -1869,7 +1869,7 @@ const guides: Guide[] = [
           "💰 Frais de traitement express (+2-3 jours) : environ 25-30 USD",
           "💰 Total indicatif pour un visa L tourisme standard : ~170 USD",
           "⚠️ Ces frais sont payés en USD cash au comptoir — aucune carte, aucun virement",
-          "💳 Les frais Joventy (120 $ engagement + 180 $ prime de succès) sont séparés et payés via M-Pesa, Airtel ou Orange Money",
+          "💳 Les frais Joventy (500 $ engagement + 1 000 $ prime de succès, total 1 500 $) sont séparés et payés via M-Pesa, Airtel ou Orange Money",
         ],
       },
       {
@@ -1969,7 +1969,7 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Combien coûte le visa Brésil avec Joventy ?",
-        a: "Frais Joventy : 200 USD d'engagement + 400 USD de prime de succès (payés uniquement à l'obtention du visa). Les frais consulaires brésiliens sont payés séparément directement à l'ambassade.",
+        a: "Frais Joventy : 500 USD d'engagement + 1 000 USD de prime de succès (payés uniquement à l'obtention du visa). Total Joventy : 1 500 USD. Les frais consulaires brésiliens sont payés séparément directement à l'ambassade.",
       },
       {
         q: "Faut-il un rendez-vous pour déposer une demande de visa Brésil à Kinshasa ?",
@@ -3341,7 +3341,7 @@ const guides: Guide[] = [
     conversion: {
       heading: "Vous préparez un visa national D pour l'Allemagne ?",
       body: "Joventy surveille le portail RK-Termin de l'Ambassade d'Allemagne à Kinshasa et vous alerte dès qu'un créneau s'ouvre. L'équipe vérifie également votre dossier avant le dépôt pour éviter les causes de refus les plus fréquentes.",
-      primaryLabel: "Démarrer mon dossier Allemagne — 150 USD",
+      primaryLabel: "Démarrer mon dossier Allemagne — 500 USD engagement",
       primaryHref: "/register",
       whatsappLabel: "Parler à Joventy sur WhatsApp",
       whatsappMessage: "Bonjour Joventy, je prépare un visa national D pour l'Allemagne depuis Kinshasa (travail / études / famille — préciser). Je veux de l'aide pour le dossier et une alerte dès qu'un créneau RK-Termin est disponible.",
@@ -3519,7 +3519,7 @@ const guides: Guide[] = [
     conversion: {
       heading: "Vous préparez un visa Schengen Allemagne depuis Kinshasa ?",
       body: "Joventy surveille le portail RK-Termin de l'Ambassade d'Allemagne à Kinshasa et vous alerte dès qu'un créneau disponible correspond à votre catégorie de visa. L'équipe vérifie aussi votre dossier pour éviter les causes de refus liées à votre statut de résident étranger en RDC.",
-      primaryLabel: "Démarrer ma demande — 150 USD",
+      primaryLabel: "Démarrer ma demande — 500 USD engagement",
       primaryHref: "/register",
       whatsappLabel: "Parler à Joventy sur WhatsApp",
       whatsappMessage: "Bonjour Joventy, je suis étranger (non-congolais) vivant en RDC et je veux un visa Schengen pour l'Allemagne. Je veux de l'aide pour le dossier et une alerte RK-Termin dès qu'un créneau est disponible à l'Ambassade d'Allemagne à Kinshasa.",

@@ -6,7 +6,7 @@ import * as z from "zod";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useAuth } from "@/lib/auth";
-import { VISA_PRICING, SERVICE_PACKAGES, getAvailablePackages, type ServicePackage } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES, VISA_PARTIAL_SERVICE, getAvailablePackages, type ServicePackage } from "@convex/constants";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -235,7 +235,7 @@ function getPackageInfo(
       return {
         label: base.label,
         tagline: base.tagline,
-        description: `Joventy remplit les formulaires officiels et vérifie les pièces que vous fournissez. Vous soumettez ensuite vous-même sur le ${portal}. Tarif fixe — aucune prime de succès.`,
+        description: `Joventy remplit les formulaires officiels et vérifie les pièces que vous fournissez. Vous soumettez ensuite vous-même sur le ${portal}. Forfait 600 $ — paiement unique, aucune prime de succès.`,
       };
     }
     const isVisaDDossier = visaType.includes("Long Séjour") || visaType.includes("Visa D");
@@ -260,7 +260,7 @@ function getPackageInfo(
     return {
       label: base.label,
       tagline: base.tagline,
-      description: `Joventy remplit les formulaires requis et vérifie les pièces que vous fournissez pour votre visa ${pricing.label}. Vous gérez ensuite votre rendez-vous ${rdv} de façon autonome. Tarif fixe — aucune prime de succès.`,
+      description: `Joventy remplit les formulaires requis et vérifie les pièces que vous fournissez pour votre visa ${pricing.label}. Vous gérez ensuite votre rendez-vous ${rdv} de façon autonome. Forfait 600 $ — paiement unique, aucune prime de succès.`,
     };
   }
 
@@ -314,9 +314,10 @@ export default function NewApplication() {
   const isSchengenVisaD = isSchengen && cevVisaClass === "D";
   const cevConsulaireFee = isSchengen && !isSchengenVisaD ? getCevConsulaireFee(selectedVisaType, cevApplicantAgeCategory) : null;
 
-  const effectiveEngagementFee = pricing?.engagementFee ?? 0;
+  // dossier_only = forfait fixe 600 $ (VISA_PARTIAL_SERVICE) — aucune prime de succès
+  const effectiveEngagementFee = isDossierOnly ? VISA_PARTIAL_SERVICE.total : (pricing?.engagementFee ?? 0);
   const effectiveSuccessFee = isDossierOnly ? 0 : (pricing?.successFee ?? 0);
-  const effectiveTotal = isDossierOnly ? (pricing?.engagementFee ?? 0) : (pricing?.total ?? 0);
+  const effectiveTotal = isDossierOnly ? VISA_PARTIAL_SERVICE.total : (pricing?.total ?? 0);
 
   const onSubmit = async (data: FormValues) => {
     setIsPending(true);
@@ -633,8 +634,8 @@ export default function NewApplication() {
                               {pkgKey === "dossier_only" ? (
                                 <>
                                   <div className="text-xs bg-slate-100 rounded-lg px-3 py-1.5">
-                                    <span className="text-slate-500">Tarif fixe : </span>
-                                    <span className="font-bold text-primary">{formatCurrency(pricing.engagementFee)}</span>
+                                    <span className="text-slate-500">Forfait unique : </span>
+                                    <span className="font-bold text-primary">{formatCurrency(VISA_PARTIAL_SERVICE.total)}</span>
                                   </div>
                                   <div className="text-xs bg-green-100 text-green-700 rounded-lg px-3 py-1.5 font-semibold">
                                     Pas de prime de succès
@@ -767,8 +768,8 @@ export default function NewApplication() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center pb-3 border-b border-white/10">
                       <div>
-                        <p className="font-semibold">Frais d'engagement</p>
-                        <p className="text-xs text-slate-300">À payer maintenant pour activer le dossier</p>
+                        <p className="font-semibold">{isDossierOnly ? "Forfait unique" : "Frais d'engagement"}</p>
+                        <p className="text-xs text-slate-300">{isDossierOnly ? "Paiement unique à l'ouverture — aucune prime de succès" : "À payer maintenant pour activer le dossier"}</p>
                       </div>
                       <span className="text-xl font-bold text-secondary">{formatCurrency(effectiveEngagementFee)}</span>
                     </div>
@@ -776,9 +777,9 @@ export default function NewApplication() {
                       <div className="flex justify-between items-center text-green-300">
                         <div>
                           <p className="font-semibold">Prime de succès</p>
-                          <p className="text-xs text-green-400">Non applicable — tarif fixe pour ce package</p>
+                          <p className="text-xs text-green-400">Non applicable — tarif forfaitaire</p>
                         </div>
-                        <span className="text-xl font-bold line-through opacity-50">{formatCurrency(pricing.successFee)}</span>
+                        <span className="text-xl font-bold line-through opacity-50">0 $</span>
                       </div>
                     ) : (
                       <div className="flex justify-between items-center">
@@ -795,7 +796,7 @@ export default function NewApplication() {
                     )}
                     <div className="flex justify-between items-center pt-3 border-t border-white/10">
                       <p className="font-bold text-lg">
-                        {isDossierOnly ? "Total (tarif fixe)" : "Total programme"}
+                        {isDossierOnly ? "Total forfait" : "Total programme"}
                       </p>
                       <span className="text-2xl font-bold text-secondary">
                         {formatCurrency(effectiveTotal)}

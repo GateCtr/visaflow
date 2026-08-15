@@ -19,7 +19,7 @@ import {
   FileText, Search, Lock, XCircle, Upload, Loader2, Eye,
   Sparkles, ClipboardCheck, Stamp, MessageSquareHeart, ChevronDown,
   KeyRound, Mail, Phone, Trash2, AlertTriangle, ShieldOff, Info,
-  ArrowUpCircle,
+ 
 } from "lucide-react";
 
 type Application = Doc<"applications">;
@@ -249,8 +249,8 @@ function getSteps(isEvisaModel: boolean, isDossierOnly: boolean, isSlotOnly: boo
   }
   if (isSlotOnly) {
     return [
-      { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
-      { key: "in_review_slot_hunting", label: "Traitement & Recherche créneau", icon: Search },
+      { key: "awaiting_engagement_payment", label: "Dossier activé", icon: CreditCard },
+      { key: "in_review_slot_hunting", label: "Recherche de créneau en cours", icon: Search },
       { key: "slot_found_awaiting_success_fee", label: "Créneau trouvé !", icon: Star },
       { key: "completed", label: "Dossier complété", icon: CheckCircle2 },
     ];
@@ -688,12 +688,6 @@ export default function ClientApplicationDetail() {
   const docs = useQuery(api.documents.listByApplication, appId ? { applicationId: appId } : "skip") ?? [];
   const sendMessage = useMutation(api.messages.send);
   const markAsRead = useMutation(api.messages.markAsRead);
-  const migrateSlot = useMutation(api.applications.migrateToNewSlotSystem);
-  const migrateCreneauSlot = useMutation(api.applications.migrateToCreneau);
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [migrationDone, setMigrationDone] = useState(false);
-  const [isUpgrading, setIsUpgrading] = useState(false);
-  const [upgradeDone, setUpgradeDone] = useState(false);
   const visaDocUrl = useQuery(
     api.admin.getVisaDocumentUrl,
     appId ? { applicationId: appId } : "skip"
@@ -729,42 +723,6 @@ export default function ClientApplicationDetail() {
     }
   };
 
-  const handleMigrate = async () => {
-    if (!appId) return;
-    setIsMigrating(true);
-    try {
-      await migrateSlot({ applicationId: appId });
-      setMigrationDone(true);
-      // Toast conditionnel : messaging différent selon si l'acompte était déjà versé
-      const engagementAlreadyPaid = app?.priceDetails?.isEngagementPaid ?? false;
-      const paidFee = app?.priceDetails?.engagementFee ?? 0;
-      toast({
-        title: "Dossier mis à jour !",
-        description: engagementAlreadyPaid
-          ? `Acompte versé ($${paidFee}) conservé · Solde normalisé à $90.`
-          : "Nouveau tarif promo appliqué : $60 acompte / $90 solde (total $150).",
-      });
-    } catch {
-      toast({ variant: "destructive", title: "Erreur", description: "La migration a échoué. Contactez le support." });
-    } finally {
-      setIsMigrating(false);
-    }
-  };
-
-  const handleUpgradeCreneau = async () => {
-    if (!appId) return;
-    setIsUpgrading(true);
-    try {
-      await migrateCreneauSlot({ applicationId: appId });
-      setUpgradeDone(true);
-      toast({ title: "Service mis à niveau !", description: "Votre dossier est maintenant en mode Créneau Uniquement ($60 acompte / $90 solde / total $150). Joventy recherchera votre créneau dès réception de l'acompte." });
-    } catch {
-      toast({ variant: "destructive", title: "Erreur", description: "La mise à niveau a échoué. Contactez le support." });
-    } finally {
-      setIsUpgrading(false);
-    }
-  };
-
   if (app === undefined) return <div className="p-12 text-center text-muted-foreground">Chargement des détails...</div>;
   if (!app) return <div className="p-12 text-center text-red-500">Dossier introuvable</div>;
 
@@ -796,97 +754,8 @@ export default function ClientApplicationDetail() {
   // Appointment details are only shown AFTER success fee is paid (completed state), for appointment model
   const showAppointmentDetails = isCompleted && isSuccessFeePaid && !isEvisaModel;
 
-  // Destinations supportées par slot_only (miroir de constants.ts)
-  const SLOT_ONLY_DESTS = new Set(["usa", "canada", "uk", "switzerland", "turkey", "schengen", "spain", "germany", "brazil"]);
-  const FINAL_STATUSES_DETAIL = new Set(["slot_found_awaiting_success_fee", "completed", "rejected"]);
-
-  // Migration eligibility: slot_only, non-final status, prime non payée, ancien tier ou ancien prix
-  const needsMigration = !migrationDone
-    && isSlotOnly
-    && !FINAL_STATUSES_DETAIL.has(app.status)
-    && !(app.priceDetails?.isSuccessFeePaid ?? false)
-    && (
-      (app as { slotUrgencyTier?: string }).slotUrgencyTier !== "standard"
-      || (app.priceDetails?.engagementFee ?? 0) !== 60
-    );
-
-  // Upgrade eligibility: dossier_only, non-final, acompte non versé, destination supportée
-  const needsCreneauUpgrade = !upgradeDone
-    && isDossierOnly
-    && !FINAL_STATUSES_DETAIL.has(app.status)
-    && !isEngagementPaid
-    && SLOT_ONLY_DESTS.has(app.destination);
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Bannière upgrade dossier_only → créneau */}
-      {needsCreneauUpgrade && (
-        <div className="bg-blue-50 border-2 border-blue-300 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <Calendar className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-blue-900 text-sm">Passez au service Créneau Uniquement</p>
-              <p className="text-xs text-blue-800 mt-0.5">
-                Votre formulaire est prêt ? Laissez Joventy s'occuper uniquement de la recherche de créneau.
-                Tarif promo : <strong>$60 acompte / $90 solde (total $150)</strong>. Aucun frais supplémentaire si vous n'avez pas encore réglé l'acompte.
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white gap-2"
-            disabled={isUpgrading}
-            onClick={handleUpgradeCreneau}
-          >
-            {isUpgrading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-            Activer Créneau Uniquement
-          </Button>
-        </div>
-      )}
-
-      {/* Confirmation upgrade créneau */}
-      {upgradeDone && (
-        <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3 flex items-center gap-3 text-sm">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-          <span className="text-emerald-800 font-medium">Service mis à niveau vers Créneau Uniquement — $60 acompte / $90 solde (total $150).</span>
-        </div>
-      )}
-
-      {/* Bannière migration ancien système créneaux */}
-      {needsMigration && (
-        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <ArrowUpCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-amber-900 text-sm">Mise à jour disponible pour ce dossier</p>
-              <p className="text-xs text-amber-800 mt-0.5">
-                {isEngagementPaid
-                  ? <>Ce dossier utilise l'ancienne tarification créneaux. Votre acompte déjà versé est <strong>conservé</strong>. La migration ajuste uniquement le <strong>solde à $90</strong>.</>
-                  : <>Ce dossier utilise l'ancienne tarification créneaux. Migrez-le pour bénéficier du nouveau tarif promo : <strong>$60 acompte / $90 solde (total $150)</strong>.</>
-                }
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            className="flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white gap-2"
-            disabled={isMigrating}
-            onClick={handleMigrate}
-          >
-            {isMigrating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUpCircle className="w-4 h-4" />}
-            Migrer vers le nouveau système
-          </Button>
-        </div>
-      )}
-
-      {/* Confirmation migration */}
-      {migrationDone && (
-        <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3 flex items-center gap-3 text-sm">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-          <span className="text-emerald-800 font-medium">Dossier migré avec succès — tarification mise à jour ($60/$90/$150).</span>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

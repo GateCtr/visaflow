@@ -62,41 +62,45 @@ export default function Conditions() {
       </ul>
 
       <h2>5. Structure tarifaire</h2>
-      <p>Le service Joventy repose sur une tarification en deux volets :</p>
+      <p>Joventy propose trois formules de service, toutes exprimées en dollars américains (USD) :</p>
 
-      <h3>5.1 Frais d'engagement</h3>
+      <h3>5.1 Service visa complet (toutes destinations)</h3>
       <p>
-        Les frais d'engagement sont dus dès l'ouverture du dossier et le démarrage du travail par
-        l'équipe Joventy. Ils couvrent la vérification documentaire, le remplissage des formulaires
-        officiels et la recherche de créneau. Ces frais sont <strong>dus dès lors que Joventy
-        commence à travailler sur votre dossier</strong>, indépendamment du résultat final.
-      </p>
-
-      <h3>5.2 Prime de succès</h3>
-      <p>
-        La prime de succès est due <strong>uniquement si Joventy obtient un résultat</strong> :
-        créneau de rendez-vous consulaire confirmé (USA, Turquie) ou visa accordé (Dubaï, Inde).
-        Si aucun résultat n'est obtenu malgré nos efforts, aucune prime de succès ne vous
-        sera réclamée.
+        <strong>500 $ de frais d'engagement</strong> (payés à l'ouverture du dossier) +
+        <strong> 1 000 $ de prime de succès</strong> (due uniquement à l'obtention du créneau
+        consulaire ou du visa électronique). Total : 1 500 $. Les frais d'engagement couvrent la
+        vérification documentaire, le remplissage des formulaires officiels et la surveillance
+        continue des portails. Ils sont <strong>dus dès lors que Joventy commence à travailler
+        sur votre dossier</strong>, indépendamment du résultat final.
       </p>
       <p>
-        <strong>Cas particulier — visa de rendez-vous (USA, Turquie) :</strong> si Joventy
-        trouve un créneau de rendez-vous mais que le visa est ensuite refusé lors de l'entretien
-        consulaire, la prime de succès reste due car Joventy a rempli sa mission.
-        Le refus consulaire lors de l'entretien est une décision souveraine de l'ambassade.
+        <strong>Cas particulier — créneau consulaire :</strong> si Joventy verrouille un créneau
+        de rendez-vous mais que le visa est ensuite refusé lors de l'entretien consulaire, la prime
+        de succès reste due car Joventy a rempli sa mission contractuelle. Le refus consulaire est
+        une décision souveraine de l'ambassade.
       </p>
 
-      <h3>5.3 Tarifs en vigueur</h3>
-      <ul>
-        <li><strong>Visa USA (B1/B2, F1, K1, H1B) :</strong> 150 $ d'engagement + 450 $ prime de succès</li>
-        <li><strong>Visa Dubaï (e-Visa) :</strong> 50 $ d'engagement + 70 $ prime de succès</li>
-        <li><strong>Visa Turquie (VFS Kinshasa) :</strong> 50 $ d'engagement + 70 $ prime de succès</li>
-        <li><strong>Visa Inde (e-Visa) :</strong> 100 $ d'engagement + 150 $ prime de succès</li>
-      </ul>
+      <h3>5.2 Service visa partiel — formulaires & vérification</h3>
       <p>
-        Ces tarifs sont exprimés en dollars américains (USD). Le paiement s'effectue
-        via les opérateurs de mobile money en RDC : M-Pesa, Airtel Money ou Orange Money.
-        Le taux de change applicable est celui en vigueur au moment du paiement.
+        <strong>600 $ forfaitaires</strong>, payés en un seul versement à l'ouverture du dossier.
+        Joventy remplit les formulaires officiels et vérifie les pièces justificatives. Le client
+        gère ensuite lui-même la soumission ou la prise de rendez-vous. <strong>Aucune prime de
+        succès n'est due</strong> dans le cadre de cette formule.
+      </p>
+
+      <h3>5.3 Service créneau uniquement (slot_only)</h3>
+      <p>
+        <strong>350 $ de prime de résultat</strong>, payés <strong>uniquement après l'obtention
+        effective du créneau consulaire</strong>. Aucun acompte ni frais d'engagement n'est exigé
+        à l'ouverture. Si aucun créneau n'est trouvé, aucun montant n'est réclamé.
+        Disponible pour les destinations : USA, Canada, Royaume-Uni, Suisse, Turquie, Schengen (CEV), Espagne, Allemagne et Brésil.
+      </p>
+
+      <p>
+        Le paiement s'effectue via les opérateurs de mobile money en RDC : M-Pesa, Airtel Money
+        ou Orange Money. Le taux de change applicable est celui en vigueur au moment du paiement.
+        Les frais consulaires gouvernementaux (MRV, CEV, UKVI, etc.) ne sont pas inclus et restent
+        à la charge exclusive du client.
       </p>
 
       <h2>6. Obligations du client</h2>

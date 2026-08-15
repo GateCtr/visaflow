@@ -36,23 +36,22 @@
 
 ## Tarification (USD) — Frais Joventy uniquement
 
-| Destination | Frais d'engagement | Prime de succès | Frais gouv. (hors Joventy) |
+| Formule | Frais d'engagement | Prime de succès | Total |
 |---|---|---|---|
-| USA (B1/B2, F1, K1, H1B) | 250 $ | 750 $ | 185–210 $ (MRV ambassade) |
-| Canada (visiteur, études, travail) | 250 $ | 750 $ | 85 CAD+ (IRCC) |
-| Royaume-Uni | 200 $ | 600 $ | 115 £+ (UKVI) |
-| Schengen / Espagne / Suisse | 150 $ | 450 $ | ~90 € (CEV ou ambassade) |
-| E-Visa Dubaï (EAU) | 150 $ | 200 $ | ~90 $ (portail ICP EAU) |
-| E-Visa Turquie | 150 $ | 200 $ | ~50 $ (e-Visa officiel) |
-| Maroc / Égypte (transit Ebola) | 150 $ | 200 $ | variable |
+| Créneau consulaire uniquement (slot_only) | 0 $ | 350 $ | 350 $ (après résultat) |
+| Service visa complet (toutes destinations) | 500 $ | 1 000 $ | 1 500 $ |
+| Service visa partiel / formulaires | 600 $ (forfait) | — | 600 $ |
 
-**Les frais d'engagement sont dus à la création du dossier. La prime de succès n'est due que si Joventy obtient le créneau ou l'e-Visa.**
+**Créneau uniquement : aucun acompte — 350 $ payés UNIQUEMENT après obtention du créneau.**
+**Service visa : engagement payé à l'ouverture du dossier. Prime de succès due uniquement si résultat obtenu.**
+
+*Les frais consulaires gouvernementaux (MRV USA 185–210$, CEV 90€, UKVI £115+, etc.) sont payés séparément par le client directement au gouvernement/organisme concerné.*
 
 ## Règle de réponse importante
 
 - Si la personne demande seulement un rendez-vous, un créneau ou un suivi de disponibilité, répondre avec le package `Créneau Uniquement` et ne pas citer automatiquement le tarif du service complet.
 - Plus généralement, si la question porte sur un sous-sujet précis comme le prix d'un rendez-vous, un document, un délai, un formulaire ou une pièce à fournir, rester strictement sur ce sous-sujet et ne pas basculer vers le visa complet ou le dossier complet.
-- Réserver les montants `250 + 750`, `150 + 450` ou autres tarifs complets aux demandes où le client veut explicitement un dossier complet.
+- Réserver les montants `500 + 1 000` (service complet, 1 500 $ total) ou `600 forfait` (service partiel, aucune prime de succès) aux demandes où le client veut explicitement un dossier complet.
 - Pour la France / Schengen, distinguer toujours `Visa C` (court séjour, CEV) et `Visa D` (long séjour, TLScontact / france-visas.gouv.fr).
 
 ## Contexte actuel (mai-juin 2026)
@@ -125,10 +124,10 @@ R : Non. Joventy est un service 100% en ligne. Aucun bureau physique à visiter 
 R : Non. Joventy garantit le service, pas le visa. La décision d'accorder ou refuser un visa appartient exclusivement à l'ambassade ou au gouvernement étranger. Le modèle Joventy est « paiement au résultat » : la prime de succès n'est due que si le créneau est obtenu ou si l'e-Visa est accordé. Si aucun résultat, seuls les frais d'engagement restent dus.
 
 **Q : Combien coûte Joventy pour un visa USA ?**
-R : 250 $ de frais d'engagement (payés à la création du dossier via M-Pesa) + 750 $ de prime de succès (payés uniquement quand le créneau est verrouillé). Les frais MRV de l'ambassade américaine (185–210 $) sont payés séparément par le client.
+R : Service complet : 500 $ d'engagement + 1 000 $ de prime de succès (total Joventy 1 500 $), payés uniquement quand le créneau est verrouillé. Service partiel (formulaires uniquement) : 600 $ forfait payés à l'ouverture, aucune prime de succès. Créneau uniquement : 350 $ après obtention, aucun acompte. Les frais MRV de l'ambassade américaine (185–210 $) sont payés séparément.
 
 **Q : Combien coûte Joventy pour un visa Schengen depuis Kinshasa ?**
-R : 150 $ d'engagement + 450 $ de prime de succès. Les frais CEV (environ 90 €) sont payés séparément au portail consulaire le jour du rendez-vous.
+R : Service complet : 500 $ d'engagement + 1 000 $ de prime de succès (total Joventy 1 500 $). Créneau uniquement : 350 $ après obtention du créneau, aucun acompte. Les frais CEV (environ 90 €) sont payés séparément au portail consulaire le jour du rendez-vous.
 
 **Q : Comment prendre rendez-vous pour un visa Espagne depuis Kinshasa ?**
 R : L'Espagne gère ses propres rendez-vous, indépendamment du CEV. La procédure est en 2 étapes : (1) envoyer un email à emb.kinshasa.citasvis@maec.es avec objet "RENDEZ-VOUS VISA EST" et les pièces jointes requises ; (2) réserver un créneau sur citaconsular.es avec les identifiants envoyés par l'ambassade. Joventy prend en charge ces deux étapes à votre place.
@@ -140,7 +139,7 @@ R : Le CEV (cev-kin.eu) est le guichet unique pour les visas Schengen court séj
 R : Le visa UK (Standard Visitor Visa) se demande en ligne sur gov.uk/apply-uk-visa (portail UKVI). Les frais (à partir de 115 £) se paient en ligne. La biométrie est prise par BLS International à Kinshasa. Joventy remplit le formulaire UKVI et accompagne la prise de rendez-vous BLS.
 
 **Q : Combien coûte Joventy pour un visa Angleterre/Royaume-Uni depuis Kinshasa ?**
-R : 200 $ d'engagement + 600 $ de prime de succès. Les frais UKVI (à partir de 115 £) sont payés séparément en ligne. Le service Joventy est 100% en ligne via WhatsApp.
+R : Service complet : 500 $ d'engagement + 1 000 $ de prime de succès (total Joventy 1 500 $). Les frais UKVI (à partir de 115 £) sont payés séparément en ligne. Le service Joventy est 100% en ligne via WhatsApp.
 
 **Q : Comment obtenir un visa Chine depuis Kinshasa ?**
 R : Le visa Chine depuis Kinshasa se demande via le CVSC/VFS (portail visaforchina.org). Les ressortissants DRC ne sont pas éligibles à l'e-Visa chinois court séjour — un visa papier est obligatoire. Joventy prépare le dossier complet. Frais gouvernementaux estimés : ~170 $ tout compris.
@@ -149,7 +148,7 @@ R : Le visa Chine depuis Kinshasa se demande via le CVSC/VFS (portail visaforchi
 R : En 2026, les créneaux visa USA à Kinshasa sont très rares : l'ambassade est en Travel Advisory Level 4 (Ebola) et a suspendu ses services depuis le 18 mai 2026. Joventy surveille le portail usvisaappt.com 24h/24 et notifie dès qu'un créneau se libère. Le délai est imprévisible — il peut aller de quelques jours à plusieurs semaines.
 
 **Q : Combien de temps faut-il pour un e-Visa Dubaï depuis Kinshasa ?**
-R : 48 à 72 heures ouvrables en général avec Joventy. Frais : 150 $ engagement + 200 $ succès. Frais gouvernementaux EAU (~90 $) non inclus.
+R : 48 à 72 heures ouvrables en général avec Joventy. Service complet : 500 $ engagement + 1 000 $ succès (1 500 $ total). Frais gouvernementaux EAU (~90 $) non inclus.
 
 **Q : Peut-on voyager aux USA depuis Kinshasa malgré l'Ebola en 2026 ?**
 R : Oui, mais via un pays neutre. Depuis le 18 mai 2026, l'ambassade américaine à Kinshasa a suspendu les services visa, et les USA interdisent l'entrée aux personnes ayant été en RDC dans les 21 jours précédents. La solution : passer 21 jours au Maroc, en Égypte, à Dubaï ou en Turquie, puis déposer sa demande de visa USA depuis ce pays. Joventy coordonne le visa transit (24–72h) et le dossier USA complet.
@@ -164,10 +163,10 @@ R : Oui. Joventy accepte exclusivement M-Pesa (Vodacom), Airtel Money et Orange 
 R : Si Joventy a obtenu le créneau consulaire, sa mission est accomplie et la prime de succès est due même si le consulat refuse le visa lors de l'entretien. Le refus consulaire est une décision souveraine de l'ambassade. Joventy conseille gratuitement sur les étapes suivantes.
 
 **Q : Joventy peut-il aider pour un visa Schengen pour la France depuis Kinshasa ?**
-R : Oui. Le visa Schengen France se demande via le portail CEV (cev-kin.eu) géré depuis Kinshasa. Joventy crée votre compte Visa On Web, surveille le portail en continu et capture le créneau dès qu'il est disponible. Tarif : 150 $ engagement + 450 $ succès. Frais CEV (~90 €) payés séparément.
+R : Oui. Le visa Schengen France se demande via le portail CEV (cev-kin.eu) géré depuis Kinshasa. Joventy crée votre compte Visa On Web, surveille le portail en continu et capture le créneau dès qu'il est disponible. Service complet : 500 $ engagement + 1 000 $ succès (1 500 $ total). Créneau seul : 350 $ après résultat, sans acompte. Frais CEV (~90 €) payés séparément.
 
 **Q : Les e-Visas Dubaï, Turquie, Inde, Maroc et Égypte sont-ils disponibles depuis la RDC ?**
-R : Oui. Joventy soumet ces e-Visas en ligne directement depuis Kinshasa. Délais : Dubaï 48–72h, Inde 3–5 jours, Turquie 24–48h, Maroc/Égypte 48–72h. Tarif uniforme : 150 $ engagement + 200 $ succès.
+R : Oui. Joventy soumet ces e-Visas en ligne directement depuis Kinshasa. Délais : Dubaï 48–72h, Inde 3–5 jours, Turquie 24–48h, Maroc/Égypte 48–72h. Tarif Joventy : service complet 1 500 $ (500+1 000), service partiel 600 $ forfait (aucune prime de succès). Frais gouvernementaux variables selon destination.
 
 **Q : Joventy peut-il aider les étrangers à obtenir un visa pour visiter la RDC ?**
 R : Oui. Joventy propose l'e-Visa DRC (délai 3–5 jours), le Visa Volant (visa d'urgence à l'arrivée pour affaires), et le suivi physique des dossiers bloqués à la DGM (Direction Générale des Migrations) à Kinshasa.
@@ -176,7 +175,10 @@ R : Oui. Joventy propose l'e-Visa DRC (délai 3–5 jours), le Visa Volant (visa
 R : L'EES (Entry/Exit System) est un système biométrique européen opérationnel depuis le 10 avril 2026. Il remplace les tampons physiques dans les passeports. À chaque entrée dans l'espace Schengen, les voyageurs non-UE (dont les Congolais) enregistrent leurs empreintes et une photo au poste frontière. Les visas Schengen restent valides comme avant ; seul le contrôle à la frontière change.
 
 **Q : Joventy peut-il remplir mes formulaires visa sans chercher le créneau ?**
-R : Oui. Joventy propose un service « Formulaires & Vérification » à tarif fixe : il correspond aux frais d'engagement de la destination, sans prime de succès. Ce service est pour les clients qui veulent seulement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis et vérifiés par un expert.
+R : Oui. Joventy propose le service partiel (formulaires uniquement) à 600 $ forfaitaires payés à l'ouverture — aucune prime de succès. Ce service est pour les clients qui veulent seulement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis et vérifiés par un expert, sans que Joventy cherche le créneau.
+
+**Q : Joventy garantit-il l'obtention du visa (créneau uniquement) ?**
+R : Pour le service créneau uniquement (slot_only), Joventy ne prend aucun acompte. Les 350 $ sont dus UNIQUEMENT quand le créneau est obtenu. Si aucun créneau n'est trouvé, vous ne payez rien. Pour le service visa complet, le frais d'engagement (500 $) est dû à l'ouverture du dossier, mais la prime de succès (1 000 $) n'est due qu'au résultat.
 
 **Q : Quelle est la différence entre Joventy et une agence de voyage classique ?**
 R : Joventy n'organise pas de voyages et n'a pas de bureau physique à Kinshasa. C'est un service 100% en ligne spécialisé uniquement dans l'assistance visa : formulaires, surveillance des portails consulaires, prise de créneaux, et soumission d'e-Visas. Une agence de voyage vend des billets et des hôtels — Joventy s'occupe uniquement du visa.

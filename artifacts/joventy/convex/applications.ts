@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { VISA_PRICING, SLOT_URGENCY_TIERS, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
+import { VISA_PRICING, SLOT_URGENCY_TIERS, VISA_PARTIAL_SERVICE, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
 import { getVisaCategory, getVisaClassForBroadcast } from "./visaClassifications";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -214,9 +214,10 @@ export const create = mutation({
       successFee = tierData.successAmount;
       totalPrice = tierData.total;
     } else {
-      engagementFee = pricing.engagementFee;
-      successFee = isDossierOnly ? 0 : pricing.successFee;
-      totalPrice = isDossierOnly ? pricing.engagementFee : pricing.total;
+      // dossier_only = visa partiel : 600 USD forfait fixe (VISA_PARTIAL_SERVICE), aucune prime de succès
+      engagementFee = isDossierOnly ? VISA_PARTIAL_SERVICE.engagementFee : pricing.engagementFee;
+      successFee = isDossierOnly ? VISA_PARTIAL_SERVICE.successFee : pricing.successFee;
+      totalPrice = isDossierOnly ? VISA_PARTIAL_SERVICE.total : pricing.total;
     }
 
     const priceDetails = {
@@ -224,6 +225,7 @@ export const create = mutation({
       successFee,
       paidAmount: 0,
       isEngagementPaid: false,
+      // dossier_only = tarif fixe (pas de prime de succès séparée)
       isSuccessFeePaid: isDossierOnly,
     };
 
@@ -268,7 +270,8 @@ export const create = mutation({
       userFirstName: identity.givenName,
       userLastName: identity.familyName,
       userEmail: identity.email,
-      status: "awaiting_engagement_payment",
+      // slot_only has 0 deposit → skip the payment gate, start hunting immediately
+      status: isSlotOnly ? "slot_hunting" : "awaiting_engagement_payment",
       isPaid: false,
       price: totalPrice,
       priceDetails,
@@ -313,6 +316,7 @@ export const create = mutation({
         visaType: args.visaType,
         engagementFee,
         applicationId: id,
+        servicePackage: pkg,
       });
     }
 

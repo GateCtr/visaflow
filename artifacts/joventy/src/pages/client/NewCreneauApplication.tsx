@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { VISA_PRICING, CRENEAU_PROMO_PRICING, SERVICE_PACKAGES } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES } from "@convex/constants";
 
 // Destinations disponibles pour slot_only — dérivées directement de la config backend.
 // Ne pas modifier manuellement : modifiez SERVICE_PACKAGES.slot_only.availableFor dans constants.ts.
@@ -191,7 +191,6 @@ export default function NewCreneauApplication() {
   const markConvinced = useMutation(api.victor.markConvinced);
 
   const selectedDest = CRENEAU_DESTINATIONS.find((d) => d.id === dest);
-  const { normalPrice, promoPrice, depositAmount, successAmount, processingWeeksMin } = CRENEAU_PROMO_PRICING;
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   const goNext = () => {
@@ -299,9 +298,9 @@ export default function NewCreneauApplication() {
           description: `${failedUploads.map((f) => f.label).join(", ")} n'ont pas pu être uploadés. Vous pouvez les ajouter depuis votre fiche dossier.`,
         });
       } else {
-        toast({ title: "Dossier créé !", description: "Réglez l'acompte pour démarrer la recherche de créneau." });
+        toast({ title: "Dossier créé !", description: "Joventy démarre la recherche de créneau. Vous paierez 350 $ uniquement à l'obtention." });
       }
-      setLocation(`/dashboard/applications/${id}/payment`);
+      setLocation(`/dashboard/applications/${id}`);
     } catch (e) {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de créer le dossier. Réessayez." });
     } finally {
@@ -346,18 +345,18 @@ export default function NewCreneauApplication() {
       </div>
 
       {/* Bannière tarif */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex items-center gap-3">
-          <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <Clock className="w-5 h-5 text-green-600 flex-shrink-0" />
           <div>
-            <p className="font-bold text-amber-900 text-sm">Délai minimum : {processingWeeksMin} semaines</p>
-            <p className="text-xs text-amber-700 mt-0.5">Joventy surveille les portails 24h/24 et capture votre créneau dès qu'une place apparaît.</p>
+            <p className="font-bold text-green-900 text-sm">Surveillance 24h/24 — Délai minimum : 3 semaines</p>
+            <p className="text-xs text-green-700 mt-0.5">Joventy surveille les portails en continu et capture votre créneau dès qu'une place se libère.</p>
           </div>
         </div>
         <div className="sm:ml-auto text-right flex-shrink-0">
-          <p className="text-xs text-slate-500 line-through">{formatCurrency(normalPrice)}</p>
-          <p className="text-xl font-bold text-secondary">{formatCurrency(promoPrice)} <span className="text-xs font-normal text-slate-500">promo</span></p>
-          <p className="text-xs text-slate-600">Acompte : <strong>{formatCurrency(depositAmount)}</strong> maintenant</p>
+          <p className="text-2xl font-bold text-primary">350 $</p>
+          <p className="text-xs text-green-700 font-semibold">Payé UNIQUEMENT après résultat</p>
+          <p className="text-xs text-slate-500">Aucun acompte — zéro paiement avant le créneau</p>
         </div>
       </div>
 
@@ -484,7 +483,7 @@ export default function NewCreneauApplication() {
                 <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
                   <MessageCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
                   <p className="text-xs text-emerald-800">
-                    <strong>Après paiement :</strong> rendez-vous dans "Messagerie" → votre dossier → envoyez votre n° de passeport + mot de passe portail à notre équipe.
+                    <strong>Après création du dossier :</strong> rendez-vous dans "Messagerie" → votre dossier → envoyez votre n° de passeport + mot de passe portail à notre équipe.
                   </p>
                 </div>
                 <label className="flex items-start gap-3 cursor-pointer group">
@@ -551,7 +550,7 @@ export default function NewCreneauApplication() {
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
-              Tous les uploads sont <strong>optionnels ici</strong> — vous pouvez les ajouter depuis votre fiche dossier après paiement. Notre équipe vérifie et valide chaque document avant le démarrage de la recherche de créneau.
+              Tous les uploads sont <strong>optionnels ici</strong> — vous pouvez les ajouter depuis votre fiche dossier après création. Notre équipe vérifie et valide chaque document avant le démarrage de la recherche de créneau.
             </div>
 
             <div className="space-y-3">
@@ -621,33 +620,33 @@ export default function NewCreneauApplication() {
               )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Délai minimum</span>
-                <span className="font-semibold text-amber-700">{processingWeeksMin} semaines</span>
+                <span className="font-semibold text-amber-700">3 semaines minimum</span>
               </div>
             </div>
 
             {/* Tarif */}
             <div className="bg-primary rounded-2xl p-6 text-white">
               <div className="flex items-baseline gap-3 mb-4">
-                <span className="text-slate-400 text-lg line-through">{formatCurrency(normalPrice)}</span>
-                <span className="text-3xl font-bold text-secondary">{formatCurrency(promoPrice)}</span>
-                <span className="text-xs bg-secondary/20 text-secondary px-2 py-1 rounded-full font-semibold">PROMO</span>
+                <span className="text-3xl font-bold text-secondary">350 $</span>
+                <span className="text-xs bg-secondary/20 text-secondary px-2 py-1 rounded-full font-semibold">PAYÉ APRÈS RÉSULTAT</span>
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-300">Acompte à payer maintenant</span>
-                  <span className="font-bold text-secondary">{formatCurrency(depositAmount)}</span>
+                  <span className="text-slate-300">Acompte maintenant</span>
+                  <span className="font-bold text-green-300">0 $ — rien à payer</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-300">Solde (créneau obtenu)</span>
-                  <span className="font-semibold text-white">{formatCurrency(successAmount)}</span>
+                  <span className="font-semibold text-white">350 $</span>
                 </div>
               </div>
               <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-white/10">
-                Le solde n'est dû qu'une fois votre créneau consulaire obtenu. Si aucun créneau n'est disponible, rien de plus ne vous est facturé.
+                Aucun paiement maintenant. Les 350 $ sont dus uniquement une fois votre créneau consulaire obtenu. Si aucun créneau n'est trouvé, vous ne payez rien.
               </p>
             </div>
 
             <div className="flex gap-3">
+              <span className="text-muted-foreground text-sm hidden" />
               <Button variant="outline" onClick={goBack} className="h-12 px-6">
                 <ArrowLeft className="w-4 h-4 mr-2" /> Retour
               </Button>
@@ -656,7 +655,7 @@ export default function NewCreneauApplication() {
                 disabled={isPending}
                 className="flex-1 h-12 bg-secondary text-primary hover:bg-orange-500 font-bold text-base"
               >
-                {isPending ? "Création en cours..." : `Créer mon dossier & payer ${formatCurrency(depositAmount)}`}
+                {isPending ? "Création en cours..." : "Créer mon dossier — gratuit"}
               </Button>
             </div>
           </div>

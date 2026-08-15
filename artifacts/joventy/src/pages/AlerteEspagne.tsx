@@ -86,7 +86,7 @@ const OBJECTIONS = [
   },
   {
     q: "10 USD c'est cher pour un groupe WhatsApp ?",
-    a: "Un café à Bruxelles coûte 4 EUR. 10 USD vous donne un accès à vie à des alertes précises, une méthode testée, et une communauté active. Comparé aux 150 USD des frais Joventy pour la gestion complète, ou au coût d'une journée de travail perdue à surveiller un écran — c'est la meilleure valeur disponible pour ceux qui veulent le faire eux-mêmes.",
+    a: "Un café à Bruxelles coûte 4 EUR. 10 USD vous donne un accès à vie à des alertes précises, une méthode testée, et une communauté active. Comparé aux 350 USD du service créneau Joventy (payé uniquement après résultat), ou au coût d'une journée de travail perdue à surveiller un écran — c'est la meilleure valeur disponible pour ceux qui veulent le faire eux-mêmes.",
   },
   {
     q: "Comment je sais que le groupe est vraiment actif ?",
@@ -341,7 +341,7 @@ export default function AlerteEspagne() {
             <div className="text-5xl mb-6">🇪🇸</div>
             <h2 className="text-3xl sm:text-4xl font-black mb-4">Tout ça pour 10 USD.<br />Une seule fois.</h2>
             <p className="text-white/70 text-base mb-8 max-w-xl mx-auto leading-relaxed">
-              D'autres paient 150 USD pour qu'on gère leur rendez-vous. Vous préférez le faire vous-même — c'est tout à fait possible. Ce groupe vous donne les outils pour y arriver. 10 USD, accès à vie, aucun abonnement.
+              D'autres paient 350 USD pour qu'on gère leur rendez-vous (après résultat). Vous préférez le faire vous-même — c'est tout à fait possible. Ce groupe vous donne les outils pour y arriver. 10 USD, accès à vie, aucun abonnement.
             </p>
             <ul className="text-left max-w-sm mx-auto space-y-3 mb-10">
               {[

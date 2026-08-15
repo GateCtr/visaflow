@@ -49,8 +49,8 @@ const DESTINATIONS = [
     code: "us",
     name: "États-Unis",
     visaTypes: ["B1/B2 Tourisme", "F1 Étudiant", "K1 Fiancé(e)", "H1B Travail"],
-    engagement: 250,
-    success: 750,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais MRV 265$ non inclus",
     badge: null,
@@ -59,8 +59,8 @@ const DESTINATIONS = [
     code: "ca",
     name: "Canada",
     visaTypes: ["Biométrie (Biometric)", "Visa Visiteur", "Permis d'études", "Permis de travail"],
-    engagement: 250,
-    success: 750,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais IRCC (85 CAD+) non inclus",
     badge: null,
@@ -69,8 +69,8 @@ const DESTINATIONS = [
     code: "gb",
     name: "Royaume-Uni",
     visaTypes: ["Standard Visitor Visa", "Student Visa", "Work Visa", "Family Visa"],
-    engagement: 200,
-    success: 600,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais UKVI (£115+) non inclus",
     badge: null,
@@ -79,8 +79,8 @@ const DESTINATIONS = [
     code: "ch",
     name: "Suisse",
     visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études", "Visa D Long Séjour", "Transit"],
-    engagement: 150,
-    success: 450,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais consulaires (90€+) non inclus",
     badge: null,
@@ -89,8 +89,8 @@ const DESTINATIONS = [
     code: "eu",
     name: "Europe Schengen",
     visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études (gratuit*)", "Visa D Long Séjour"],
-    engagement: 150,
-    success: 450,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais consulaires CEV 90€/adulte non inclus",
     badge: null,
@@ -99,8 +99,8 @@ const DESTINATIONS = [
     code: "ae",
     name: "Dubaï (EAU)",
     visaTypes: ["Touriste 30j", "Touriste 60j", "Affaires", "Résidence"],
-    engagement: 150,
-    success: 200,
+    engagement: 500,
+    success: 1000,
     model: "evisa",
     note: "Frais e-Visa EAU (~90$) non inclus",
     badge: null,
@@ -109,8 +109,8 @@ const DESTINATIONS = [
     code: "tr",
     name: "Turquie",
     visaTypes: ["E-Visa en ligne", "Visa Sticker (ambassade)", "Transit"],
-    engagement: 150,
-    success: 200,
+    engagement: 500,
+    success: 1000,
     model: "evisa",
     note: "E-Visa ~50$ (si visa USA/Schengen/UK valide)",
     badge: null,
@@ -119,8 +119,8 @@ const DESTINATIONS = [
     code: "in",
     name: "Inde",
     visaTypes: ["E-Visa Tourisme", "Médical", "Affaires", "Études"],
-    engagement: 100,
-    success: 150,
+    engagement: 500,
+    success: 1000,
     model: "evisa",
     note: "Frais e-Visa gouvernement (~25-80$) non inclus",
     badge: null,
@@ -129,8 +129,8 @@ const DESTINATIONS = [
     code: "es",
     name: "Espagne",
     visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études", "Visa D Long Séjour"],
-    engagement: 150,
-    success: 450,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais consulaires 90€/adulte non inclus",
     badge: null,
@@ -139,8 +139,8 @@ const DESTINATIONS = [
     code: "de",
     name: "Allemagne",
     visaTypes: ["Visa National Études", "Regroupement familial", "Travail / Chancenkarte", "Au-pair / Volontariat"],
-    engagement: 150,
-    success: 450,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais consulaires (75-80€) non inclus",
     badge: null,
@@ -149,8 +149,8 @@ const DESTINATIONS = [
     code: "ma",
     name: "Maroc",
     visaTypes: ["E-Visa portail officiel", "Consulaire sans RDV", "Transit Ebola 21j"],
-    engagement: 150,
-    success: 200,
+    engagement: 500,
+    success: 1000,
     model: "hybrid",
     note: "E-Visa 77-110$ ou consulaire 15-25$ non inclus",
     badge: null,
@@ -159,8 +159,8 @@ const DESTINATIONS = [
     code: "eg",
     name: "Égypte",
     visaTypes: ["E-Visa en ligne (visa2.egypt.gov.eg)", "Consulaire sans RDV", "Transit Ebola 21j"],
-    engagement: 150,
-    success: 200,
+    engagement: 500,
+    success: 1000,
     model: "hybrid",
     note: "E-Visa 25-60$ ou consulaire ~60$ non inclus",
     badge: null,
@@ -169,8 +169,8 @@ const DESTINATIONS = [
     code: "cn",
     name: "Chine",
     visaTypes: ["Visa papier via CVSC/VFS", "Visa L Tourisme (VFS)", "Visa M Affaires (VFS)", "Visa F / X2 (VFS)"],
-    engagement: 120,
-    success: 380,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais consulaires ~140$ + VFS ~30$ non inclus",
     badge: null,
@@ -179,8 +179,8 @@ const DESTINATIONS = [
     code: "br",
     name: "Brésil",
     visaTypes: ["Tourisme (VITUR)", "Affaires (VITEM II)", "Études (VITEM IV)"],
-    engagement: 200,
-    success: 400,
+    engagement: 500,
+    success: 1000,
     model: "appointment",
     note: "Frais consulaires brésiliens non inclus",
     badge: "Nouveau",
@@ -241,21 +241,21 @@ const PACKAGES = [
       "Surveillance continue du portail consulaire",
       "Alerte immédiate à la capture",
       "Disponible USA, Schengen (CEV) & Espagne",
-      "Niveaux d'urgence : Standard → Très urgent",
-      "Prime due uniquement si créneau obtenu",
+      "350 $ — payés UNIQUEMENT après obtention",
+      "Aucun acompte, zéro paiement à l'avance",
     ],
   },
   {
     key: "dossier_only",
     icon: ClipboardList,
     label: "Formulaires & Vérification",
-    tagline: "Tarif fixe",
-    desc: "Joventy remplit vos formulaires officiels et vérifie vos pièces. Vous gérez ensuite vous-même la soumission ou le rendez-vous. Aucune prime de succès.",
+    tagline: "600 $ — paiement unique",
+    desc: "Joventy remplit vos formulaires officiels et vérifie vos pièces. Vous gérez ensuite vous-même la soumission ou le rendez-vous. Tarif forfaitaire, aucune prime de succès.",
     highlight: false,
     features: [
       "Remplissage des formulaires officiels",
       "Vérification complète de votre dossier",
-      "Tarif fixe — aucune surprise",
+      "600 $ — paiement unique à l'ouverture",
       "Disponible pour toutes les destinations",
       "Idéal si vous avez déjà un créneau",
     ],
@@ -490,7 +490,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Combien coûte le service Joventy ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Joventy facture des frais d'engagement (payés à la création du dossier) et une prime de succès (due uniquement si le résultat est obtenu). Tarifs : USA — 250 $ engagement + 750 $ succès ; Canada — 250 $ + 750 $ ; Royaume-Uni — 200 $ + 600 $ ; Schengen / Espagne / Suisse — 150 $ + 450 $ ; e-Visa Dubaï / Turquie / Maroc / Égypte — 150 $ + 200 $. Les frais consulaires gouvernementaux (MRV USA ≈185-210 $, CEV Schengen ≈90 €, UKVI UK ≈115 £, portail Dubaï ≈90 $) ne sont pas inclus et sont payés directement au gouvernement concerné." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire uniquement : 350 $ — payés UNIQUEMENT après obtention, aucun acompte. (2) Service visa complet (dossier + créneau + accompagnement) : 500 $ d'engagement + 1 000 $ prime de succès = 1 500 $ au total, toutes destinations. (3) Service visa partiel (formulaires uniquement) : 600 $ forfaitaire payés à l'ouverture — aucune prime de succès. Les frais consulaires gouvernementaux (MRV USA ≈185 $, CEV Schengen ≈90 €, UKVI UK ≈115 £, portail Dubaï ≈90 $) sont séparés et payés directement au gouvernement." }
             },
             {
               "@type": "Question",
@@ -530,17 +530,17 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Comment obtenir un visa Schengen depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa Schengen depuis Kinshasa, le rendez-vous se prend via le système CEV (Centre d'Encodage des Visas) géré par l'ambassade belge. Les créneaux sont très limités et pris d'assaut. Joventy surveille le portail CEV en continu et verrouille un créneau dès qu'il est disponible. Frais Joventy : 150 $ engagement + 450 $ succès. Frais CEV (≈90 €) payés séparément. En 2026, le système EES (Entry/Exit System) biométrique est en vigueur dans toute la zone Schengen depuis le 10 avril 2026." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa Schengen depuis Kinshasa, le rendez-vous se prend via le système CEV (Centre d'Encodage des Visas) géré par l'ambassade belge. Les créneaux sont très limités et pris d'assaut. Joventy surveille le portail CEV en continu et verrouille un créneau dès qu'il est disponible. Service créneau seul : 350 $ payés UNIQUEMENT après obtention (0 acompte). Service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. Frais CEV (≈90 €) payés séparément. En 2026, le système EES (Entry/Exit System) biométrique est en vigueur dans toute la zone Schengen depuis le 10 avril 2026." }
             },
             {
               "@type": "Question",
               "name": "Comment obtenir un e-Visa Dubaï depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "L'e-Visa Dubaï (Émirats Arabes Unis) se demande en ligne via le portail officiel ICP des EAU. Le résultat est généralement obtenu en 48 à 72 heures ouvrables. Joventy prend en charge toute la procédure de soumission. Frais Joventy : 150 $ engagement + 200 $ prime de succès. Les frais officiels du gouvernement des EAU (environ 90 $) sont payés séparément par le client." }
+              "acceptedAnswer": { "@type": "Answer", "text": "L'e-Visa Dubaï (Émirats Arabes Unis) se demande en ligne via le portail officiel ICP des EAU. Le résultat est généralement obtenu en 48 à 72 heures ouvrables. Joventy prend en charge toute la procédure de soumission. Frais Joventy service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. Les frais officiels du gouvernement des EAU (environ 90 $) sont payés séparément par le client." }
             },
             {
               "@type": "Question",
               "name": "Joventy peut-il aider pour un visa Canada depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy prend en charge les dossiers IRCC (Immigration, Réfugiés et Citoyenneté Canada) pour les visas visiteur, permis d'études et permis de travail. Attention : en 2026, le Canada a suspendu la délivrance de visas aux résidents de la RDC du 27 mai au 28 août 2026 suite à l'épidémie d'Ebola. Les demandes reprennent après cette période. Frais Joventy : 250 $ engagement + 750 $ succès. Frais IRCC (85 CAD+) non inclus." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy prend en charge les dossiers IRCC (Immigration, Réfugiés et Citoyenneté Canada) pour les visas visiteur, permis d'études et permis de travail. Attention : en 2026, le Canada a suspendu la délivrance de visas aux résidents de la RDC du 27 mai au 28 août 2026 suite à l'épidémie d'Ebola. Les demandes reprennent après cette période. Frais Joventy service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. Frais IRCC (85 CAD+) non inclus." }
             },
             {
               "@type": "Question",
@@ -570,7 +570,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Joventy peut-il aider pour un visa Turquie depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui. La Turquie délivre des e-Visas en ligne aux détenteurs de visa USA, Schengen ou UK valide. Le résultat est généralement obtenu en 24 à 48 heures. Pour les ressortissants congolais ne disposant pas d'un visa USA/Schengen/UK, Joventy aide à obtenir le visa turc via l'ambassade de Turquie. Frais Joventy : 150 $ engagement + 200 $ succès. La Turquie est également un pays de transit idéal pour « purger » les 21 jours Ebola avant d'entrer aux USA." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. La Turquie délivre des e-Visas en ligne aux détenteurs de visa USA, Schengen ou UK valide. Le résultat est généralement obtenu en 24 à 48 heures. Pour les ressortissants congolais ne disposant pas d'un visa USA/Schengen/UK, Joventy aide à obtenir le visa turc via l'ambassade de Turquie. Frais Joventy service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. La Turquie est également un pays de transit idéal pour « purger » les 21 jours Ebola avant d'entrer aux USA." }
             },
             {
               "@type": "Question",
@@ -585,7 +585,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Joventy peut-il préparer mon dossier visa sans trouver le créneau ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose un service « Formulaires & Vérification » à tarif fixe pour les clients qui ont déjà un créneau consulaire ou un accès au portail et souhaitent uniquement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis et vérifiés par un expert. Ce service est facturé séparément, sans frais de succès." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose un service « Formulaires & Vérification » à 600 USD forfaitaire pour les clients qui ont déjà un créneau consulaire ou un accès au portail et souhaitent uniquement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis et vérifiés par un expert. Ce service est facturé en un seul paiement à l'ouverture, sans prime de succès." }
             }
           ]
         })}</script>
@@ -594,14 +594,14 @@ export default function Landing() {
           "@type": "HowTo",
           "name": "Comment obtenir un visa USA depuis Kinshasa avec Joventy",
           "description": "Guide étape par étape pour obtenir un créneau de rendez-vous visa USA (B1/B2) depuis Kinshasa, RDC, via le service d'assistance Joventy.",
-          "estimatedCost": { "@type": "MonetaryAmount", "currency": "USD", "value": "250", "description": "Frais d'engagement Joventy (prime de succès 750 $ due uniquement si créneau obtenu)" },
+          "estimatedCost": { "@type": "MonetaryAmount", "currency": "USD", "value": "500", "description": "Frais d'engagement Joventy (prime de succès 1 000 $ due uniquement si créneau obtenu)" },
           "totalTime": "P14D",
           "step": [
-            { "@type": "HowToStep", "position": 1, "name": "Créer le dossier", "text": "Inscrivez-vous sur joventy.cd et créez votre dossier visa USA. Payez les frais d'engagement (250 $) via M-Pesa, Airtel Money ou Orange Money." },
+            { "@type": "HowToStep", "position": 1, "name": "Créer le dossier", "text": "Inscrivez-vous sur joventy.cd et créez votre dossier visa USA. Payez les frais d'engagement (500 $) via M-Pesa, Airtel Money ou Orange Money." },
             { "@type": "HowToStep", "position": 2, "name": "Envoyer les documents", "text": "Transmettez vos documents via WhatsApp ou l'espace client : passeport, photo biométrique, relevés bancaires (3 mois), justificatif d'emploi, justificatif de domicile en RDC." },
             { "@type": "HowToStep", "position": 3, "name": "Remplissage du formulaire DS-160", "text": "L'équipe Joventy remplit le formulaire DS-160 à votre place et vous soumet le brouillon pour vérification et signature électronique." },
             { "@type": "HowToStep", "position": 4, "name": "Surveillance du portail et capture du créneau", "text": "Joventy surveille le portail usvisaappt.com 24h/24. Dès qu'un créneau est disponible à Kinshasa (ou dans un pays tiers si nécessaire), il est verrouillé et vous êtes notifié immédiatement via WhatsApp." },
-            { "@type": "HowToStep", "position": 5, "name": "Paiement de la prime de succès", "text": "Une fois le créneau confirmé, vous payez la prime de succès (750 $) via Mobile Money." },
+            { "@type": "HowToStep", "position": 5, "name": "Paiement de la prime de succès", "text": "Une fois le créneau confirmé, vous payez la prime de succès (1 000 $) via Mobile Money." },
             { "@type": "HowToStep", "position": 6, "name": "Préparation à l'entretien consulaire", "text": "Joventy vous fournit un guide de préparation personnalisé pour l'entretien B1/B2 : questions probables, documents à apporter, conseils de présentation." },
             { "@type": "HowToStep", "position": 7, "name": "Se rendre à l'entretien", "text": "Présentez-vous à l'ambassade américaine à la date et l'heure indiquées. Si le visa est accordé, vous le recevez dans votre passeport sous 3 à 5 jours ouvrables." }
           ]
@@ -623,7 +623,7 @@ export default function Landing() {
             "@type": "Place",
             "name": "Kinshasa, République Démocratique du Congo"
           },
-          "priceRange": "150$-1000$",
+          "priceRange": "350$-1500$",
           "currenciesAccepted": "USD",
           "paymentAccepted": "M-Pesa, Airtel Money, Orange Money",
           "aggregateRating": {

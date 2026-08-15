@@ -550,20 +550,29 @@ export const sendApplicationConfirmationClient = internalAction({
     visaType: v.string(),
     engagementFee: v.number(),
     applicationId: v.string(),
+    servicePackage: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
+    const isSlotOnly = args.servicePackage === "slot_only";
+
     const rows =
       info("Demandeur", args.applicantName) +
       info("Destination", destLabel(args.destination)) +
       info("Type de visa", args.visaType) +
-      info("Frais d'engagement", `${args.engagementFee} USD`);
+      (isSlotOnly
+        ? info("Formule", "Créneau uniquement — 350 USD après obtention")
+        : info("Frais d'engagement", `${args.engagementFee} USD`));
+
+    const nextStep = isSlotOnly
+      ? `<p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Merci de faire confiance à Joventy. Votre dossier créneau est enregistré — <strong>aucun paiement n'est requis maintenant</strong>. Un membre de notre équipe va configurer la surveillance de votre dossier et vous notifiera dès qu'un créneau est disponible. Les <strong>350 USD</strong> ne seront dus qu'après l'obtention effective du créneau.</p>`
+      : `<p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Merci de faire confiance à Joventy. Votre demande de visa est enregistrée. La prochaine étape est de régler les <strong>frais d'engagement (${args.engagementFee}&nbsp;USD)</strong> pour activer votre dossier.</p>`;
 
     const body = `
       <h2 style="margin:0 0 8px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Votre dossier a bien été créé</h2>
       <p style="margin:0 0 20px;color:#64748b;font-size:14px;">Référence : JOV-${args.applicationId.slice(-5).toUpperCase()}</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Merci de faire confiance à Joventy. Votre demande de visa est enregistrée. La prochaine étape est de régler les <strong>frais d'engagement (${args.engagementFee}&nbsp;USD)</strong> pour activer votre dossier.</p>
+      ${nextStep}
       ${infoTable(rows)}
-      ${paymentBox()}
+      ${isSlotOnly ? "" : paymentBox()}
       ${cta(`${APP_URL}/dashboard`, "Accéder à mon espace")}
     `;
     await sendEmail({
