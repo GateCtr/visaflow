@@ -72,3 +72,34 @@ For 2+ dossiers: getsigninfields/ 0B for dossier #2+ → signin/ fails gracefull
 - `bookingConfig`: include `agendaId: assignedSlot?.agendaId` so fallback is correct.
 - `createIsolatedBookingSession` capsolver path: NO `_ownImpit` — use singleton impit.
 - Do NOT attempt `/main/` reset with same or stripped PHPSESSID — both return 0B.
+
+## Vue-jour datetime/ resolution — validated 2026-08-15 (Saopola, 342 créneaux)
+
+### Context
+The monthly datetime/ scan (start=YYYY-MM-01, end=YYYY-MM-31) returns `state=1, times=[]`
+for available days — Bookitit never reveals time slots or freeslots in calendar view.
+The scanner adds a second pass after the monthly scan: `datetime/?start=date&end=date`
+(same date for start and end) for up to 10 unique dates with `freeslots=-1`.
+
+### Confirmed behavior (warm context — after full widget sequence)
+- **Vue-jour WORKS** in warm context: the server returns real time slots (e.g. `09:30`) with
+  real freeslots counts (e.g. `1pl`) for most resolved dates.
+- Cold call (no prior widget sequence): always returns `{"Exception": "Contact with your technical support."}` — expected.
+- Some time slots within a resolved day still have `freeslots=-1`: the server reveals the time
+  but not the freeslots count for certain agenda/time combinations.
+- The 10-date cap limits resolution: with 242+ available days, ~132/342 slots remain as
+  `freeslots=-1` placeholders (dates beyond the cap). These are kept as-is; the first resolved
+  slot is used for the watcher's `date/time` output.
+
+### What to expect in logs
+```
+[spain-http] 🔍 Résolution heures/places (vue jour) — N date(s) [date1, date2, ...]
+[spain-http] 📅 datetime/ vue-jour YYYY-MM-DD → NNNNb
+[spain-http] ✅ YYYY-MM-DD: 11 heure(s) — 09:00(-1pl) 09:30(1pl) ...
+[spain-http] ✅ Résolution terminée — NNN créneau(x) avec heures/places
+```
+
+### Limitation
+Bookitit Saopola does NOT reveal times in monthly view (times=[]). Vue-jour resolves
+the first 10 dates only. For booking, any slot from `_allSlots` works regardless of
+`freeslots` value — the real check is `state=1` confirmed by datetime/.
