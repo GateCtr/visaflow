@@ -583,9 +583,9 @@ export type SlotUrgencyTier = keyof typeof SLOT_URGENCY_TIERS;
 export const SERVICE_PACKAGES = {
   full_service: {
     key: "full_service" as const,
-    label: "Service Complet",
+    label: "Accompagnement Complet",
     tagline: "Recommandé",
-    description: "Joventy remplit les formulaires officiels, vérifie les pièces que vous fournissez et gère le dossier complet, y compris la recherche de créneau ou la soumission du visa électronique. À choisir si vous voulez l'accompagnement complet, pas seulement le rendez-vous.",
+    description: "Vous fournissez votre passeport, une photo d'identité et vos informations personnelles de base. Joventy prend en charge l'intégralité des documents du dossier (réservations, justificatifs financiers, garanties, invitations, formulaires officiels, etc.), gère le profil consulaire ou e-Visa et capture votre créneau. Prime de succès payée uniquement à l'obtention du visa.",
     hasSuccessFee: true,
     availableFor: "all" as const,
   },
@@ -599,10 +599,10 @@ export const SERVICE_PACKAGES = {
   },
   dossier_only: {
     key: "dossier_only" as const,
-    label: "Formulaires & Vérification",
-    tagline: "Tarif fixe",
-    description: "Joventy remplit les formulaires requis et vérifie les pièces que vous fournissez. Vous gérez ensuite votre rendez-vous ou soumission de façon autonome. Tarif fixe.",
-    hasSuccessFee: false,
+    label: "Accompagnement Partiel",
+    tagline: "Paiement au succès",
+    description: "Vous fournissez votre passeport et vos propres documents justificatifs. Joventy complète uniquement les pièces manquantes, puis gère la vérification, le profil consulaire et la capture du créneau. Prime de succès payée uniquement à l'obtention du visa.",
+    hasSuccessFee: true,
     availableFor: "all" as const,
   },
 } as const;
@@ -663,10 +663,16 @@ export const APPLICATION_STATUSES = {
 
 export type ApplicationStatus = keyof typeof APPLICATION_STATUSES;
 
-// ─── Tarification service visa partiel ────────────────────────────────────
+// ─── Tarification services ────────────────────────────────────────────────
+export const VISA_FULL_SERVICE = {
+  engagementFee: 500,
+  successFee: 1000,
+  total: 1500,
+} as const;
+
 export const VISA_PARTIAL_SERVICE = {
-  engagementFee: 600,  // forfait unique payé à l'ouverture
-  successFee: 0,       // aucune prime de succès
+  engagementFee: 200,  // engagement payé à l'ouverture du dossier
+  successFee: 400,     // prime payée uniquement à l'obtention du visa
   total: 600,
 } as const;
 
