@@ -32,7 +32,7 @@ const CONTRACT_SECTIONS = [
             ["Service Complet", "remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire."],
             ["Créneau Uniquement", "surveillance automatisée des portails consulaires et capture d'un créneau disponible."],
             ["E-Visa / Visa sans rendez-vous", "constitution, vérification et soumission du dossier sur le portail officiel compétent."],
-            ["Dossier Uniquement", "remplissage des formulaires et vérification des pièces justificatives, sans soumission ni prise de rendez-vous."],
+            ["Accompagnement Partiel", "vous fournissez vos documents ou la majorité ; Joventy complète les pièces manquantes, constitue votre profil et capture votre créneau. Prime de succès due uniquement à l'obtention de votre visa."],
           ].map(([label, desc]) => (
             <li key={label} className="pl-3 text-sm"><strong>{label} :</strong> {desc}</li>
           ))}
@@ -57,8 +57,7 @@ const CONTRACT_SECTIONS = [
           ))}
         </ul>
         <p className="mt-3 text-sm">
-          Pour le package <strong>Dossier Uniquement</strong>, un tarif fixe est appliqué. Les paiements
-          s'effectuent via Mobile Money (M-Pesa, Airtel Money, Orange Money).
+          Les paiements s'effectuent via Mobile Money (M-Pesa, Airtel Money, Orange Money).
         </p>
       </>
     ),
