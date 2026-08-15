@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, ArrowRight, CheckCircle2, Plane, MapPin, CreditCard, FileText, Package, Star, Calendar, ClipboardList } from "lucide-react";
 
 const schema = z.object({
@@ -470,10 +470,28 @@ export default function NewApplication() {
                             <SelectValue placeholder="Sélectionnez le type de visa..." />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          {(VISA_PRICING[selectedDest]?.visaTypes as readonly string[] ?? []).map((type) => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
-                          ))}
+                        <SelectContent className="max-h-72 overflow-y-auto">
+                          {selectedDest === "germany" ? (
+                            <>
+                              <SelectGroup>
+                                <SelectLabel className="text-xs font-bold text-primary px-2 py-1.5">🇩🇪 Visa National (long séjour)</SelectLabel>
+                                {(VISA_PRICING.germany.visaTypes as readonly string[]).filter((t) => t.startsWith("Visa National")).map((type) => (
+                                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                              <SelectSeparator />
+                              <SelectGroup>
+                                <SelectLabel className="text-xs font-bold text-amber-700 px-2 py-1.5">🌍 Visa Schengen — Non-Congolais résidant en RDC uniquement</SelectLabel>
+                                {(VISA_PRICING.germany.visaTypes as readonly string[]).filter((t) => t.startsWith("Visa Schengen")).map((type) => (
+                                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </>
+                          ) : (
+                            (VISA_PRICING[selectedDest]?.visaTypes as readonly string[] ?? []).map((type) => (
+                              <SelectItem key={type} value={type}>{type}</SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />

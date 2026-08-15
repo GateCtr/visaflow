@@ -15,7 +15,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, ArrowRight, MapPin, Plane, CreditCard, Upload, CheckCircle2,
   Clock, ExternalLink, Info, FileText, Camera, Ticket, Hotel,
@@ -437,11 +437,29 @@ export default function NewCreneauApplication() {
               <label className="block text-sm font-semibold text-primary mb-1.5">Type de visa <span className="text-red-500">*</span></label>
               <Select value={visaType} onValueChange={(v) => { setVisaType(v); }}>
                 <SelectTrigger className="h-11"><SelectValue placeholder="Sélectionnez le type de visa" /></SelectTrigger>
-                <SelectContent>
-                  {selectedDest.visaTypes.map((vt) => (
-                    <SelectItem key={vt} value={vt}>{vt}</SelectItem>
-                  ))}
-                </SelectContent>
+                                <SelectContent className="max-h-72 overflow-y-auto">
+                   {selectedDest.id === "germany" ? (
+                     <>
+                       <SelectGroup>
+                         <SelectLabel className="text-xs font-bold text-primary px-2 py-1.5">🇩🇪 Visa National (long séjour)</SelectLabel>
+                         {selectedDest.visaTypes.filter((vt) => vt.startsWith("Visa National")).map((vt) => (
+                           <SelectItem key={vt} value={vt}>{vt}</SelectItem>
+                         ))}
+                       </SelectGroup>
+                       <SelectSeparator />
+                       <SelectGroup>
+                         <SelectLabel className="text-xs font-bold text-amber-700 px-2 py-1.5">🌍 Visa Schengen — Non-Congolais résidant en RDC uniquement</SelectLabel>
+                         {selectedDest.visaTypes.filter((vt) => vt.startsWith("Visa Schengen")).map((vt) => (
+                           <SelectItem key={vt} value={vt}>{vt}</SelectItem>
+                         ))}
+                       </SelectGroup>
+                     </>
+                   ) : (
+                     selectedDest.visaTypes.map((vt) => (
+                       <SelectItem key={vt} value={vt}>{vt}</SelectItem>
+                     ))
+                   )}
+                 </SelectContent>
               </Select>
             </div>
 
