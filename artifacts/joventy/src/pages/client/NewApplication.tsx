@@ -470,7 +470,7 @@ export default function NewApplication() {
                             <SelectValue placeholder="Sélectionnez le type de visa..." />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="max-h-60 overflow-y-auto">
                           {(VISA_PRICING[selectedDest]?.visaTypes as readonly string[] ?? []).map((type) => (
                             <SelectItem key={type} value={type}>{type}</SelectItem>
                           ))}

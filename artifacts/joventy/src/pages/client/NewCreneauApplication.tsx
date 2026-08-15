@@ -476,7 +476,7 @@ export default function NewCreneauApplication() {
                   <label className="block text-sm font-semibold text-primary mb-1.5">Catégorie d'âge</label>
                   <Select value={cevAgeCategory} onValueChange={(v) => setCevAgeCategory(v as typeof cevAgeCategory)}>
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       <SelectItem value="adult">Adulte (12 ans et plus)</SelectItem>
                       <SelectItem value="child_6_12">Enfant (6 à 12 ans)</SelectItem>
                       <SelectItem value="child_under_6">Enfant (moins de 6 ans)</SelectItem>
