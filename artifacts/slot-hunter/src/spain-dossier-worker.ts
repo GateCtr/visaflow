@@ -28,8 +28,7 @@ import {
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import {
-  executeHttpBooking,
-  type SpainBookingConfig,
+  callBookititEndpoint,
   type SpainBookingResult,
 } from "./spain-http-booking.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
@@ -314,12 +313,83 @@ export async function runDossierWorker(
               `${tag} Cycle ${cycleCount}: ✅ Créneau ${slot.date} ${slot.time} (freeSlots=${slot.freeslots}) — booking en cours…`,
             );
 
-            const bookResult = await executeHttpBooking(
-              session,
-              config.portalUrl,
-              scan.mainHtml ?? "",
-              buildBookingConfig(config, scan, slot),
-            );
+            // ── Booking inline — même session, même PHPSESSID que le scan ────────────
+            // Source de vérité : test-bookitit-dynamic.ts section 5.
+            // getsigninfields/ amorce le nonce PHP → signin/ le consomme → summary/ confirme.
+            // PAS de nouvelle session isolée : le nonce est lié au PHPSESSID du scan.
+            const bookT0 = Date.now();
+            const widgetUrl = session.bookititState!.widgetUrl;
+            const baseBookParams: Record<string, string | string[]> = {
+              type:    "default",
+              publickey: session.bookititState!.publickey,
+              lang:    "es",
+              version: session.bookititState!.version,
+              src:     widgetUrl,
+              srvsrc:  session.bookititState!.srvsrc,
+              "services[]": scan.serviceId!,
+              ...(slot.agendaId ? { "agendas[]": slot.agendaId } : {}),
+              date:    slot.date,
+              time:    slot.time,
+              selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+            };
+
+            // getsigninfields/ — amorce le nonce PHP (sans ça, signin/ → 0B, confirmé 2026-08-12)
+            log("INFO", `${tag} 🔑 getsigninfields/…`);
+            const gsfPayload = await callBookititEndpoint(session, "getsigninfields/", baseBookParams, widgetUrl);
+            if (!gsfPayload) log("WARN", `${tag} getsigninfields/ → 0B (signin/ risque 0B)`);
+
+            // signin/ — logintype=document confirmé par capture 2026-07-28
+            log("INFO", `${tag} 🔑 signin/…`);
+            const signinPayload = await callBookititEndpoint(session, "signin/", {
+              ...baseBookParams,
+              logintype: "document",
+              login:     config.login,
+              password:  config.password,
+              comments:  "",
+            }, widgetUrl) as Record<string, unknown> | null;
+
+            const signinInner = (signinPayload as any)?.Client ?? signinPayload;
+            const bktToken    = String(signinInner?.bktToken ?? (signinPayload as any)?.bktToken ?? "");
+            const signinErrors: Array<{ message?: string }> = Array.isArray(signinInner?.errors) ? signinInner.errors : [];
+
+            let bookResult: SpainBookingResult;
+
+            if (!bktToken) {
+              const errMsg = signinErrors.length
+                ? signinErrors.map((e) => e.message).join(", ")
+                : (signinPayload ? "signin/ sans bktToken" : "signin/ → 0B");
+              log("WARN", `${tag} ❌ signin/ échoué: ${errMsg}`);
+              bookResult = { status: "signin_failed", errorMessage: errMsg, durationMs: Date.now() - bookT0 };
+            } else {
+              // summary/ — confirmation finale
+              log("INFO", `${tag} 📝 summary/ (bktToken: ${bktToken.slice(0, 15)}…)…`);
+              const summaryPayload = await callBookititEndpoint(session, "summary/", {
+                ...baseBookParams,
+                bktToken,
+                login:     config.login,
+                logintype: "document",
+              }, widgetUrl) as any;
+
+              // Extraire locator — même logique que executeHttpBooking ligne 1607-1617
+              const s0 = Array.isArray(summaryPayload) ? summaryPayload[0] : summaryPayload;
+              const locator: string =
+                s0?.Event?.locator ?? s0?.Appointment?.locator ??
+                summaryPayload?.Event?.locator ?? summaryPayload?.Appointment?.locator ?? "";
+
+              if (locator) {
+                bookResult = {
+                  status:           "booked",
+                  locator,
+                  bookedDate:       slot.date,
+                  bookedTime:       slot.time,
+                  bookedServiceName: scan.serviceName,
+                  durationMs:       Date.now() - bookT0,
+                };
+              } else {
+                const summaryErr = JSON.stringify(summaryPayload?.Exception?.errors ?? summaryPayload?.errors ?? summaryPayload).slice(0, 200);
+                bookResult = { status: "booking_failed", errorMessage: `summary/ sans locator: ${summaryErr}`, durationMs: Date.now() - bookT0 };
+              }
+            }
 
             log(
               "INFO",
@@ -335,10 +405,8 @@ export async function runDossierWorker(
             }
 
             // Booking échoué → libérer le claim de créneau de CE dossier immédiatement.
-            // Atomic Lua : retire seulement la réservation de config.id (pas les autres dossiers)
             releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
 
-            // Heartbeat d'erreur
             sendHeartbeat({
               applicationId: config.applicationId,
               result: "error",
@@ -1083,25 +1151,6 @@ async function reportBookingSuccess(
   }
 }
 
-function buildBookingConfig(
-  config: SpainDossierConfig,
-  scan: WorkerScanResult,
-  slot: WorkerSlot,
-): SpainBookingConfig {
-  return {
-    login: config.login,
-    password: config.password,
-    applicationId: config.applicationId,
-    otpChannel: config.otpChannel,
-    applicantName: config.applicantName,
-    visaType: config.visaType,
-    targetServiceId: scan.serviceId,
-    targetDate: slot.date,
-    targetTime: slot.time,
-    agendaId: slot.agendaId,
-    groupSize: config.groupSize,
-  };
-}
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────────
 
