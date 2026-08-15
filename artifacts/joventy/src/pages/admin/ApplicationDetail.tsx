@@ -1100,16 +1100,14 @@ export default function AdminApplicationDetail() {
                           : hasSuccessProof
                             ? <Clock className="w-4 h-4 text-amber-500" />
                             : <Star className="w-4 h-4 text-slate-400" />}
-                      Prime de succès — {isDossierOnly ? "Non applicable" : `${app.priceDetails?.successFee ?? 0} USD`}
+                      Prime de succès — {`${app.priceDetails?.successFee ?? 0} USD`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {isDossierOnly
-                        ? "Package Formulaires & Vérification — tarif fixe, pas de prime de succès"
-                        : isSuccessFeePaid
-                          ? "Validée ✓"
-                          : hasSuccessProof
-                            ? "Reçu soumis — en attente de validation"
-                            : "En attente du créneau"}
+                      {isSuccessFeePaid
+                        ? "Validée ✓"
+                        : hasSuccessProof
+                          ? "Reçu soumis — en attente de validation"
+                          : "En attente de l'obtention du visa"}
                     </p>
                   </div>
                 </div>
