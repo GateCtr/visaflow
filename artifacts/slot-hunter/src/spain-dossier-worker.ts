@@ -136,7 +136,7 @@ export async function runDossierWorker(
   log("INFO", `${tag} ▶ Démarrage worker autonome — portalUrl: ${config.portalUrl.slice(-40)}`);
 
   // ── 1. Réserver une IP Decodo dédiée ────────────────────────────────────────
-  const proxyUrl = await pickDedicatedProxy(config.id, tag);
+  let proxyUrl = await pickDedicatedProxy(config.id, tag);
   if (proxyUrl === null) {
     const msg = "Aucune IP Decodo disponible — toutes réservées";
     log("WARN", `${tag} ❌ ${msg}`);
@@ -322,15 +322,21 @@ export async function runDossierWorker(
       } else if (scan.status === "error") {
         log("WARN", `${tag} Cycle ${cycleCount}: ${scan.errorMessage}`);
 
-        // Si l'IP semble bloquée et qu'il reste du temps, on abandonne ce worker
-        // et laisse l'orchestrateur en spawner un nouveau avec une autre IP.
+        // 0B = IP bloquée par Bookitit → rotation IP (comme l'ancien système).
+        // On ne sort pas du worker : on change d'IP et on continue le scan.
         if (
           scan.errorMessage?.includes("0B") &&
-          Date.now() + 5 * 60_000 < windowEnd
+          Date.now() + 3 * 60_000 < windowEnd  // au moins 3 min restantes pour valoir la peine
         ) {
-          log("WARN", `${tag} IP probablement bloquée — worker exit (l'orchestrateur respawnera)`);
-          workerResult = { dossierId: config.id, status: "error", errorMessage: scan.errorMessage };
-          return workerResult;
+          const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag);
+          if (newProxy === null) {
+            // Pool épuisé ou solve échoué — plus d'IP disponible, on sort
+            workerResult = { dossierId: config.id, status: "error", errorMessage: "Pool Decodo épuisé après rotation" };
+            proxyUrl = ""; // éviter double-release dans finally (déjà libérée dans rotateWorkerIp)
+            return workerResult;
+          }
+          proxyUrl = newProxy; // finally libérera la nouvelle IP
+          cycleCount = 0;     // reset compteur pour repartir proprement
         }
       }
 
@@ -426,6 +432,88 @@ async function captureChallengePage(
     log("WARN", `${tag} Probe portail error: ${e} — solve CF sans HTML (risque 403)`);
     return { challengeHtml: "", ua: IMPIT_CHROME_UA };
   }
+}
+
+// ─── Rotation IP mid-session ──────────────────────────────────────────────────
+
+/**
+ * Rotation IP quand /main/ retourne 0B (IP bloquée par Bookitit).
+ *
+ * IDENTIQUE à l'ancien système (spain-watcher-loop.ts + rotateSpainCfIpAfterMainFailure),
+ * mais encapsulé dans le worker dossier plutôt que dans l'état global :
+ *   1. Libère l'IP courante (owner-checked Redis)
+ *   2. Sélectionne la prochaine IP disponible
+ *   3. Crée un nouvel impit avec cette IP
+ *   4. Probe portail → capture HTML challenge CF (lie cf_clearance à la TLS du nouvel impit)
+ *   5. Solve CF (CapSolver) avec le HTML → nouveau cf_clearance
+ *   6. Met à jour session en place (ne crée pas de nouveau SpainCfSession)
+ *   7. Ré-initialise le PHPSESSID avec le nouvel impit
+ *
+ * @returns nouvelle proxyUrl (string) si succès, null si plus d'IP disponible ou solve échoué
+ */
+async function rotateWorkerIp(
+  session: SpainCfSession,
+  currentProxyUrl: string,
+  config: SpainDossierConfig,
+  capsolverKey: string,
+  tag: string,
+): Promise<string | null> {
+  log("WARN", `${tag} 🔄 Rotation IP (0B détecté) — libération ${maskProxy(currentProxyUrl)} …`);
+
+  // 1. Libérer l'IP courante
+  if (currentProxyUrl) {
+    await releaseWorkerIp(currentProxyUrl, config.id).catch(() => {});
+  }
+
+  // 2. Sélectionner la prochaine IP disponible
+  const newProxy = await pickDedicatedProxy(config.id, tag);
+  if (newProxy === null) {
+    log("WARN", `${tag} ❌ Rotation impossible — pool Decodo épuisé`);
+    return null;
+  }
+
+  log("INFO", `${tag} 🔄 Nouvelle IP : ${maskProxy(newProxy)} — probe CF …`);
+
+  // 3 + 4. Nouvel impit + probe portail
+  const newImpit = createImpitWithProxy(newProxy ?? "");
+  const { challengeHtml, ua } = await captureChallengePage(newImpit, config.portalUrl, tag);
+
+  // 5. Solve CF avec le HTML du nouvel impit
+  const solveResult = await solveSpainCloudflare(
+    config.portalUrl,
+    capsolverKey,
+    newProxy ?? "",
+    challengeHtml || undefined,
+    challengeHtml ? ua : undefined,
+  );
+
+  if (!solveResult.success || !solveResult.session) {
+    log("WARN", `${tag} ❌ Rotation CF solve échoué: ${solveResult.error} — libération ${maskProxy(newProxy)}`);
+    if (newProxy) await releaseWorkerIp(newProxy, config.id).catch(() => {});
+    return null;
+  }
+
+  // 6. Mise à jour session EN PLACE — préserve les états internes (bookititState, etc.)
+  const newSession = solveResult.session;
+  session.cfClearance   = newSession.cfClearance;
+  session.soaxProxyUrl  = newProxy ?? "";
+  session._ownImpit     = newImpit; // même impit que le probe → TLS cohérent
+  // Fusionner les cookies CF dans la session courante
+  for (const c of newSession.allCookies) {
+    const idx = session.allCookies.findIndex((x) => x.name === c.name);
+    if (idx >= 0) session.allCookies[idx] = c;
+    else session.allCookies.push(c);
+  }
+
+  log("INFO", `${tag} ✅ Rotation CF réussie (${solveResult.durationMs}ms) — ré-init PHPSESSID …`);
+
+  // 7. Ré-initialiser le PHPSESSID avec le nouvel impit (session PHP liée à l'IP)
+  const phpOk = await initPortalSession(session, config.portalUrl, tag);
+  if (!phpOk) {
+    log("WARN", `${tag} ⚠️ PHPSESSID absent après rotation — scan peut échouer`);
+  }
+
+  return newProxy;
 }
 
 // ─── IP Decodo dédiée ─────────────────────────────────────────────────────────
