@@ -146,7 +146,7 @@ async function main() {
   };
 
   // getsigninfields/ — amorce le nonce PHP
-  L("STEP", `getsigninfields/ — service=${result.serviceId} date=${firstSlot.date} ${firstSlot.time}…`);
+  L("STEP", `getsigninfields/ — service=${result!.serviceId} date=${firstSlot.date} ${firstSlot.time}…`);
   const gsfPayload = await callBookititEndpoint(session, "getsigninfields/", baseParams, widgetUrl);
   if (gsfPayload) {
     L("OK", `getsigninfields/ → réponse non-nulle ✅ (nonce PHP amorcé)`);

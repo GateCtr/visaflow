@@ -436,6 +436,9 @@ export async function runDossierWorker(
     const cycleStart = Date.now();
 
     try {
+      // phpState est toujours non-null ici : le seul chemin qui le ré-assigne
+      // (rotation IP) renvoie/break immédiatement si l'init échoue.
+      if (!phpState) break;
       const scan = await scanDatetimeDirect(session, phpState, config, tag);
 
       // ── Session morte (datetime/ 0B) → rotation IP + réinit PHP ────────────

@@ -279,7 +279,7 @@ function LogDataBlock({ data, isExpanded }: { data: string; isExpanded: boolean 
 
 // ─── Bot Logs Tab ─────────────────────────────────────────────────────────────
 
-type FlowTab = "usa" | "cev" | "germany" | "all";
+type FlowTab = "usa" | "cev" | "germany" | "spain" | "all";
 
 function BotLogsTab() {
   const [flowTab, setFlowTab]           = useState<FlowTab>("usa");
@@ -422,6 +422,7 @@ function BotLogsTab() {
               { id: "usa" as FlowTab, label: "🇺🇸 USA", count: usaCount },
               { id: "cev" as FlowTab, label: "🇪🇺 CEV", count: cevCount },
               { id: "germany" as FlowTab, label: "🇩🇪 Germany", count: germanyCount },
+              { id: "spain" as FlowTab, label: "🇪🇸 Espagne", count: null },
               { id: "all" as FlowTab, label: "Tous", count: paginatedLogs.length },
             ]).map(tab => (
               <button
@@ -434,17 +435,19 @@ function BotLogsTab() {
                 }`}
               >
                 {tab.label}
+                {tab.count !== null && (
                 <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
                   flowTab === tab.id ? "bg-slate-100 text-slate-600" : "bg-slate-200/50 text-slate-400"
                 }`}>{tab.count}</span>
+              )}
               </button>
             ))}
           </div>
 
           <span className="flex-1" />
 
-          {/* Delete selector */}
-          <div className="flex items-center gap-1.5">
+          {/* Delete selector — masqué quand l'onglet Espagne est actif */}
+          {flowTab !== "spain" && <div className="flex items-center gap-1.5">
             <select
               value={clearTarget}
               onChange={(e) => setClearTarget(e.target.value as typeof clearTarget)}
@@ -490,10 +493,11 @@ function BotLogsTab() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
+          </div>}
         </div>
 
-        {/* Step + status filters */}
+        {/* Step + status filters — masqué quand l'onglet Espagne est actif */}
+        {flowTab !== "spain" && (
         <div className="flex flex-wrap gap-2 items-center">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -539,10 +543,14 @@ function BotLogsTab() {
             {paginationStatus === "LoadingFirstPage" ? "..." : `${filtered.length} log${filtered.length !== 1 ? "s" : ""}${canLoadMore ? "+" : ""}`}
           </span>
         </div>
+        )}
       </div>
 
-      {/* Logs list */}
-      <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+      {/* Espagne — rendu inline quand l'onglet Espagne est actif */}
+      {flowTab === "spain" && <SpainWatcherTab />}
+
+      {/* Logs list — masqué quand l'onglet Espagne est actif */}
+      {flowTab !== "spain" && <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
         {paginationStatus === "LoadingFirstPage" ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -706,7 +714,7 @@ function BotLogsTab() {
             )}
           </>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -1336,8 +1344,16 @@ function RushPrepStatus({ watcher, command }: {
 function SpainWatcherTab() {
   const [scanPage, setScanPage] = useState(0);
   const [scanFilter, setScanFilter] = useState<"" | "found" | "not_found" | "error">("");
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string>("");
 
-  const data = useQuery(api.spainWatcher.getWatcherPaginated, { page: scanPage, pageSize: 20, statusFilter: scanFilter || undefined });
+  const dossierList = useQuery(api.spainWatcher.getDossierList, {});
+
+  const data = useQuery(api.spainWatcher.getWatcherPaginated, {
+    page: scanPage,
+    pageSize: 20,
+    statusFilter: scanFilter || undefined,
+    applicationId: selectedApplicationId || undefined,
+  });
   const setWatcher = useMutation(api.spainWatcher.setWatcher);
   const clearSpainScans = useMutation(api.spainWatcher.clearScans);
   const requestRushPrep = useMutation(api.spainWatcher.requestRushPrep);
@@ -1555,12 +1571,29 @@ function SpainWatcherTab() {
 
       {/* Scan history */}
       <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
             <Flag className="w-4 h-4 text-red-500" />
             Historique scans
             {stats.total > 0 && <span className="ml-1 text-[10px] text-muted-foreground bg-slate-100 px-1.5 py-0.5 rounded-full">{stats.total}</span>}
           </h3>
+
+          {/* Dossier selector — filtrage par applicationId */}
+          {dossierList && dossierList.length > 0 && (
+            <select
+              value={selectedApplicationId}
+              onChange={e => { setSelectedApplicationId(e.target.value); setScanPage(0); }}
+              className="text-[11px] h-7 rounded-md border border-slate-200 px-2 bg-white text-slate-700 max-w-[200px] truncate"
+            >
+              <option value="">Tous les dossiers</option>
+              {dossierList.map(d => (
+                <option key={d.applicationId} value={d.applicationId}>
+                  {d.dossierName}
+                </option>
+              ))}
+            </select>
+          )}
+
           <span className="flex-1" />
           {stats.total > 0 && (
             <AlertDialog>
@@ -1838,18 +1871,12 @@ function SpainWatcherTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type Tab = "logs" | "watcher";
-
 export default function AdminBotLogs() {
-  const [activeTab, setActiveTab] = useState<Tab>("logs");
-
   useEffect(() => {
     const ts = String(Date.now());
     localStorage.setItem("botLogsLastSeen", ts);
     window.dispatchEvent(new StorageEvent("storage", { key: "botLogsLastSeen", newValue: ts }));
   }, []);
-
-  const logsCount = useQuery(api.botLogs.listRecent, { limit: 1 });
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -1862,27 +1889,10 @@ export default function AdminBotLogs() {
           <h1 className="text-xl font-bold text-primary">Bot & Veilleurs</h1>
           <p className="text-sm text-muted-foreground">Logs du slot-hunter et surveillance automatique</p>
         </div>
-        {logsCount === undefined && <RefreshCw className="w-4 h-4 text-purple-400 animate-spin ml-auto" />}
       </div>
 
-      {/* Tab switcher */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
-        <button onClick={() => setActiveTab("logs")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            activeTab === "logs" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
-          }`}>
-          <Terminal className="w-4 h-4" /> Logs Bot
-        </button>
-        <button onClick={() => setActiveTab("watcher")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            activeTab === "watcher" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
-          }`}>
-          <span className="text-base leading-none">{"\u{1F1EA}\u{1F1F8}"}</span> Espagne
-        </button>
-      </div>
-
-      {activeTab === "logs"    && <BotLogsTab />}
-      {activeTab === "watcher" && <SpainWatcherTab />}
+      {/* Tous les flux dans un seul tab bar : USA / CEV / Germany / 🇪🇸 Espagne / Tous */}
+      <BotLogsTab />
     </div>
   );
 }
