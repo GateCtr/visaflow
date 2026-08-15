@@ -30,7 +30,8 @@ interface HistoryTurn {
 
 function renderInline(text: string): React.ReactNode {
   if (!text) return null;
-  const re = /\*\*([^*\n]+)\*\*|\*([^*\n]+)\*/g;
+  // Matches: **bold**, *italic*, [label](url)
+  const re = /\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|\[([^\]\n]+)\]\((https?:\/\/[^)\n]+)\)/g;
   const parts: React.ReactNode[] = [];
   let last = 0;
   let k = 0;
@@ -41,6 +42,8 @@ function renderInline(text: string): React.ReactNode {
       parts.push(<strong key={k++} className="font-semibold">{m[1]}</strong>);
     else if (m[2] !== undefined)
       parts.push(<em key={k++}>{m[2]}</em>);
+    else if (m[3] !== undefined && m[4] !== undefined)
+      parts.push(<a key={k++} href={m[4]} target="_blank" rel="noopener noreferrer" className="underline text-indigo-600 hover:text-indigo-800 break-all">{m[3]}</a>);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
