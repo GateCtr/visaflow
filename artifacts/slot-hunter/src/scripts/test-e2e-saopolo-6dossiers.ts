@@ -54,8 +54,6 @@ import "dotenv/config";
 import {
   ensureSpainCfSession,
   getActiveSpainCfSession,
-  spainCfFetch,
-  makeBookititUrl,
   type SpainCfSession,
 } from "../spain-soax-solver.js";
 import {
@@ -147,45 +145,11 @@ function extractAgendaId(parsed: unknown): string {
   return walk(parsed);
 }
 
-// ─── Appel getagendas/ manuel ─────────────────────────────────────────────────
-// Appelé AVANT le probe (runSpainHttpProbe) pour capturer agendaId sur le
-// PHPSESSID courant. Le probe consommera getagendas/ sur le même PHPSESSID
-// (retour 0B) — mais on a déjà agendaId stocké.
-// → Mirrors exactement ce que fait le scan interne avant d'exposer _allSlots.agendaId.
-async function fetchAgendaIdManually(
-  session: SpainCfSession,
-  serviceId: string,
-): Promise<string> {
-  // makeBookititUrl exige session.bookititState (disponible en mode capsolver-residential)
-  if (!session.bookititState) {
-    warn("bookititState absent (mode non-capsolver ?) — agendaId non pré-récupérable");
-    return "";
-  }
-
-  const JSONP_HEADERS = {
-    Accept: "text/javascript, application/javascript, application/ecmascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "same-origin",
-    Referer: PORTAL_URL,
-  };
-
-  const url = makeBookititUrl(session, "getagendas/", { "services[]": serviceId });
-  const res = await spainCfFetch(url, session, { headers: JSONP_HEADERS });
-  if (!res) return "";
-  const raw = await res.text();
-  log(`  getagendas/ pré-probe → HTTP ${res.status} | ${raw.length}B`);
-  if (!raw.trim()) return "";
-  const parsed = parseJsonp(raw);
-  const agendaId = extractAgendaId(parsed);
-  if (agendaId) {
-    ok(`  agendaId capturé avant probe : ${agendaId}`);
-  } else {
-    warn(`  getagendas/ réponse non nulle mais agendaId non extrait — raw: ${raw.slice(0, 200)}`);
-  }
-  return agendaId;
-}
+// flag: tester avec un appel datetime/ explicite avant getsigninfields/ dans le booking
+// Usage: TEST_WITH_DATETIME=1 node_modules/.bin/tsx ...
+// Permet de comparer les deux variantes (avec vs sans) pour identifier laquelle
+// respecte l'état PHP Bookitit.
+const TEST_WITH_DATETIME = process.env.TEST_WITH_DATETIME === "1";
 
 // ─── Round-robin simplifié (miroir de assignSlotsRoundRobin du watcher) ───────
 function assignSlotsSimple(
@@ -258,13 +222,13 @@ async function main(): Promise<void> {
   const phpSessId = initialSession.allCookies.find(c => c.name === "PHPSESSID")?.value ?? "";
   ok(`Session établie — PHPSESSID: ${phpSessId.slice(0, 12)}… | source: ${initialSession.source}`);
 
-  // ── 3. getagendas/ pré-probe — capture agendaId avant que le probe le consomme ─
-  sep("3 — getagendas/ pré-probe (capture agendaId avant consommation par le scan)");
-  log("IMPORTANT: getagendas/ n'est consommable qu'UNE fois par PHPSESSID en mode capsolver.");
-  log("On le capture maintenant ; le probe (étape 4) aura 0B — mais on garde l'agendaId.");
-  let agendaIdFromPreFetch = await fetchAgendaIdManually(initialSession, TARGET_SERVICE_ID);
+  log(`Mode datetime/ pré-getsigninfields : ${TEST_WITH_DATETIME ? "ACTIVÉ (TEST_WITH_DATETIME=1)" : "désactivé (comportement prod)"}`);
 
-  // ── 4. Probe réel (runSpainHttpProbe — identique au watcher) ─────────────
+  // ── 3→4. Probe réel (runSpainHttpProbe — identique au watcher) ───────────
+  // NOTE : getagendas/ pré-probe supprimé — il était appelé sans getservices/ avant,
+  // ce qui corrompait l'état PHP. L'agendaId est extrait depuis _allSlots[0].agendaId
+  // (le probe appelle getwidgetconfigurations → getservices → getagendas → datetime
+  //  dans le bon ordre). Le dynamic test confirme : l'agendaId vient de datetime/.agenda.
   sep("4 — runSpainHttpProbe() — scan réel (miroir exact du watcher)");
   const probeResult = await runSpainHttpProbe(PORTAL_URL);
   log(`Probe status : ${probeResult.status}`);
@@ -278,16 +242,13 @@ async function main(): Promise<void> {
   log(`  _services : ${services.length} service(s) — ${services.map(s => `"${s.serviceName}" (${s.serviceId})`).join(", ") || "aucun"}`);
   log(`  _mainHtml : ${mainHtml.length}B`);
 
-  // agendaId final : depuis _allSlots (probe l'a trouvé) OU depuis le pré-fetch
-  // (même logique que le watcher : _allSlots.agendaId → config.agendaId)
-  const agendaIdFromProbe = allSlots[0]?.agendaId ?? "";
-  const agendaId = agendaIdFromProbe || agendaIdFromPreFetch;
-  log(`  agendaId  : ${agendaId || "(non disponible — booking sans agendas[])"}`);
+  // agendaId depuis _allSlots du probe uniquement (champ .agenda dans réponse datetime/)
+  const agendaId = allSlots[0]?.agendaId ?? "";
+  log(`  agendaId  : ${agendaId || "(non disponible — portail sans agendas ou aucun créneau)"}`);
 
   if (!agendaId) {
     warn("agendaId absent — ce test ne peut pas vérifier la chaîne getsigninfields/signin/");
-    warn("→ Cela peut arriver si le portail ne répond pas à getagendas/ (maintenance, IP bloquée…)");
-    warn("→ Résultat: no_slots attendu (datetime/ sans agendas[] retourne souvent 0 slot)");
+    warn("→ Portail any_agenda=0 (Kinshasa) ou aucun créneau disponible");
   }
 
   // ── 5. Session active après probe ────────────────────────────────────────
@@ -296,8 +257,7 @@ async function main(): Promise<void> {
   const phpSessId2 = cfSession.allCookies.find(c => c.name === "PHPSESSID")?.value ?? "";
   ok(`Session active — PHPSESSID: ${phpSessId2.slice(0, 12)}… | source: ${cfSession.source}`);
   if (phpSessId !== phpSessId2) {
-    warn("PHPSESSID a changé entre init et probe → le probe a renouvelé la session CF");
-    warn("→ agendaId pré-fetché était sur l'ancienne session — peut ne plus être valide");
+    warn("PHPSESSID a changé pendant le probe → le probe a renouvelé la session CF (normal si CF expirée)");
   }
 
   // ── 6. Assignation des créneaux (round-robin, identique au watcher) ───────

@@ -28,6 +28,8 @@ import {
   spainCfFetch,
   cloneSpainCfSessionForDossier,
   createFreshSpainImpit,
+  getSpainImpit,
+  makeBookititUrl,
   type SpainCfSession,
 } from "./spain-soax-solver.js";
 import {
@@ -241,7 +243,7 @@ function buildJQueryCallback(): string {
   return `jQuery${rnd}_${Date.now()}`;
 }
 
-async function callBookititEndpoint(
+export async function callBookititEndpoint(
   session: SpainCfSession,
   endpoint: string,
   params: Record<string, string | string[]>,
@@ -272,12 +274,41 @@ async function callBookititEndpoint(
       await new Promise((r) => setTimeout(r, waitMs));
     }
 
-    // Regénérer callback + _ à chaque tentative pour éviter la mise en cache
-    const q = buildBookititQueryString({
-      ...params,
-      callback: buildJQueryCallback(),
-      _: String(Date.now()),
-    });
+    // Ordre strict des paramètres Bookitit (documenté dynamic test ligne 114) :
+    //   callback → type → publickey → lang → services[] → agendas[] → version → src → srvsrc → [autres] → _
+    // Bookitit peut être strict sur l'ordre ; un mauvais ordre → 0B (confirmé Cuba bkt897578).
+    // Réutiliser le jqCallback du CF solve (lié au PHPSESSID) — en générer un nouveau → 0B.
+    const state = session.bookititState;
+    const jqCb = state?.jqCallback ?? buildJQueryCallback();
+    const orderedPairs: Array<[string, string]> = [
+      ["callback", jqCb],
+      ["type",      String(params["type"]      ?? "default")],
+      ["publickey", String(params["publickey"] ?? "")],
+      ["lang",      String(params["lang"]      ?? "es")],
+    ];
+    // services[] et agendas[] AVANT version/src/srvsrc
+    const svcs = params["services[]"];
+    if (svcs) {
+      for (const s of (Array.isArray(svcs) ? svcs : [svcs])) orderedPairs.push(["services[]", s]);
+    }
+    const ags = params["agendas[]"];
+    if (ags) {
+      for (const a of (Array.isArray(ags) ? ags : [ags])) orderedPairs.push(["agendas[]", a]);
+    }
+    orderedPairs.push(
+      ["version", String(params["version"] ?? state?.version ?? "4")],
+      ["src",     String(params["src"]     ?? state?.widgetUrl ?? "")],
+      ["srvsrc",  String(params["srvsrc"]  ?? state?.srvsrc   ?? "https://www.citaconsular.es")],
+    );
+    // Params restants (date, time, start, end, selectedPeople, logintype, login, password…)
+    const knownKeys = new Set(["callback","type","publickey","lang","services[]","agendas[]","version","src","srvsrc"]);
+    for (const [k, v] of Object.entries(params)) {
+      if (knownKeys.has(k)) continue;
+      if (Array.isArray(v)) { for (const item of v) orderedPairs.push([k, item]); }
+      else orderedPairs.push([k, String(v)]);
+    }
+    orderedPairs.push(["_", String(Date.now())]);
+    const q = orderedPairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
     const url = `${baseUrl}${endpoint}?${q}`;
 
     const res = await spainCfFetch(url, session, { headers });
@@ -328,8 +359,8 @@ async function callBookititEndpointBrowser(
   const baseUrl = "https://www.citaconsular.es/onlinebookings/";
   const q = buildBookititQueryString({
     ...params,
-    // Utiliser le format jQuery JSONP — le serveur Bookitit valide que callback commence par "jQuery"
-    callback: buildJQueryCallback(),
+    // Réutiliser le jqCallback du CF solve — même règle que callBookititEndpoint.
+    callback: session.bookititState?.jqCallback ?? buildJQueryCallback(),
     _: String(Date.now()),
   });
   const url = `${baseUrl}${endpoint}?${q}`;
@@ -420,49 +451,207 @@ function buildBookingCookieHeader(session: SpainCfSession): string {
  * émettre un nouveau PHPSESSID, qui reste uniquement dans cette copie locale
  * pour datetime/signin/summary.
  */
+/**
+ * Rafraîchit le PHPSESSID de la session capsolver sans refaire de CF solve.
+ *
+ * Problème : le probe (scan) fait N appels datetime/ sur 6 mois → le PHPSESSID est
+ * "épuisé" côté PHP Bookitit → getsigninfields/ retourne 0B → signin_failed.
+ *
+ * Solution : GET widget (HTML) → POST token → Set-Cookie donne un nouveau PHPSESSID
+ * valide. On utilise le SINGLETON impit (même fingerprint TLS que le CF solve).
+ * Un impit frais aurait un fingerprint différent → CF rejette → 0B.
+ *
+ * Après cet appel, session.allCookies contient le nouveau PHPSESSID.
+ * Le booking doit ensuite faire getservices/ + datetime/ (1 appel) avant getsigninfields/.
+ *
+ * @param session  Session capsolver existante (cf_clearance + cookies)
+ * @param portalUrl  URL du portail Bookitit (contient la publickey)
+ */
+async function refreshPhpsessidForCapsolver(
+  session: SpainCfSession,
+  portalUrl: string,
+): Promise<boolean> {
+  const impit = getSpainImpit(session); // singleton — même TLS que le CF solve
+  const portalPublickey = (
+    session.portalKey
+    ?? portalUrl.match(/widgetdefault\/([^/?#]+)/)?.[1]
+    ?? portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$)/)?.[1]
+    ?? ""
+  );
+  if (!portalPublickey) {
+    console.warn("[spain-booking] ⚠️ refreshPhpsessid: publickey introuvable dans portalUrl");
+    return false;
+  }
+  const targetUrl = `https://www.citaconsular.es/es/hosteds/widgetdefault/${portalPublickey}/`;
+  const baseHost  = "https://www.citaconsular.es";
+  // Exclure PHPSESSID : on veut que le serveur crée une NOUVELLE session PHP.
+  // Envoyer l'ancien PHPSESSID ferait que le serveur réutilise la session épuisée
+  // et ne renverrait pas de Set-Cookie PHPSESSID dans la réponse POST token.
+  const cookieStr = session.allCookies
+    .filter(c => c.name !== "PHPSESSID")
+    .map(c => `${c.name}=${c.value}`)
+    .join("; ");
+
+  // Helper : extrait les Set-Cookie d'une réponse et met à jour session.allCookies.
+  // Retourne le nouveau PHPSESSID s'il est présent dans les headers.
+  const applySetCookies = (res: Response): string => {
+    const rawSC = (res.headers as unknown as { get: (k: string) => string | null }).get("set-cookie") ?? "";
+    const setCookies: string[] = res.headers.getSetCookie?.() ?? (rawSC ? [rawSC] : []);
+    let newPhpSessId = "";
+    for (const sc of setCookies) {
+      const [nameValue = ""] = sc.split(";", 1);
+      const sepIdx = nameValue.indexOf("=");
+      if (sepIdx <= 0) continue;
+      const name  = nameValue.slice(0, sepIdx).trim();
+      const value = nameValue.slice(sepIdx + 1).trim();
+      if (!name || !value) continue;
+      const existing = session.allCookies.findIndex(c => c.name === name);
+      if (existing >= 0) session.allCookies[existing] = { name, value };
+      else session.allCookies.push({ name, value });
+      if (name === "PHPSESSID") newPhpSessId = value;
+    }
+    return newPhpSessId;
+  };
+
+  // ── GET widget → CSRF token + PHPSESSID (dans Set-Cookie du GET) ──────────
+  // Le PHPSESSID est émis par le GET widget, pas le POST.
+  // Le POST token le met ensuite à jour / confirme.
+  let token: string | undefined;
+  try {
+    const rGet = await (impit.fetch(targetUrl, {
+      headers: {
+        "User-Agent":      session.userAgent,
+        "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+        "Cookie":          cookieStr, // sans PHPSESSID → serveur crée une NOUVELLE session
+      },
+    }) as unknown as Promise<Response>);
+    const body = await rGet.text();
+    const phpFromGet = applySetCookies(rGet);
+    if (phpFromGet) {
+      console.log(`[spain-booking] ✅ refreshPhpsessid: PHPSESSID GET widget: ${phpFromGet.slice(0, 12)}…`);
+    }
+    token = body.match(/name="token"\s+value="([^"]+)"/i)?.[1];
+    if (!token) {
+      console.warn(`[spain-booking] ⚠️ refreshPhpsessid: token absent (HTTP ${rGet.status}, ${body.length}B)`);
+      return false;
+    }
+  } catch (e) {
+    console.warn(`[spain-booking] ⚠️ refreshPhpsessid: GET widget échoué — ${e}`);
+    return false;
+  }
+
+  // ── POST token → confirmation PHPSESSID + srvsrc ──────────────────────────
+  // Utiliser le cookie mis à jour (avec nouveau PHPSESSID du GET) pour le POST.
+  const cookieStrWithNewPhp = session.allCookies
+    .filter(c => c.name !== "PHPSESSID") // exclure l'ancien si toujours présent
+    .map(c => `${c.name}=${c.value}`)
+    .join("; ");
+  // Réintégrer le nouveau PHPSESSID
+  const newPhpEntry = session.allCookies.find(c => c.name === "PHPSESSID");
+  const cookieStrPost = newPhpEntry
+    ? `${cookieStrWithNewPhp}; PHPSESSID=${newPhpEntry.value}`
+    : cookieStrWithNewPhp;
+
+  try {
+    const rPost = await (impit.fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "User-Agent":   session.userAgent,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept":       "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Cookie":       cookieStrPost,
+        "Referer":      targetUrl,
+        "Origin":       baseHost,
+      },
+      body: `token=${encodeURIComponent(token)}`,
+    }) as unknown as Promise<Response>);
+
+    const phpFromPost = applySetCookies(rPost);
+    if (phpFromPost) {
+      console.log(`[spain-booking] ✅ PHPSESSID rafraîchi (POST): ${phpFromPost.slice(0, 12)}…`);
+    }
+
+    const finalPhp = session.allCookies.find(c => c.name === "PHPSESSID");
+    if (!finalPhp) {
+      console.warn(`[spain-booking] ⚠️ refreshPhpsessid: PHPSESSID absent après GET+POST token`);
+      return false;
+    }
+
+    // ── GET /main/ JSONP → active le widget Bookitit sur le nouveau PHPSESSID ──
+    // Sans cet appel, tous les endpoints Bookitit (getservices/, datetime/,
+    // getsigninfields/) retournent 0B : le widget n'est pas initialisé côté PHP.
+    // On réutilise le jqCallback de la session (ou en génère un nouveau — le serveur
+    // ne le lie pas au PHPSESSID, c'est juste un wrapper JSONP).
+    const jqCallback = session.bookititState?.jqCallback
+      ?? `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1_000_000_000)}`;
+    const mainUrl = makeBookititUrl(session, "main/", {});
+    // Reconstruire l'URL /main/ avec le jqCallback courant (makeBookititUrl l'inclut)
+    try {
+      const rMain = await spainCfFetch(mainUrl, session, {
+        headers: {
+          "Accept": "text/javascript, application/javascript, */*; q=0.01",
+          "X-Requested-With": "XMLHttpRequest",
+          "Sec-Fetch-Dest": "empty",
+          "Sec-Fetch-Mode": "cors",
+          "Sec-Fetch-Site": "same-origin",
+        },
+      });
+      const mainBody = rMain ? await rMain.text() : "";
+      if (mainBody.length > 100) {
+        console.log(`[spain-booking] ✅ PHPSESSID frais: ${finalPhp.value.slice(0, 12)}… — /main/ activé (${mainBody.length}B) — widget Bookitit prêt`);
+        return true;
+      }
+      console.warn(`[spain-booking] ⚠️ refreshPhpsessid: /main/ sur PHPSESSID frais → ${mainBody.length}B (widget non activé)`);
+      // On considère ça comme un succès partiel — le PHPSESSID est là, /main/ peut
+      // échouer si le PHPSESSID est "froid" vis-à-vis du fingerprint CF. On laisse
+      // le booking tenter getservices/ et voir.
+      return true;
+    } catch (e) {
+      console.warn(`[spain-booking] ⚠️ refreshPhpsessid: /main/ échoué — ${e}`);
+      return true; // PHPSESSID présent, on tente quand même
+    }
+  } catch (e) {
+    console.warn(`[spain-booking] ⚠️ refreshPhpsessid: POST token échoué — ${e}`);
+    return false;
+  }
+}
+
 export async function createIsolatedBookingSession(
   cfSession: SpainCfSession,
   portalUrl: string,
 ): Promise<{ session: SpainCfSession; mainHtml?: string } | null> {
   // ── Mode HTTP-pur (capsolver/impit) ──────────────────────────────────────────
-  // En mode capsolver-residential, le PHPSESSID est lié au challenge CF complet
-  // (GET widget → POST token → /main/). Un appel /main/ nu sans ce flow ne crée
-  // pas de nouveau PHPSESSID — le serveur exige que le challenge ait été résolu.
-  // → On réutilise le PHPSESSID de la session principale (seul disponible).
-  // → Le booking parallèle n'est donc pas possible en capsolver sans re-solve CF.
-  // → Booking séquentiel conservé dans le watcher.
+  // Architecture capsolver : le probe (scan) épuise le PHPSESSID via N appels
+  // datetime/ sur 6 mois → getsigninfields/ retourne 0B → signin_failed.
+  //
+  // Fix : créer un PHPSESSID frais via GET widget → POST token (réutilise
+  // cf_clearance + singleton impit, pas de CF solve supplémentaire).
+  // Après refresh, executeHttpBooking fait getservices/ + datetime/ (1 appel)
+  // pour initialiser l'état PHP du nouveau PHPSESSID avant getsigninfields/.
+  //
+  // ⚠️ Ne PAS utiliser createFreshSpainImpit : cf_clearance est lié au
+  // fingerprint TLS du singleton utilisé pendant le CF solve. Un impit frais
+  // a un fingerprint différent → CF rejette les appels JSONP avec 0B.
   if (cfSession.source === "capsolver") {
-    const phpSessId = cfSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
-    if (phpSessId) {
-      // ─── Contrainte architecturale capsolver-residential ──────────────────────
-      // Le PHPSESSID est créé par le flow CF complet (GET widget → CapSolver solve
-      // → POST token → GET /main/). Il est impossible d'obtenir un nouveau PHPSESSID
-      // sans re-solve : /main/ sans PHPSESSID retourne 0B (testé, confirmé).
-      //
-      // Conséquence : tous les dossiers partagent le MÊME PHPSESSID.
-      //   → L'état PHP widget (services→agendas→datetime→getsigninfields→signin)
-      //     est partagé entre les dossiers.
-      //   → getsigninfields/ peut 0B pour les dossiers #2+ si l'état a avancé.
-      //   → Le booking séquentiel garde chaque dossier indépendant au niveau de
-      //     la session HTTP (pas de cross-contamination des requêtes), mais pas
-      //     au niveau de l'état PHP server-side.
-      //
-      // ⚠️ Ne PAS utiliser createFreshSpainImpit ici : cf_clearance est lié au
-      // fingerprint TLS du singleton impit utilisé pendant le solve CapSolver.
-      // Un impit frais a un fingerprint différent → CF rejette silencieusement
-      // les appels JSONP avec 0B. On laisse _ownImpit absent → spainCfFetch
-      // utilise getSpainImpit(session) = singleton (même TLS que le solve).
-      console.log("[spain-booking] ℹ️ Mode capsolver — PHPSESSID partagé (singleton impit, état PHP commun)");
-      return {
-        session: {
-          ...cfSession,
-          allCookies: cfSession.allCookies.map(c => ({ ...c })),
-          extraHeaders: { ...cfSession.extraHeaders },
-          // _ownImpit intentionnellement absent → singleton impit (cohérence TLS solve)
-        },
-      };
+    // Clone la session (copies indépendantes des cookies)
+    const cloned: SpainCfSession = {
+      ...cfSession,
+      allCookies:   cfSession.allCookies.map(c => ({ ...c })),
+      extraHeaders: { ...cfSession.extraHeaders },
+      // _ownImpit absent → singleton impit (cohérence TLS solve)
+    };
+    // Rafraîchir le PHPSESSID sur le clone (pas sur la session principale du probe)
+    const refreshed = await refreshPhpsessidForCapsolver(cloned, portalUrl);
+    if (!refreshed) {
+      console.warn("[spain-booking] ⚠️ Refresh PHPSESSID échoué — réutilisation du PHPSESSID probe (booking peut échouer)");
     }
-    console.warn("[spain-booking] ⚠️ Mode capsolver mais PHPSESSID absent — le booking peut échouer");
+    // Marquer que le PHPSESSID a été rafraîchi → executeHttpBooking doit faire
+    // getservices/ + datetime/ pour initialiser l'état PHP avant getsigninfields/.
+    if (refreshed) {
+      (cloned as SpainCfSession & { _phpSessRefreshed?: boolean })._phpSessRefreshed = true;
+    }
+    return { session: cloned };
   }
 
   const session = cloneSpainCfSessionForDossier(cfSession);
@@ -758,10 +947,25 @@ export async function executeHttpBooking(
   let agendaId = config.agendaId ?? "";
   let rawCfgPayload: unknown = null;
 
+  // Quand le PHPSESSID a été rafraîchi (createIsolatedBookingSession capsolver),
+  // le nouveau PHPSESSID est "froid" — aucun appel Bookitit n'a encore été fait.
+  // Il faut appeler getservices/ pour initialiser l'état PHP, puis datetime/ pour
+  // "activer" le nonce avant getsigninfields/.
+  const phpSessRefreshed = Boolean(
+    (bookingSession as SpainCfSession & { _phpSessRefreshed?: boolean })._phpSessRefreshed,
+  );
+
   if (agendaId) {
-    // agendaId déjà connu depuis le scan — skip getagendas/ (consommé une fois par PHPSESSID)
-    console.log(`[spain-booking] ✅ agendaId depuis config: ${agendaId} — getagendas/ ignoré (déjà consommé par le scan)`);
-    rawCfgPayload = await callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null);
+    // agendaId déjà connu depuis le scan.
+    // Si PHPSESSID rafraîchi → appel getservices/ obligatoire pour init état PHP.
+    // Sinon (PHPSESSID partagé probe) → skip getagendas/ seulement.
+    if (phpSessRefreshed) {
+      console.log(`[spain-booking] ✅ agendaId depuis config: ${agendaId} — PHPSESSID frais → getservices/ puis datetime/ avant getsigninfields/`);
+      rawCfgPayload = await callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null);
+    } else {
+      console.log(`[spain-booking] ✅ agendaId depuis config: ${agendaId} — getagendas/ ignoré (déjà consommé par le scan)`);
+      rawCfgPayload = await callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null);
+    }
   } else {
     // Premier booking ou mode sans agendaId pré-fourni → appels en parallèle
     console.log(`[spain-booking] 📋 Récupération agendas + config widget en parallèle…`);
@@ -791,22 +995,47 @@ export async function executeHttpBooking(
   let slotTime = config.targetTime ?? "";
 
   if (slotDate && slotTime) {
-    // Créneau pré-confirmé par le scanner — on ne re-cherche pas de slot, mais on appelle
-    // datetime/ pour le mois du créneau afin d'activer le nonce PHP requis par getsigninfields/.
-    // Confirmé 2026-08-12 : sans datetime/, getsigninfields/ → 0B (nonce non amorcé).
-    // Même si datetime/ retourne 0B (post-signin/ état consommé), le serveur met à jour
-    // sa session côté PHP → getsigninfields/ répond avec 13816B.
-    const slotMonth = slotDate.slice(0, 7);
-    const dtNonceParams: Record<string, string | string[]> = {
-      ...baseParams,
-      "services[]": [targetService.serviceId],
-      ...(agendaId ? { "agendas[]": [agendaId] } : {}),
-      start: `${slotMonth}-01`,
-      end: `${slotMonth}-${String(new Date(Number(slotMonth.slice(0, 4)), Number(slotMonth.slice(5, 7)), 0).getDate()).padStart(2, "0")}`,
-      selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
-    };
-    const dtNonce = await callEndpoint("datetime/", dtNonceParams);
-    console.log(`[spain-booking] ✅ Créneau pré-confirmé: ${slotDate} à ${slotTime} — datetime/ nonce: ${dtNonce ? "OK" : "0B (nonce activé côté PHP)"}`);
+    // Créneau pré-confirmé par le scanner.
+    //
+    // Deux chemins selon l'état du PHPSESSID :
+    //
+    // A) PHPSESSID partagé (probe) — PAS de datetime/ :
+    //    Le probe a déjà fait getwidgetconfigurations→getservices→getagendas→datetime(N mois).
+    //    Rappeler datetime/ réinitialise l'état PHP → getsigninfields/ → 0B.
+    //    Séquence : [booking direct] → getsigninfields/ → signin/.
+    //
+    // B) PHPSESSID frais (refreshPhpsessidForCapsolver) :
+    //    Le nouveau PHPSESSID est "froid" (aucun appel Bookitit dessus).
+    //    Il faut initialiser l'état PHP : getservices/ → datetime/ (1 appel, mois cible).
+    //    Séquence : getservices/ → datetime/ → getsigninfields/ → signin/.
+    if (phpSessRefreshed) {
+      // ── Initialisation état PHP du PHPSESSID frais ─────────────────────────
+      // getservices/ : active la session widget côté PHP
+      const servicesRes = await callEndpoint("getservices/", baseParams).catch(() => null);
+      if (servicesRes) {
+        console.log(`[spain-booking] ✅ getservices/ (init PHPSESSID frais) — OK`);
+      } else {
+        console.warn(`[spain-booking] ⚠️ getservices/ → 0B sur PHPSESSID frais`);
+      }
+
+      // datetime/ (1 appel pour le mois du créneau) : active le nonce PHP
+      const slotMonth = slotDate.slice(0, 7);
+      const lastDay = new Date(
+        Number(slotMonth.slice(0, 4)),
+        Number(slotMonth.slice(5, 7)),
+        0,
+      ).getDate();
+      const dtParams: Record<string, string | string[]> = withBookititSelectedPeople({
+        ...baseParams,
+        "services[]": targetService.serviceId,
+        ...(agendaId ? { "agendas[]": agendaId } : {}),
+        start: `${slotMonth}-01`,
+        end:   `${slotMonth}-${String(lastDay).padStart(2, "0")}`,
+      });
+      const dtRes = await callEndpoint("datetime/", dtParams);
+      console.log(`[spain-booking] ✅ datetime/ init (PHPSESSID frais, mois ${slotMonth}): ${dtRes ? "OK" : "0B (portail sans créneaux ou session encore froide)"}`);
+    }
+    console.log(`[spain-booking] ✅ Créneau pré-confirmé: ${slotDate} à ${slotTime} — getsigninfields/ en cours…`);
   } else {
     console.log(`[spain-booking] 📅 Récupération datetime…`);
     const now = new Date();
