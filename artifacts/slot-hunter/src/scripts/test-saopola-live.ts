@@ -180,156 +180,58 @@ async function main() {
   if (probe.slotInfo)     log("OK",   `Créneau détecté : ${probe.slotInfo}`);
   if (probe.errorMessage) log("WARN", `Message d'erreur : ${probe.errorMessage}`);
 
-  // ─── Étape 3 : Appels API individuels ──────────────────────────────────────
-  // On utilise la session CF active pour tester chaque endpoint Bookitit.
-  section("Étape 3 — Appels API Bookitit individuels");
+  // ─── Étape 3 : Données API extraites du scan de production ───────────────────
+  // ⚠️  IMPORTANT : on N'appelle PAS getservices/getagendas/datetime à la main ici.
+  // Ces endpoints Bookitit sont STATEFUL : ils n'acceptent que la séquence exacte
+  // du scanner (callback jQuery211091… + bookititState + ordre getwidgetconfigurations
+  // → getsigninfields → getservices, même instance impit primée). Des appels bruts
+  // reconstruits à la main renvoient 0B — ce n'était PAS un problème d'IP/session
+  // mais un artefact du diagnostic. On lit donc directement ce que le VRAI scanner
+  // (Étape 2, runSpainHttpProbe) a déjà récupéré : source unique de vérité.
+  section("Étape 3 — Données API (extraites du scan de production, sans appels dupliqués)");
 
-  const activeSession = getActiveSpainCfSession() ?? session;
-  const now_ms = Date.now();
-
-  const commonParams = new URLSearchParams({
-    type:         "default",
-    publickey:    WIDGET_KEY,
-    lang:         "es",
-    version:      "4",
-    src:          `https://www.citaconsular.es/es/hosteds/widgetdefault/${WIDGET_KEY}/#services`,
-    srvsrc:       "https://www.citaconsular.es",
-    selectedPeople: "1",
-    _:            String(now_ms),
-  });
-
-  const jsonpHeaders = {
-    "Accept":          "*/*",
-    "Referer":         `https://www.citaconsular.es/es/hosteds/widgetdefault/${WIDGET_KEY}/#services`,
-    "X-Requested-With": "XMLHttpRequest",
-  };
-
-  // ── 3a. getwidgetconfigurations/ ─────────────────────────────────────────
-  subsection("3a. getwidgetconfigurations/");
-  {
-    const cb = `jQuery_cfg_${now_ms}`;
-    const url = `${BASE_BOOKITIT}getwidgetconfigurations/?callback=${cb}&${commonParams}`;
-    const t = Date.now();
-    const res = await spainCfFetch(url, activeSession, { headers: jsonpHeaders });
-    const body = res ? await res.text() : "";
-    const elapsed = ((Date.now() - t) / 1_000).toFixed(1);
-    const parsed = parseJsonp(body);
-    log("INFO", `getwidgetconfigurations/ → ${body.length}B en ${elapsed}s`);
-    if (parsed) {
-      const cfg = (parsed as any)?.WidgetConfiguration;
-      if (cfg) {
-        log("OK",   `captcha         : ${cfg.captcha ?? "?"} | registration_type: ${cfg.registration_type ?? "?"}`);
-        log("INFO", `captcha requis  : ${cfg.captcha === "1" ? "OUI ⚠️" : "NON ✅"}`);
-      }
-    } else {
-      log("WARN", `Parse JSONP échoué — extrait: ${body.slice(0, 120)}`);
-    }
+  // Config widget capturée par le scanner
+  const widgetCfg = (probe as any)._widgetConfig as { captcha?: unknown; registration_type?: unknown } | undefined;
+  subsection("3a. getwidgetconfigurations/ (via scan)");
+  if (widgetCfg) {
+    log("OK",   `captcha=${widgetCfg.captcha ?? "?"} | registration_type=${widgetCfg.registration_type ?? "?"}`);
+    log("INFO", `captcha requis  : ${String(widgetCfg.captcha) === "1" ? "OUI ⚠️" : "NON ✅"}`);
+  } else {
+    log("INFO", "Config widget non exposée par le scan (probe non-found ou champ absent).");
   }
 
-  // ── 3b. getservices/ ──────────────────────────────────────────────────────
-  subsection("3b. getservices/");
+  // Services confirmés par le scanner (getservices/ JSONP → _services)
+  subsection("3b. getservices/ (via scan)");
+  const scanServices = ((probe as any)._services ?? []) as ExtractedSlotInfo[];
   let visaServiceId = "";
-  {
-    const cb = `jQuery_svc_${now_ms}`;
-    const url = `${BASE_BOOKITIT}getservices/?callback=${cb}&${commonParams}`;
-    const t = Date.now();
-    const res = await spainCfFetch(url, activeSession, { headers: jsonpHeaders });
-    const body = res ? await res.text() : "";
-    const elapsed = ((Date.now() - t) / 1_000).toFixed(1);
-    const parsed = parseJsonp(body);
-    log("INFO", `getservices/ → ${body.length}B en ${elapsed}s`);
-    if (Array.isArray(parsed)) {
-      log("OK",  `${parsed.length} service(s) trouvé(s) :`);
-      for (const svc of parsed as Array<{ id: string; name?: string }>) {
-        const isVisa = /tramita|visados?|visa/i.test(svc.name ?? "");
-        log("INFO", `  ${isVisa ? "🎯" : "  "} ID=${svc.id} | nom=${svc.name ?? "(masqué)"}`);
-        if (isVisa && !visaServiceId) visaServiceId = svc.id;
-      }
-      if (visaServiceId) log("OK", `Service visa retenu pour les étapes suivantes : ${visaServiceId}`);
-    } else {
-      log("WARN", `Parse JSONP échoué — extrait: ${body.slice(0, 120)}`);
+  if (scanServices.length > 0) {
+    log("OK", `${scanServices.length} service(s) confirmé(s) par le scan :`);
+    for (const svc of scanServices) {
+      const isVisa = /tramita|visados?|visa|pasaporte/i.test(svc.serviceName ?? "");
+      log("INFO", `  ${isVisa ? "🎯" : "  "} ID=${svc.serviceId} | nom=${svc.serviceName ?? "(masqué)"}`);
+      if (!visaServiceId) visaServiceId = svc.serviceId;
     }
+    log("OK", `Service retenu : ${visaServiceId}`);
+  } else if (probe.status === "found") {
+    log("ERROR", "RÉGRESSION : probe=found mais aucun service exposé — runSpainHttpProbe a perdu _services");
+  } else {
+    log("INFO", "Aucun service (probe non-found — pas de créneau, comportement normal).");
   }
 
-  // ── 3c. getagendas/ ───────────────────────────────────────────────────────
-  subsection("3c. getagendas/");
-  let agendaId = "";
-  {
-    const cb = `jQuery_ag_${now_ms}`;
-    const params = new URLSearchParams(commonParams);
-    if (visaServiceId) params.set("services[]", visaServiceId);
-    const url = `${BASE_BOOKITIT}getagendas/?callback=${cb}&${params}`;
-    const t = Date.now();
-    const res = await spainCfFetch(url, activeSession, { headers: jsonpHeaders });
-    const body = res ? await res.text() : "";
-    const elapsed = ((Date.now() - t) / 1_000).toFixed(1);
-    const parsed = parseJsonp(body);
-    log("INFO", `getagendas/ → ${body.length}B en ${elapsed}s${body.length === 0 ? " ⚠️  VIDE" : ""}`);
-    if (parsed && (parsed as any)?.agendas) {
-      const agendas: Array<{ idAgenda: string; agendaName?: string }> = (parsed as any).agendas;
-      log("OK", `${agendas.length} agenda(s) :`);
-      for (const ag of agendas) {
-        log("INFO", `  ID=${ag.idAgenda} | nom=${ag.agendaName ?? "(sans nom)"}`);
-        if (!agendaId) agendaId = ag.idAgenda;
-      }
-    } else if (body.length > 0) {
-      log("WARN", `Parse JSONP échoué — extrait: ${body.slice(0, 120)}`);
-    } else {
-      log("WARN", "getagendas/ → corps vide (0B) — session CF liée à une IP différente ou PHPSESSID manquant");
+  // Créneaux confirmés par le scanner (datetime/ → _allSlots)
+  subsection("3c-d. agendas + créneaux (via scan datetime/)");
+  const scanSlots = ((probe as any)._allSlots ?? []) as Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
+  const agendaId = scanSlots.find(s => s.agendaId)?.agendaId ?? "";
+  if (agendaId) log("INFO", `Agenda détecté par le scan : ${agendaId}`);
+  if (scanSlots.length > 0) {
+    log("OK", `🎉 ${scanSlots.length} créneau(x) confirmé(s) par le scanner :`);
+    for (const slot of scanSlots.slice(0, 5)) {
+      const places = slot.freeslots === -1 ? "capacité inconnue" : `${slot.freeslots} place(s)`;
+      log("INFO", `  📅 ${slot.date} ${slot.time} | ${places}${slot.agendaId ? ` | agenda ${slot.agendaId}` : ""}`);
     }
-  }
-
-  // ── 3d. datetime/ (mois courant et suivant) ───────────────────────────────
-  subsection("3d. datetime/ — créneaux disponibles");
-  {
-    const months = [
-      new Date(),
-      new Date(Date.now() + 31 * 24 * 3600 * 1_000),
-      new Date(Date.now() + 62 * 24 * 3600 * 1_000),
-    ];
-    let totalSlots = 0;
-
-    for (const monthDate of months) {
-      const start = monthDate.toISOString().slice(0, 7) + "-01";
-      const end = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
-        .toISOString().slice(0, 10);
-      const cb = `jQuery_dt_${now_ms}_${monthDate.getMonth()}`;
-      const params = new URLSearchParams(commonParams);
-      if (visaServiceId) params.set("services[]", visaServiceId);
-      if (agendaId)       params.set("agendas[]", agendaId);
-      params.set("start", start);
-      params.set("end", end);
-      const url = `${BASE_BOOKITIT}datetime/?callback=${cb}&${params}`;
-      const t = Date.now();
-      const res = await spainCfFetch(url, activeSession, { headers: jsonpHeaders });
-      const body = res ? await res.text() : "";
-      const elapsed = ((Date.now() - t) / 1_000).toFixed(1);
-      const parsed = parseJsonp(body);
-      const slots = parsed && Array.isArray((parsed as any)?.Slots) ? (parsed as any).Slots : [];
-      const slotCount = slots.length;
-      totalSlots += slotCount;
-
-      if (body.length === 0) {
-        log("WARN", `datetime/ ${start}→${end} → 0B (session IP mismatch probable)`);
-      } else if (slotCount > 0) {
-        log("OK", `datetime/ ${start}→${end} → ${slotCount} créneau(x) disponible(s) :`);
-        for (const slot of slots.slice(0, 5)) {
-          const times = Object.keys(slot.times ?? {}).join(", ");
-          log("INFO", `  📅 ${slot.date} | ${times || "(pas d'heures)"} | freeSlots: ${
-            Object.values(slot.times ?? {}).map((t: any) => t.freeSlots).join("/")
-          }`);
-        }
-        if (slotCount > 5) log("INFO", `  … et ${slotCount - 5} autres créneaux`);
-      } else {
-        log("INFO", `datetime/ ${start}→${end} → ${body.length}B, 0 créneau (${elapsed}s)`);
-      }
-    }
-
-    if (totalSlots > 0) {
-      log("OK", `🎉 Total créneaux détectés sur 3 mois : ${totalSlots}`);
-    } else {
-      log("INFO", "Aucun créneau disponible sur les 3 prochains mois.");
-    }
+    if (scanSlots.length > 5) log("INFO", `  … et ${scanSlots.length - 5} autres créneaux`);
+  } else {
+    log("INFO", "Aucun créneau exposé par le scan (probe non-found — pas de disponibilité).");
   }
 
   // ─── Étape 4 : BOOKING RÉEL (executeHttpBooking) ──────────────────────────
