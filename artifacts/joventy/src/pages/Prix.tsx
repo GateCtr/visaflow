@@ -197,6 +197,41 @@ export default function Prix() {
         <p className="text-xs text-muted-foreground mt-6 text-center italic">* Tous les prix sont en USD. Les frais consulaires (payés directement au gouvernement) ne sont pas inclus.</p>
       </section>
 
+      {/* CRÉNEAUX PAR DESTINATION */}
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-4">
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <h2 className="text-lg font-bold text-primary">Créneau consulaire — pages dédiées par destination</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-5">
+            Votre dossier est prêt et vous cherchez uniquement un rendez-vous ? Sélectionnez votre destination :
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              { href: "/creneaux-visa-espagne-kinshasa", flag: "es", label: "Créneau Visa Espagne", sub: "Email ambassade + citaconsular.es" },
+              { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", label: "Créneau Schengen CEV Belgique", sub: "visaonweb.be / CEV Kinshasa" },
+              { href: "/creneaux-visa-usa-kinshasa", flag: "us", label: "Créneau Visa USA", sub: "usvisaappt.com" },
+              { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", label: "Créneau Long Séjour Allemagne", sub: "RK-Termin / Visa national D" },
+            ].map((item) => (
+              <Link key={item.href} href={item.href}>
+                <div className="group flex items-center gap-3 bg-white border border-green-200 hover:border-secondary rounded-xl px-4 py-3 transition-all hover:shadow-sm cursor-pointer">
+                  <img src={`https://flagcdn.com/w40/${item.flag}.png`} width={24} alt="" className="rounded-sm flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-primary text-sm group-hover:text-secondary transition-colors">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.sub}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-secondary flex-shrink-0 transition-colors" />
+                </div>
+              </Link>
+            ))}
+          </div>
+          <p className="text-xs text-green-700 font-medium mt-4 text-center">
+            Toutes ces pages · 350 $ payés uniquement après obtention du créneau · 0 $ d'acompte
+          </p>
+        </div>
+      </section>
+
       {/* TABLE DES DESTINATIONS */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
         <h2 className="text-xl font-bold text-primary mb-4">Frais consulaires par destination</h2>

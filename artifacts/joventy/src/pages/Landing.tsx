@@ -830,6 +830,43 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ═══ CRÉNEAUX GARANTIS PAR DESTINATION ═══ */}
+      <section className="py-16 bg-gradient-to-br from-green-50 to-emerald-50 border-y border-green-200">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-8">
+            <p className="text-green-700 font-bold text-xs uppercase tracking-widest mb-2">Créneau Uniquement · 0 $ d'acompte</p>
+            <h2 className="text-2xl sm:text-3xl font-black text-primary">
+              Votre dossier est prêt ? On prend votre rendez-vous — 350 $ après résultat
+            </h2>
+            <p className="text-muted-foreground mt-3 max-w-xl mx-auto text-sm">
+              Si vos formulaires sont remplis et vos frais payés, Joventy surveille le portail officiel 24h/24 et verrouille votre créneau dès qu'un slot apparaît. Vous payez uniquement après confirmation.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { href: "/creneaux-visa-espagne-kinshasa", flag: "es", emoji: "🇪🇸", name: "Espagne", portal: "citaconsular.es" },
+              { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", emoji: "🇧🇪", name: "Schengen CEV", portal: "visaonweb.be" },
+              { href: "/creneaux-visa-usa-kinshasa", flag: "us", emoji: "🇺🇸", name: "USA", portal: "usvisaappt.com" },
+              { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", emoji: "🇩🇪", name: "Allemagne", portal: "RK-Termin" },
+            ].map((item) => (
+              <Link key={item.href} href={item.href}>
+                <div className="group bg-white border border-green-200 hover:border-secondary hover:shadow-md rounded-2xl p-5 flex flex-col items-center text-center transition-all cursor-pointer">
+                  <span className="text-3xl mb-3">{item.emoji}</span>
+                  <p className="font-black text-primary text-base group-hover:text-secondary transition-colors">{item.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{item.portal}</p>
+                  <div className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-green-700">
+                    350 $ après résultat <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+          <p className="text-center text-xs text-green-700 font-medium mt-6">
+            Aucun acompte · Paiement M-Pesa uniquement après obtention du créneau · Notification WhatsApp immédiate
+          </p>
+        </div>
+      </section>
+
       {/* ═══ ADSENSE ═══ */}
       <section className="py-8 bg-muted">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">

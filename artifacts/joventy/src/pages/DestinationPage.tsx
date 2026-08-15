@@ -367,23 +367,28 @@ export default function DestinationPage() {
           </section>
         )}
 
-        {/* ── ALERTE SCHENGEN (Schengen-only CTA) ── */}
+        {/* ── CRÉNEAU UNIQUEMENT — Schengen ── */}
         {dest.slug === "visa-schengen-kinshasa" && (
-          <section className="bg-gradient-to-br from-primary/5 via-blue-50 to-indigo-50 border border-primary/20 rounded-3xl p-8 sm:p-10">
+          <section className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-3xl p-8 sm:p-10">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-              <div className="text-5xl flex-shrink-0">🇪🇺</div>
+              <div className="text-5xl flex-shrink-0">🇧🇪</div>
               <div className="flex-1">
-                <p className="text-secondary font-semibold text-xs uppercase tracking-widest mb-1">Nouveau — Groupe WhatsApp privé</p>
+                <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
-                  Alerte créneaux Schengen — Faites-le vous-même pour 10 USD
+                  Votre dossier est prêt ? Joventy prend votre créneau CEV — 350 $ après résultat
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Vous préférez prendre vous-même votre rendez-vous sur visaonweb.be ? Rejoignez notre groupe WhatsApp privé : vous recevrez la plage horaire exacte dès qu'un créneau CEV apparaît, plus des conseils pratiques pour le capturer en moins de 30 secondes. Accès à vie, paiement unique de 10 USD via Mobile Money.
+                  Vos formulaires Schengen sont prêts ? Joventy surveille visaonweb.be 24h/24 et verrouille votre créneau au Centre Européen des Visas de Kinshasa dès qu'un slot apparaît. Aucun acompte — 350 $ payés uniquement après confirmation.
                 </p>
                 <div className="flex flex-wrap gap-3">
+                  <Link href="/creneaux-visa-schengen-belgique-kinshasa">
+                    <Button className="bg-secondary hover:bg-secondary/90 text-white font-bold shadow-lg shadow-secondary/20 gap-2">
+                      Créneau CEV Schengen · 0 $ d'acompte <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </Link>
                   <Link href="/alerte-schengen">
-                    <Button className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 gap-2">
-                      Rejoindre le groupe · 10 USD <ArrowRight className="w-4 h-4" />
+                    <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 gap-2">
+                      Groupe Alerte · 10 USD (DIY)
                     </Button>
                   </Link>
                 </div>
@@ -392,28 +397,53 @@ export default function DestinationPage() {
           </section>
         )}
 
-        {/* ── ALERTE ESPAGNE (Spain-only CTA) ── */}
+        {/* ── CRÉNEAU UNIQUEMENT — Espagne ── */}
         {dest.slug === "visa-espagne-kinshasa" && (
-          <section className="bg-gradient-to-br from-primary/5 via-blue-50 to-orange-50 border border-primary/20 rounded-3xl p-8 sm:p-10">
+          <section className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-3xl p-8 sm:p-10">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
               <div className="text-5xl flex-shrink-0">🇪🇸</div>
               <div className="flex-1">
-                <p className="text-secondary font-semibold text-xs uppercase tracking-widest mb-1">Nouveau — Groupe WhatsApp privé</p>
+                <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
-                  Alerte créneaux Espagne — Faites-le vous-même pour 10 USD
+                  Votre dossier est prêt ? Joventy envoie l'email + prend votre créneau — 350 $ après résultat
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Vous préférez prendre vous-même votre rendez-vous sur citaconsular.es ? Rejoignez notre groupe WhatsApp privé : vous recevrez le jour et la plage horaire exacte dès qu'un créneau apparaît, plus des conseils pratiques pour le capturer en moins de 30 secondes. Accès à vie, paiement unique de 10 USD via Mobile Money.
+                  Joventy envoie l'email d'inscription à emb.kinshasa.citasvis@maec.es en votre nom, puis réserve votre créneau sur citaconsular.es dès que l'ambassade répond. Aucun acompte — 350 $ payés uniquement après confirmation.
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <Link href="/alerte-espagne">
-                    <Button className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 gap-2">
-                      Rejoindre le groupe · 10 USD <ArrowRight className="w-4 h-4" />
+                  <Link href="/creneaux-visa-espagne-kinshasa">
+                    <Button className="bg-secondary hover:bg-secondary/90 text-white font-bold shadow-lg shadow-secondary/20 gap-2">
+                      Créneau Espagne · 0 $ d'acompte <ArrowRight className="w-4 h-4" />
                     </Button>
                   </Link>
-                  <Link href="/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026">
+                  <Link href="/alerte-espagne">
                     <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 gap-2">
-                      Guide : créneaux Espagne
+                      Groupe Alerte · 10 USD (DIY)
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── CRÉNEAU UNIQUEMENT — USA ── */}
+        {dest.slug === "visa-usa-kinshasa" && (
+          <section className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-3xl p-8 sm:p-10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              <div className="text-5xl flex-shrink-0">🇺🇸</div>
+              <div className="flex-1">
+                <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
+                  DS-160 soumis et frais MRV payés ? Joventy prend votre créneau — 350 $ après résultat
+                </h2>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+                  Joventy surveille usvisaappt.com en permanence et réserve votre créneau à l'ambassade américaine de Kinshasa dès qu'un slot se libère. Aucun acompte — 350 $ payés uniquement après confirmation.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/creneaux-visa-usa-kinshasa">
+                    <Button className="bg-secondary hover:bg-secondary/90 text-white font-bold shadow-lg shadow-secondary/20 gap-2">
+                      Créneau USA · 0 $ d'acompte <ArrowRight className="w-4 h-4" />
                     </Button>
                   </Link>
                 </div>

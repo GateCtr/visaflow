@@ -2,9 +2,10 @@ import type { Plugin, IndexHtmlTransformContext } from "vite";
 import { DESTINATIONS_SEO } from "./src/data/destinations-seo";
 import { getGuideBySlug, getAllGuides } from "./src/data/guides-seo";
 import { EMBASSIES_SEO, getEmbassyBySlug } from "./src/data/embassies-seo";
+import { CRENEAUX_PAGES, getCreneauxPageBySlug } from "./src/data/creneaux-seo";
 
 export type { Guide } from "./src/data/guides-seo";
-export { getAllGuides, DESTINATIONS_SEO, EMBASSIES_SEO };
+export { getAllGuides, DESTINATIONS_SEO, EMBASSIES_SEO, CRENEAUX_PAGES };
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
@@ -151,8 +152,82 @@ function buildGuideSchemas(guide: NonNullable<ReturnType<typeof getGuideBySlug>>
   return parts.join("\n");
 }
 
+function buildCreneauxSchemas(page: (typeof CRENEAUX_PAGES)[0], url: string): string {
+  const service = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: `Créneau Visa ${page.name} depuis Kinshasa`,
+    description: page.metaDescription,
+    url,
+    provider: {
+      "@type": "LocalBusiness",
+      name: "Joventy",
+      url: "https://joventy.cd",
+      telephone: "+243840808122",
+      address: { "@type": "PostalAddress", addressLocality: "Kinshasa", addressCountry: "CD" },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.9",
+        bestRating: "5",
+        worstRating: "1",
+        reviewCount: "127",
+      },
+    },
+    areaServed: { "@type": "Place", name: "Kinshasa, République Démocratique du Congo" },
+    offers: {
+      "@type": "Offer",
+      priceCurrency: "USD",
+      price: "350",
+    },
+  });
+  const faq = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: page.faqs.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  });
+  const breadcrumb = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+      { "@type": "ListItem", position: 2, name: "Tarifs", item: "https://joventy.cd/prix" },
+      { "@type": "ListItem", position: 3, name: `Créneau ${page.name}`, item: url },
+    ],
+  });
+  return [
+    `<script type="application/ld+json">${service}</script>`,
+    `<script type="application/ld+json">${faq}</script>`,
+    `<script type="application/ld+json">${breadcrumb}</script>`,
+  ].join("\n");
+}
+
 export function injectSeoMeta(html: string, pathname: string): string {
   const clean = pathname.split("?")[0].replace(/\/$/, "") || "/";
+
+  // Créneau landing pages
+  const creneauxSlug = clean.replace(/^\//, "");
+  const creneauxPage = getCreneauxPageBySlug(creneauxSlug);
+  if (creneauxPage) {
+    const url = `https://joventy.cd/${creneauxPage.slug}`;
+    const schemas = buildCreneauxSchemas(creneauxPage, url);
+    return html
+      .replace(/<title>[^<]*<\/title>/, `<title>${esc(creneauxPage.title)}</title>`)
+      .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(creneauxPage.metaDescription)}"`)
+      .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
+      .replace(/<meta property="og:title" content="[^"]*"/, `<meta property="og:title" content="${esc(creneauxPage.title)}"`)
+      .replace(/<meta property="og:description" content="[^"]*"/, `<meta property="og:description" content="${esc(creneauxPage.metaDescription)}"`)
+      .replace(/<meta property="og:url" content="[^"]*"/, `<meta property="og:url" content="${url}"`)
+      .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${esc(creneauxPage.title)}"`)
+      .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${esc(creneauxPage.metaDescription)}"`)
+      .replace(/<meta property="og:image" content="[^"]*"/, `<meta property="og:image" content="https://joventy.cd/opengraph.jpg"`)
+      .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(`Créneau Visa ${creneauxPage.name} depuis Kinshasa avec Joventy`)}"`)
+      .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
+      .replace("</head>", `${schemas}\n</head>`);
+  }
 
   const destSlug = clean.replace(/^\//, "");
   const dest = DESTINATIONS_SEO.find((d) => d.slug === destSlug);
@@ -235,7 +310,8 @@ export function seoMetaInjectPlugin(): Plugin {
           pathname.endsWith(".html");
         const isSemanticRoute =
           /^\/visa-/.test(pathname) || /^\/guides\//.test(pathname) ||
-          /^\/e-visa-/.test(pathname) || /^\/ambassade/.test(pathname);
+          /^\/e-visa-/.test(pathname) || /^\/ambassade/.test(pathname) ||
+          /^\/creneaux-/.test(pathname);
 
         if (!isHtmlRoute || !isSemanticRoute) return next();
 

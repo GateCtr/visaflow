@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { DESTINATIONS_SEO } from "../src/data/destinations-seo";
 import { getAllGuides } from "../src/data/guides-seo";
 import { EMBASSIES_SEO } from "../src/data/embassies-seo";
+import { CRENEAUX_PAGES } from "../src/data/creneaux-seo";
 import { injectSeoMeta } from "../vite-plugin-seo";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -48,6 +49,13 @@ for (const guide of getAllGuides()) {
   count++;
 }
 
+for (const page of CRENEAUX_PAGES) {
+  const html = injectSeoMeta(template, `/${page.slug}`);
+  write(path.join(DIST, `${page.slug}.html`), html);
+  console.log(`  ✓ /${page.slug}`);
+  count++;
+}
+
 console.log(`\n🚀 Pre-rendered ${count} pages into dist/public`);
 
 const SITE = "https://joventy.cd";
@@ -89,7 +97,13 @@ const guideEntries: SitemapEntry[] = getAllGuides().map((g) => ({
   lastmod: g.updatedDate,
 }));
 
-const allEntries = [...staticEntries, ...destEntries, ...embassyEntries, ...guideEntries];
+const creneauxEntries: SitemapEntry[] = CRENEAUX_PAGES.map((p) => ({
+  loc: `${SITE}/${p.slug}`,
+  changefreq: "weekly",
+  priority: "0.9",
+}));
+
+const allEntries = [...staticEntries, ...destEntries, ...embassyEntries, ...guideEntries, ...creneauxEntries];
 
 const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

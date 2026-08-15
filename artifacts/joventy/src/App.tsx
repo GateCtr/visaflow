@@ -30,6 +30,10 @@ import EmbassyPage from "@/pages/EmbassyPage";
 import AlerteEspagne from "@/pages/AlerteEspagne";
 import AlerteSchengen from "@/pages/AlerteSchengen";
 import Prix from "@/pages/Prix";
+import CreneauxAllemagne from "@/pages/creneaux/CreneauxAllemagne";
+import CreneauxEspagne from "@/pages/creneaux/CreneauxEspagne";
+import CreneauxSchengen from "@/pages/creneaux/CreneauxSchengen";
+import CreneauxUSA from "@/pages/creneaux/CreneauxUSA";
 import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
 
@@ -173,6 +177,12 @@ function Router() {
       {/* Alertes */}
       <Route path="/alerte-espagne" component={AlerteEspagne} />
       <Route path="/alerte-schengen" component={AlerteSchengen} />
+
+      {/* Créneau landing pages — slot_only SEO */}
+      <Route path="/creneaux-visa-allemagne-kinshasa" component={CreneauxAllemagne} />
+      <Route path="/creneaux-visa-espagne-kinshasa" component={CreneauxEspagne} />
+      <Route path="/creneaux-visa-schengen-belgique-kinshasa" component={CreneauxSchengen} />
+      <Route path="/creneaux-visa-usa-kinshasa" component={CreneauxUSA} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />
