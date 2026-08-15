@@ -20,4 +20,6 @@ Pour déclencher `signin/` en mode HTTP pur (capsolver-residential), il faut app
 ## Ce qui ne change pas
 
 - `createIsolatedBookingSession` échoue pour capsolver-residential car le `/main/` dédié ne retourne pas de PHPSESSID (PHPSESSID vient du POST token, pas de /main/). En pratique, la session principale suffit pour un seul dossier.
-- `getsigninfields/` retournait 0B avant (comment obsolète dans spain-http-booking.ts) — confirmé fonctionnel via HTTP pur (test 2026-08-12).
+- Sur un portail multi-agendas, getsigninfields/ et signin/ doivent utiliser la paire serviceId+agendaId d'où provient le créneau (date/heure), pas un agenda arbitraire — sinon la réponse ne prouve pas la séquence visée.
+- Preuve de traitement serveur : getsigninfields/ = 200 + JSONP avec CustomFields ; signin/ = Client.errors login/password ("incorrectos") ou bktToken. Toute HTML/challenge/erreur générique ne prouve rien.
+- Les proxies live viennent du fichier `decodo-proxies.csv` (chargé par spain-decodo-pool), PAS du secret `DECODO_PROXY_URL` (isp/gate.decodo.com peut être injoignable).

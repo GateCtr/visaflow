@@ -9,6 +9,7 @@
  */
 
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 // ─── Mock Redis persistence (fire-and-forget calls — no real Redis in tests) ──
 
@@ -36,6 +37,12 @@ import {
 /** Build a comma-separated DECODO_PROXY_URLS string from N fake URLs. */
 function makePool(n: number): string[] {
   return Array.from({ length: n }, (_, i) => `http://user:pass@10.0.0.${i + 1}:10000`);
+}
+
+/** Mirror of the private computePoolFingerprint() in spain-decodo-pool.ts. */
+function fingerprint(pool: string[]): string {
+  const hash = createHash("sha256").update(pool.join("\n")).digest("hex").slice(0, 8);
+  return `${pool.length}:${hash}`;
 }
 
 /**
@@ -363,6 +370,7 @@ describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
     rotationIndex: number;
     blacklistedIps: Record<string, number>;
     savedAt: number;
+    poolFingerprint?: string;
   } | null): void {
     vi.mocked(restoreDecodoPoolStateFromRedis).mockResolvedValueOnce(state as any);
   }
@@ -383,6 +391,9 @@ describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
         [ip1]: now - 10_000,
       },
       savedAt: now - 5_000,
+      // Matching fingerprint → pool composition verified → blacklist restored.
+      // (A separate migration test covers the missing-fingerprint safe-reset path.)
+      poolFingerprint: fingerprint(pool),
     });
 
     // Simulate restart: reset module state then restore from Redis
@@ -433,6 +444,7 @@ describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
         [ip1]: expiredTs,
       },
       savedAt: expiredTs,
+      poolFingerprint: fingerprint(pool),
     });
 
     reloadDecodoPool();
@@ -472,6 +484,7 @@ describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
         [pool[2]]: now - 10_000,
       },
       savedAt: now - 10_000,
+      poolFingerprint: fingerprint(pool),
     });
 
     reloadDecodoPool();

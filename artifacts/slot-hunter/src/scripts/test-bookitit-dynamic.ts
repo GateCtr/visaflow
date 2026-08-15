@@ -213,7 +213,7 @@ async function main(): Promise<void> {
   const now = new Date();
   let totalSlots = 0;
   // Tableau détaillé des créneaux trouvés
-  const allFoundSlots: Array<{ date: string; time: string; freeSlots: number; totalSlots: number; agenda: string }> = [];
+  const allFoundSlots: Array<{ date: string; time: string; freeSlots: number; totalSlots: number; agenda: string; serviceId: string; agendaId: string }> = [];
 
   for (const ag of allAgendas) {
     let globalMaxDays: Date | null = null;
@@ -267,6 +267,8 @@ async function main(): Promise<void> {
                 freeSlots: free,
                 totalSlots: total,
                 agenda: ag.agendaName,
+                serviceId: ag.serviceId,
+                agendaId: ag.agendaId,
               });
             }
           }
@@ -336,6 +338,104 @@ async function main(): Promise<void> {
       console.log(`    ${date} : ${totalFree} place(s) sur ${nSlots} créneau(x) horaire(s)`);
     }
     console.log("");
+  }
+
+  // ═══ 5. getsigninfields/ + signin/ (HTTP pur, identifiants fictifs) ════════
+  // Objectif : reproduire la séquence native du widget Backbone jusqu'à signin/
+  // sans navigateur. Le serveur PHP Bookitit n'amorce le nonce de signin/ qu'après
+  // un getsigninfields/ dans la MÊME session PHPSESSID, avec les mêmes params que
+  // datetime/ (services[]/agendas[]/date/time/selectedPeople). Sans cet appel,
+  // signin/ retourne 0B (confirmé Saopolo 2026-08-12).
+  section("5 — getsigninfields/ + signin/ (identifiants fictifs)");
+
+  // Choisir un créneau cible : premier créneau libre trouvé, sinon date future
+  // plausible sur le premier agenda (signin/ échouera plus loin, mais la séquence
+  // getsigninfields→signin doit répondre non-0B).
+  // La date/heure DOIVENT correspondre au service+agenda soumis (portails multi-agendas).
+  // On prend donc un créneau réel avec sa paire serviceId/agendaId d'origine ; à défaut,
+  // on retombe sur le premier agenda avec une date fictive (signin/ échouera plus loin,
+  // mais getsigninfields/→signin/ doit tout de même répondre non-0B).
+  const targetAgenda = allAgendas[0];
+  const firstSlot = allFoundSlots[0];
+  if (!targetAgenda && !firstSlot) {
+    log("ERR", "Aucun agenda ni créneau découvert — impossible de tester signin/");
+    process.exit(1);
+  }
+  {
+    const signinService = firstSlot?.serviceId ?? targetAgenda!.serviceId;
+    const signinAgenda = firstSlot?.agendaId ?? targetAgenda!.agendaId;
+    const signinDate = firstSlot?.date
+      ?? new Date(now.getFullYear(), now.getMonth() + 1, 15).toISOString().slice(0, 10);
+    const signinTime = firstSlot?.time ?? "09:00";
+    log("INFO", `Créneau cible : ${signinDate} ${signinTime} | service=${signinService} | agenda=${signinAgenda}${firstSlot ? " (créneau réel)" : " (date fictive)"}`);
+
+    // ── 5a. getsigninfields/ (amorce le nonce PHP) ──
+    const rGsf = await impit.fetch(makeUrl("getsigninfields/", {
+      "services[]": signinService,
+      "agendas[]": signinAgenda,
+      date: signinDate,
+      time: signinTime,
+      selectedPeople: "1",
+    }), { headers: cookieHeader() } as any) as unknown as Response;
+    const bodyGsf = await rGsf.text();
+    log("INFO", `getsigninfields/ → ${rGsf.status} | ${bodyGsf.length}B`);
+    log("INFO", `  aperçu: ${bodyGsf.slice(0, 150)}`);
+    // Structure attendue : HTTP 200 + JSONP parsable contenant CustomFields (les champs
+    // du formulaire de connexion). Toute autre réponse (0B, HTML, challenge CF, erreur
+    // générique) prouve que le nonce n'est PAS amorcé → échec explicite.
+    const gsfParsed = parseJsonp(bodyGsf) as any;
+    const gsfValid = rGsf.status === 200 && gsfParsed && typeof gsfParsed === "object"
+      && gsfParsed.CustomFields != null && typeof gsfParsed.CustomFields === "object";
+    if (!gsfValid) {
+      log("ERR", `❌ getsigninfields/ invalide (status=${rGsf.status}, ${bodyGsf.length}B, CustomFields absent/invalide) — nonce PHP NON amorcé, séquence HTTP pur cassée`);
+      process.exit(1);
+    }
+    log("OK", "getsigninfields/ → CustomFields présent (nonce PHP amorcé)");
+
+    // ── 5b. signin/ (faux identifiants → erreur explicite attendue, pas 0B) ──
+    const rSignin = await impit.fetch(makeUrl("signin/", {
+      "services[]": signinService,
+      "agendas[]": signinAgenda,
+      date: signinDate,
+      time: signinTime,
+      selectedPeople: "1",
+      logintype: "document",
+      login: "TESTSAOPOLA000",
+      password: "FAKEPASS123",
+      comments: "",
+    }), { headers: cookieHeader() } as any) as unknown as Response;
+    const bodySignin = await rSignin.text();
+    log(bodySignin.length > 0 ? "OK" : "ERR",
+      `signin/ → ${rSignin.status} | ${bodySignin.length}B${bodySignin.length === 0 ? " (0B — serveur n'a PAS traité la requête)" : ""}`);
+    log("INFO", `  signin/ raw: ${bodySignin.slice(0, 300)}`);
+
+    if (bodySignin.length === 0) {
+      log("ERR", "❌ signin/ 0B — le serveur n'a PAS traité la requête (getsigninfields/ manquant ou séquence divergente)");
+      process.exit(1);
+    }
+    // Seules deux réponses prouvent que le serveur PHP a bien TRAITÉ le signin :
+    //   (a) rejet d'identifiants explicite : Client.errors[].message="…incorrectos" (field login/password)
+    //   (b) succès réel : payload contenant un bktToken.
+    // Une page HTML, un challenge CF, ou une erreur générique ("There was an error")
+    // ne prouve PAS que la séquence de nonce a fonctionné → échec explicite.
+    const signinParsed = parseJsonp(bodySignin) as any;
+    const clientErrors: Array<any> = Array.isArray(signinParsed?.Client?.errors) ? signinParsed.Client.errors : [];
+    const hasCredError = clientErrors.some((e) =>
+      /incorrect|contrase|password|login|usuario/i.test(String(e?.message ?? "")) &&
+      (e?.field === "login" || e?.field === "password"));
+    const bktToken = signinParsed?.bktToken ?? signinParsed?.Client?.bktToken;
+    const hasRealSuccess = typeof bktToken === "string" && bktToken.length > 0;
+    if (hasCredError) {
+      log("OK", "🎉 signin/ traité par le serveur — rejet d'identifiants explicite (Client.errors login/password) — séquence HTTP pur VALIDÉE");
+    } else if (hasRealSuccess) {
+      log("OK", "🎉 signin/ a renvoyé un bktToken réel — séquence VALIDÉE");
+    } else {
+      // Non-0B mais ni rejet d'identifiants ciblé ni bktToken = la séquence n'est PAS
+      // prouvée (HTML/challenge/erreur générique). Échec explicite : ne jamais "réussir"
+      // en masquant une régression.
+      log("ERR", `❌ signin/ non-0B mais ni rejet d'identifiants ni bktToken — séquence NON validée : ${bodySignin.slice(0, 200)}`);
+      process.exit(1);
+    }
   }
 
   // ═══ RÉSULTAT ═════════════════════════════════════════════════════════════
