@@ -830,6 +830,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
                 availableServices: services,
                 targetDate: assignedSlot?.date ?? confirmedSlotDate,
                 targetTime: assignedSlot?.time ?? confirmedSlotTime,
+                // ── Règle capsolver ──────────────────────────────────────────
+                // getagendas/ ne répond qu'UNE fois par PHPSESSID (le scan l'a
+                // déjà consommé). On transmet l'agendaId capturé par le scan
+                // pour que le booking skip getagendas/ et parte directement sur
+                // datetime/ avec agendas[]= correct → nonce PHP activé → signin OK.
+                agendaId: assignedSlot?.agendaId,
               };
 
               try {

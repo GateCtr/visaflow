@@ -744,32 +744,45 @@ export async function executeHttpBooking(
   // ─── 2+4. getagendas/ et getwidgetconfigurations/ en parallèle ──────────────
   // Ces deux appels sont indépendants → 1 RTT au lieu de 2 (~200–500ms économisés
   // au moment où le serveur est le plus saturé).
-  console.log(`[spain-booking] 📋 Récupération agendas + config widget en parallèle…`);
+  //
+  // ⚠️ Règle capsolver : getagendas/ ne répond qu'UNE FOIS par PHPSESSID.
+  // En mode capsolver, le scan l'a déjà consommé → retourne 0B pour tout appel
+  // suivant. Si config.agendaId est fourni par le watcher (issu du scan), on skip
+  // entièrement getagendas/ pour préserver la ressource ET éviter agendaId="".
+  // Sans agendaId, datetime/ est appelé sans agendas[] → nonce PHP non amorcé →
+  // getsigninfields/ → 0B → signin/ → 0B → signin_failed.
   const callEndpoint = useBrowserCalls
     ? (ep: string, p: Record<string, string | string[]>) => callBookititEndpointBrowser(bookingSession, ep, p, portalUrl)
     : (ep: string, p: Record<string, string | string[]>) => callBookititEndpoint(bookingSession, ep, p, portalUrl);
 
-  const [agendasPayload, rawCfgPayload] = await Promise.all([
-    callEndpoint("getagendas/", {
-      ...baseParams,
-      "services[]": [targetService.serviceId], // PHP array notation confirmée par capture
-    }),
-    callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null),
-  ]);
-
-  // DEBUG temporaire — à retirer après diagnostic
-  console.log(`[spain-booking] 🔍 DEBUG getagendas raw: ${JSON.stringify(agendasPayload)?.slice(0, 400)}`);
-  console.log(`[spain-booking] 🔍 DEBUG widgetcfg raw: ${JSON.stringify(rawCfgPayload)?.slice(0, 400)}`);
-
-  // config.agendaId = valeur transmise depuis le scan (règle #9 : getagendas/ ne répond qu'une
-  // fois par PHPSESSID — pour dossier #2+ en mode capsolver, la réponse est 0B).
   let agendaId = config.agendaId ?? "";
-  if (agendasPayload && typeof agendasPayload === "object") {
-    const agendaIds = extractIds(agendasPayload, /agenda.*id|^id$/i);
-    console.log(`[spain-booking] 🔍 DEBUG extractIds agendas: ${JSON.stringify(agendaIds)}`);
-    if (agendaIds.length > 0) {
-      agendaId = agendaIds[0];
-      console.log(`[spain-booking] ✅ Agenda: ${agendaId}`);
+  let rawCfgPayload: unknown = null;
+
+  if (agendaId) {
+    // agendaId déjà connu depuis le scan — skip getagendas/ (consommé une fois par PHPSESSID)
+    console.log(`[spain-booking] ✅ agendaId depuis config: ${agendaId} — getagendas/ ignoré (déjà consommé par le scan)`);
+    rawCfgPayload = await callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null);
+  } else {
+    // Premier booking ou mode sans agendaId pré-fourni → appels en parallèle
+    console.log(`[spain-booking] 📋 Récupération agendas + config widget en parallèle…`);
+    const [agendasPayload, cfgPayload] = await Promise.all([
+      callEndpoint("getagendas/", {
+        ...baseParams,
+        "services[]": [targetService.serviceId], // PHP array notation confirmée par capture
+      }),
+      callEndpoint("getwidgetconfigurations/", baseParams).catch(() => null),
+    ]);
+    rawCfgPayload = cfgPayload;
+
+    if (agendasPayload && typeof agendasPayload === "object") {
+      const agendaIds = extractIds(agendasPayload, /agenda.*id|^id$/i);
+      if (agendaIds.length > 0) {
+        agendaId = agendaIds[0];
+        console.log(`[spain-booking] ✅ Agenda: ${agendaId}`);
+      }
+    }
+    if (!agendaId) {
+      console.warn(`[spain-booking] ⚠️ getagendas/ → null/vide — datetime/ sera appelé sans agendas[] (nonce PHP peut échouer)`);
     }
   }
 
