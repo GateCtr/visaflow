@@ -683,7 +683,12 @@ export async function startSpainWatcherLoop(): Promise<void> {
               })
             : Promise.resolve(null);
         } else {
-          log("WARN", `[SPAIN-WATCHER] ⚠️ Créneau confirmé par datetime/ MAIS aucun service connu (ni HTML ni getservices/) — booking impossible`);
+          // NB : ce n'est PAS un faux positif — datetime/ a confirmé les créneaux
+          // (seule preuve fiable). L'absence de liens #selectservice dans le HTML
+          // est normale sur portail SPA. Si _services est vide ici, c'est une perte
+          // de plomberie côté scan (voir runSpainHttpProbe) : le booking tentera
+          // quand même via le fallback targetServiceId.
+          log("WARN", `[SPAIN-WATCHER] ⚠️ Créneau CONFIRMÉ par datetime/ mais _services non transmis par le scan (HTML SPA sans liens = normal) — booking via fallback targetServiceId`);
           // Log un extrait du HTML pour diagnostic
           const renderedHtml = mainHtml.replace(/<script\s+type=['"]text\/template['"][^>]*>[\s\S]*?<\/script>/gi, "");
           const containerMatch = renderedHtml.match(/idDivBktServicesContainer[^>]*>([\s\S]{0,500})/i);

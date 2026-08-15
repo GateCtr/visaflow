@@ -1797,7 +1797,7 @@ function extractAllSlotsFromDatetime(
       const stateNum = typeof stateRaw === "number" ? stateRaw
         : typeof stateRaw === "string" ? parseInt(stateRaw, 10) : -1;
       if (times.length === 0 && stateNum === 1) {
-        console.log(`[spain-http] 🗓  datetime/ jour dispo times=[] state=1 → ${date} 09:00`);
+        console.log(`[spain-http] 🗓  datetime/ jour ouvert (state=1, times=[]) → ${date} — heure 09:00 PAR DÉFAUT (non confirmée par le serveur)`);
         slots.push({ date, time: "09:00", agendaId: dayAgendaId, freeslots: -1 });
       }
       continue; // tableau → pas de clés d'heures à itérer
@@ -3438,6 +3438,14 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
   _mainHtml?: string;
   /** Tous les créneaux disponibles — pour la stratégie multi-dossiers round-robin */
   _allSlots?: Array<{ date: string; time: string; agendaId?: string; freeslots: number }>;
+  /** Services confirmés par le scan (getservices/ ou HTML) — OBLIGATOIRE à propager :
+   *  les perdre ici fait croire au watcher qu'aucun service n'existe → booking no_slots
+   *  instantané alors que datetime/ a confirmé des créneaux (bug du 2026-08-14). */
+  _services?: ExtractedSlotInfo[];
+  /** Config widget capturée pendant le scan (captcha, registration_type…) */
+  _widgetConfig?: SpainHttpScanResult["_widgetConfig"];
+  /** Slot confirmé structuré (date/time) */
+  slot?: SpainHttpScanResult["slot"];
   /** Trace diagnostique pour l'historique admin */
   _scanTrace?: SpainScanTrace;
 }> {
@@ -3448,8 +3456,11 @@ export async function runSpainHttpProbe(portalUrl: string): Promise<{
       return {
         status: "found",
         slotInfo: result.slotInfo,
+        slot: result.slot,
         _mainHtml: result._mainHtml,
         _allSlots: result._allSlots,
+        _services: result._services,
+        _widgetConfig: result._widgetConfig,
         _scanTrace: result._scanTrace,
       };
     case "not_found":

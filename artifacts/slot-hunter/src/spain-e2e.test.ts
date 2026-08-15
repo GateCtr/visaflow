@@ -857,24 +857,38 @@ subsection("4b. Aucun service dans le mainHtml → no_slots");
     targetServiceId: undefined, // let it auto-detect
     visaType: undefined,
   });
-  assertEq(result.status, "no_slots", "Pas de services dans HTML → no_slots");
+  // Depuis le fix 2026-08-15 : sans liste NI targetServiceId → erreur de
+  // configuration (booking_failed), pas no_slots (les slots peuvent exister).
+  assertEq(result.status, "booking_failed", "Pas de services ni targetServiceId → booking_failed (config)");
+  assert(
+    (result.errorMessage ?? "").includes("Configuration incomplète"),
+    `Message d'erreur mentionne la configuration (got: "${result.errorMessage}")`,
+  );
   resetMocks();
 }
 
-subsection("4c. targetServiceId introuvable dans le HTML → no_slots");
+subsection("4c. targetServiceId absent du HTML → booking continue avec l'ID fourni");
 {
+  // Depuis le fix 2026-08-15 : un targetServiceId connu SUFFIT même s'il n'est
+  // pas dans la liste HTML (rendu SPA). Le flow doit continuer et utiliser cet
+  // ID dans les requêtes suivantes — on vérifie qu'il dépasse l'étape service
+  // (échec plus loin dans le flow avec les mocks nuls, mais PAS "non trouvé").
   resetMocks();
   const session = makeMockSession();
-  _setTestFetch(async () => null);
+  const seenUrls: string[] = [];
+  _setTestFetch(async (url: string) => {
+    seenUrls.push(url);
+    return null;
+  });
 
   const result = await executeHttpBooking(session, PORTAL_URL, HTML_MAIN_WITH_SERVICE, {
     ...BASE_BOOKING_CONFIG,
     targetServiceId: "bkt_DOES_NOT_EXIST",
   });
-  assertEq(result.status, "no_slots", "targetServiceId inexistant → no_slots");
+  assert(result.status !== "no_slots", `targetServiceId inconnu du HTML ne doit plus donner no_slots (got: ${result.status})`);
   assert(
-    (result.errorMessage ?? "").includes("non trouvé"),
-    `Message d'erreur mentionne "non trouvé" (got: "${result.errorMessage}")`,
+    !(result.errorMessage ?? "").includes("non trouvé"),
+    `L'erreur ne doit plus être "non trouvé" (got: "${result.errorMessage}")`,
   );
   resetMocks();
 }

@@ -552,7 +552,13 @@ export async function createIsolatedBookingSession(
 
 /**
  * Extrait les services rendus depuis le HTML de /main/.
- * Quand des créneaux sont disponibles, le HTML contient :
+ *
+ * ⚠️ IMPORTANT : sur les portails SPA (Saopola/Kinshasa), les liens
+ * `#selectservice` ne sont JAMAIS dans le HTML serveur — le rendu est
+ * client-side (Backbone) et la route services est bloquée par la custom view.
+ * Un retour vide ici est donc NORMAL et ne prouve PAS l'absence de créneaux :
+ * la seule vraie preuve de disponibilité est datetime/ (state=1 / Slots non vide).
+ * Cette fonction ne sert que pour les rares portails à rendu serveur :
  *   <a href='#selectservice/ID'><div class="clsBktServiceDataContainer ...">
  *     <div class="clsBktServiceDataName">NOM</div>
  *   </div></a>
@@ -601,24 +607,32 @@ export async function executeHttpBooking(
   let capturedSummaryBody = "";
 
   // ─── 1. Extraire les services disponibles ─────────────────────────────
+  // NB : sur portail SPA, le HTML ne contient jamais #selectservice — un
+  // targetServiceId connu SUFFIT pour booker (portail mono-service Kinshasa).
+  // Ne JAMAIS échouer ici quand targetServiceId est fourni : le scan a déjà
+  // confirmé les créneaux via datetime/, bloquer = créneaux ratés (bug 2026-08-14).
   const services = config.availableServices?.length
     ? config.availableServices
     : extractServicesFromHtml(mainHtml);
-  if (services.length === 0) {
-    return { status: "no_slots", errorMessage: "Aucun service rendu dans le HTML", durationMs: Date.now() - t0 };
+  if (services.length === 0 && !config.targetServiceId) {
+    return {
+      status: "booking_failed",
+      errorMessage: "Configuration incomplète : aucun service connu (liste vide, pas de targetServiceId) — le HTML SPA ne rend pas les services, le scan doit fournir _services ou un targetServiceId",
+      durationMs: Date.now() - t0,
+    };
   }
 
   // Sélection du service cible :
-  //   1. Si targetServiceId fourni → chercher par ID
+  //   1. Si targetServiceId fourni → chercher par ID (fallback: utiliser l'ID directement)
   //   2. Si visaType fourni → matching par nom via spain-service-mapping
   //   3. Sinon → premier service disponible (legacy)
   let targetService: ExtractedSlotInfo | null = null;
 
   if (config.targetServiceId) {
-    targetService = services.find((s) => s.serviceId === config.targetServiceId) ?? null;
-    if (!targetService) {
-      return { status: "no_slots", errorMessage: `Service cible ID ${config.targetServiceId} non trouvé dans le HTML`, durationMs: Date.now() - t0 };
-    }
+    targetService = services.find((s) => s.serviceId === config.targetServiceId)
+      // ID connu mais absent de la liste (liste vide/incomplète en rendu SPA) :
+      // on book quand même avec l'ID — c'est la donnée fiable issue du scan.
+      ?? { serviceId: config.targetServiceId, serviceName: config.visaType ?? "Service (ID scan)" };
   } else if (config.visaType) {
     targetService = matchServiceForVisa(services, config.visaType);
     if (!targetService) {
