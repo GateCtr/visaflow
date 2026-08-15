@@ -1134,12 +1134,7 @@ function extractAllSlotsFromPayload(
 
     const times = d.times;
 
-    // Saopola : times=[] + state=1 → jour disponible sans heure
-    if (Array.isArray(times) && times.length === 0 && stateNum === 1) {
-      result.push({ date, time: "09:00", agendaId: slotAgendaId, freeslots: 1 });
-      continue;
-    }
-
+    // times=[] ou times absent → pas de créneau réel pour ce jour
     if (!times || typeof times !== "object" || Array.isArray(times)) continue;
     const timesObj = times as Record<string, unknown>;
 
