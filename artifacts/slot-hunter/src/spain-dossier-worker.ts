@@ -43,6 +43,7 @@ import {
 import {
   getDecodoProxyForIndex,
   getDecodoPoolSize,
+  flagDecodoIp,
 } from "./spain-decodo-pool.js";
 import {
   reportSlotFound,
@@ -103,6 +104,33 @@ const DATETIME_MONTHS_AHEAD = ((): number => {
 })();
 
 const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
+
+// ─── Détection erreur proxy ────────────────────────────────────────────────────
+
+/**
+ * Détecte si une chaîne d'erreur correspond à un proxy injoignable (connexion refusée,
+ * timeout, erreur proxy CapSolver). Utilisée pour blacklister l'IP Decodo dès le
+ * solve CF initial (pas seulement lors d'un scan 0B).
+ *
+ * Cas connus :
+ *  - impit : "ECONNREFUSED", "ECONNRESET", "proxy", "connect"
+ *  - CapSolver : "ERROR_PROXY_*", "custom proxy connect", "proxy connect", "proxy refused"
+ */
+function isProxyConnectError(msg: string | undefined): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return (
+    m.includes("error_proxy") ||
+    m.includes("proxy connect") ||
+    m.includes("proxy refused") ||
+    m.includes("custom proxy") ||
+    m.includes("econnrefused") ||
+    m.includes("econnreset") ||
+    m.includes("epipe") ||
+    m.includes("proxy timeout") ||
+    m.includes("connect timeout")
+  );
+}
 
 // ─── Types internes ───────────────────────────────────────────────────────────
 
@@ -171,11 +199,23 @@ export async function runDossierWorker(
     "INFO",
     `${tag} 🔎 Probe portail CF → ${proxyUrl ? maskProxy(proxyUrl) : "direct"} …`,
   );
-  const { challengeHtml, ua: probeUA } = await captureChallengePage(
+  const { challengeHtml, ua: probeUA, proxyError: probeProxyError } = await captureChallengePage(
     probeImpit,
     config.portalUrl,
     tag,
   );
+
+  // Probe a détecté que le proxy est injoignable → blacklist immédiate avant solve
+  if (probeProxyError && proxyUrl) {
+    log("WARN", `${tag} 🚫 Probe proxy injoignable — blacklist ${maskProxy(proxyUrl)}`);
+    flagDecodoIp(proxyUrl, "probe-connect-error");
+    workerResult = {
+      dossierId: config.id,
+      status: "error",
+      errorMessage: `Proxy injoignable au probe CF: ${maskProxy(proxyUrl)}`,
+    };
+    return workerResult;
+  }
 
   // ── 3. Solve CF en passant le HTML capturé ───────────────────────────────────
   // Sans HTML : cf_clearance lié au Chrome CapSolver → impit reçoit 403/0B (TLS différent)
@@ -193,6 +233,11 @@ export async function runDossierWorker(
   );
 
   if (!solveResult.success || !solveResult.session) {
+    // Si l'échec est dû au proxy injoignable → blacklist immédiate
+    if (proxyUrl && isProxyConnectError(solveResult.error)) {
+      log("WARN", `${tag} 🚫 Solve CF proxy injoignable — blacklist ${maskProxy(proxyUrl)}`);
+      flagDecodoIp(proxyUrl, `solve-proxy-error: ${solveResult.error?.slice(0, 60)}`);
+    }
     workerResult = {
       dossierId: config.id,
       status: "error",
@@ -399,7 +444,7 @@ async function captureChallengePage(
   impit: any,
   portalUrl: string,
   tag: string,
-): Promise<{ challengeHtml: string; ua: string }> {
+): Promise<{ challengeHtml: string; ua: string; proxyError: boolean }> {
   try {
     const res = await impit.fetch(portalUrl, {
       headers: {
@@ -427,10 +472,15 @@ async function captureChallengePage(
       (isCfChallenge ? "✅ CF challenge détecté" : "(pas de challenge — session directe)"),
     );
 
-    return { challengeHtml: html, ua: IMPIT_CHROME_UA };
+    return { challengeHtml: html, ua: IMPIT_CHROME_UA, proxyError: false };
   } catch (e) {
-    log("WARN", `${tag} Probe portail error: ${e} — solve CF sans HTML (risque 403)`);
-    return { challengeHtml: "", ua: IMPIT_CHROME_UA };
+    const errMsg = String(e);
+    const proxyError = isProxyConnectError(errMsg);
+    log(
+      proxyError ? "WARN" : "WARN",
+      `${tag} Probe portail error${proxyError ? " (proxy injoignable)" : ""}: ${e} — solve CF sans HTML (risque 403)`,
+    );
+    return { challengeHtml: "", ua: IMPIT_CHROME_UA, proxyError };
   }
 }
 
@@ -476,7 +526,15 @@ async function rotateWorkerIp(
 
   // 3 + 4. Nouvel impit + probe portail
   const newImpit = createImpitWithProxy(newProxy ?? "");
-  const { challengeHtml, ua } = await captureChallengePage(newImpit, config.portalUrl, tag);
+  const { challengeHtml, ua, proxyError: probeProxyError } = await captureChallengePage(newImpit, config.portalUrl, tag);
+
+  // Probe a détecté que la nouvelle IP est injoignable → blacklist immédiate
+  if (probeProxyError && newProxy) {
+    log("WARN", `${tag} 🚫 Rotation probe proxy injoignable — blacklist ${maskProxy(newProxy)}`);
+    flagDecodoIp(newProxy, "rotation-probe-connect-error");
+    await releaseWorkerIp(newProxy, config.id).catch(() => {});
+    return null;
+  }
 
   // 5. Solve CF avec le HTML du nouvel impit
   const solveResult = await solveSpainCloudflare(
@@ -488,6 +546,11 @@ async function rotateWorkerIp(
   );
 
   if (!solveResult.success || !solveResult.session) {
+    // Si l'échec est dû au proxy injoignable → blacklist immédiate
+    if (newProxy && isProxyConnectError(solveResult.error)) {
+      log("WARN", `${tag} 🚫 Rotation solve CF proxy injoignable — blacklist ${maskProxy(newProxy)}`);
+      flagDecodoIp(newProxy, `rotation-solve-proxy-error: ${solveResult.error?.slice(0, 60)}`);
+    }
     log("WARN", `${tag} ❌ Rotation CF solve échoué: ${solveResult.error} — libération ${maskProxy(newProxy)}`);
     if (newProxy) await releaseWorkerIp(newProxy, config.id).catch(() => {});
     return null;
