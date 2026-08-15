@@ -52,7 +52,6 @@ import {
   uploadFile,
   type SlotDiscoveryEvent,
 } from "./convexClient.js";
-import { matchServiceForVisa } from "./spain-service-mapping.js";
 import { log } from "./scheduler-utils.js";
 
 // ─── Types publics ────────────────────────────────────────────────────────────
@@ -600,19 +599,11 @@ async function workerScanCycle(
       config.portalUrl,
     );
     const rawServices = svcPayload ? extractServiceDetails(svcPayload) : [];
+    // Tous les portails citaconsular.es sont mono-service — on prend toujours services[0].
+    // matchServiceForVisa n'est pas nécessaire ici (aucun portail multi-service en prod).
     if (rawServices.length > 0) {
-      // Convertir en ExtractedSlotInfo[] pour matchServiceForVisa
-      const extSlots = rawServices.map((s) => ({ serviceId: s.id, serviceName: s.name }));
-      const matched = matchServiceForVisa(extSlots, config.visaType) ?? extSlots[0];
-      if (matched) {
-        serviceId = matched.serviceId;
-        serviceName = matched.serviceName;
-        if (matched !== extSlots[0] || extSlots.length === 1) {
-          // Match explicite ou portail mono-service : déjà loggé par matchServiceForVisa
-        } else {
-          log("WARN", `${tag} getservices/: aucun match visaType "${config.visaType}" → fallback premier service "${serviceName}"`);
-        }
-      }
+      serviceId   = rawServices[0].id;
+      serviceName = rawServices[0].name;
     }
   } catch (e) {
     log("WARN", `${tag} getservices/ error: ${e}`);
