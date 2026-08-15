@@ -96,7 +96,7 @@ export default function APropos() {
             {[
               { icon: ShieldCheck, title: "Paiement au résultat", desc: "La prime de succès n'est due que lorsque nous obtenons votre créneau consulaire ou votre e-Visa. Aucun résultat = aucun solde. Zéro risque pour vous." },
               { icon: Zap, title: "100% Mobile Money", desc: "Payez via M-Pesa (Vodacom), Airtel Money ou Orange Money. Aucune carte bancaire internationale, aucun virement SWIFT. Conçu pour les résidents de Kinshasa et de la RDC." },
-              { icon: Users, title: "Équipe basée à Kinshasa", desc: "Notre équipe connaît les réalités locales : les files au CEV, les particularités de l'ambassade US de Gombe, les banques pour le paiement MRV." },
+              { icon: Users, title: "Équipe basée à Kinshasa", desc: "Notre équipe connaît les réalités locales : les files au CEV, les particularités de l'ambassade US de Gombe, les spécificités de chaque consulat." },
               { icon: Globe, title: "Surveillance 24/7 des portails", desc: "Nos systèmes surveillent en permanence les portails officiels (usvisaappt.com, CEV, IRCC, ICP) pour capturer les disponibilités dès qu'elles apparaissent." },
               { icon: Award, title: "Expertise multi-destinations", desc: "USA, Canada, Schengen, UK, Dubaï, Turquie, Maroc, Égypte, Inde — chaque destination a ses particularités que nous maîtrisons." },
               { icon: CheckCircle2, title: "Transparence totale", desc: "Tableau de bord client en temps réel, notifications WhatsApp à chaque étape, tarifs affichés publiquement. Aucun frais caché." },
@@ -127,7 +127,7 @@ export default function APropos() {
             Akollad Groupe développe des plateformes technologiques qui résolvent des problèmes concrets pour les Congolais : accès aux services consulaires, digitalisation de processus administratifs, et solutions de paiement mobile.
           </p>
           <p className="text-muted-foreground leading-relaxed">
-            Notre approche : combiner la technologie (surveillance automatisée, portails en ligne, tableaux de bord) avec l'expertise humaine (connaissance des consulats, préparation des dossiers, accompagnement personnalisé).
+            Notre approche : combiner des systèmes de surveillance en continu avec l'expertise humaine (connaissance des consulats, préparation des dossiers, accompagnement personnalisé).
           </p>
         </div>
       </section>

@@ -18,34 +18,34 @@ function FlagImg({ code, size = 32, className = "" }: { code: string; size?: num
 }
 
 const DESTINATIONS = [
-  { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", external: "185-210 USD (MRV ambassade)", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)", note: null },
-  { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", external: "185 CAD+ (IRCC + biométrie)", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)", note: null },
-  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (CEV)", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null, note: null },
-  { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", external: "£115+ (UKVI)", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null, note: null },
-  { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", external: "90 €/adulte (ambassade)", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null, note: null },
-  { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", external: "90 €+ (consulat)", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null, note: null },
-  { code: "de", name: "Visa Allemagne", types: "National, Schengen, Études, Travail", external: "75-80 € (consulat)", delay: "Variable (RK-Termin)", href: "/visa-schengen-kinshasa", alert: null, note: null },
-  { code: "ae", name: "E-Visa Dubaï", types: "Touriste 30j/60j, Affaires", external: "~90 USD (portail ICP)", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null, note: null },
-  { code: "tr", name: "Visa Turquie", types: "E-Visa (si visa USA/Schengen/UK), Sticker", external: "~50 USD (e-Visa)", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null, note: null },
-  { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire sans RDV, Transit 21j", external: "77-110 USD (e-Visa) / 15-25 USD (consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null, note: "ℹ️ E-Visa 100 % en ligne sur le portail officiel — aucun RDV consulaire requis. Idéal pour transit 21j (Ebola). Visa consulaire possible sans RDV à Kinshasa." },
-  { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire sans RDV, Transit 21j", external: "25-60 USD (e-Visa/consulaire)", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/e-visa-egypte-kinshasa", alert: null, note: "ℹ️ E-Visa disponible en ligne sur visa2egypt.gov.eg — idéal pour transit 21j (Ebola). Visa consulaire sans RDV à l'ambassade d'Égypte à Kinshasa." },
-  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", external: "~140 USD (consulaire) + 30 USD (VFS)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null, note: "ℹ️ Formulaire papier obligatoire — dépôt via VFS Global à Kinshasa (sans RDV). E-Visa disponible pour courts séjours (tourisme/transit). Frais VFS (~30 USD) en sus des frais consulaires." },
-  { code: "in", name: "E-Visa Inde", types: "Tourisme, Médical, Affaires", external: "25-80 USD (portail)", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null, note: null },
-  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", external: "Frais consulaires brésiliens (variable)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null, note: "ℹ️ RDV consulaire obligatoire à l'ambassade du Brésil à Kinshasa. Formulaire en ligne sur le portail VBras. Délai variable selon disponibilité des créneaux (généralement 2-4 semaines)." },
+  { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)", note: null },
+  { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)", note: null },
+  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour, Visa D", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null, note: null },
+  { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null, note: null },
+  { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null, note: null },
+  { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null, note: null },
+  { code: "de", name: "Visa Allemagne", types: "National Études / Travail, Regroupement familial, Chancenkarte", delay: "Variable (RK-Termin)", href: "/visa-schengen-kinshasa", alert: null, note: null },
+  { code: "ae", name: "Visa Dubaï (EAU)", types: "Touriste 30j/60j, Affaires, Résidence", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null, note: null },
+  { code: "tr", name: "Visa Turquie", types: "E-Visa en ligne, Visa Sticker (ambassade), Transit", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null, note: null },
+  { code: "al", name: "Visa Albanie", types: "E-Visa en ligne, Visa touristique", delay: "2-5 jours ouvrables", href: "/visa-albanie-kinshasa", alert: null, note: "ℹ️ E-Visa disponible en ligne. Titulaires d'un visa Schengen/USA/UK valide peuvent entrer sans visa." },
+  { code: "ma", name: "Visa Maroc", types: "E-Visa portail officiel, Consulaire, Transit 21j", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/visa-maroc-kinshasa", alert: null, note: "ℹ️ Idéal pour transit 21j (Ebola). E-Visa 100 % en ligne ou visa consulaire sans RDV à Kinshasa." },
+  { code: "eg", name: "Visa Égypte", types: "E-Visa en ligne, Consulaire, Transit 21j", delay: "24-72h (e-Visa) / 3-5j (consulaire)", href: "/e-visa-egypte-kinshasa", alert: null, note: "ℹ️ Idéal pour transit 21j (Ebola). E-Visa sur visa2egypt.gov.eg ou visa consulaire sans RDV à Kinshasa." },
+  { code: "cn", name: "Visa Chine", types: "E-Visa court séjour, Visa L/M/F/X2 via VFS (sans RDV)", delay: "4-7 jours ouvrables", href: "/visa-chine-kinshasa", alert: null, note: "ℹ️ Dépôt via VFS Global à Kinshasa (sans RDV). E-Visa pour courts séjours tourisme/transit." },
+  { code: "in", name: "Visa Inde", types: "E-Visa Tourisme, Médical, Affaires", delay: "72-96h", href: "/e-visa-inde-kinshasa", alert: null, note: null },
+  { code: "br", name: "Visa Brésil", types: "Tourisme (VITUR), Affaires (VITEM II), Études (VITEM IV)", delay: "Variable (RDV consulaire)", href: "/visa-bresil-kinshasa", alert: null, note: "ℹ️ RDV consulaire obligatoire à l'ambassade du Brésil à Kinshasa." },
 ];
 
 const INCLUDES = [
   "Remplissage complet des formulaires officiels (DS-160, IRCC, Schengen, etc.)",
-  "Vérification et préparation de votre dossier complet",
-  "Recherche active de créneaux consulaires (USA, Schengen, Canada)",
-  "Soumission de votre e-Visa sur les portails officiels",
+  "Vérification, profilage et préparation de votre dossier complet",
+  "Recherche et capture de créneaux consulaires (USA, Schengen, Canada, Allemagne, Espagne…)",
+  "Soumission sur les portails officiels pour les visas en ligne",
   "Suivi en temps réel via votre espace client + notifications WhatsApp",
   "Assistance pour la préparation à l'entretien consulaire",
   "Support WhatsApp réactif (réponse en moins de 2h)",
 ];
 
 const NOT_INCLUDES = [
-  "Frais consulaires / frais gouvernementaux (payés directement à l'ambassade ou au portail officiel)",
   "Assurance voyage (obligatoire pour Schengen, environ 20-50 USD/semaine)",
   "Réservations d'hôtel et billets d'avion (requis comme pièces justificatives)",
   "Frais de traduction certifiée (si documents en langues autres que français/anglais)",
@@ -165,7 +165,7 @@ export default function Prix() {
             </div>
             <p className="text-4xl font-extrabold mb-1">1 500 $</p>
             <p className="text-sm text-white/80 mb-4">500 $ à l'ouverture · 1 000 $ à l'obtention</p>
-            <p className="text-sm text-white/80 mb-4">Joventy s'occupe de tout : formulaires officiels, dossier complet, recherche de créneau ou soumission e-Visa.</p>
+            <p className="text-sm text-white/80 mb-4">Joventy prend en charge l'intégralité du processus : formulaires officiels, constitution et vérification du dossier, profilage, créneau consulaire ou visa en ligne. Vous n'avez qu'à vous présenter le jour J.</p>
             <ul className="space-y-1.5 text-xs text-white/80 mb-6 flex-1">
               <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-secondary flex-shrink-0" /> Remplissage DS-160, formulaires Schengen, UKVI…</li>
               <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-secondary flex-shrink-0" /> Préparation et vérification du dossier complet</li>
@@ -179,22 +179,22 @@ export default function Prix() {
           {/* Service partiel */}
           <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
             <div className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">
-              Service partiel
+              Accompagnement partiel
             </div>
             <p className="text-4xl font-extrabold text-primary mb-1">600 $</p>
             <p className="text-sm text-muted-foreground mb-4">600 $ — paiement unique à l'ouverture · aucune prime de succès</p>
-            <p className="text-sm text-muted-foreground mb-4">Joventy prépare vos formulaires officiels et vérifie votre dossier. Vous gérez votre créneau ou soumission ensuite.</p>
+            <p className="text-sm text-muted-foreground mb-4">Vous fournissez la majorité ou la totalité de vos documents. Joventy prend en charge la composition du dossier, le profilage et, si besoin, la recherche du créneau.</p>
             <ul className="space-y-1.5 text-xs text-slate-600 mb-6 flex-1">
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Formulaires remplis et vérifiés par un expert</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Sans prime si aucun créneau obtenu de votre côté</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Toutes destinations</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Composition et vérification du dossier par un expert</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Profilage et conseils personnalisés</li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Toutes destinations — visa consulaire inclus</li>
             </ul>
             <Link href="/register">
-              <Button variant="outline" className="w-full font-bold">Démarrer — Formulaires</Button>
+              <Button variant="outline" className="w-full font-bold">Démarrer — Accompagnement partiel</Button>
             </Link>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-6 text-center italic">* Tous les prix sont en USD. Les frais consulaires (payés directement au gouvernement) ne sont pas inclus.</p>
+        <p className="text-xs text-muted-foreground mt-6 text-center italic">* Tous les prix sont en USD. Paiement exclusivement via M-Pesa, Airtel Money ou Orange Money.</p>
       </section>
 
       {/* CRÉNEAUX PAR DESTINATION */}
@@ -209,10 +209,10 @@ export default function Prix() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
-              { href: "/creneaux-visa-espagne-kinshasa", flag: "es", label: "Créneau Visa Espagne", sub: "Email ambassade + citaconsular.es" },
-              { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", label: "Créneau Schengen CEV Belgique", sub: "visaonweb.be / CEV Kinshasa" },
-              { href: "/creneaux-visa-usa-kinshasa", flag: "us", label: "Créneau Visa USA", sub: "usvisaappt.com" },
-              { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", label: "Créneau Long Séjour Allemagne", sub: "RK-Termin / Visa national D" },
+              { href: "/creneaux-visa-espagne-kinshasa", flag: "es", label: "Créneau Visa Espagne", sub: "Visa Schengen via ambassade d'Espagne" },
+              { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", label: "Créneau Schengen — CEV Belgique", sub: "France, Belgique, Pays-Bas, Italie…" },
+              { href: "/creneaux-visa-usa-kinshasa", flag: "us", label: "Créneau Visa USA", sub: "B1/B2 Tourisme · F1 Études" },
+              { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", label: "Créneau Long Séjour Allemagne", sub: "Études, travail, regroupement familial" },
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <div className="group flex items-center gap-3 bg-white border border-green-200 hover:border-secondary rounded-xl px-4 py-3 transition-all hover:shadow-sm cursor-pointer">
@@ -234,15 +234,14 @@ export default function Prix() {
 
       {/* TABLE DES DESTINATIONS */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
-        <h2 className="text-xl font-bold text-primary mb-4">Frais consulaires par destination</h2>
-        <p className="text-sm text-muted-foreground mb-6">Les tarifs Joventy sont identiques pour toutes les destinations. Ci-dessous les frais gouvernementaux à votre charge selon la destination choisie.</p>
+        <h2 className="text-xl font-bold text-primary mb-4">Destinations couvertes</h2>
+        <p className="text-sm text-muted-foreground mb-6">Les tarifs Joventy sont identiques pour toutes les destinations. Les frais gouvernementaux ou consulaires restent à votre charge et sont payés directement aux organismes concernés.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-muted border-b-2 border-primary/20">
                 <th className="text-left px-4 py-3 font-bold text-primary">Destination</th>
                 <th className="text-left px-4 py-3 font-bold text-primary hidden sm:table-cell">Types de visa</th>
-                <th className="text-left px-4 py-3 font-bold text-primary hidden md:table-cell">Frais consulaires</th>
                 <th className="text-center px-4 py-3 font-bold text-primary hidden lg:table-cell">Délai estimé</th>
               </tr>
             </thead>
@@ -258,7 +257,6 @@ export default function Prix() {
                     {p.note && <p className="text-[10px] text-blue-700 mt-1 leading-relaxed">{p.note}</p>}
                   </td>
                   <td className="px-4 py-4 text-xs text-muted-foreground hidden sm:table-cell">{p.types}</td>
-                  <td className="px-4 py-4 text-xs text-muted-foreground hidden md:table-cell">{p.external}</td>
                   <td className="px-4 py-4 text-xs text-center text-muted-foreground hidden lg:table-cell">{p.delay}</td>
                 </tr>
               ))}
@@ -279,17 +277,16 @@ export default function Prix() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
-              { flag: "ma", name: "Maroc", visa: "E-Visa 77-110$", delay: "24-72h" },
-              { flag: "eg", name: "Égypte", visa: "Visa ~60$", delay: "24-72h" },
-              { flag: "ae", name: "Dubaï", visa: "E-Visa ~90$", delay: "48-72h" },
+              { flag: "ma", name: "Maroc", delay: "24-72h" },
+              { flag: "eg", name: "Égypte", delay: "24-72h" },
+              { flag: "ae", name: "Dubaï (EAU)", delay: "48-72h" },
             ].map((t) => (
               <div key={t.flag} className="bg-white border border-red-200 rounded-xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <FlagImg code={t.flag} size={24} />
                   <span className="font-bold text-primary">{t.name}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Frais Joventy : <span className="font-bold text-primary">voir formules ci-dessus</span></p>
-                <p className="text-xs text-muted-foreground">Frais visa : {t.visa}</p>
+                <p className="text-xs text-muted-foreground">Joventy : <span className="font-bold text-primary">voir formules ci-dessus</span></p>
                 <p className="text-xs text-muted-foreground">Délai : {t.delay}</p>
               </div>
             ))}

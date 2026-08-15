@@ -26,8 +26,8 @@ function snapFlagSize(n: number) {
 const FLAG_NAMES: Record<string, string> = {
   us: "États-Unis", ca: "Canada", gb: "Royaume-Uni", eu: "Europe Schengen",
   es: "Espagne", ch: "Suisse", ae: "Émirats Arabes Unis (Dubaï)", tr: "Turquie",
-  in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine", cd: "République Démocratique du Congo",
-  fr: "France", be: "Belgique", de: "Allemagne", br: "Brésil",
+  al: "Albanie", in: "Inde", ma: "Maroc", eg: "Égypte", cn: "Chine",
+  cd: "République Démocratique du Congo", fr: "France", be: "Belgique", de: "Allemagne", br: "Brésil",
 };
 function FlagImg({ code, size = 32, className = "" }: { code: string; size?: number; className?: string }) {
   const snapped = snapFlagSize(size);
@@ -52,7 +52,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais MRV 265$ non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -62,7 +62,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais IRCC (85 CAD+) non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -72,7 +72,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais UKVI (£115+) non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -82,17 +82,17 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais consulaires (90€+) non inclus",
+    note: null,
     badge: null,
   },
   {
     code: "eu",
     name: "Europe Schengen",
-    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études (gratuit*)", "Visa D Long Séjour"],
+    visaTypes: ["Visa C Tourisme / Affaires", "Visa C Études", "Visa D Long Séjour"],
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais consulaires CEV 90€/adulte non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -102,7 +102,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "evisa",
-    note: "Frais e-Visa EAU (~90$) non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -112,8 +112,18 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "evisa",
-    note: "E-Visa ~50$ (si visa USA/Schengen/UK valide)",
+    note: null,
     badge: null,
+  },
+  {
+    code: "al",
+    name: "Albanie",
+    visaTypes: ["E-Visa en ligne", "Visa touristique consulaire"],
+    engagement: 500,
+    success: 1000,
+    model: "evisa",
+    note: null,
+    badge: "Nouveau",
   },
   {
     code: "in",
@@ -122,7 +132,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "evisa",
-    note: "Frais e-Visa gouvernement (~25-80$) non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -132,7 +142,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais consulaires 90€/adulte non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -142,27 +152,27 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais consulaires (75-80€) non inclus",
+    note: null,
     badge: null,
   },
   {
     code: "ma",
     name: "Maroc",
-    visaTypes: ["E-Visa portail officiel", "Consulaire sans RDV", "Transit Ebola 21j"],
+    visaTypes: ["E-Visa portail officiel", "Visa consulaire", "Transit Ebola 21j"],
     engagement: 500,
     success: 1000,
     model: "hybrid",
-    note: "E-Visa 77-110$ ou consulaire 15-25$ non inclus",
+    note: null,
     badge: null,
   },
   {
     code: "eg",
     name: "Égypte",
-    visaTypes: ["E-Visa en ligne (visa2.egypt.gov.eg)", "Consulaire sans RDV", "Transit Ebola 21j"],
+    visaTypes: ["E-Visa en ligne", "Visa consulaire", "Transit Ebola 21j"],
     engagement: 500,
     success: 1000,
     model: "hybrid",
-    note: "E-Visa 25-60$ ou consulaire ~60$ non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -172,7 +182,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais consulaires ~140$ + VFS ~30$ non inclus",
+    note: null,
     badge: null,
   },
   {
@@ -182,7 +192,7 @@ const DESTINATIONS = [
     engagement: 500,
     success: 1000,
     model: "appointment",
-    note: "Frais consulaires brésiliens non inclus",
+    note: null,
     badge: "Nouveau",
   },
 ];
@@ -203,13 +213,13 @@ const STEPS = [
   {
     num: "03",
     title: "Joventy traite votre dossier",
-    desc: "Notre équipe remplit vos formulaires, vérifie vos pièces et cherche activement votre créneau consulaire ou soumet votre e-Visa.",
+    desc: "Notre équipe prépare et vérifie votre dossier, remplit les formulaires officiels et cherche activement votre créneau consulaire — ou soumet votre demande en ligne selon votre destination.",
     icon: Zap,
   },
   {
     num: "04",
     title: "Vous ne payez qu'à la réussite",
-    desc: "La prime de succès n'est due qu'une fois le résultat obtenu : créneau verrouillé ou visa électronique accordé. Aucun résultat, aucun solde.",
+    desc: "La prime de succès n'est due qu'une fois le résultat obtenu. Aucun résultat, aucun solde à payer.",
     icon: CheckCircle2,
   },
 ];
@@ -218,14 +228,14 @@ const PACKAGES = [
   {
     key: "full_service",
     icon: Star,
-    label: "Service Complet",
+    label: "Assistance Complète",
     tagline: "Recommandé — Clé en main",
-    desc: "Joventy gère tout : formulaires officiels, vérification de votre dossier, et recherche active de créneau consulaire ou dépôt e-Visa en votre nom. Vous n'avez qu'à vous présenter le jour J.",
+    desc: "Joventy prend en charge l'intégralité du processus : formulaires, constitution du dossier, profilage, créneau consulaire ou demande en ligne. Visa consulaire ou électronique — vous n'avez qu'à vous présenter le jour J.",
     highlight: true,
     features: [
-      "Formulaires DS-160, MRV, VFS ou e-Visa",
-      "Vérification complète des pièces justificatives",
-      "Recherche active de créneau consulaire",
+      "Formulaires officiels remplis (DS-160, Schengen, UKVI…)",
+      "Constitution et vérification complète du dossier",
+      "Recherche active de créneau consulaire ou soumission en ligne",
       "Chat dédié avec un conseiller Joventy",
       "Prime de succès due uniquement si résultat",
     ],
@@ -235,12 +245,12 @@ const PACKAGES = [
     icon: Calendar,
     label: "Créneau Uniquement",
     tagline: "Dossier déjà prêt",
-    desc: "Vos formulaires sont remplis, vos frais MRV payés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade (USA) ou au CEV (Schengen/Espagne).",
+    desc: "Votre dossier est complet ? Joventy surveille 24h/24 le système de rendez-vous et verrouille votre créneau dès qu'une place se libère — USA, Schengen, Espagne, Allemagne et plus.",
     highlight: false,
     features: [
-      "Surveillance continue du portail consulaire",
-      "Alerte immédiate à la capture",
-      "Disponible USA, Schengen (CEV) & Espagne",
+      "Surveillance continue du système consulaire 24h/24",
+      "Capture immédiate dès qu'un créneau apparaît",
+      "USA, Schengen (CEV), Espagne, Allemagne (RK-Termin)…",
       "350 $ — payés UNIQUEMENT après obtention",
       "Aucun acompte, zéro paiement à l'avance",
     ],
@@ -248,16 +258,16 @@ const PACKAGES = [
   {
     key: "dossier_only",
     icon: ClipboardList,
-    label: "Formulaires & Vérification",
+    label: "Accompagnement Partiel",
     tagline: "600 $ — paiement unique",
-    desc: "Joventy remplit vos formulaires officiels et vérifie vos pièces. Vous gérez ensuite vous-même la soumission ou le rendez-vous. Tarif forfaitaire, aucune prime de succès.",
+    desc: "Vous fournissez la majorité ou la totalité de vos documents. Joventy compose votre dossier, assure le profilage et gère le reste — y compris le créneau. Tarif forfaitaire, aucune prime de succès.",
     highlight: false,
     features: [
-      "Remplissage des formulaires officiels",
-      "Vérification complète de votre dossier",
+      "Composition et vérification du dossier",
+      "Profilage et conseils personnalisés",
       "600 $ — paiement unique à l'ouverture",
       "Disponible pour toutes les destinations",
-      "Idéal si vous avez déjà un créneau",
+      "Visa consulaire et visa en ligne inclus",
     ],
   },
 ];
@@ -490,7 +500,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Combien coûte le service Joventy ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire uniquement : 350 $ — payés UNIQUEMENT après obtention, aucun acompte. (2) Service visa complet (dossier + créneau + accompagnement) : 500 $ d'engagement + 1 000 $ prime de succès = 1 500 $ au total, toutes destinations. (3) Service visa partiel (formulaires uniquement) : 600 $ forfaitaire payés à l'ouverture — aucune prime de succès. Les frais consulaires gouvernementaux (MRV USA ≈185 $, CEV Schengen ≈90 €, UKVI UK ≈115 £, portail Dubaï ≈90 $) sont séparés et payés directement au gouvernement." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire uniquement : 350 $ — payés UNIQUEMENT après obtention, aucun acompte. (2) Assistance complète (dossier + créneau + accompagnement) : 500 $ d'engagement + 1 000 $ prime de succès = 1 500 $ au total, toutes destinations. (3) Accompagnement partiel : 600 $ forfaitaire payés à l'ouverture — aucune prime de succès. Les frais gouvernementaux (consulaires ou en ligne selon la destination) sont payés directement au gouvernement par le client." }
             },
             {
               "@type": "Question",
@@ -530,17 +540,17 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Comment obtenir un visa Schengen depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa Schengen depuis Kinshasa, le rendez-vous se prend via le système CEV (Centre d'Encodage des Visas) géré par l'ambassade belge. Les créneaux sont très limités et pris d'assaut. Joventy surveille le portail CEV en continu et verrouille un créneau dès qu'il est disponible. Service créneau seul : 350 $ payés UNIQUEMENT après obtention (0 acompte). Service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. Frais CEV (≈90 €) payés séparément. En 2026, le système EES (Entry/Exit System) biométrique est en vigueur dans toute la zone Schengen depuis le 10 avril 2026." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa Schengen depuis Kinshasa, le rendez-vous se prend via le Centre Européen des Visas (CEV), géré par l'ambassade belge, sur le portail Visa On Web (visaonweb.diplomatie.be). Les créneaux sont très limités et pris d'assaut. Joventy surveille le système en continu et verrouille un créneau dès qu'il est disponible. Service créneau seul : 350 $ payés UNIQUEMENT après obtention (0 acompte). Service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. En 2026, le système EES (Entry/Exit System) biométrique est en vigueur dans toute la zone Schengen depuis le 10 avril 2026." }
             },
             {
               "@type": "Question",
               "name": "Comment obtenir un e-Visa Dubaï depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "L'e-Visa Dubaï (Émirats Arabes Unis) se demande en ligne via le portail officiel ICP des EAU. Le résultat est généralement obtenu en 48 à 72 heures ouvrables. Joventy prend en charge toute la procédure de soumission. Frais Joventy service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. Les frais officiels du gouvernement des EAU (environ 90 $) sont payés séparément par le client." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Le visa Dubaï (Émirats Arabes Unis) se demande en ligne via le portail officiel des EAU. Le résultat est généralement obtenu en 48 à 72 heures ouvrables. Joventy prend en charge toute la procédure de soumission. Frais Joventy service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. Les frais officiels du gouvernement des EAU sont payés séparément par le client directement sur le portail officiel." }
             },
             {
               "@type": "Question",
               "name": "Joventy peut-il aider pour un visa Canada depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy prend en charge les dossiers IRCC (Immigration, Réfugiés et Citoyenneté Canada) pour les visas visiteur, permis d'études et permis de travail. Attention : en 2026, le Canada a suspendu la délivrance de visas aux résidents de la RDC du 27 mai au 28 août 2026 suite à l'épidémie d'Ebola. Les demandes reprennent après cette période. Frais Joventy service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. Frais IRCC (85 CAD+) non inclus." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy prend en charge les dossiers IRCC (Immigration, Réfugiés et Citoyenneté Canada) pour les visas visiteur, permis d'études et permis de travail. Attention : en 2026, le Canada a suspendu la délivrance de visas aux résidents de la RDC du 27 mai au 28 août 2026 suite à l'épidémie d'Ebola. Les demandes reprennent après cette période. Frais Joventy service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total." }
             },
             {
               "@type": "Question",
@@ -550,7 +560,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Les frais consulaires sont-ils inclus dans le prix Joventy ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Non. Les frais consulaires gouvernementaux ne sont jamais inclus dans les tarifs Joventy. Ils sont payés directement par le client auprès du gouvernement ou de l'organisme officiel : frais MRV USA (185-210 $, payés via une banque partenaire), frais CEV Schengen (90 €, payés au portail CEV), frais UKVI Royaume-Uni (à partir de 115 £), frais portail EAU pour Dubaï (environ 90 $), frais e-Visa Turquie (environ 50 $). Joventy vous indique précisément quoi payer et comment." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Non. Les frais gouvernementaux (consulaires ou en ligne selon la destination) ne sont pas inclus dans les tarifs Joventy. Ils sont payés directement par le client auprès du gouvernement ou de l'organisme officiel concerné. De même, l'assurance voyage, les réservations d'hôtel et les billets d'avion sont à la charge du client. Joventy vous indique précisément ce qu'il faut préparer et comment." }
             },
             {
               "@type": "Question",
@@ -775,7 +785,7 @@ export default function Landing() {
                 {[
                   { text: "Joventy n'est pas un consulat et ne délivre pas de visas", note: "La décision d'accord ou de refus appartient exclusivement à l'ambassade ou au gouvernement étranger." },
                   { text: "Joventy ne garantit pas l'approbation finale du visa", note: "Nous garantissons uniquement le service : si nous ne trouvons pas de créneau ou si l'e-Visa est refusé, vous ne payez pas la prime de succès." },
-                  { text: "Les frais consulaires et annexes ne sont pas inclus dans nos tarifs", note: "MRV USA (185-210$), frais CEV Schengen (90€), e-Visa Turquie (~50$), e-Visa EAU (~90$), e-Visa Inde (~25-80$), assurance voyage, réservations d'hôtel et de billets d'avion restent à la charge du client et sont payés directement aux organismes concernés." },
+                  { text: "Les frais gouvernementaux et annexes ne sont pas inclus dans nos tarifs", note: "Les frais officiels (consulaires ou en ligne selon la destination) sont payés directement par vous auprès du gouvernement ou de l'organisme concerné. L'assurance voyage, les réservations d'hôtel et les billets d'avion sont également à votre charge." },
                 ].map((item) => (
                   <li key={item.text} className="flex items-start gap-3">
                     <XCircle className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
@@ -839,21 +849,21 @@ export default function Landing() {
               Votre dossier est prêt ? On prend votre rendez-vous — 350 $ après résultat
             </h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto text-sm">
-              Si vos formulaires sont remplis et vos frais payés, Joventy surveille le portail officiel 24h/24 et verrouille votre créneau dès qu'un slot apparaît. Vous payez uniquement après confirmation.
+              Votre dossier est prêt ? Joventy surveille le système de rendez-vous consulaire 24h/24 et verrouille votre créneau dès qu'une place apparaît. Vous payez uniquement après confirmation.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { href: "/creneaux-visa-espagne-kinshasa", flag: "es", emoji: "🇪🇸", name: "Espagne", portal: "citaconsular.es" },
-              { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", emoji: "🇧🇪", name: "Schengen CEV", portal: "visaonweb.be" },
-              { href: "/creneaux-visa-usa-kinshasa", flag: "us", emoji: "🇺🇸", name: "USA", portal: "usvisaappt.com" },
-              { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", emoji: "🇩🇪", name: "Allemagne", portal: "RK-Termin" },
+              { href: "/creneaux-visa-espagne-kinshasa", emoji: "🇪🇸", name: "Espagne", sub: "Visa Schengen via ambassade d'Espagne" },
+              { href: "/creneaux-visa-schengen-belgique-kinshasa", emoji: "🇧🇪", name: "Schengen — CEV", sub: "France, Belgique, Pays-Bas, Italie…" },
+              { href: "/creneaux-visa-usa-kinshasa", emoji: "🇺🇸", name: "États-Unis", sub: "B1/B2 Tourisme · F1 Études" },
+              { href: "/creneaux-visa-allemagne-kinshasa", emoji: "🇩🇪", name: "Allemagne", sub: "Études, travail, regroupement familial" },
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <div className="group bg-white border border-green-200 hover:border-secondary hover:shadow-md rounded-2xl p-5 flex flex-col items-center text-center transition-all cursor-pointer">
                   <span className="text-3xl mb-3">{item.emoji}</span>
                   <p className="font-black text-primary text-base group-hover:text-secondary transition-colors">{item.name}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{item.portal}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{item.sub}</p>
                   <div className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-green-700">
                     350 $ après résultat <ChevronRight className="w-3.5 h-3.5" />
                   </div>
@@ -952,7 +962,7 @@ export default function Landing() {
             <div className="flex items-center gap-4">
               <Wifi className="w-8 h-8 text-secondary flex-shrink-0" />
               <p className="text-white/80 text-sm leading-relaxed">
-                <strong className="text-white">Joventy ne remplace pas l'ambassade.</strong> Nous sommes l'intermédiaire digital entre vous et les portails officiels (usvisaappt.com, cev-kin.eu, portail ICP Dubaï...) — sans que vous ayez à comprendre ces systèmes complexes.
+                <strong className="text-white">Joventy ne remplace pas l'ambassade.</strong> Nous sommes l'intermédiaire de confiance entre vous et les systèmes consulaires officiels — sans que vous ayez à maîtriser ces procédures complexes.
               </p>
             </div>
             <Link href="/register" className="flex-shrink-0">
@@ -1267,8 +1277,8 @@ export default function Landing() {
                 a: "Si vous avez obtenu un créneau de rendez-vous (USA, Schengen) ou votre e-Visa (Dubaï, Turquie, Inde), Joventy a rempli sa mission et la prime de succès est due. Le refus consulaire lors de l'entretien est une décision souveraine de l'ambassade, indépendante du service Joventy.",
               },
               {
-                q: "Les frais consulaires, assurances et réservations sont-ils inclus dans vos tarifs ?",
-                a: "Non. Les frais consulaires sont payés directement par vous au gouvernement ou à l'organisme concerné (banque pour le MRV USA, CEV pour le Schengen, portail officiel pour Dubaï, Turquie et l'Inde). De même, l'assurance voyage, les réservations d'hôtel et les billets d'avion — souvent exigés par le consulat comme pièces justificatives — sont entièrement à votre charge. Joventy vous indique ce qu'il faut préparer, mais ne règle pas ces frais à votre place.",
+                q: "Les frais gouvernementaux, assurances et réservations sont-ils inclus dans vos tarifs ?",
+                a: "Non. Les frais officiels (consulaires ou en ligne selon la destination) sont payés directement par vous auprès du gouvernement ou de l'organisme concerné. De même, l'assurance voyage, les réservations d'hôtel et les billets d'avion — souvent exigés comme pièces justificatives — sont entièrement à votre charge. Joventy vous indique précisément ce qu'il faut préparer, mais ne règle pas ces frais à votre place.",
               },
               {
                 q: "Mes documents et informations personnelles sont-ils en sécurité ?",

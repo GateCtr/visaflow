@@ -435,7 +435,7 @@ export default function DestinationPage() {
               <div className="flex-1">
                 <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
-                  DS-160 soumis et frais MRV payés ? Joventy prend votre créneau — 350 $ après résultat
+                  Dossier prêt ? Joventy prend votre créneau USA — 350 $ payés uniquement après résultat
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
                   Joventy surveille usvisaappt.com en permanence et réserve votre créneau à l'ambassade américaine de Kinshasa dès qu'un slot se libère. Aucun acompte — 350 $ payés uniquement après confirmation.

@@ -158,7 +158,7 @@ export function CreneauxLanding({ data }: Props) {
               {[
                 "Aucun acompte requis",
                 "Paiement M-Pesa accepté",
-                `Portail ${data.portal} surveillé 24h/24`,
+                "Surveillance active 24h/24, 7j/7",
                 "Notification WhatsApp immédiate",
               ].map((item) => (
                 <div key={item} className="flex items-center gap-2 text-white/80 text-xs">
@@ -255,8 +255,8 @@ export function CreneauxLanding({ data }: Props) {
                 color: "text-secondary",
                 bg: "bg-orange-50",
                 border: "border-orange-200",
-                title: `Robot sur ${data.portal} 24h/24`,
-                desc: `Notre outil surveille ${data.portal} en permanence. Vous seriez prévenu dans les secondes qui suivent l'apparition d'un créneau.`,
+                title: "Surveillance active 24h/24",
+                desc: "Le système Joventy surveille le portail consulaire en permanence. Vous êtes prévenu dans les secondes qui suivent l'apparition d'un créneau disponible.",
               },
               {
                 icon: Clock,
@@ -291,11 +291,6 @@ export function CreneauxLanding({ data }: Props) {
                   <p className="text-sm text-slate-700">{item}</p>
                 </div>
               ))}
-            </div>
-            <div className="bg-slate-50 px-6 py-4 border-t border-border">
-              <p className="text-xs text-muted-foreground">
-                <strong>Non inclus :</strong> Frais consulaires ({data.name === "États-Unis" ? "185 $ MRV payés sur usvisaappt.com" : data.name === "Schengen — CEV Belgique" ? "90 €/adulte CEV payés au guichet" : data.name === "Espagne" ? "90 €/adulte payés à l'ambassade le jour J" : "frais consulaires payés directement à l'ambassade"}), assurance voyage, billet d'avion.
-              </p>
             </div>
           </div>
         </div>
@@ -342,7 +337,7 @@ export function CreneauxLanding({ data }: Props) {
               Prêt à obtenir votre créneau {data.name} ?
             </h2>
             <p className="text-white/70 text-base mb-8 max-w-xl mx-auto leading-relaxed">
-              Votre dossier est prêt. Joventy surveille <strong>{data.portal}</strong> en permanence.
+              Votre dossier est prêt. Joventy surveille le système consulaire en permanence.
               Aucun acompte — vous payez 350 $ uniquement quand le créneau est confirmé.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
