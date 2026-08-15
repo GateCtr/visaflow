@@ -216,7 +216,7 @@ export const create = mutation({
       successFee = tierData.successAmount;
       totalPrice = tierData.total;
     } else {
-      // dossier_only = visa partiel : 600 USD forfait fixe (VISA_PARTIAL_SERVICE), aucune prime de succès
+      // dossier_only = Accompagnement Partiel : 200 USD engagement + 400 USD prime de succès (VISA_PARTIAL_SERVICE)
       engagementFee = isDossierOnly ? VISA_PARTIAL_SERVICE.engagementFee : pricing.engagementFee;
       successFee = isDossierOnly ? VISA_PARTIAL_SERVICE.successFee : pricing.successFee;
       totalPrice = isDossierOnly ? VISA_PARTIAL_SERVICE.total : pricing.total;

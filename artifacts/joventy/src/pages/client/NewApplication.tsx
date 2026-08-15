@@ -221,25 +221,25 @@ function getPackageInfo(
       return {
         label: base.label,
         tagline: base.tagline,
-        description: `Vous rassemblez vos pièces justificatives, Joventy constitue le dossier, remplit les formulaires et soumet votre demande sur le ${portal}. Forfait fixe 600 $ — aucune prime de succès.`,
+        description: `Vous fournissez vos documents ou la majorité. Joventy complète les pièces manquantes, constitue votre dossier et soumet votre demande sur le ${portal}. Prime de succès payée uniquement à l'obtention de votre visa.`,
       };
     }
     const isVisaDDossier = visaType.includes("Long Séjour") || visaType.includes("Visa D");
-    const rdv =
-      destination === "usa"           ? "à l'ambassade américaine de Kinshasa"
-      : destination === "canada"      ? "au centre VFS IRCC (collecte biométrique & dépôt)"
-      : destination === "uk"          ? "au centre VFS UKVI (UK Visas & Immigration)"
-      : destination === "switzerland" ? "au centre VFS Global Suisse de Kinshasa"
-      : destination === "spain"       ? "à l'ambassade d'Espagne (citaconsular.es)"
-      : destination === "schengen" && isVisaDDossier ? "au portail long séjour du pays cible (TLScontact / Visaonweb)"
-      : destination === "schengen"    ? "au Centre Européen des Visas (CEV) Kinshasa"
-      : destination === "germany"     ? "à l'ambassade d'Allemagne (portail RK-Termin)"
-      : destination === "brazil"      ? "à l'ambassade du Brésil à Kinshasa"
-      : "au centre VFS Global ou à l'ambassade";
+    const ambassade =
+      destination === "usa"           ? "l'ambassade américaine de Kinshasa"
+      : destination === "canada"      ? "le centre VFS IRCC de Kinshasa (collecte biométrique & dépôt)"
+      : destination === "uk"          ? "le centre VFS UKVI de Kinshasa"
+      : destination === "switzerland" ? "le centre VFS Global Suisse de Kinshasa"
+      : destination === "spain"       ? "l'ambassade d'Espagne à Kinshasa"
+      : destination === "schengen" && isVisaDDossier ? "le portail long séjour du pays cible"
+      : destination === "schengen"    ? "le Centre Européen des Visas (CEV) Kinshasa"
+      : destination === "germany"     ? "l'ambassade d'Allemagne à Kinshasa"
+      : destination === "brazil"      ? "l'ambassade du Brésil à Kinshasa"
+      : "l'ambassade ou le centre VFS Kinshasa";
     return {
       label: base.label,
       tagline: base.tagline,
-      description: `Vous rassemblez vos pièces justificatives, Joventy constitue le dossier complet, remplit les formulaires officiels et gère votre rendez-vous ${rdv}. Forfait fixe 600 $ — aucune prime de succès.`,
+      description: `Vous fournissez vos documents ou la majorité. Joventy complète les pièces manquantes, constitue votre profil et capture votre créneau. Vous déposez vous-même votre dossier à ${ambassade} le jour du rendez-vous. Prime de succès payée uniquement à l'obtention de votre visa.`,
     };
   }
 
@@ -292,9 +292,9 @@ export default function NewApplication() {
   const cevVisaClass = selectedVisaType.includes("Long Séjour") || selectedVisaType.includes("Visa D") ? "D" : "C" as "C" | "D";
   const isSchengenVisaD = isSchengen && cevVisaClass === "D";
 
-  // dossier_only = forfait fixe 600 $ (VISA_PARTIAL_SERVICE) — aucune prime de succès
-  const effectiveEngagementFee = isDossierOnly ? VISA_PARTIAL_SERVICE.total : (pricing?.engagementFee ?? 0);
-  const effectiveSuccessFee = isDossierOnly ? 0 : (pricing?.successFee ?? 0);
+  // dossier_only = Accompagnement Partiel — 200 $ engagement + 400 $ prime de succès
+  const effectiveEngagementFee = isDossierOnly ? VISA_PARTIAL_SERVICE.engagementFee : (pricing?.engagementFee ?? 0);
+  const effectiveSuccessFee = isDossierOnly ? VISA_PARTIAL_SERVICE.successFee : (pricing?.successFee ?? 0);
   const effectiveTotal = isDossierOnly ? VISA_PARTIAL_SERVICE.total : (pricing?.total ?? 0);
 
   const onSubmit = async (data: FormValues) => {

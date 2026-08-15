@@ -504,7 +504,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Combien coûte le service Joventy ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire uniquement : 350 $ — payés UNIQUEMENT après obtention, aucun acompte. (2) Assistance complète (dossier + créneau + accompagnement) : 500 $ d'engagement + 1 000 $ prime de succès = 1 500 $ au total, toutes destinations. (3) Accompagnement partiel : 600 $ forfaitaire payés à l'ouverture — aucune prime de succès. Les frais gouvernementaux (consulaires ou en ligne selon la destination) sont payés directement au gouvernement par le client." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire uniquement : 350 $ — payés UNIQUEMENT après obtention, aucun acompte. (2) Accompagnement Complet (dossier + créneau + obtention du visa) : 500 $ d'engagement + 1 000 $ prime de succès = 1 500 $ au total, toutes destinations. (3) Accompagnement Partiel (vous fournissez vos pièces, Joventy complète + créneau) : 200 $ d'engagement + 400 $ prime de succès = 600 $ au total. Les frais gouvernementaux sont payés directement au gouvernement par le client." }
             },
             {
               "@type": "Question",
@@ -599,7 +599,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Joventy peut-il préparer mon dossier visa sans trouver le créneau ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose un service « Formulaires & Vérification » à 600 USD forfaitaire pour les clients qui ont déjà un créneau consulaire ou un accès au portail et souhaitent uniquement que leurs formulaires (DS-160, IMM5257, etc.) soient remplis et vérifiés par un expert. Ce service est facturé en un seul paiement à l'ouverture, sans prime de succès." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose un service « Accompagnement Partiel » pour les clients qui souhaitent fournir leurs propres pièces. Joventy complète les documents manquants, constitue le profil, capture le créneau et, pour les visas consulaires, vous déposez vous-même le dossier à l'ambassade le jour du rendez-vous. Tarif : 200 USD d'engagement + 400 USD prime de succès payée uniquement à l'obtention du visa." }
             }
           ]
         })}</script>

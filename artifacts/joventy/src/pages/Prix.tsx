@@ -102,10 +102,10 @@ export default function Prix() {
     <PublicLayout solidNav>
       <Helmet>
         <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
-        <meta name="description" content="Tarifs Joventy 2026 depuis Kinshasa : créneau consulaire 350$ (paiement après résultat), service visa complet 1 500$ (500+1 000$), service partiel 600$. Toutes destinations. Paiement M-Pesa." />
+        <meta name="description" content="Tarifs Joventy 2026 depuis Kinshasa : créneau consulaire 350$ (après résultat), accompagnement complet 1 500$ (500+1 000$), accompagnement partiel 600$ (200+400$). Toutes destinations. Paiement M-Pesa." />
         <link rel="canonical" href="https://joventy.cd/prix" />
         <meta property="og:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta property="og:description" content="Créneau 350$ (après résultat) · Service visa complet 1 500$ · Service partiel 600$. Toutes destinations. Paiement M-Pesa." />
+        <meta property="og:description" content="Créneau 350$ (après résultat) · Accompagnement Complet 1 500$ · Accompagnement Partiel 600$ (200+400$). Toutes destinations. Paiement M-Pesa." />
         <meta property="og:url" content="https://joventy.cd/prix" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
@@ -113,7 +113,7 @@ export default function Prix() {
         <meta property="og:site_name" content="Joventy" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta name="twitter:description" content="Créneau 350$ (après résultat) · Service visa complet 1 500$ · Service partiel 600$. Toutes destinations. Paiement M-Pesa." />
+        <meta name="twitter:description" content="Créneau 350$ (après résultat) · Accompagnement Complet 1 500$ · Accompagnement Partiel 600$ (200+400$). Toutes destinations. Paiement M-Pesa." />
         <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>

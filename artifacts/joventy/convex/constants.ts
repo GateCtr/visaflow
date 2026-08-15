@@ -577,10 +577,10 @@ export const VISA_FULL_SERVICE = {
   total: 1500,
 } as const;
 
-// Tarif fixe — 600 USD payés à l'ouverture, aucune prime de succès séparée
+// Accompagnement Partiel — 200 USD engagement + 400 USD prime de succès à l'obtention
 export const VISA_PARTIAL_SERVICE = {
-  engagementFee: 600,
-  successFee: 0,
+  engagementFee: 200,
+  successFee: 400,
   total: 600,
 } as const;
 
@@ -649,9 +649,9 @@ export const SERVICE_PACKAGES = {
   dossier_only: {
     key: "dossier_only" as const,
     label: "Accompagnement Partiel",
-    tagline: "Tarif fixe",
-    description: "Vous rassemblez vos pièces justificatives, Joventy constitue le dossier complet, remplit les formulaires officiels et gère votre rendez-vous ou soumission. Tarif fixe — aucune prime de succès.",
-    hasSuccessFee: false,
+    tagline: "Paiement au succès",
+    description: "Vous fournissez vos documents ou la majorité. Joventy complète les pièces manquantes, constitue votre profil et capture votre créneau. Pour les visas consulaires, vous déposez vous-même le dossier à l'ambassade le jour du rendez-vous. Prime de succès payée uniquement à l'obtention de votre visa.",
+    hasSuccessFee: true,
     availableFor: "all" as const,
   },
 } as const;

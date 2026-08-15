@@ -318,10 +318,8 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                     Ce service comprend, selon le package choisi :
                   </p>
                   <ul className="space-y-2 pl-3 sm:pl-4 border-l-2 border-[#F59E0B]/30">
-                    <li className="pl-3 sm:pl-4"><strong>Service Complet :</strong> remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire.</li>
-                    <li className="pl-3 sm:pl-4"><strong>Créneau Uniquement :</strong> surveillance automatisée des portails consulaires et capture d'un créneau disponible.</li>
-                    <li className="pl-3 sm:pl-4"><strong>E-Visa / Visa sans rendez-vous :</strong> constitution, vérification et soumission du dossier sur le portail officiel compétent.</li>
-                    <li className="pl-3 sm:pl-4"><strong>Dossier Uniquement :</strong> remplissage des formulaires et vérification des pièces justificatives, sans soumission ni prise de rendez-vous.</li>
+                    <li className="pl-3 sm:pl-4"><strong>Accompagnement Complet :</strong> Joventy gère l'intégralité du dossier — constitution, formulaires officiels, profil consulaire, capture du créneau ou soumission e-Visa — et obtient le visa pour le Client. Prime de succès due uniquement à l'obtention.</li>
+                    <li className="pl-3 sm:pl-4"><strong>Accompagnement Partiel :</strong> Le Client fournit ses pièces ou la majorité ; Joventy complète les documents manquants, constitue le profil et capture le créneau. Pour les visas consulaires, le Client dépose lui-même son dossier à l'ambassade le jour du rendez-vous. Prime de succès due uniquement à l'obtention du visa.</li>
                   </ul>
                 </section>
 
@@ -348,9 +346,7 @@ export function ContractSignModal({ userName, onSigned }: ContractSignModalProps
                     </li>
                   </ul>
                   <p>
-                    Pour le package <strong>Dossier Uniquement</strong>, un tarif fixe est appliqué — aucune prime
-                    de succès n'est due. Les paiements s'effectuent via Mobile Money (M-Pesa, Airtel Money,
-                    Orange Money) selon les instructions affichées sur la plateforme.
+                    Les deux services (Accompagnement Complet et Partiel) fonctionnent selon le même modèle : frais d'engagement à l'ouverture du dossier, puis prime de succès due uniquement à l'obtention du visa ou du créneau. Les paiements s'effectuent via Mobile Money (M-Pesa, Airtel Money, Orange Money) selon les instructions affichées sur la plateforme.
                   </p>
                 </section>
 

@@ -196,10 +196,10 @@ function buildDestinationPricingReply(destination: Destination): string {
   const slotSummary = buildSlotOnlyPricingSummary();
 
   if (slotAvailable) {
-    return `Pour ${pricing.label}, le service complet est à ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} engagement + ${VISA_FULL_SERVICE.successFee} au succès). Le service partiel (formulaires uniquement) est à ${VISA_PARTIAL_SERVICE.total} USD. Le créneau seul : ${slotSummary} — aucun acompte, paiement après résultat uniquement.`;
+    return `Pour ${pricing.label}, l'Accompagnement Complet est à ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} engagement + ${VISA_FULL_SERVICE.successFee} prime de succès). L'Accompagnement Partiel (client fournit ses docs, Joventy complète + profil + créneau) est à ${VISA_PARTIAL_SERVICE.total} USD (mêmes modalités succès). Le créneau seul : ${slotSummary} — aucun acompte, paiement après résultat uniquement.`;
   }
 
-  return `Pour ${pricing.label}, le service complet est à ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} engagement + ${VISA_FULL_SERVICE.successFee} au succès). Le service partiel (formulaires uniquement) est à ${VISA_PARTIAL_SERVICE.total} USD. Le créneau seul n'est pas proposé pour cette destination.`;
+  return `Pour ${pricing.label}, l'Accompagnement Complet est à ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} engagement + ${VISA_FULL_SERVICE.successFee} prime de succès). L'Accompagnement Partiel est à ${VISA_PARTIAL_SERVICE.total} USD (mêmes modalités succès). Le créneau seul n'est pas proposé pour cette destination.`;
 }
 
 function buildPricingCatalogBlock(): string {
@@ -208,7 +208,7 @@ function buildPricingCatalogBlock(): string {
     .map(([destination, pricing]) => {
       const slotAvailable = getAvailablePackages(destination).includes("slot_only");
       const slotLine = slotAvailable ? `Créneau consulaire seul : ${slotSummary}.` : "Créneau consulaire seul : indisponible.";
-      return `• ${pricing.label} : service complet ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} + ${VISA_FULL_SERVICE.successFee}). Service partiel ${VISA_PARTIAL_SERVICE.total} USD (${VISA_PARTIAL_SERVICE.engagementFee} + ${VISA_PARTIAL_SERVICE.successFee}). ${slotLine}`;
+      return `• ${pricing.label} : Accompagnement Complet ${VISA_FULL_SERVICE.total} USD (${VISA_FULL_SERVICE.engagementFee} + ${VISA_FULL_SERVICE.successFee}). Accompagnement Partiel ${VISA_PARTIAL_SERVICE.total} USD (client fournit docs, Joventy complète + créneau). ${slotLine}`;
     });
   return lines.join("\n");
 }
@@ -461,8 +461,8 @@ TARIFS RÉELS DU SITE (tous en USD, hors frais consulaires) :
 ${buildPricingCatalogBlock()}
 ${processingStatsBlock}
 MODÈLE TARIFAIRE :
-- SERVICE VISA (complet) : 500 USD d'engagement (payés à l'ouverture du dossier) + 1 000 USD prime de succès (payée uniquement à l'obtention). Total : 1 500 USD. Toutes destinations.
-- SERVICE VISA (partiel — formulaires uniquement) : 600 USD forfait unique payés à l'ouverture. Aucune prime de succès. Le client gère ensuite son dépôt/rendez-vous de façon autonome.
+- ACCOMPAGNEMENT COMPLET : 500 USD d'engagement (payés à l'ouverture du dossier) + 1 000 USD prime de succès (payée uniquement à l'obtention du visa). Total : 1 500 USD. Toutes destinations. Joventy gère tout de A à Z.
+- ACCOMPAGNEMENT PARTIEL : 600 USD d'engagement + prime de succès à l'obtention. Le client fournit ses pièces ou la majorité, Joventy complète les documents manquants, constitue le profil, capture le créneau. Pour visas consulaires : le client dépose lui-même à l'ambassade le jour du rendez-vous. Prime due uniquement à l'obtention du visa.
 - CRÉNEAU UNIQUEMENT (slot_only) : 350 USD — payés UNIQUEMENT après obtention du créneau. Aucun acompte, zéro paiement à l'avance.
 - Paiement : M-Pesa, Airtel Money, Orange Money (pas de carte internationale)
 - Frais consulaires : séparés, payés directement au gouvernement
@@ -483,16 +483,16 @@ guide-le ÉTAPE PAR ÉTAPE en lui posant des questions pour identifier où il es
 CHEMIN D'ACCÈS : Menu → "Nouveau Dossier" dans le tableau de bord, ou lien direct /dashboard/applications/new.
 
 ÉTAPE 1 — DESTINATION & TYPE DE VISA :
-• Choisir la destination parmi : USA, Canada, Royaume-Uni, Europe Schengen, Allemagne, Suisse, Espagne, Dubaï, Turquie, Inde, Chine, Maroc, Égypte, Brésil
+• Choisir la destination parmi : USA, Canada, Royaume-Uni, Europe Schengen, Allemagne, Suisse, Espagne, Dubaï, Turquie, Inde, Chine, Maroc, Égypte, Brésil, Albanie
 • Puis sélectionner le type de visa (liste proposée automatiquement selon la destination)
-• Tip pour débloquer : "Clique sur ta destination — un badge 'Consulaire' ou 'E-Visa' apparaît selon le type de process. Puis le menu type de visa s'ouvre en bas."
+• Tip pour débloquer : "Clique sur ta destination — un badge 'Visa Complet' ou 'E-Visa' apparaît selon le type de process. Puis le menu type de visa s'ouvre en bas."
 
 ÉTAPE 2 — PACKAGE :
-• Trois packages proposés :
-  - "Service Complet" (recommandé) : Joventy remplit les formulaires + cherche le créneau. 500 USD engagement + 1 000 USD prime de succès = 1 500 USD.
-  - "Créneau Uniquement" : si le client a DÉJÀ son dossier prêt (DS-160 pour USA, VOWINT pour Schengen, etc.). 350 USD — payés UNIQUEMENT après obtention, aucun acompte.
-  - "Formulaires & Vérification" : Joventy remplit seulement les formulaires. 600 USD forfait unique, aucune prime de succès.
-• Tip pour débloquer : "Si tu vois 3 options avec des boutons radio, clique sur celle qui correspond à ta situation. Pas sûr ? Choisis 'Service Complet' — c'est le plus simple."
+• Deux packages proposés pour le visa :
+  - "Accompagnement Complet" (recommandé) : Joventy gère tout de A à Z — dossier, formulaires, profil, créneau, obtention du visa. 500 USD engagement + 1 000 USD prime de succès = 1 500 USD. Paiement uniquement à l'obtention du visa.
+  - "Accompagnement Partiel" : Le client fournit ses pièces ou la majorité, Joventy complète les manquantes, constitue le profil, capture le créneau. Pour visas consulaires : le client dépose lui-même à l'ambassade. Prime de succès payée uniquement à l'obtention.
+• Note : le "Créneau Uniquement" (350 USD, aucun acompte) est accessible via le formulaire dédié "Demande de créneau", pas ici.
+• Tip pour débloquer : "Si tu vois 2 options, clique sur celle qui correspond à ta situation. Pas sûr ? Choisis 'Accompagnement Complet' — c'est le plus simple et le plus complet."
 
 ÉTAPE 3 — INFORMATIONS DU VOYAGEUR :
 • Champs obligatoires : Nom complet (exactement comme sur le passeport), Numéro de passeport, Date de départ prévue, Motif du voyage (min 10 mots — décris l'objet du voyage)
