@@ -50,6 +50,7 @@ import {
   reportSlotFound,
   sendHeartbeat,
   reportSlotDiscoveryBatch,
+  reportSpainWatcherScan,
   attachConfirmationDoc,
   uploadFile,
   type SlotDiscoveryEvent,
@@ -176,6 +177,160 @@ interface WorkerScanResult {
 }
 
 
+// ─── PHP State (init one-shot, partagé entre tous les cycles) ─────────────────
+
+interface WorkerPhpState {
+  services: Array<{ serviceId: string; serviceName: string }>;
+  agendaId: string;
+  bestServiceId: string;
+  bestServiceName: string;
+}
+
+/**
+ * Initialise l'état PHP Bookitit une seule fois par session.
+ * Reproduit exactement la section 3 de test-bookitit-dynamic.ts :
+ *   getwidgetconfigurations/ → getservices/ → getagendas/
+ *
+ * RÈGLE §9 : getagendas/ ne peut être appelé qu'UNE FOIS par PHPSESSID.
+ * Ensuite, les cycles de scan n'appellent QUE datetime/ — pas de réinit.
+ */
+async function initPhpState(
+  session: SpainCfSession,
+  config: SpainDossierConfig,
+  tag: string,
+): Promise<WorkerPhpState | null> {
+  const widgetUrl = session.bookititState?.widgetUrl;
+  if (!widgetUrl) {
+    log("WARN", `${tag} initPhpState: bookititState absent`);
+    return null;
+  }
+
+  // 1. getwidgetconfigurations/ — initialise le widget PHP côté serveur
+  await callBookititEndpoint(session, "getwidgetconfigurations/", {}, widgetUrl);
+
+  // 2. getservices/ — liste des services disponibles
+  const svcPayload = await callBookititEndpoint(session, "getservices/", {}, widgetUrl) as any;
+  const rawServices: Array<{ id: string; name: string }> =
+    svcPayload?.Services ?? svcPayload?.services ?? [];
+
+  const services = rawServices
+    .filter((s) => s?.id)
+    .map((s) => ({
+      serviceId: String(s.id),
+      serviceName: (s.name ?? "").replace(/<[^>]*>/g, "").trim(),
+    }));
+
+  if (services.length === 0) {
+    log("WARN", `${tag} initPhpState: getservices/ → 0 services (session PHP pas prête)`);
+    return null;
+  }
+
+  // Prioriser un service avec nom non-vide (comme test-bookitit-dynamic.ts l.195)
+  const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
+  log("INFO", `${tag} 🎯 PHP init: ${services.length} service(s) → cible "${bestSvc.serviceName}" (${bestSvc.serviceId})`);
+
+  // 3. getagendas/ — une fois seulement par PHPSESSID
+  const agPayload = await callBookititEndpoint(session, "getagendas/", {
+    "services[]": bestSvc.serviceId,
+    selectedPeople: "1",
+  }, widgetUrl) as any;
+
+  const rawAgendas: Array<{ id: string }> =
+    agPayload?.Agendas ?? agPayload?.agendas ?? [];
+  const agendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
+
+  log("INFO", `${tag} ✅ PHP init OK — agenda=${agendaId || "(vide)"} | cycles suivants: datetime/ direct`);
+
+  return { services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName };
+}
+
+/**
+ * Un cycle de scan direct — appelle UNIQUEMENT datetime/ avec le phpState déjà initialisé.
+ * Reproduit la section 4 de test-bookitit-dynamic.ts (boucle mois par mois).
+ *
+ * @returns WorkerScanResult   — slots trouvés ou not_found
+ * @returns "session_dead"     — datetime/ retourne null (0B) → session PHP morte
+ */
+async function scanDatetimeDirect(
+  session: SpainCfSession,
+  phpState: WorkerPhpState,
+  config: SpainDossierConfig,
+  tag: string,
+): Promise<WorkerScanResult | "session_dead"> {
+  const widgetUrl = session.bookititState?.widgetUrl;
+  if (!widgetUrl) return "session_dead";
+
+  const now = new Date();
+  const allSlots: WorkerSlot[] = [];
+  let globalMaxDays: Date | null = null;
+  let consecutiveEmpty = 0;
+  const MAX_MONTHS = Math.max(DATETIME_MONTHS_AHEAD + 2, 4);
+
+  for (let mo = 0; mo < MAX_MONTHS; mo++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + mo, 1);
+    const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const endStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+    const params: Record<string, string> = {
+      "services[]": phpState.bestServiceId,
+      start: startStr,
+      end: endStr,
+      selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+    };
+    if (phpState.agendaId) params["agendas[]"] = phpState.agendaId;
+
+    const payload = await callBookititEndpoint(session, "datetime/", params, widgetUrl);
+
+    if (payload === null) {
+      // 0B ou erreur → session PHP morte
+      log("WARN", `${tag} datetime/ ${monthLabel} → 0B — session morte`);
+      return "session_dead";
+    }
+
+    const dtData = payload as any;
+    const maxDaysRaw: string = dtData?.maxDays ?? "";
+    if (maxDaysRaw?.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const parsed = new Date(maxDaysRaw + "T23:59:59");
+      if (!globalMaxDays || parsed > globalMaxDays) globalMaxDays = parsed;
+    }
+
+    const slots = extractAllSlotsFromPayload(payload, phpState.agendaId, config.groupSize ?? 1);
+    log(
+      "INFO",
+      `${tag}   ${monthLabel}: ${slots.length > 0 ? `${slots.length} créneau(x)` : "0"} | maxDays=${maxDaysRaw || "(absent)"}`,
+    );
+
+    if (slots.length > 0) {
+      allSlots.push(...slots);
+      consecutiveEmpty = 0;
+    } else {
+      consecutiveEmpty++;
+    }
+
+    // Stop condition identique au test dynamique (section 4 l.288-305)
+    if (mo >= 1 && globalMaxDays) {
+      const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + mo + 1, 1);
+      if (firstOfNextMonth > globalMaxDays) break;
+    }
+    if (!globalMaxDays && consecutiveEmpty >= 3) break;
+  }
+
+  if (allSlots.length === 0) {
+    return { status: "not_found", serviceId: phpState.bestServiceId, serviceName: phpState.bestServiceName };
+  }
+
+  allSlots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  return {
+    status: "found",
+    slots: allSlots,
+    serviceId: phpState.bestServiceId,
+    serviceName: phpState.bestServiceName,
+    agendaId: phpState.agendaId,
+  };
+}
+
 // ─── Entrée publique ──────────────────────────────────────────────────────────
 
 /**
@@ -259,11 +414,20 @@ export async function runDossierWorker(
     return workerResult;
   }
 
-  // ── 6. Boucle de scan ────────────────────────────────────────────────────────
-  // Chaque cycle appelle confirmSlotsViaDatetime (flux complet de l'ancien scanner).
-  // confirmSlotsViaDatetime gère : getwidgetconfigurations/ → getservices/ → getagendas/ → datetime/.
-  // Règle §9 Bookitit : getagendas/ ne peut être appelé qu'une fois par PHPSESSID.
-  // Après chaque cycle sans slot, on crée une nouvelle session (nouveau PHPSESSID).
+  // ── 6. PHP init one-shot ────────────────────────────────────────────────────
+  // Reproduit la section 3 de test-bookitit-dynamic.ts : getwidget/ + getservices/ + getagendas/.
+  // UNE SEULE FOIS par session PHP (règle §9 Bookitit).
+  // Les cycles suivants n'appellent QUE datetime/ — même comportement que le test dynamique A-à-Z.
+  log("INFO", `${tag} 🔧 PHP init one-shot (getwidgetconfigurations/ + getservices/ + getagendas/)…`);
+  let phpState = await initPhpState(session, config, tag);
+  if (!phpState) {
+    workerResult = { dossierId: config.id, status: "error", errorMessage: "initPhpState: aucun service découvert (getservices/ 0B?)" };
+    return workerResult;
+  }
+
+  // ── 7. Boucle de scan — uniquement datetime/ (pas de réinit PHP) ───────────
+  // Identique à la section 4 de test-bookitit-dynamic.ts — boucle mois par mois.
+  // Si datetime/ → 0B (session morte) : rotation IP + réinit PHP, continue.
   const windowEnd = Date.now() + WORKER_WINDOW_MS;
   let cycleCount = 0;
 
@@ -272,7 +436,40 @@ export async function runDossierWorker(
     const cycleStart = Date.now();
 
     try {
-      const scan = await workerScanCycle(session, config, tag);
+      const scan = await scanDatetimeDirect(session, phpState, config, tag);
+
+      // ── Session morte (datetime/ 0B) → rotation IP + réinit PHP ────────────
+      if (scan === "session_dead") {
+        log("WARN", `${tag} Cycle ${cycleCount}: session morte → rotation IP + réinit PHP`);
+        if (Date.now() + 3 * 60_000 < windowEnd) {
+          const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag);
+          if (newProxy === null) {
+            workerResult = { dossierId: config.id, status: "error", errorMessage: "Pool épuisé après session morte" };
+            proxyUrl = "";
+            return workerResult;
+          }
+          proxyUrl = newProxy;
+          phpState = await initPhpState(session, config, tag);
+          if (!phpState) {
+            workerResult = { dossierId: config.id, status: "error", errorMessage: "initPhpState échoué après rotation" };
+            proxyUrl = "";
+            return workerResult;
+          }
+          cycleCount = 0;
+          continue;
+        }
+        break;
+      }
+
+      // ── Reporting scan Convex (par dossier) ─────────────────────────────────
+      void reportSpainWatcherScan({
+        status: scan.status === "found" ? "found" : "not_found",
+        applicationId: config.applicationId,
+        dossierName: config.applicantName,
+        detectedSlots: scan.status === "found" && scan.slots
+          ? JSON.stringify(scan.slots.slice(0, 20).map((s) => ({ d: s.date, t: s.time, n: s.freeslots })))
+          : undefined,
+      }).catch(() => {});
 
       // ── Reporting découverte (fire-and-forget) ──────────────────────────
       if (scan.slots && scan.slots.length > 0) {
@@ -467,25 +664,6 @@ export async function runDossierWorker(
               errorMessage: `Booking ${bookResult.status}: ${bookResult.errorMessage}`,
             }).catch(() => {});
           }
-        }
-      } else if (scan.status === "error") {
-        log("WARN", `${tag} Cycle ${cycleCount}: ${scan.errorMessage}`);
-
-        // 0B = IP bloquée par Bookitit → rotation IP (comme l'ancien système).
-        // On ne sort pas du worker : on change d'IP et on continue le scan.
-        if (
-          scan.errorMessage?.includes("0B") &&
-          Date.now() + 3 * 60_000 < windowEnd  // au moins 3 min restantes pour valoir la peine
-        ) {
-          const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag);
-          if (newProxy === null) {
-            // Pool épuisé ou solve échoué — plus d'IP disponible, on sort
-            workerResult = { dossierId: config.id, status: "error", errorMessage: "Pool Decodo épuisé après rotation" };
-            proxyUrl = ""; // éviter double-release dans finally (déjà libérée dans rotateWorkerIp)
-            return workerResult;
-          }
-          proxyUrl = newProxy; // finally libérera la nouvelle IP
-          cycleCount = 0;     // reset compteur pour repartir proprement
         }
       }
 

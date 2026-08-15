@@ -1170,6 +1170,8 @@ http.route({
       slotInfo?: string;
       screenshotStorageId?: string;
       errorMessage?: string;
+      applicationId?: string;
+      dossierName?: string;
       pageCaptures?: string;
       detectedServices?: string;
       detectedSlots?: string;
@@ -1192,6 +1194,8 @@ http.route({
         slotInfo: body.slotInfo,
         screenshotStorageId: body.screenshotStorageId,
         errorMessage: body.errorMessage,
+        applicationId: body.applicationId,
+        dossierName: body.dossierName,
         pageCaptures: body.pageCaptures,
         detectedServices: body.detectedServices,
         detectedSlots: body.detectedSlots,

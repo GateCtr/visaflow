@@ -880,6 +880,8 @@ export async function reportSpainWatcherScan(payload: {
   slotInfo?: string;
   screenshotStorageId?: string;
   errorMessage?: string;
+  applicationId?: string;    // ID Convex du dossier (worker multi-dossier)
+  dossierName?: string;      // Nom du demandeur
   detectedServices?: string; // JSON string of [{serviceId, serviceName}]
   detectedSlots?: string;    // JSON string of [{id, name, slots: [{d, t, n}]}]
   scanTrace?: string;        // JSON string SpainScanTrace

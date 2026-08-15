@@ -189,21 +189,43 @@ const WARM_PROBE_ENABLED = process.env.SPAIN_WARM_PROBE !== "0";
 
 const _warmProbeCache = new Map<string, WarmProbeEntry>();
 
-function getWarmProbe(publickey: string): WarmProbeEntry | null {
-  // Warm cache désactivé — cause des 0B sur toutes les requêtes AJAX après /main/.
-  // Le cold path (getwidgetconfigurations + getservices + getagendas + datetime) est
-  // nécessaire à chaque cycle pour initialiser la session widget côté Bookitit.
-  return null;
+/**
+ * Clé de cache warm probe = PHPSESSID + "_" + publickey.
+ * Invalidation automatique quand le PHPSESSID change (rotation IP → nouvelle session).
+ */
+function _warmKey(session: SpainCfSession, publickey: string): string {
+  const phpsessid = session.allCookies.find((c) => c.name === "PHPSESSID")?.value ?? "anon";
+  return `${phpsessid}_${publickey}`;
 }
 
-function setWarmProbe(publickey: string, services: Array<{ serviceId: string; serviceName: string }>, agendaId: string): void {
-  // Warm cache désactivé — no-op.
-  return;
+function getWarmProbe(session: SpainCfSession, publickey: string): WarmProbeEntry | null {
+  if (!WARM_PROBE_ENABLED) return null;
+  const key = _warmKey(session, publickey);
+  const entry = _warmProbeCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > WARM_PROBE_TTL_MS) {
+    _warmProbeCache.delete(key);
+    return null;
+  }
+  return entry;
 }
 
-function invalidateWarmProbe(publickey: string, reason: string): void {
-  if (_warmProbeCache.delete(publickey)) {
-    console.log(`[spain-http] 🧹 Warm cache invalidé (${reason}) — re-scan à froid immédiat`);
+function setWarmProbe(
+  session: SpainCfSession,
+  publickey: string,
+  services: Array<{ serviceId: string; serviceName: string }>,
+  agendaId: string,
+): void {
+  if (!WARM_PROBE_ENABLED) return;
+  const key = _warmKey(session, publickey);
+  _warmProbeCache.set(key, { services, agendaId, cachedAt: Date.now() });
+  console.log(`[spain-http] 💾 Warm cache → ${services.length} service(s) agenda=${agendaId} (cycles suivants: datetime/ direct)`);
+}
+
+function invalidateWarmProbe(session: SpainCfSession, publickey: string, reason: string): void {
+  const key = _warmKey(session, publickey);
+  if (_warmProbeCache.delete(key)) {
+    console.log(`[spain-http] 🧹 Warm cache invalidé (${reason}) — re-scan à froid au prochain cycle`);
   }
 }
 
@@ -1057,19 +1079,18 @@ export async function confirmSlotsViaDatetime(
   cookieStr: string,
   referer: string,
 ): Promise<ConfirmSlotsResult> {
-  // ── Rotation callback désactivée ─────────────────────────────────────────────
-  // Le warm cache a été retiré. Le callback bookititState.jqCallback est le callback
-  // assigné par le solve capsolver et reste stable pour toute la durée de la session.
-  // Ne pas le modifier : Bookitit lie l'état widget au callback initial.
-
-  const warm = getWarmProbe(publickey);
+  // ── Warm probe : sauter getwidget/getservices/getagendas si déjà connus ──────
+  // Après le premier scan réussi, serviceId + agendaId sont mis en cache (clé=PHPSESSID+publickey).
+  // Les cycles suivants vont directement à datetime/ — même séquence que le vrai navigateur
+  // (getwidget/getservices/getagendas = init one-shot, pas re-appelés à chaque fois).
+  const warm = getWarmProbe(session, publickey);
   if (warm) {
-    // Dead code — warm est toujours null.
     const health = { datetimeResponded: false };
     const warmResult = await confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, warm, health);
-    if (warmResult && warmResult !== "ajax_unavailable") return warmResult;
-    if (warmResult === null && health.datetimeResponded) return null;
-    invalidateWarmProbe(publickey, "warm dead code");
+    // Résultat valide (slots trouvés ou non) → retourner directement
+    if (warmResult !== "ajax_unavailable") return warmResult;
+    // ajax_unavailable sur warm → session peut-être changée, invalider et faire cold scan
+    invalidateWarmProbe(session, publickey, "ajax_unavailable sur warm");
   }
   const health = { datetimeResponded: false };
   const result = await confirmSlotsViaDatetimeOnce(session, renderedHtml, publickey, cookieStr, referer, null, health);
@@ -1140,8 +1161,10 @@ async function confirmSlotsViaDatetimeOnce(
   // (plus de retry getagendas, donc plus besoin de tracker ce flag)
 
   if (warm) {
-    // Warm cache désactivé — ce bloc ne sera jamais atteint (getWarmProbe retourne toujours null).
+    // Warm probe actif : service + agenda déjà connus → sauter getwidget/getservices/getagendas.
+    // Même comportement que le vrai navigateur (init one-shot, datetime/ seul par la suite).
     services = warm.services;
+    console.log(`[spain-http] ♻️ Warm probe — service=${warm.services[0]?.serviceId} agenda=${warm.agendaId} (init sauté)`);
   } else if (services === undefined && svcMatches.length === 0) {
     // FALLBACK : Kinshasa (et certains portails Bookitit récents) utilisent un rendu
     // client-side via Backbone.js / Underscore templates — les liens #selectservice
@@ -1458,6 +1481,13 @@ async function confirmSlotsViaDatetimeOnce(
         ok: agRaw.length > 0 && !!agendaId,
         agendaId: agendaId || undefined,
       });
+
+      // ── Warm probe : sauvegarder service + agenda pour les cycles suivants ──────
+      // Après cette première découverte (cold path), datetime/ suffira seul.
+      // Cache clé = PHPSESSID + publickey → invalidation automatique si rotation IP.
+      if (!warm && services && agendaId) {
+        setWarmProbe(session, publickey, services, agendaId);
+      }
     } catch (agErr) {
       console.warn(`[spain-http] ⚠️ getagendas/ exception: ${agErr}`);
     }
@@ -1695,7 +1725,7 @@ async function confirmSlotsViaDatetimeOnce(
     // réellement répondu. On ne mémorise QUE la configuration (services + agenda) ;
     // la disponibilité, elle, est re-interrogée en live à chaque cycle.
     if (!warm && health.datetimeResponded && agendaId) {
-      setWarmProbe(publickey, services, agendaId);
+      setWarmProbe(session, publickey, services, agendaId);
     }
     // ── Résolution des heures exactes — vue jour (day-detail) ───────────────────
     //

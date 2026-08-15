@@ -61,6 +61,7 @@ export const getWatcherPaginated = query({
     page: v.optional(v.number()),     // 0-indexed page number (default 0)
     pageSize: v.optional(v.number()), // items per page (default 20)
     statusFilter: v.optional(v.string()), // "found" | "not_found" | "error" | "" (all)
+    applicationId: v.optional(v.string()), // filter by dossier
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -81,10 +82,13 @@ export const getWatcherPaginated = query({
       .order("desc")
       .take(MAX_SCANS);
 
-    // Apply status filter
-    const filtered = args.statusFilter
+    // Apply filters
+    let filtered = args.statusFilter
       ? allScans.filter((s) => s.status === args.statusFilter)
       : allScans;
+    if (args.applicationId) {
+      filtered = filtered.filter((s) => s.applicationId === args.applicationId);
+    }
 
     const totalCount = filtered.length;
     const totalPages = Math.ceil(totalCount / pageSize);
@@ -112,6 +116,36 @@ export const getWatcherPaginated = query({
     };
 
     return { watcher: watcher ?? null, scans, page, pageSize, totalCount, totalPages, stats };
+  },
+});
+
+// ─── Query: liste des dossiers ayant des scans Spain ────────────────────────────
+
+export const getDossierList = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
+    const scans = await ctx.db
+      .query("spainWatcherScans")
+      .withIndex("by_ts")
+      .order("desc")
+      .take(MAX_SCANS);
+
+    // Dédupliquer par applicationId — retourner nom + ID unique
+    const seen = new Map<string, { applicationId: string; dossierName: string; lastScan: number }>();
+    for (const scan of scans) {
+      if (!scan.applicationId) continue;
+      if (!seen.has(scan.applicationId)) {
+        seen.set(scan.applicationId, {
+          applicationId: scan.applicationId,
+          dossierName: scan.dossierName ?? scan.applicationId,
+          lastScan: scan.ts,
+        });
+      }
+    }
+    return [...seen.values()].sort((a, b) => b.lastScan - a.lastScan);
   },
 });
 
@@ -174,6 +208,8 @@ export const internalRecordScan = internalMutation({
     slotInfo: v.optional(v.string()),
     screenshotStorageId: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
+    applicationId: v.optional(v.string()),  // Dossier associé (worker multi-dossier)
+    dossierName: v.optional(v.string()),    // Nom du demandeur
     pageCaptures: v.optional(v.string()),
     detectedServices: v.optional(v.string()),  // JSON array of {serviceId, serviceName}
     detectedSlots: v.optional(v.string()),     // JSON array of {id, name, slots: [{d, t, n}]}
@@ -194,6 +230,8 @@ export const internalRecordScan = internalMutation({
       slotInfo: args.slotInfo,
       screenshotStorageId: args.screenshotStorageId,
       errorMessage: args.errorMessage,
+      applicationId: args.applicationId,
+      dossierName: args.dossierName,
       pageCaptures: args.pageCaptures,
       detectedServices: args.detectedServices,
       detectedSlots: args.detectedSlots,
