@@ -1173,6 +1173,7 @@ http.route({
       pageCaptures?: string;
       detectedServices?: string;
       detectedSlots?: string;
+      scanTrace?: string;
     };
 
     try {
@@ -1194,6 +1195,7 @@ http.route({
         pageCaptures: body.pageCaptures,
         detectedServices: body.detectedServices,
         detectedSlots: body.detectedSlots,
+        scanTrace: body.scanTrace,
       });
 
       return new Response(JSON.stringify({ ok: true }), {

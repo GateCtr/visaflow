@@ -2,6 +2,7 @@ import type { Page } from 'puppeteer';
 import type { PuppeteerContextAdapter } from './browser.js';
 import type { HunterJob } from './convexClient';
 import { botLog, uploadScreenshot, recordCevClick, activateCevSession, persistCevLoopSession, restoreCevLoopSession } from './convexClient';
+import { resolveAnticaptchaKey } from './cevHttpSetup.js';
 import { completeCevCaptcha, pollCevSlots, pollCevSlotsMultiMonth, isCevSessionValid, CevSession } from './cevPortal';
 import { launchBrowser, randomDelay, humanType, humanClick, humanScroll } from './browser.js';
 import { attachNetCapture } from './netCapture.js';
@@ -898,7 +899,8 @@ async function solveHcaptcha(
   }
 
   // ─── Tentative 2 : Anti-Captcha (domaines gouvernementaux supportés) ──
-  const antiKey = process.env.ANTICAPTCHA_API_KEY ?? '';
+  // resolveAnticaptchaKey() cherche dans env + Convex botConfig (prioritaire sur env seul)
+  const antiKey = (await resolveAnticaptchaKey()) ?? '';
   if (antiKey) {
     botLog({ applicationId: clientId, step: 'cev_hcaptcha_anticaptcha_start', status: 'ok' });
     const token = await solveHcaptchaViaAntiCaptcha(antiKey, HCAPTCHA_SITE_KEY, PAGE_URL, clientId);

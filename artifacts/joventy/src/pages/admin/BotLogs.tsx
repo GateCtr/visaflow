@@ -960,52 +960,140 @@ function parseSpainScanTrace(raw: string | undefined): SpainScanTraceData | null
   try { return JSON.parse(raw) as SpainScanTraceData; } catch { return null; }
 }
 
-/** Résumé inline — visible sans déplier la trace complète. */
-function SpainScanTraceSummary({ scanTrace }: { scanTrace: string }) {
-  const trace = parseSpainScanTrace(scanTrace);
-  if (!trace) return null;
-  if (!trace.main && !trace.initConfig && !trace.service
-    && trace.bookings.length === 0 && trace.agendas.length === 0 && trace.datetimes.length === 0) {
-    return null;
+/**
+ * Pipeline compact — visible SANS dépliage, pour TOUS les scans (found / not_found / error).
+ * Chaque étape affiche son état (ok/fail/n/a) + les métriques clés.
+ */
+function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
+  type StepBadge = { k: string; v: boolean | null | undefined };
+  type Step = {
+    label: string;
+    ok: boolean | null;
+    meta?: string;
+    sub?: string;
+    badges?: StepBadge[];
+    color?: "amber" | "blue";
+  };
+
+  const steps: Step[] = [];
+
+  // ── /main/ ──
+  if (trace.main) {
+    const cached = trace.main.fromCache;
+    steps.push({
+      label: cached ? "main↩" : "main",
+      ok: trace.main.ok,
+      meta: trace.main.bytes >= 1024
+        ? `${(trace.main.bytes / 1024).toFixed(0)}kB`
+        : `${trace.main.bytes}B`,
+      badges: [
+        { k: "sc", v: trace.main.serviceContainer },
+        { k: "dc", v: trace.main.dialogConfirm },
+      ],
+    });
   }
 
+  // ── initConfig ──
+  if (trace.initConfig) {
+    steps.push({
+      label: "cfg",
+      ok: trace.initConfig.ok,
+      meta: trace.initConfig.bytes > 0 ? `${trace.initConfig.bytes}B` : undefined,
+    });
+  }
+
+  // ── getservices/ ──
+  if (trace.service) {
+    steps.push({
+      label: "svc",
+      ok: trace.service.ok,
+      meta: `×${trace.service.count}`,
+      badges: [
+        { k: "aa", v: trace.service.allowAppointment },
+        { k: "sc", v: trace.service.serviceContainer },
+        { k: "dc", v: trace.service.dialogConfirm },
+      ],
+    });
+  }
+
+  // ── agenda ──
+  if (trace.agendas.length > 0) {
+    const okCount = trace.agendas.filter(a => a.ok).length;
+    steps.push({
+      label: "agenda",
+      ok: okCount > 0,
+      meta: `×${trace.agendas.length}`,
+    });
+  }
+
+  // ── datetime ──
+  if (trace.datetimes.length > 0) {
+    const totalSlots = trace.datetimes.reduce((n, d) => n + d.slots, 0);
+    steps.push({
+      label: "datetime",
+      ok: totalSlots > 0,
+      meta: `${totalSlots} crén.`,
+      sub: `×${trace.datetimes.length} mois`,
+    });
+  }
+
+  // ── booking ──
+  if (trace.bookings.length > 0) {
+    const bookedCount = trace.bookings.filter(b => b.status === "booked").length;
+    steps.push({
+      label: "booking",
+      ok: bookedCount > 0,
+      meta: `×${trace.bookings.length}`,
+      color: bookedCount === 0 ? "amber" : undefined,
+    });
+  }
+
+  // ── rotations IP ──
+  if ((trace.ipRotations ?? 0) > 0) {
+    steps.push({
+      label: "rot",
+      ok: null,
+      meta: `×${trace.ipRotations}`,
+      color: "blue",
+    });
+  }
+
+  if (steps.length === 0) return null;
+
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1 items-center">
-      {trace.main && (
-        <>
-          <span className="text-[9px] text-violet-600 font-semibold">main</span>
-          <span className="text-[9px] text-slate-500">{trace.main.bytes}B</span>
-          {boolBadge(trace.main.serviceContainer, "serviceContainer")}
-          {boolBadge(trace.main.dialogConfirm, "dialogConfirm")}
-        </>
-      )}
-      {trace.initConfig && (
-        <>
-          <span className="text-[9px] text-violet-600 font-semibold ml-1">initConfig</span>
-          <span className="text-[9px] text-slate-500">{trace.initConfig.bytes}B</span>
-          {boolBadge(trace.initConfig.ok, "ok")}
-        </>
-      )}
-      {trace.service && (
-        <>
-          <span className="text-[9px] text-violet-600 font-semibold ml-1">service</span>
-          {boolBadge(trace.service.allowAppointment, "allowAppointment")}
-          {boolBadge(trace.service.serviceContainer, "serviceContainer")}
-          {boolBadge(trace.service.dialogConfirm, "dialogConfirm")}
-          <span className="text-[9px] text-slate-400">{trace.service.count} svc</span>
-        </>
-      )}
-      {trace.datetimes.length > 0 && (
-        <span className="text-[9px] text-slate-500 ml-1">
-          datetime ×{trace.datetimes.length}
-          {" "}({trace.datetimes.reduce((n, d) => n + d.slots, 0)} créneaux)
-        </span>
-      )}
-      {trace.bookings.length > 0 && (
-        <span className="text-[9px] text-amber-700 ml-1 font-medium">
-          booking ×{trace.bookings.length}
-        </span>
-      )}
+    <div className="mt-2 flex flex-wrap items-center gap-0.5">
+      {steps.map((step, i) => {
+        const base = step.color === "amber"
+          ? "bg-amber-50 text-amber-700 border-amber-200"
+          : step.color === "blue"
+            ? "bg-blue-50 text-blue-600 border-blue-100"
+            : step.ok === true
+              ? "bg-green-50 text-green-700 border-green-100"
+              : step.ok === false
+                ? "bg-red-50 text-red-600 border-red-100"
+                : "bg-slate-50 text-slate-500 border-slate-200";
+
+        return (
+          <span key={i} className="inline-flex items-center gap-0.5">
+            {i > 0 && <span className="text-slate-300 text-[8px] mx-0.5">→</span>}
+            <span className={`inline-flex items-center gap-0.5 text-[9px] font-mono px-1 py-0.5 rounded border ${base}`}>
+              <span className="font-semibold">{step.label}</span>
+              {step.meta && <span className="opacity-75">{step.meta}</span>}
+              {step.sub && <span className="opacity-50 text-[8px]">{step.sub}</span>}
+              {step.badges?.map((b, j) => (
+                <span
+                  key={j}
+                  className={`text-[8px] ml-0.5 ${
+                    b.v === true ? "text-green-600" : b.v === false ? "text-red-500" : "text-slate-400"
+                  }`}
+                >
+                  {b.k}={b.v === true ? "✓" : b.v === false ? "✗" : "?"}
+                </span>
+              ))}
+            </span>
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -1571,8 +1659,11 @@ function SpainWatcherTab() {
                         </div>
                         {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
 
-                        {/* Trace scan — résumé inline + détail dépliable */}
-                        {scan.scanTrace && <SpainScanTraceSummary scanTrace={scan.scanTrace} />}
+                        {/* Pipeline étapes — visible pour TOUS les scans (found / not_found / error) */}
+                        {scan.scanTrace && (() => {
+                          const t = parseSpainScanTrace(scan.scanTrace);
+                          return t ? <SpainCycleSteps trace={t} /> : null;
+                        })()}
 
                         {/* Detected services for "found" */}
                         {scan.status === "found" && scan.detectedServices && (() => {
@@ -1597,7 +1688,7 @@ function SpainWatcherTab() {
                           <p className="text-[10px] text-amber-600 mt-1">⚠️ Aucun service extrait — possible faux positif</p>
                         )}
 
-                        {/* Detected slots — dates/heures exactes */}
+                        {/* Detected slots — dates/heures exactes + distinction placeholder vs confirmé */}
                         {scan.status === "found" && scan.detectedSlots && (() => {
                           try {
                             const svcSlots = JSON.parse(scan.detectedSlots) as Array<{id: string; name: string; slots: Array<{d: string; t: string; n: number}>}>;
@@ -1609,14 +1700,32 @@ function SpainWatcherTab() {
                                     <p className="text-[10px] font-semibold text-green-800 mb-1">📋 {svc.name} <span className="text-green-500 font-normal">#{svc.id}</span></p>
                                     {svc.slots.length > 0 ? (
                                       <div className="flex flex-wrap gap-1">
-                                        {svc.slots.slice(0, 12).map((slot, j) => (
-                                          <span key={j} className="inline-flex items-center gap-0.5 text-[9px] bg-white text-green-900 px-1.5 py-0.5 rounded border border-green-200 font-mono">
-                                            📅 {slot.d} <span className="text-green-600">{slot.t}</span>
-                                            {slot.n > 0 && <span className="text-green-500 ml-0.5">({slot.n}p)</span>}
-                                          </span>
-                                        ))}
-                                        {svc.slots.length > 12 && (
-                                          <span className="text-[9px] text-green-500 self-center">+{svc.slots.length - 12} autres</span>
+                                        {svc.slots.slice(0, 15).map((slot, j) => {
+                                          // Distinguer heure confirmée vs placeholder "09:00"
+                                          const isPlaceholder = slot.t === "09:00";
+                                          const hasPlaces = slot.n > 0;
+                                          return (
+                                            <span
+                                              key={j}
+                                              title={isPlaceholder ? "Heure non confirmée par le serveur (placeholder)" : `Heure confirmée${hasPlaces ? ` · ${slot.n} place(s) libre(s)` : ""}`}
+                                              className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded border font-mono ${
+                                                isPlaceholder
+                                                  ? "bg-amber-50 text-amber-800 border-amber-200"
+                                                  : "bg-white text-green-900 border-green-200"
+                                              }`}
+                                            >
+                                              <span className="text-[8px] opacity-60">{slot.d}</span>
+                                              <span className={isPlaceholder ? "text-amber-600 italic" : "text-green-600 font-semibold"}>
+                                                {isPlaceholder ? `~${slot.t}` : slot.t}
+                                              </span>
+                                              <span className={`ml-0.5 ${hasPlaces ? "text-green-500" : "text-slate-400"}`}>
+                                                ({hasPlaces ? `${slot.n}p` : "?p"})
+                                              </span>
+                                            </span>
+                                          );
+                                        })}
+                                        {svc.slots.length > 15 && (
+                                          <span className="text-[9px] text-green-500 self-center">+{svc.slots.length - 15} autres</span>
                                         )}
                                       </div>
                                     ) : (

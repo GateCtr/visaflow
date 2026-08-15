@@ -431,6 +431,7 @@ export default defineSchema({
     pageCaptures: v.optional(v.string()), // JSON-encoded array of captured requests
     detectedServices: v.optional(v.string()), // JSON: [{serviceId, serviceName}] when status=found
     detectedSlots: v.optional(v.string()),    // JSON: [{id, name, slots: [{d, t, n}]}] — dates/heures exactes
+    scanTrace: v.optional(v.string()),        // JSON: SpainScanTrace — main/initConfig/service/agenda/datetime/booking steps
   }).index("by_ts", ["ts"]),
 
   // OTP challenges for portal flows requiring user one-time code (e.g. Spain confirmclient)

@@ -32,3 +32,4 @@
 - [Spain services plumbing bug](spain-services-plumbing.md) — wrappers must forward `_services`; 0 liens #selectservice sur SPA ≠ faux positif; datetime/ state=1 = seule vraie preuve de créneau.
 - [getsigninfields/ obligatoire avant signin/](spain-getsigninfields-required.md) — sans cet appel HTTP, signin/ retourne 0B ; appelé en amont, signin/ répond normalement (confirmé 2026-08-12 Saopolo HTTP pur).
 - [Spain Decodo pool Redis persistence](spain-decodo-pool-redis.md) — index rotation + IP blacklist (TTL) persistés dans Redis ; initDecodoPool() à appeler après initSpainRedis() dans le watcher loop.
+- [Spain scan trace pipeline fix](spain-scan-trace-pipeline.md) — scanTrace was silently dropped at 3 layers; all 3 fixed: schema, mutation args, and http.ts endpoint body/forward.
