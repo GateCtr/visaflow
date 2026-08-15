@@ -29,7 +29,7 @@ const CONTRACT_SECTIONS = [
         </p>
         <ul className="space-y-1.5 pl-3 border-l-2 border-[#F59E0B]/30">
           {[
-            ["Service Complet", "remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire."],
+            ["Accompagnement Complet", "remplissage des formulaires, vérification du dossier et recherche active de créneau consulaire ou soumission e-Visa."],
             ["Créneau Uniquement", "surveillance automatisée des portails consulaires et capture d'un créneau disponible."],
             ["E-Visa / Visa sans rendez-vous", "constitution, vérification et soumission du dossier sur le portail officiel compétent."],
             ["Accompagnement Partiel", "vous fournissez vos documents ou la majorité ; Joventy complète les pièces manquantes, constitue votre profil et capture votre créneau. Prime de succès due uniquement à l'obtention de votre visa."],
