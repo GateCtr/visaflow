@@ -155,6 +155,7 @@ function Router() {
       <Route path="/visa-maroc-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-egypte-kinshasa" component={DestinationPage} />
       <Route path="/visa-chine-kinshasa" component={DestinationPage} />
+      <Route path="/visa-albanie-kinshasa" component={DestinationPage} />
       <Route path="/visa-bresil-kinshasa" component={DestinationPage} />
 
       {/* Embassy SEO pages */}

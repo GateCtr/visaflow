@@ -148,7 +148,7 @@ function getPackageInfo(
         label: "Créneau Ambassade",
         tagline: "Rendez-vous uniquement",
         description: "Vos formulaires sont remplis et vos frais MRV acquittés ? Joventy se concentre uniquement sur la capture d'un créneau disponible à l'ambassade américaine.",
-        slotNote: "Prérequis : DS-160 soumis. Frais MRV (265 $) requis — le reçu peut être fourni ultérieurement.",
+        slotNote: "Prérequis : DS-160 soumis et frais de visa acquittés auprès de l'ambassade — le reçu peut être fourni ultérieurement.",
       };
     }
     if (destination === "canada") {
@@ -156,7 +156,7 @@ function getPackageInfo(
         label: "Créneau VFS IRCC",
         tagline: "Rendez-vous uniquement",
         description: "Votre dossier IRCC est en cours ou vos documents sont prêts ? Joventy surveille le portail VFS IRCC et capture un créneau dès qu'une place biométrique se libère à Kinshasa.",
-        slotNote: "Prérequis : lettre de collecte biométrique IRCC ou demande de visa en cours. Frais IRCC (85 CAD+) payés séparément.",
+        slotNote: "Prérequis : lettre de collecte biométrique IRCC ou demande de visa en cours. Frais IRCC payés séparément directement au gouvernement canadien.",
       };
     }
     if (destination === "uk") {
@@ -164,7 +164,7 @@ function getPackageInfo(
         label: "Créneau VFS UKVI",
         tagline: "Rendez-vous uniquement",
         description: "Votre dossier UK Visas & Immigration est prêt ? Joventy surveille le portail VFS UKVI et réserve votre créneau de dépôt dès qu'une place est disponible à Kinshasa.",
-        slotNote: "Prérequis : dossier UKVI complet (formulaire, photos, justificatifs). Frais UKVI (£115+) payés séparément.",
+        slotNote: "Prérequis : dossier UKVI complet (formulaire, photos, justificatifs). Frais UKVI payés séparément directement au gouvernement britannique.",
       };
     }
     if (destination === "switzerland") {
@@ -172,7 +172,7 @@ function getPackageInfo(
         label: "Créneau VFS Suisse",
         tagline: "Rendez-vous uniquement",
         description: "Votre dossier est prêt ? Joventy surveille le portail VFS Global Suisse et capture un créneau dès qu'une disponibilité apparaît pour le centre de Kinshasa.",
-        slotNote: "Prérequis : dossier complet (formulaire, assurance, justificatifs). Frais consulaires suisses (90€+) payés séparément.",
+        slotNote: "Prérequis : dossier complet (formulaire, assurance, justificatifs). Frais officiels suisses payés séparément directement au consulat.",
       };
     }
     if (destination === "turkey") {
@@ -190,14 +190,14 @@ function getPackageInfo(
           label: "Créneau TLScontact",
           tagline: "Rendez-vous uniquement",
           description: "Votre dossier france-visas.gouv.fr est soumis ? Joventy surveille le portail TLScontact France Kinshasa et capture un créneau biométrique dès qu'une place est disponible.",
-          slotNote: "Prérequis : demande soumise sur france-visas.gouv.fr. Frais de dossier (~99 €) + frais TLScontact (~30 €) payés séparément.",
+          slotNote: "Prérequis : demande soumise sur france-visas.gouv.fr. Frais officiels (dossier + TLScontact) payés séparément directement aux organismes concernés.",
         };
       }
       return {
         label: "Créneau CEV",
         tagline: "Rendez-vous uniquement",
         description: "Vous avez déjà un dossier VOWINT en cours ou vous voulez seulement le rendez-vous ? Joventy surveille activement le Centre Européen des Visas et capture un créneau dès qu'une place est disponible pour votre pays cible.",
-        slotNote: "Prérequis : dossier VOWINT déjà créé avec vos pièces. Frais consulaires CEV (90 €/adulte) payés au guichet — non inclus.",
+        slotNote: "Prérequis : dossier VOWINT déjà créé avec vos pièces. Les frais officiels CEV sont payés directement au guichet le jour du rendez-vous.",
       };
     }
     if (destination === "spain") {
@@ -205,7 +205,7 @@ function getPackageInfo(
         label: "Créneau Ambassade",
         tagline: "Rendez-vous uniquement",
         description: "Vous avez reçu vos identifiants citaconsular.es de l'ambassade ? Joventy surveille le portail Bookitit et verrouille votre créneau dès qu'une place se libère.",
-        slotNote: "Prérequis : inscription préalable par email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) pour obtenir vos identifiants. Frais consulaires espagnols (90 €/adulte) payés à l'ambassade — non inclus.",
+        slotNote: "Prérequis : inscription préalable par email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) pour obtenir vos identifiants. Les frais officiels sont payés directement à l'ambassade le jour du rendez-vous.",
       };
     }
     if (destination === "germany") {
@@ -508,7 +508,7 @@ export default function NewApplication() {
                     <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-1">
                       🇪🇺 Informations Schengen / CEV
                     </h3>
-                    <p className="text-xs text-muted-foreground">Ces informations permettent de calculer les frais consulaires CEV que vous paierez au guichet le jour du rendez-vous.</p>
+                    <p className="text-xs text-muted-foreground">Ces informations permettent d'adapter votre dossier CEV selon votre profil.</p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
@@ -532,8 +532,8 @@ export default function NewApplication() {
                         className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
                       >
                         <option value="adult">Adulte (12 ans et plus)</option>
-                        <option value="child_6_12">Enfant (6 à 12 ans) — 45 €</option>
-                        <option value="child_under_6">Enfant de moins de 6 ans — Gratuit</option>
+                        <option value="child_6_12">Enfant (6 à 12 ans)</option>
+                        <option value="child_under_6">Enfant (moins de 6 ans)</option>
                       </select>
                     </div>
                   </div>
@@ -807,18 +807,18 @@ export default function NewApplication() {
                 </div>
               )}
 
-              {/* CEV — frais consulaires séparés (informatif, Step 4) */}
-              {isSchengen && cevConsulaireFee && (
+              {/* CEV — frais officiels (informatif, Step 4) */}
+              {isSchengen && (
                 <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                   <span className="text-xl mt-0.5">🇪🇺</span>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-primary">Frais consulaires CEV non inclus</p>
+                    <p className="text-sm font-bold text-primary">Frais officiels CEV non inclus</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      En plus des frais Joventy ci-dessus, vous paierez <strong className="text-blue-700">{cevConsulaireFee}</strong> directement au guichet CEV le jour de votre rendez-vous, par carte bancaire.
+                      En plus des frais Joventy, vous paierez les frais officiels directement au guichet CEV le jour de votre rendez-vous, par carte bancaire.
                     </p>
                     {cevVisaClass === "D" && (
                       <p className="text-xs text-amber-700 mt-1 font-medium">
-                        Visa D : une redevance supplémentaire de l'Office des Étrangers est également requise avant le RDV (montant variable, payable sur un compte belge).
+                        Visa D : une redevance de l'Office des Étrangers est également requise avant le RDV (payable sur un compte belge).
                       </p>
                     )}
                   </div>

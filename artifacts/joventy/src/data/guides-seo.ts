@@ -250,8 +250,8 @@ const guides: Guide[] = [
           "En juin 2026, voici les données actualisées pour chaque ambassade à Kinshasa :",
         list: [
           "🇫🇷 France (via CEV) : délai réglementaire maximum de 15 jours ouvrables à compter du dépôt du dossier complet. En période estivale (juin-août), compter 20 à 25 jours. Frais visa : 90 € adulte, 45 € enfant 6-12 ans, gratuit sous 6 ans",
-          "🇧🇪 Belgique (via CEV — l'Ambassade de Belgique est l'autorité décisionnaire) : délai standard 15 jours ouvrables. Un entretien consulaire complémentaire peut être demandé. Frais : 90 € adulte, 45 € enfant, gratuit sous 6 ans",
-          "🇩🇪 Allemagne (via CEV — l'Ambassade d'Allemagne NE reçoit PAS les Congolais directement) : délai standard 15 jours ouvrables. Le CEV peut refuser la prise en charge si un document manque. Frais : 90 € adulte",
+          "🇧🇪 Belgique (via CEV — l'Ambassade de Belgique est l'autorité décisionnaire) : délai standard 15 jours ouvrables. Un entretien consulaire complémentaire peut être demandé",
+          "🇩🇪 Allemagne (via CEV — l'Ambassade d'Allemagne NE reçoit PAS les Congolais directement) : délai standard 15 jours ouvrables. Le CEV peut refuser la prise en charge si un document manque",
           "Paiement : les frais de visa se règlent en euros ou en USD selon le taux du jour affiché au guichet. Les frais ne sont pas remboursables en cas de refus.",
           "Voie de recours : en cas de refus, vous avez le droit de demander les motifs écrits et de déposer un appel dans les 15 jours auprès de la même ambassade.",
         ],
@@ -896,7 +896,7 @@ const guides: Guide[] = [
           "Les demandes Schengen se déposent au Centre de Visas Européens (CEV) à Kinshasa. Le délai de traitement est réglementé à 15 jours ouvrables maximum. Depuis avril 2026, le système EES (Entry/Exit System) est actif aux frontières — les tampons de passeport sont supprimés et remplacés par un scan biométrique.",
         list: [
           "Prise de rendez-vous CEV : 1 à 4 semaines d'attente",
-          "Frais consulaires : 90 €/adulte, 45 €/enfant 6-12 ans (hausse de 80 € à 90 € en 2026)",
+          "Frais consulaires (tarif officiel fixé par le règlement UE)",
           "Délai de traitement légal : 15 jours ouvrables (peut aller jusqu'à 30 en période chargée)",
           "Total estimé : 4 à 8 semaines depuis la décision de voyager",
           "Nouveau en 2026 : le visa Schengen devient progressivement digital (code-barre 2D à la place du sticker)",
@@ -911,7 +911,7 @@ const guides: Guide[] = [
         list: [
           "🇺🇸 Visa USA B1/B2 : 8 à 16 semaines (avec Joventy : 3 à 5 semaines grâce au suivi rapproché du portail). Travel Advisory Level 4 en cours.",
           "🇨🇦 Visa Canada visiteur : ⚠️ SUSPENDU pour les résidents RDC du 27 mai au 28 août 2026 (mesure Ebola)",
-          "🇪🇺 Visa Schengen : 4 à 8 semaines — frais passés à 90 €/adulte, système EES biométrique actif aux frontières",
+          "🇪🇺 Visa Schengen : 4 à 8 semaines — système EES biométrique actif aux frontières",
           "🇬🇧 Visa Royaume-Uni : 5 à 10 semaines",
           "🇦🇪 E-Visa Dubaï : 3 à 5 jours ouvrables",
           "🇹🇷 Visa Turquie (e-Visa) : 24 à 72 heures",
@@ -1024,7 +1024,7 @@ const guides: Guide[] = [
     sections: [
       { heading: "Qu'est-ce que l'EES ?", body: "L'Entry/Exit System est un système informatique européen qui enregistre les entrées et sorties de tous les ressortissants de pays tiers (non-UE) :", list: ["Remplace les tampons de passeport par un enregistrement numérique", "Collecte les empreintes digitales (4 doigts) et une image faciale à la première entrée", "Les passages suivants nécessitent une vérification biométrique simplifiée", "Les données sont conservées 3 ans", "Opérationnel dans les 29 pays du système Schengen depuis le 10 avril 2026", "Plus de 66 millions de passages enregistrés dans les 6 premières semaines"] },
       { heading: "Ce qui change pour les voyageurs congolais", body: "L'impact principal est sur le temps de passage aux frontières :", list: ["Premier passage : prévoir 5 à 15 minutes supplémentaires pour l'enregistrement biométrique complet", "Passages suivants : scan rapide d'empreintes (1-2 minutes)", "Le système calcule automatiquement vos 90 jours sur 180 — impossible de dépasser sans être détecté", "Plus besoin de compter vos jours manuellement : le système le fait pour vous", "Si vous dépassez vos 90 jours, vous serez signalé automatiquement à la sortie", "Les e-gates (portiques automatiques) se multiplient dans les aéroports — mais pas encore pour les détenteurs de passeport congolais"] },
-      { heading: "Ce qui ne change PAS", body: "Rassurez-vous, beaucoup reste identique :", list: ["Le processus de demande de visa Schengen est inchangé", "Les documents requis sont les mêmes", "Les frais restent à 90 €/adulte", "La durée maximale de 90 jours sur 180 est inchangée", "Votre visa sticker reste valable (jusqu'à la transition vers le visa digital)", "Le CEV de Kinshasa fonctionne normalement"] },
+      { heading: "Ce qui ne change PAS", body: "Rassurez-vous, beaucoup reste identique :", list: ["Le processus de demande de visa Schengen est inchangé", "Les documents requis sont les mêmes", "Les frais officiels Schengen sont inchangés", "La durée maximale de 90 jours sur 180 est inchangée", "Votre visa sticker reste valable (jusqu'à la transition vers le visa digital)", "Le CEV de Kinshasa fonctionne normalement"] },
       { heading: "Conseils pratiques pour votre prochain voyage Schengen", body: "Pour que votre passage aux frontières se passe bien avec l'EES :", list: ["Arrivez plus tôt à l'aéroport — surtout si c'est votre première entrée Schengen avec l'EES", "Gardez votre passeport en bon état : les lecteurs biométriques sont sensibles", "Ne vous inquiétez pas si la file est plus longue que d'habitude — c'est normal pendant la phase d'adaptation", "Conservez votre itinéraire de voyage — en cas de contrôle, le système peut vérifier votre historique", "Si vous avez un doute sur vos jours restants, demandez à l'agent frontalier — le système affiche le décompte"] },
     ],
     faq: [
@@ -1383,9 +1383,9 @@ const guides: Guide[] = [
       },
       {
         heading: "Frais de visa et modalités de paiement",
-        body: "Les frais consulaires sont payés directement à l'Ambassade d'Espagne le jour du rendez-vous. Ils ne sont pas inclus dans les frais Joventy :",
+        body: "Les frais officiels sont payés directement à l'Ambassade d'Espagne le jour du rendez-vous. Ils ne sont pas inclus dans les frais Joventy :",
         list: [
-          "Adulte (12 ans et plus) : 90 €",
+          "Adulte (12 ans et plus) : tarif officiel consulaire",
           "Enfant de 6 à 12 ans : 45 €",
           "Enfant de moins de 6 ans : GRATUIT",
           "Modalité de paiement : renseignez-vous auprès de l'ambassade pour la devise acceptée (CDF, USD ou carte bancaire selon les cas)",
@@ -1441,7 +1441,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte le visa Espagne depuis Kinshasa ?",
-        a: "Les frais consulaires payés à l'ambassade sont : 90 € pour un adulte, 45 € pour un enfant de 6-12 ans, gratuit pour les moins de 6 ans. Les frais Joventy sont : 500 USD d'engagement à la création du dossier + 1 000 USD de prime de succès uniquement à la confirmation du rendez-vous (total 1 500 USD).",
+        a: "Les frais officiels consulaires sont payés directement à l'ambassade le jour du rendez-vous. Les frais Joventy sont : 500 USD d'engagement à la création du dossier + 1 000 USD de prime de succès uniquement à la confirmation du rendez-vous (total 1 500 USD).",
       },
       {
         q: "Que faire si mon email à l'ambassade reste sans réponse ?",
@@ -1579,7 +1579,7 @@ const guides: Guide[] = [
         body:
           "Les frais de visa Schengen sont uniformes pour tous les États Schengen représentés au CEV. Ils sont fixés par le Code des visas européen et s'appliquent en euros, convertis en francs congolais ou en USD au taux du jour.",
         list: [
-          "💶 Adulte (tarif standard) : 90 € ≈ 105 USD",
+          "💶 Adulte (tarif standard) : tarif officiel CEV",
           "💶 Enfant de 6 à 12 ans : 45 €",
           "💶 Enfant de moins de 6 ans : gratuit",
           "Les frais sont réglés directement au CEV au moment du dépôt — pas de paiement en ligne",
@@ -1671,7 +1671,7 @@ const guides: Guide[] = [
         list: [
           "📍 BLS International Kinshasa : collecte biométrique et dépôt de dossier — vérifiez l'adresse actuelle sur blsinternational.com (elle peut changer)",
           "Le formulaire de demande se remplit intégralement en ligne sur le portail UKVI (gov.uk/apply-uk-visa)",
-          "Les frais consulaires UK sont payés en ligne en livres sterling (£) par carte",
+          "Les frais officiels UK sont payés en ligne en livres sterling (£) par carte",
           "Le dossier papier est remis uniquement lors du rendez-vous biométrique chez BLS",
           "UKVI prend la décision finale — BLS ne fait que collecter les biométries et transmettre",
           "Les demandeurs DRC ne bénéficient pas d'exemption de visa — le Standard Visitor Visa est obligatoire même pour 1 jour au UK",
@@ -1715,7 +1715,7 @@ const guides: Guide[] = [
         list: [
           "Étape 1 : Créez un compte sur gov.uk/apply-uk-visa et choisissez le type de visa",
           "Étape 2 : Remplissez le formulaire en ligne (environ 45-60 minutes) — questions sur vos voyages passés, situation financière, famille, liens avec le Royaume-Uni",
-          "Étape 3 : Payez les frais consulaires en ligne par carte (£115 pour le Standard Visitor) — le paiement est non remboursable",
+          "Étape 3 : Payez les frais officiels UKVI en ligne par carte — le paiement est non remboursable",
           "Étape 4 : Prenez rendez-vous pour la biométrie chez BLS International Kinshasa via le portail UKVI (après le paiement)",
           "Étape 5 : Le jour du rendez-vous BLS — apportez votre formulaire imprimé, vos photos, et l'intégralité de votre dossier papier",
           "Étape 6 : BLS collecte vos empreintes digitales et votre photo (biométrie) et transmet votre dossier à UKVI",
@@ -1760,7 +1760,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte un visa UK (Angleterre) depuis Kinshasa en 2026 ?",
-        a: "Les frais consulaires UK pour un Standard Visitor Visa sont de £115 (6 mois). Pour un visa multi-entrées 2 ans : £432, 5 ans : £796, 10 ans : £963. S'ajoutent les frais de service BLS (~50-80 USD) et les frais Joventy (500 $ engagement + 1 000 $ prime de succès, total 1 500 $). Le traitement prioritaire UKVI (5 jours ouvrables) coûte environ £500 supplémentaires.",
+        a: "Les frais officiels UKVI varient selon le type et la durée du visa, payés directement en ligne. S'ajoutent les frais de service BLS et les frais Joventy (500 $ engagement + 1 000 $ prime de succès, total 1 500 $). Le traitement prioritaire UKVI (5 jours ouvrables) est disponible moyennant supplément.",
       },
       {
         q: "Quel est le délai pour obtenir un visa UK depuis Kinshasa ?",
@@ -1969,7 +1969,7 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Combien coûte le visa Brésil avec Joventy ?",
-        a: "Frais Joventy : 500 USD d'engagement + 1 000 USD de prime de succès (payés uniquement à l'obtention du visa). Total Joventy : 1 500 USD. Les frais consulaires brésiliens sont payés séparément directement à l'ambassade.",
+        a: "Frais Joventy : 500 USD d'engagement + 1 000 USD de prime de succès (payés uniquement à l'obtention du visa). Total Joventy : 1 500 USD. Les frais officiels sont payés séparément directement à l'ambassade.",
       },
       {
         q: "Faut-il un rendez-vous pour déposer une demande de visa Brésil à Kinshasa ?",

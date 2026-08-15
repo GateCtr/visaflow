@@ -230,6 +230,8 @@ const PACKAGES = [
     icon: Star,
     label: "Assistance Complète",
     tagline: "Recommandé — Clé en main",
+    price: "1 500 $",
+    priceDetail: "500 $ à l'ouverture · 1 000 $ à l'obtention",
     desc: "Joventy prend en charge l'intégralité du processus : formulaires, constitution du dossier, profilage, créneau consulaire ou demande en ligne. Visa consulaire ou électronique — vous n'avez qu'à vous présenter le jour J.",
     highlight: true,
     features: [
@@ -245,13 +247,14 @@ const PACKAGES = [
     icon: Calendar,
     label: "Créneau Uniquement",
     tagline: "Dossier déjà prêt",
+    price: "350 $",
+    priceDetail: "Payé UNIQUEMENT après obtention · 0 $ d'acompte",
     desc: "Votre dossier est complet ? Joventy surveille 24h/24 le système de rendez-vous et verrouille votre créneau dès qu'une place se libère — USA, Schengen, Espagne, Allemagne et plus.",
     highlight: false,
     features: [
       "Surveillance continue du système consulaire 24h/24",
       "Capture immédiate dès qu'un créneau apparaît",
       "USA, Schengen (CEV), Espagne, Allemagne (RK-Termin)…",
-      "350 $ — payés UNIQUEMENT après obtention",
       "Aucun acompte, zéro paiement à l'avance",
     ],
   },
@@ -259,13 +262,14 @@ const PACKAGES = [
     key: "dossier_only",
     icon: ClipboardList,
     label: "Accompagnement Partiel",
-    tagline: "600 $ — paiement unique",
+    tagline: "Paiement unique · aucune prime de succès",
+    price: "600 $",
+    priceDetail: "Paiement unique à l'ouverture · aucune prime de succès",
     desc: "Vous fournissez la majorité ou la totalité de vos documents. Joventy compose votre dossier, assure le profilage et gère le reste — y compris le créneau. Tarif forfaitaire, aucune prime de succès.",
     highlight: false,
     features: [
       "Composition et vérification du dossier",
       "Profilage et conseils personnalisés",
-      "600 $ — paiement unique à l'ouverture",
       "Disponible pour toutes les destinations",
       "Visa consulaire et visa en ligne inclus",
     ],
@@ -822,8 +826,8 @@ export default function Landing() {
                 },
                 {
                   num: "3",
-                  title: "Frais consulaires",
-                  desc: "Payés directement par vous au consulat/gouvernement étranger. Non collectés par Joventy. Montants variables selon la destination.",
+                  title: "Frais officiels",
+                  desc: "Payés directement par vous au gouvernement étranger (consulat ou portail officiel selon la destination). Non collectés par Joventy.",
                   color: "bg-white/10 border-white/20",
                 },
               ].map((item) => (
@@ -1055,6 +1059,11 @@ export default function Landing() {
                       <p className={`text-xs font-semibold uppercase tracking-wide ${pkg.highlight ? "text-primary/60" : "text-white/55"}`}>{pkg.tagline}</p>
                       <h3 className={`font-bold text-lg ${pkg.highlight ? "text-primary" : "text-white"}`}>{pkg.label}</h3>
                     </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <span className={`text-3xl font-black ${pkg.highlight ? "text-primary" : "text-secondary"}`}>{pkg.price}</span>
+                    <p className={`text-xs mt-1 ${pkg.highlight ? "text-primary/60" : "text-white/50"}`}>{pkg.priceDetail}</p>
                   </div>
 
                   <p className={`text-sm mb-5 leading-relaxed ${pkg.highlight ? "text-primary/80" : "text-white/70"}`}>{pkg.desc}</p>

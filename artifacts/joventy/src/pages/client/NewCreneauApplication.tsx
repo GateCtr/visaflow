@@ -459,7 +459,7 @@ export default function NewCreneauApplication() {
                 <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
                   <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-600" />
                   <div>
-                    <p className="font-semibold">Visa C — Portail CEV (visaonweb.be)</p>
+                    <p className="font-semibold">Visa C — Portail CEV (visaonweb.diplomatie.be)</p>
                     <p className="text-xs mt-1 text-blue-700">Votre passeport et vos pièces justificatives sont gérés via le formulaire VOWINT. Le passeport n'est pas requis ici. Prérequis : avoir un dossier VOWINT en cours ou Joventy en crée un pour vous.</p>
                   </div>
                 </div>
@@ -467,7 +467,7 @@ export default function NewCreneauApplication() {
                   <label className="block text-sm font-semibold text-primary mb-1.5">Pays de destination Schengen <span className="text-red-500">*</span></label>
                   <Select value={cevTargetCountry} onValueChange={setCevTargetCountry}>
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60 overflow-y-auto">
                       {CEV_COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -477,9 +477,9 @@ export default function NewCreneauApplication() {
                   <Select value={cevAgeCategory} onValueChange={(v) => setCevAgeCategory(v as typeof cevAgeCategory)}>
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="adult">Adulte (≥ 12 ans) — 90 €</SelectItem>
-                      <SelectItem value="child_6_12">Enfant 6-12 ans — 45 €</SelectItem>
-                      <SelectItem value="child_under_6">Enfant moins de 6 ans — Gratuit</SelectItem>
+                      <SelectItem value="adult">Adulte (12 ans et plus)</SelectItem>
+                      <SelectItem value="child_6_12">Enfant (6 à 12 ans)</SelectItem>
+                      <SelectItem value="child_under_6">Enfant (moins de 6 ans)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -553,7 +553,7 @@ export default function NewCreneauApplication() {
                   <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
                     <MessageCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
                     <p className="text-xs text-emerald-800">
-                      <strong>Après création du dossier :</strong> transmettez votre identifiant + mot de passe à notre équipe via la messagerie sécurisée. Notre robot lancera la recherche dès réception.
+                      <strong>Après création du dossier :</strong> transmettez votre identifiant + mot de passe à notre équipe via la messagerie sécurisée. Notre système lancera la surveillance dès réception.
                     </p>
                   </div>
                 )}
