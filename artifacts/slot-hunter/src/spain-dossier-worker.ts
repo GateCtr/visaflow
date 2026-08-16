@@ -488,6 +488,13 @@ export async function runDossierWorker(
         log("INFO", `${tag} ✅ Session rechargée après rotation — reprise scan`);
       }
 
+      // ── Header de cycle — visible pour chaque dossier en cours de scan ─────────
+      const winRemain = Math.round((windowEnd - Date.now()) / 60_000);
+      log(
+        "INFO",
+        `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | service: "${phpState.bestServiceName}" | proxy: ${maskProxy(proxyUrl)}`,
+      );
+
       const scan = await scanDatetimeDirect(phpState, config, tag);
 
       // Mise à jour compteur cycles morts
@@ -496,6 +503,11 @@ export async function runDossierWorker(
         log("WARN", `${tag} ⚠️ Session morte (tous mois 0B) — dead cycle ${consecutiveDeadCycles}/${MAX_DEAD_CYCLES_BEFORE_ROTATE}`);
       } else {
         consecutiveDeadCycles = 0;
+      }
+
+      // ── Résumé de cycle ──────────────────────────────────────────────────────
+      if (!scan.allMonthsDead && scan.status === "not_found") {
+        log("INFO", `${tag} ⏸ Cycle ${cycleCount}: aucun créneau — next`);
       }
 
       // ── Reporting scan Convex (par dossier) ─────────────────────────────────

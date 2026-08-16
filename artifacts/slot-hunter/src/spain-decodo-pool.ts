@@ -139,13 +139,37 @@ function getPool(): string[] {
 
 // ─── Blacklist helpers ─────────────────────────────────────────────────────────
 
-/** Vérifie si une URL est actuellement blacklistée (TTL expirés auto-purgés). */
+/**
+ * Normalise une URL proxy en supprimant le suffixe sticky Decodo
+ * (-session-XXXX-sessionduration-NN dans le username).
+ *
+ * Nécessaire car flagDecodoIp et isBlacklisted reçoivent des URLs sticky
+ * (ex: user-session-cc4b6xqp-sessionduration-60) mais le pool contient
+ * les URLs de base (ex: user). Sans normalisation :
+ *   - indexOf retourne -1 → "[?/6000]" dans les logs
+ *   - La blacklist clé = sticky URL → une autre sticky du même proxy n'est pas bloquée
+ */
+function baseProxyUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const user = decodeURIComponent(u.username);
+    const baseUser = user.replace(/-session-[^-]+-sessionduration-\d+/g, "");
+    u.username = encodeURIComponent(baseUser);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+/** Vérifie si une URL est actuellement blacklistée (TTL expirés auto-purgés).
+ *  Normalise les URLs sticky avant le lookup (même base IP → même entrée blacklist). */
 export function isDecodoIpBlacklisted(url: string): boolean { return isBlacklisted(url); }
 function isBlacklisted(url: string): boolean {
-  const ts = _blacklistedIps.get(url);
+  const base = baseProxyUrl(url);
+  const ts = _blacklistedIps.get(base);
   if (ts === undefined) return false;
   if (Date.now() - ts > getBlacklistTtlMs()) {
-    _blacklistedIps.delete(url); // auto-expire en mémoire
+    _blacklistedIps.delete(base); // auto-expire en mémoire
     return false;
   }
   return true;
@@ -300,14 +324,18 @@ export function flagDecodoIp(url: string | undefined, reason: string): void {
   const pool = getPool();
   if (pool.length <= 1) return; // inutile si pool d'une seule IP
 
+  // Normaliser vers l'URL de base (sans suffix sticky) pour :
+  //   1. Trouver l'index réel dans le pool (pool ne contient pas les URLs sticky)
+  //   2. Stocker dans la blacklist par base URL → toute future sticky de la même IP sera bloquée
+  const base = baseProxyUrl(url);
   const ttlMin = Math.round(getBlacklistTtlMs() / 60_000);
-  const masked = url.replace(/:([^:@]+)@/, ":***@");
-  const ipIdx = pool.indexOf(url);
+  const masked = base.replace(/:([^:@]+)@/, ":***@");
+  const ipIdx = pool.indexOf(base);
   const idxLabel = ipIdx >= 0 ? `[${ipIdx + 1}/${pool.length}]` : `[?/${pool.length}]`;
   console.warn(
     `[spain-decodo] 🚫 IP blacklistée ${idxLabel} (${reason}, TTL ${ttlMin}min) — ${masked.slice(0, 60)}`,
   );
-  _blacklistedIps.set(url, Date.now());
+  _blacklistedIps.set(base, Date.now());
   syncDecodoPoolStateToRedis(_index, _blacklistedIps, computePoolFingerprint(pool));
 }
 
