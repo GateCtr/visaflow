@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, List, Grid3X3, BarChart3, EyeOff, TrendingUp, Download, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, List, Grid3X3, BarChart3, Eye, EyeOff, TrendingUp, Download, Zap } from "lucide-react";
 
 const DEST_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   usa:      { bg: "bg-blue-100",   text: "text-blue-800",   dot: "bg-blue-500" },
