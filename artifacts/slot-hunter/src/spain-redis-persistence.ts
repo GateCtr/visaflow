@@ -938,6 +938,47 @@ export async function releaseWorkerIp(proxyUrl: string, dossierId: string): Prom
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SLOT SNAPSHOT — mémoire partagée entre workers parallèles
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_SLOT_SNAP_PREFIX = "spain:slot_snap:";
+const REDIS_SLOT_SNAP_TTL_SEC = 120; // 2 min — plus long que le SCAN_INTERVAL (10–30s)
+
+export interface SlotSnapEntry {
+  date: string;
+  time: string;
+  agendaId: string;
+  freeslots: number;
+}
+
+/**
+ * Publie le snapshot de créneaux découverts dans Redis.
+ * Clé : spain:slot_snap:{agendaId}:{serviceId}
+ * TTL  : 2 min (renouveler à chaque cycle de scan).
+ *
+ * Permet aux workers parallèles sur le même agenda de voir la même
+ * liste sans re-scanner, et de choisir des créneaux distincts.
+ */
+export async function publishSlotSnapshot(
+  agendaId: string,
+  serviceId: string,
+  slots: SlotSnapEntry[],
+  ttlSec = REDIS_SLOT_SNAP_TTL_SEC,
+): Promise<void> {
+  if (!redisReady || !redisClient || slots.length === 0) return;
+  const key = `${REDIS_SLOT_SNAP_PREFIX}${agendaId}:${serviceId}`;
+  try {
+    await redisClient.set(
+      key,
+      JSON.stringify(slots.slice(0, 500).map((s) => ({
+        d: s.date, t: s.time, a: s.agendaId, n: s.freeslots,
+      }))),
+      { EX: ttlSec },
+    );
+  } catch { /* ignore — non-bloquant */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════════
 

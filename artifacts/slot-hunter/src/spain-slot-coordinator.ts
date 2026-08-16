@@ -22,4 +22,5 @@ export {
   reserveWorkerIp,
   isIpReservedByOther,
   releaseWorkerIp,
+  publishSlotSnapshot,
 } from "./spain-redis-persistence.js";

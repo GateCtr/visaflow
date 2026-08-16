@@ -42,6 +42,7 @@ import {
   reserveWorkerIp,
   isIpReservedByOther,
   releaseWorkerIp,
+  publishSlotSnapshot,
 } from "./spain-slot-coordinator.js";
 import {
   getDecodoProxyForIndex,
@@ -481,30 +482,44 @@ export async function runDossierWorker(
           (s) => isSlotInDateWindow(s.date, config, tag) && s.freeslots > 0,
         );
 
+        // Publier le snapshot pour les workers parallèles
+        publishSlotSnapshot(
+          phpState.agendaId,
+          phpState.bestServiceId ?? "",
+          eligible.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
+        ).catch(() => {});
+
         if (eligible.length === 0) {
           log(
             "INFO",
             `${tag} Cycle ${cycleCount}: ${scan.slots.length} créneau(x) hors fenêtre — next`,
           );
         } else {
-          const slot = eligible[0]; // Meilleur créneau (trié par date ASC dans le scan)
+          // Itérer tous les créneaux éligibles jusqu'à en obtenir un (parallélisme multi-dossier).
+          // Plusieurs workers sur le même agenda partagent le même claim Redis — si le premier
+          // créneau est déjà pris par un autre dossier, on essaie le suivant plutôt que d'attendre
+          // le prochain cycle.
+          let claimedSlot: WorkerSlot | undefined;
+          for (const candidate of eligible) {
+            const ok = await tryClaimSlot(
+              candidate.date,
+              candidate.time,
+              candidate.agendaId ?? "",
+              config.id,
+              groupSize,
+              candidate.freeslots,
+            );
+            if (ok) { claimedSlot = candidate; break; }
+            log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà pris, prochain créneau…`);
+          }
 
-          // Claim atomique Redis (Lua)
-          const claimed = await tryClaimSlot(
-            slot.date,
-            slot.time,
-            slot.agendaId ?? "",
-            config.id,
-            groupSize,
-            slot.freeslots,
-          );
-
-          if (!claimed) {
+          if (!claimedSlot) {
             log(
               "INFO",
-              `${tag} Cycle ${cycleCount}: créneau ${slot.date} ${slot.time} déjà pris → next`,
+              `${tag} Cycle ${cycleCount}: tous les créneaux éligibles (${eligible.length}) déjà pris → next`,
             );
           } else {
+            const slot = claimedSlot;
             log(
               "INFO",
               `${tag} Cycle ${cycleCount}: ✅ Créneau ${slot.date} ${slot.time} (freeSlots=${slot.freeslots}) — booking en cours…`,
@@ -1114,7 +1129,9 @@ function extractAllSlotsFromPayload(
   const obj = payload as Record<string, unknown>;
   if (!Array.isArray(obj.Slots)) return [];
 
-  const minFree = groupSize > 1 ? groupSize : 1;
+  // Booking groupé : exige strictement plus de 2 places libres (≥ 3)
+  // Booking normal : au moins 1 place
+  const minFree = groupSize > 1 ? Math.max(groupSize, 3) : 1;
   const result: WorkerSlot[] = [];
 
   for (const day of obj.Slots) {
@@ -1123,14 +1140,18 @@ function extractAllSlotsFromPayload(
     const date = typeof d.date === "string" ? d.date : "";
     if (!date) continue;
 
+    const stateNum =
+      typeof d.state === "number" ? d.state
+      : typeof d.state === "string" ? parseInt(d.state, 10) : -1;
+
+    // Ignorer tout jour non explicitement ouvert (state=1)
+    // Couvre : state=0 (fermé), state absent (-1), état inconnu
+    if (stateNum !== 1) continue;
+
     const slotAgendaId =
       d.agenda != null ? String(d.agenda)
       : d.agenda_id != null ? String(d.agenda_id)
       : agendaId;
-
-    const stateNum =
-      typeof d.state === "number" ? d.state
-      : typeof d.state === "string" ? parseInt(d.state, 10) : -1;
 
     const times = d.times;
 
@@ -1150,10 +1171,9 @@ function extractAllSlotsFromPayload(
         typeof freeRaw === "number" ? freeRaw
         : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
 
-      const hasAvailability = free > 0 || free === -1;
-      if (!hasAvailability) continue;
-      // Vérification capacité groupSize
-      if (free !== -1 && free < minFree) continue;
+      if (free <= 0) continue;
+      // Vérification capacité : groupSize normal + seuil groupe > 2
+      if (free < minFree) continue;
 
       const time = /^\d{1,2}:\d{2}$/.test(timeKey)
         ? timeKey
