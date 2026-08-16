@@ -465,24 +465,18 @@ export async function runDossierWorker(
 
       const scan = await scanDatetimeDirect(phpState, config, tag);
 
-      // ── Résumé de cycle ──────────────────────────────────────────────────────
-      if (scan.status === "not_found") {
-        log("INFO", `${tag} ⏸ Cycle ${cycleCount}: aucun créneau — next`);
-      }
-
-      // ── Reporting scan Convex (par dossier) ─────────────────────────────────
-      void reportSpainWatcherScan({
-        status: scan.status === "found" ? "found" : "not_found",
-        applicationId: config.applicationId,
-        dossierName: config.applicantName,
-        detectedSlots: scan.status === "found" && scan.slots
-          ? JSON.stringify(scan.slots.slice(0, 20).map((s) => ({ d: s.date, t: s.time, n: s.freeslots })))
-          : undefined,
-      }).catch(() => {});
-
-      // ── Reporting découverte (fire-and-forget) ──────────────────────────
+      // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
         emitDiscoveryEvents(scan.slots, scan.serviceId, scan.serviceName, config);
+      }
+
+      if (scan.status === "not_found") {
+        log("INFO", `${tag} ⏸ Cycle ${cycleCount}: aucun créneau — next`);
+        void reportSpainWatcherScan({
+          status: "not_found",
+          applicationId: config.applicationId,
+          dossierName: config.applicantName,
+        }).catch(() => {});
       }
 
       if (scan.status === "found" && scan.slots && scan.slots.length > 0) {
@@ -503,6 +497,18 @@ export async function runDossierWorker(
           phpState.bestServiceId ?? "",
           eligible.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
         ).catch(() => {});
+
+        // ── Reporting Convex APRÈS filtre — "found" seulement si créneaux éligibles ──
+        // IMPORTANT : ne pas passer "found" si tous les créneaux sont hors-fenêtre,
+        // sinon l'email admin "Créneau Espagne Disponible !" est déclenché à tort.
+        void reportSpainWatcherScan({
+          status: eligible.length > 0 ? "found" : "not_found",
+          applicationId: config.applicationId,
+          dossierName: config.applicantName,
+          detectedSlots: JSON.stringify(
+            eligible.slice(0, 20).map((s) => ({ d: s.date, t: s.time, n: s.freeslots }))
+          ),
+        }).catch(() => {});
 
         if (eligible.length === 0) {
           log(

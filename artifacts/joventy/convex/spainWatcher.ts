@@ -266,8 +266,12 @@ export const internalRecordScan = internalMutation({
         updatedAt: now,
       });
 
-      // Send email alert if slot found
-      if (args.status === "found" && watcher.adminEmail) {
+      // Send email alert if slot found — cooldown 30 min pour éviter le spam
+      const ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+      const lastAlert = watcher.lastAlertSentAt ?? 0;
+      const cooldownOk = now - lastAlert > ALERT_COOLDOWN_MS;
+      if (args.status === "found" && watcher.adminEmail && cooldownOk) {
+        await ctx.db.patch(watcher._id, { lastAlertSentAt: now });
         await ctx.scheduler.runAfter(0, internal.spainWatcher.internalSendWatcherAlert, {
           adminEmail: watcher.adminEmail,
           slotInfo: args.slotInfo ?? "Créneau disponible",

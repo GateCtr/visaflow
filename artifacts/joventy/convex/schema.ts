@@ -427,6 +427,7 @@ export default defineSchema({
     rushPrepAt: v.optional(v.number()),       // when admin issued the command
     rushPrepResult: v.optional(v.string()),   // "ok" | "error: <msg>" — set by bot on ack
     rushPrepAckedAt: v.optional(v.number()),  // when bot acknowledged
+    lastAlertSentAt: v.optional(v.number()),  // timestamp dernier email "créneau trouvé" — cooldown 30min
   }).index("by_key", ["key"]),
 
   spainWatcherScans: defineTable({
