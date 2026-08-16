@@ -1060,6 +1060,32 @@ export async function getLastProxyForDossier(dossierId: string): Promise<string 
   }
 }
 
+// ─── Sticky session ID persistence ──────────────────────────────────────────
+// Même stickyId → même exit IP Decodo → CF clearance toujours valide au démarrage
+// de la fenêtre suivante (le cf_clearance est lié à l'exit IP, pas au host:port).
+const REDIS_LAST_STICKY_PREFIX  = "visaflow:spain-worker-last-sticky:";
+const REDIS_LAST_STICKY_TTL_SEC = 2 * 3600; // 2h — dépasse la durée sticky Decodo (60min+)
+
+export async function saveLastStickyForDossier(dossierId: string, stickyId: string): Promise<void> {
+  if (!redisReady || !redisClient || !stickyId) return;
+  const key = REDIS_LAST_STICKY_PREFIX + dossierId;
+  try {
+    await redisClient.set(key, stickyId, { EX: REDIS_LAST_STICKY_TTL_SEC });
+  } catch (err: any) {
+    console.warn(`[spain-redis] saveLastStickyForDossier échouée: ${err?.message}`);
+  }
+}
+
+export async function getLastStickyForDossier(dossierId: string): Promise<string | null> {
+  if (!redisReady || !redisClient) return null;
+  const key = REDIS_LAST_STICKY_PREFIX + dossierId;
+  try {
+    return await redisClient.get(key);
+  } catch {
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SLOT SNAPSHOT — mémoire partagée entre workers parallèles
 // ═══════════════════════════════════════════════════════════════════════════════
