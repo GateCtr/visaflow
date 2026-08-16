@@ -420,35 +420,38 @@ function BotLogsTab() {
       {/* Flow tabs + Filters bar */}
       <div className="bg-white rounded-2xl border border-border shadow-sm p-4 space-y-3">
         {/* Flow tabs */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
-            {([
-              { id: "all" as FlowTab, label: "Tous", count: paginatedLogs.length },
-              { id: "usa" as FlowTab, label: "🇺🇸 USA", count: usaCount },
-              { id: "cev" as FlowTab, label: "🇪🇺 CEV", count: cevCount },
-              { id: "germany" as FlowTab, label: "🇩🇪 Germany", count: germanyCount },
-              { id: "spain" as FlowTab, label: "🇪🇸 Espagne", count: spainCount },
-            ]).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => { setFlowTab(tab.id); setPage(0); }}
-                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                  flowTab === tab.id
-                    ? "bg-white text-slate-800 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {tab.label}
-                {tab.count !== null && (
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                  flowTab === tab.id ? "bg-slate-100 text-slate-600" : "bg-slate-200/50 text-slate-400"
-                }`}>{tab.count}</span>
-              )}
-              </button>
-            ))}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          {/* Tab bar — scrollable horizontalement sur mobile, pills sur desktop */}
+          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 min-w-max">
+              {([
+                { id: "all" as FlowTab, label: "Tous", count: paginatedLogs.length },
+                { id: "usa" as FlowTab, label: "🇺🇸 USA", count: usaCount },
+                { id: "cev" as FlowTab, label: "🇪🇺 CEV", count: cevCount },
+                { id: "germany" as FlowTab, label: "🇩🇪 Germany", count: germanyCount },
+                { id: "spain" as FlowTab, label: "🇪🇸 Espagne", count: spainCount },
+              ]).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => { setFlowTab(tab.id); setPage(0); }}
+                  className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    flowTab === tab.id
+                      ? "bg-white text-slate-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.count !== null && (
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                    flowTab === tab.id ? "bg-slate-100 text-slate-600" : "bg-slate-200/50 text-slate-400"
+                  }`}>{tab.count}</span>
+                )}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <span className="flex-1" />
+          <span className="hidden sm:block flex-1" />
 
           {/* Delete selector — masqué quand l'onglet Espagne est actif */}
           {flowTab !== "spain" && <div className="flex items-center gap-1.5">
