@@ -282,7 +282,7 @@ function LogDataBlock({ data, isExpanded }: { data: string; isExpanded: boolean 
 type FlowTab = "usa" | "cev" | "germany" | "spain" | "all";
 
 function BotLogsTab() {
-  const [flowTab, setFlowTab]           = useState<FlowTab>("usa");
+  const [flowTab, setFlowTab]           = useState<FlowTab>("all");
   const [stepFilter, setStepFilter]     = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "ok" | "warn" | "fail">("");
   const [page, setPage]                 = useState(0);
@@ -347,6 +347,10 @@ function BotLogsTab() {
 
   const canLoadMore = paginationStatus === "CanLoadMore";
   const isLoadingMore = paginationStatus === "LoadingMore";
+
+  // Spain count — minimal query pour le badge dans l'onglet
+  const spainStats = useQuery(api.spainWatcher.getWatcherPaginated, { page: 0, pageSize: 1 });
+  const spainCount: number | null = spainStats?.stats?.total ?? null;
 
   // Filter by flow tab
   const flowFiltered = (paginatedLogs ?? []).filter(log => {
@@ -419,11 +423,11 @@ function BotLogsTab() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
             {([
+              { id: "all" as FlowTab, label: "Tous", count: paginatedLogs.length },
               { id: "usa" as FlowTab, label: "🇺🇸 USA", count: usaCount },
               { id: "cev" as FlowTab, label: "🇪🇺 CEV", count: cevCount },
               { id: "germany" as FlowTab, label: "🇩🇪 Germany", count: germanyCount },
-              { id: "spain" as FlowTab, label: "🇪🇸 Espagne", count: null },
-              { id: "all" as FlowTab, label: "Tous", count: paginatedLogs.length },
+              { id: "spain" as FlowTab, label: "🇪🇸 Espagne", count: spainCount },
             ]).map(tab => (
               <button
                 key={tab.id}
@@ -715,6 +719,9 @@ function BotLogsTab() {
           </>
         )}
       </div>}
+
+      {/* Espagne — historique scans uniquement dans l'onglet "Tous" */}
+      {flowTab === "all" && <SpainWatcherTab compact />}
     </div>
   );
 }
@@ -1385,7 +1392,7 @@ function RushPrepStatus({ watcher, command }: {
   return null;
 }
 
-function SpainWatcherTab() {
+function SpainWatcherTab({ compact = false }: { compact?: boolean } = {}) {
   const [scanPage, setScanPage] = useState(0);
   const [scanFilter, setScanFilter] = useState<"" | "found" | "not_found" | "error">("");
   const [selectedApplicationId, setSelectedApplicationId] = useState<string>("");
@@ -1485,8 +1492,8 @@ function SpainWatcherTab() {
 
   return (
     <div className="space-y-6">
-      {/* Status card */}
-      <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
+      {/* Status card — masqué en mode compact (onglet "Tous") */}
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-6" style={{ display: compact ? "none" : undefined }}>
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center text-lg">{"\u{1F1EA}\u{1F1F8}"}</div>
           <div className="flex-1" />
@@ -1736,8 +1743,6 @@ function SpainWatcherTab() {
                             </a>
                           )}
                         </div>
-                        {scan.slotInfo && <p className="text-xs text-green-700 mt-1 font-medium">{scan.slotInfo}</p>}
-
                         {/* Pipeline étapes — visible pour TOUS les scans (found / not_found / error) */}
                         {scan.scanTrace && (() => {
                           const t = parseSpainScanTrace(scan.scanTrace);
