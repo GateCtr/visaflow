@@ -267,12 +267,17 @@ const REDIS_WORKER_CF_PREFIX = "visaflow:spain-cf:worker:";
 
 /**
  * Extrait un identifiant stable depuis l'URL du proxy Decodo (partie user:session).
- * Ex: http://user-session_abc123:pass@gate.decodo.com:10006 → "user-session_abc123"
+ * Ex: http://user-session_abc123:pass@gate.decodo.com:10006 → "gate.decodo.com_10006"
+ *
+ * Keyed by host:port (not username) so the same Decodo exit-IP port always maps
+ * to the same Redis entry regardless of the random sticky-session ID in the username.
  */
 function proxyToWorkerKey(proxyUrl: string): string {
   try {
-    const match = proxyUrl.match(/\/\/([^:@]+)/);
-    if (match) return REDIS_WORKER_CF_PREFIX + match[1].replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+    const u = new URL(proxyUrl);
+    const host = u.hostname.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const port = u.port || "0";
+    return REDIS_WORKER_CF_PREFIX + `${host}_${port}`.slice(0, 80);
   } catch { /* ignore */ }
   // Fallback : fin de l'URL sanitisée
   return REDIS_WORKER_CF_PREFIX + proxyUrl.slice(-60).replace(/[^a-zA-Z0-9_-]/g, "_");
