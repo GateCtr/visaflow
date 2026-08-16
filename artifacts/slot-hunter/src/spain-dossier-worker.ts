@@ -56,6 +56,7 @@ import {
   getLastProxyForDossier,
   saveLastStickyForDossier,
   getLastStickyForDossier,
+  deleteLastStickyForDossier,
 } from "./spain-redis-persistence.js";
 import {
   reportSlotFound,
@@ -558,6 +559,15 @@ export async function runDossierWorker(
     log("WARN", `${tag} ❌ initWorkerSession échoué — flag + rotation (tentative ${attempt + 1})`);
     flagDecodoIp(proxyUrl, "init-session-failed");
     await releaseWorkerIp(proxyUrl, config.id).catch(() => {});
+
+    // Si c'était la tentative avec l'ancien stickyId (attempt 0 + lastStickyId),
+    // l'invalider immédiatement : le port vient d'être blacklisté et les fenêtres
+    // suivantes ne doivent pas réinjecter ce stickyId sur un autre port (exit IP
+    // différente → CF clearance invalide → re-solve inutile).
+    if (attempt === 0 && lastStickyId) {
+      await deleteLastStickyForDossier(config.id).catch(() => {});
+      log("INFO", `${tag} 🗑️ StickyId invalidé (port blacklisté) — prochain solve sera frais`);
+    }
 
     const nextProxy = await pickDedicatedProxy(config.id, tag);
     if (!nextProxy) { log("WARN", `${tag} Pool Decodo épuisé`); proxyUrl = ""; break; }

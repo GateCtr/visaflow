@@ -1086,6 +1086,22 @@ export async function getLastStickyForDossier(dossierId: string): Promise<string
   }
 }
 
+/**
+ * Supprime le stickyId persisté pour ce dossier.
+ * À appeler quand l'IP associée à ce sticky est invalidée (0B /main/, init-session-failed)
+ * afin que la fenêtre suivante ne réessaie pas ce sticky sur un autre port Decodo
+ * (ce qui donnerait une exit IP différente → CF clearance invalide → re-solve inutile).
+ */
+export async function deleteLastStickyForDossier(dossierId: string): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  const key = REDIS_LAST_STICKY_PREFIX + dossierId;
+  try {
+    await redisClient.del(key);
+  } catch (err: any) {
+    console.warn(`[spain-redis] deleteLastStickyForDossier échouée: ${err?.message}`);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SLOT SNAPSHOT — mémoire partagée entre workers parallèles
 // ═══════════════════════════════════════════════════════════════════════════════
