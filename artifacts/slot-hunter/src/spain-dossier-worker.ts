@@ -94,6 +94,29 @@ function addStickySession(url: string, sid: string): string {
   } catch { return url; }
 }
 
+/**
+ * Supprime le sticky session ID du username Decodo pour obtenir la BASE URL.
+ * Ex: http://user-sp4e4cx19x-session-abc123-sessionduration-60:pass@es.decodo.com:10005
+ *   → http://user-sp4e4cx19x-sessionduration-60:pass@es.decodo.com:10005
+ *
+ * Utilisé avant saveLastProxyForDossier pour persister la BASE URL, pas la sticky URL.
+ * Sans ça, deux windows peuvent générer des clés Redis différentes pour le même port
+ * (base URL vs sticky URL) → double réservation → IP partagée entre dossiers.
+ */
+function stripStickySession(url: string): string {
+  try {
+    const u = new URL(url);
+    const user = decodeURIComponent(u.username);
+    if (!user.includes("-session-")) return url; // déjà base URL
+    const baseUser = user.replace(/-session-[^-]+-/, "-"); // retire -session-{id}-
+    u.username = encodeURIComponent(baseUser);
+    // URL.toString() ajoute un "/" final sur les URLs sans path — le retirer pour
+    // que la base URL sauvegardée corresponde au format des URLs CSV (sans slash).
+    const result = u.toString();
+    return (u.pathname === "/" && !url.endsWith("/")) ? result.replace(/\/$/, "") : result;
+  } catch { return url; }
+}
+
 // ─── Types publics ────────────────────────────────────────────────────────────
 
 export interface SpainDossierConfig {
@@ -1018,10 +1041,13 @@ export async function runDossierWorker(
     // Owner-check Lua : seul ce dossier peut supprimer sa réservation.
     // proxyUrl = "" → mode direct, pas de réservation Redis à libérer.
     if (proxyUrl) {
-      // Mémoriser ce port pour la prochaine fenêtre → même port → CF cache hit
-      // await obligatoire : process.exit() (test) ou fin de boucle orchestrateur
-      // tuerait une Promise fire-and-forget avant qu'elle ne soit commitée Redis.
-      await saveLastProxyForDossier(config.id, proxyUrl).catch(() => {});
+      // Mémoriser ce port pour la prochaine fenêtre → même port → CF cache hit.
+      // IMPORTANT : sauvegarder la BASE URL (sans sticky session) pour que le path
+      // lastProxy de pickDedicatedProxy génère la même clé Redis que le round-robin.
+      // Sauvegarder la sticky URL provoquait une double réservation (clés différentes)
+      // → deux dossiers sur le même port physique → CF clearances écrasées mutuellement.
+      // await obligatoire : process.exit() (test) tuerait une Promise fire-and-forget.
+      await saveLastProxyForDossier(config.id, stripStickySession(proxyUrl)).catch(() => {});
       releaseWorkerIp(proxyUrl, config.id).catch(() => {});
     }
   }

@@ -965,12 +965,32 @@ const REDIS_IP_RESERVE_PREFIX = "spain:ip:reserved:";
 const REDIS_IP_RESERVE_TTL_SEC = 30 * 60; // 30 min — durée fenêtre worker
 
 /**
+ * Normalise une URL proxy Decodo en clé de réservation stable : "host:port".
+ *
+ * CRITIQUE : la clé doit ignorer le sticky session ID dans le username, sinon
+ * un worker qui passe une BASE URL (round-robin) et un autre qui passe une STICKY
+ * URL (lastProxy path) génèrent deux clés différentes pour le même port physique
+ * → double réservation → deux dossiers sur le même port → exit IPs qui se
+ * chevauchent → CF clearances écrasées mutuellement → cfFromCache toujours false.
+ */
+function proxyToReserveKey(proxyUrl: string): string {
+  try {
+    const u = new URL(proxyUrl);
+    return `${REDIS_IP_RESERVE_PREFIX}${u.hostname}:${u.port}`;
+  } catch {
+    // Fallback : fin de l'URL sanitisée (évite de crasher sur URL malformée)
+    return `${REDIS_IP_RESERVE_PREFIX}${proxyUrl.slice(-40).replace(/[^a-zA-Z0-9:._-]/g, "_")}`;
+  }
+}
+
+/**
  * Réserve un proxy Decodo pour un dossier (NX : échoue si déjà réservé par un autre).
  * Retourne true si la réservation a réussi (ou en mode dégradé sans Redis).
+ * La clé est normalisée sur host:port uniquement — insensible au sticky session ID.
  */
 export async function reserveWorkerIp(proxyUrl: string, dossierId: string): Promise<boolean> {
   if (!redisReady || !redisClient) return true;
-  const key = `${REDIS_IP_RESERVE_PREFIX}${encodeURIComponent(proxyUrl)}`;
+  const key = proxyToReserveKey(proxyUrl);
   try {
     const res = await redisClient.set(key, dossierId, { NX: true, EX: REDIS_IP_RESERVE_TTL_SEC });
     return res === "OK";
@@ -982,10 +1002,11 @@ export async function reserveWorkerIp(proxyUrl: string, dossierId: string): Prom
 
 /**
  * Vérifie si une IP est déjà réservée par un autre dossier.
+ * La clé est normalisée sur host:port — même port physique, sticky différent = même clé.
  */
 export async function isIpReservedByOther(proxyUrl: string, dossierId: string): Promise<boolean> {
   if (!redisReady || !redisClient) return false;
-  const key = `${REDIS_IP_RESERVE_PREFIX}${encodeURIComponent(proxyUrl)}`;
+  const key = proxyToReserveKey(proxyUrl);
   try {
     const val = await redisClient.get(key);
     return val !== null && val !== dossierId;
@@ -1001,12 +1022,12 @@ export async function isIpReservedByOther(proxyUrl: string, dossierId: string): 
  * Si un nouveau worker a reclamé l'IP après expiration du TTL, cette fonction
  * ne la supprime pas (la valeur Redis sera différente de dossierId).
  *
- * @param proxyUrl  URL du proxy Decodo à libérer.
+ * @param proxyUrl  URL du proxy Decodo à libérer (base ou sticky — normalisée en host:port).
  * @param dossierId ID du dossier qui détient la réservation.
  */
 export async function releaseWorkerIp(proxyUrl: string, dossierId: string): Promise<void> {
   if (!redisReady || !redisClient) return;
-  const key = `${REDIS_IP_RESERVE_PREFIX}${encodeURIComponent(proxyUrl)}`;
+  const key = proxyToReserveKey(proxyUrl);
   const lua = `
     if redis.call("GET", KEYS[1]) == ARGV[1] then
       redis.call("DEL", KEYS[1])
