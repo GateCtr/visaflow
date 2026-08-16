@@ -1501,3 +1501,108 @@ export const sendWelcomeClient = internalAction({
     });
   },
 });
+
+/* ─── SPAIN BOOKING — TENTATIVE (admin) ─────────────────────────────────────
+ * Envoyé dès que le bot lance getsigninfields/ pour un créneau donné.
+ * Permet à l'admin de savoir qu'une tentative est en cours, par dossier.
+ * ─────────────────────────────────────────────────────────────────────────── */
+export const sendSpainBookingAttemptAdmin = internalAction({
+  args: {
+    applicantName: v.string(),
+    date: v.string(),
+    time: v.string(),
+    serviceName: v.string(),
+    applicationId: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const adminUrl = `${APP_URL}/admin/applications/${args.applicationId}`;
+    const rows =
+      info("Dossier", escHtml(args.applicantName)) +
+      info("Date visée", `<strong>${escHtml(args.date)}</strong>`) +
+      info("Heure", escHtml(args.time)) +
+      (args.serviceName ? info("Service", escHtml(args.serviceName)) : "");
+    const body = `
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🔄 Tentative de réservation — Espagne 🇪🇸</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Le bot vient de lancer une tentative de booking sur le portail Bookitit.</p>
+      ${infoTable(rows)}
+      ${cta(adminUrl, "Voir le dossier")}
+    `;
+    await sendEmail({
+      from: FROM,
+      to: getAdminEmail(),
+      subject: `🔄 Tentative booking Espagne — ${escHtml(args.applicantName)} — ${args.date} ${args.time}`,
+      html: htmlWrapper("Tentative de réservation Espagne", body),
+    });
+  },
+});
+
+/* ─── SPAIN BOOKING — RÉUSSI (admin) ────────────────────────────────────────
+ * Envoyé dès que summary/ retourne un locator valide.
+ * ─────────────────────────────────────────────────────────────────────────── */
+export const sendSpainBookingSuccessAdmin = internalAction({
+  args: {
+    applicantName: v.string(),
+    date: v.string(),
+    time: v.string(),
+    locator: v.string(),
+    serviceName: v.string(),
+    applicationId: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const adminUrl = `${APP_URL}/admin/applications/${args.applicationId}`;
+    const rows =
+      info("Dossier", escHtml(args.applicantName)) +
+      info("Date RDV", `<strong style="color:#166534;">${escHtml(args.date)}</strong>`) +
+      info("Heure RDV", `<strong style="color:#166534;">${escHtml(args.time)}</strong>`) +
+      (args.locator ? info("Locator / Ref", `<code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;">${escHtml(args.locator)}</code>`) : "") +
+      (args.serviceName ? info("Service", escHtml(args.serviceName)) : "");
+    const body = `
+      <h2 style="margin:0 0 16px;color:#166534;font-size:22px;font-weight:700;letter-spacing:-0.3px;">✅ Réservation réussie — Espagne 🇪🇸</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Le bot a réussi à réserver un créneau sur le portail Bookitit.</p>
+      ${infoTable(rows)}
+      ${cta(adminUrl, "Voir le dossier")}
+    `;
+    await sendEmail({
+      from: FROM,
+      to: getAdminEmail(),
+      subject: `✅ Booking réussi Espagne — ${escHtml(args.applicantName)} — ${args.date} ${args.time}`,
+      html: htmlWrapper("Réservation réussie Espagne", body),
+    });
+  },
+});
+
+/* ─── SPAIN BOOKING — ÉCHOUÉ (admin) ────────────────────────────────────────
+ * Envoyé quand signin_failed ou booking_failed.
+ * La raison (message d'erreur serveur) est transmise telle quelle.
+ * ─────────────────────────────────────────────────────────────────────────── */
+export const sendSpainBookingFailedAdmin = internalAction({
+  args: {
+    applicantName: v.string(),
+    date: v.string(),
+    time: v.string(),
+    reason: v.string(),
+    serviceName: v.string(),
+    applicationId: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const adminUrl = `${APP_URL}/admin/applications/${args.applicationId}`;
+    const rows =
+      info("Dossier", escHtml(args.applicantName)) +
+      info("Date visée", escHtml(args.date)) +
+      info("Heure", escHtml(args.time)) +
+      info("Raison", `<span style="color:#b91c1c;">${escHtml(args.reason)}</span>`) +
+      (args.serviceName ? info("Service", escHtml(args.serviceName)) : "");
+    const body = `
+      <h2 style="margin:0 0 16px;color:#b91c1c;font-size:22px;font-weight:700;letter-spacing:-0.3px;">❌ Booking échoué — Espagne 🇪🇸</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Le bot a tenté de réserver un créneau mais la tentative a échoué.</p>
+      ${infoTable(rows)}
+      ${cta(adminUrl, "Voir le dossier")}
+    `;
+    await sendEmail({
+      from: FROM,
+      to: getAdminEmail(),
+      subject: `❌ Booking échoué Espagne — ${escHtml(args.applicantName)} — ${args.reason.slice(0, 60)}`,
+      html: htmlWrapper("Booking échoué Espagne", body),
+    });
+  },
+});

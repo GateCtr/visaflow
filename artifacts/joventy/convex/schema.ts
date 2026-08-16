@@ -647,6 +647,35 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_created", ["createdAt"]),
 
+  // ─── Spain Booking Logs ──────────────────────────────────────────────────────
+  // Chaque tentative de booking par dossier (attempted → booked ou failed).
+  // Déclenche un email admin à chaque transition.
+  spainBookingLogs: defineTable({
+    /** ID de la demande Convex */
+    applicationId: v.id("applications"),
+    /** ID interne du dossier worker */
+    dossierId: v.string(),
+    /** Nom du demandeur */
+    applicantName: v.string(),
+    /** Date du créneau visé (YYYY-MM-DD) */
+    date: v.string(),
+    /** Heure du créneau visé (HH:MM) */
+    time: v.string(),
+    /** attempted = tentative lancée, booked = réservation réussie, failed = échec */
+    status: v.union(v.literal("attempted"), v.literal("booked"), v.literal("failed")),
+    /** Raison de l'échec (uniquement si failed) */
+    reason: v.optional(v.string()),
+    /** Locator / code de confirmation (uniquement si booked) */
+    locator: v.optional(v.string()),
+    /** Nom du service Bookitit */
+    serviceName: v.optional(v.string()),
+    /** Timestamp de la tentative (ms) */
+    attemptedAt: v.number(),
+  })
+    .index("by_applicationId", ["applicationId"])
+    .index("by_attemptedAt", ["attemptedAt"])
+    .index("by_status", ["status"]),
+
   victorConversations: defineTable({
     sessionId: v.string(),
     pageContext: v.string(),

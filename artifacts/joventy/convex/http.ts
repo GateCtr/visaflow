@@ -1707,4 +1707,62 @@ http.route({
   }),
 });
 
+// ─── Spain Booking Log ───────────────────────────────────────────────────────
+// Reçoit attempted / booked / failed par dossier depuis le worker Bookitit.
+// Insère dans spainBookingLogs + planifie email admin.
+http.route({
+  path: "/hunter/spain-booking-log",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    let body: {
+      applicationId: string;
+      dossierId: string;
+      applicantName: string;
+      date: string;
+      time: string;
+      status: "attempted" | "booked" | "failed";
+      reason?: string;
+      locator?: string;
+      serviceName?: string;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!body.applicationId || !body.dossierId || !body.date || !body.time || !body.status) {
+      return new Response("Missing required fields", { status: 400 });
+    }
+
+    try {
+      await ctx.runMutation(internal.spainBooking.recordBookingLog, {
+        applicationId: body.applicationId,
+        dossierId: body.dossierId,
+        applicantName: body.applicantName ?? "",
+        date: body.date,
+        time: body.time,
+        status: body.status,
+        reason: body.reason,
+        locator: body.locator,
+        serviceName: body.serviceName,
+        attemptedAt: Date.now(),
+      });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;

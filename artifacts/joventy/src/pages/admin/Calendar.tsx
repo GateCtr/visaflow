@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, User, List, Grid3X3, BarChart3, Eye, EyeOff, TrendingUp, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Clock, List, Grid3X3, BarChart3, EyeOff, TrendingUp, Download, Zap } from "lucide-react";
 
 const DEST_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   usa:      { bg: "bg-blue-100",   text: "text-blue-800",   dot: "bg-blue-500" },
@@ -98,7 +98,8 @@ export default function AdminCalendar() {
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState<string | null>(toISODateKey(today));
-  const [view, setView] = useState<"month" | "list" | "discoveries">("month");
+  const [view, setView] = useState<"month" | "list" | "discoveries" | "bookings">("month");
+  const bookingLogs = useQuery(api.spainBooking.getRecentBookingLogs);
 
   const appointments = useMemo<Appointment[]>(() => data ?? [], [data]);
 
@@ -177,6 +178,12 @@ export default function AdminCalendar() {
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${view === "discoveries" ? "bg-primary text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
           >
             <BarChart3 className="w-4 h-4" /> Découvertes
+          </button>
+          <button
+            onClick={() => setView("bookings")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${view === "bookings" ? "bg-primary text-white shadow" : "bg-white border border-border text-slate-600 hover:bg-slate-50"}`}
+          >
+            <Zap className="w-4 h-4" /> Bookings
           </button>
         </div>
       </div>
@@ -382,9 +389,12 @@ export default function AdminCalendar() {
             </div>
           )}
         </div>
-      ) : (
+      ) : view === "discoveries" ? (
         /* Discoveries view — stats de dates captées/ignorées par le bot */
         <DiscoveriesPanel stats={discoveryStats} modeFilter={modeFilter} setModeFilter={setModeFilter} destFilter={destFilter} setDestFilter={setDestFilter} />
+      ) : (
+        /* Bookings view — tentatives, succès et échecs par dossier */
+        <BookingsPanel logs={bookingLogs} />
       )}
     </div>
   );
@@ -773,6 +783,129 @@ function PaginatedDiscoveries({ items }: { items: DiscoveryStats["recent"] }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Bookings Panel ────────────────────────────────────────────────────────────
+
+type BookingLog = {
+  _id: string;
+  applicationId: string;
+  dossierId: string;
+  applicantName: string;
+  date: string;
+  time: string;
+  status: "attempted" | "booked" | "failed";
+  reason?: string;
+  locator?: string;
+  serviceName?: string;
+  attemptedAt: number;
+};
+
+const STATUS_STYLES: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+  attempted: { label: "Tentative",  bg: "bg-blue-50",   text: "text-blue-700",  dot: "bg-blue-400" },
+  booked:    { label: "Réussi ✅",   bg: "bg-green-50",  text: "text-green-700", dot: "bg-green-500" },
+  failed:    { label: "Échoué ❌",   bg: "bg-red-50",    text: "text-red-700",   dot: "bg-red-500" },
+};
+
+function BookingsPanel({ logs }: { logs: BookingLog[] | null | undefined }) {
+  const [filter, setFilter] = useState<"all" | "attempted" | "booked" | "failed">("all");
+
+  if (logs === undefined) {
+    return <div className="p-12 text-center text-muted-foreground">Chargement des bookings…</div>;
+  }
+  if (!logs || logs.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-border p-16 text-center">
+        <Zap className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+        <p className="text-muted-foreground font-medium">Aucune tentative de booking pour l'instant</p>
+        <p className="text-sm text-muted-foreground mt-1">Les tentatives du bot Bookitit apparaîtront ici.</p>
+      </div>
+    );
+  }
+
+  const counts = {
+    all: logs.length,
+    attempted: logs.filter((l) => l.status === "attempted").length,
+    booked: logs.filter((l) => l.status === "booked").length,
+    failed: logs.filter((l) => l.status === "failed").length,
+  };
+  const filtered = filter === "all" ? logs : logs.filter((l) => l.status === filter);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary chips */}
+      <div className="flex flex-wrap gap-2">
+        {(["all", "attempted", "booked", "failed"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+              filter === f ? "bg-primary text-white border-primary shadow" : "bg-white border-border text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            {f === "all" ? "Tous" : STATUS_STYLES[f].label} ({counts[f]})
+          </button>
+        ))}
+      </div>
+
+      {/* Log list */}
+      <div className="bg-white rounded-2xl border border-border shadow-sm divide-y divide-border">
+        {filtered.length === 0 && (
+          <p className="p-6 text-center text-sm text-muted-foreground">Aucun résultat pour ce filtre.</p>
+        )}
+        {filtered.map((log) => {
+          const s = STATUS_STYLES[log.status] ?? STATUS_STYLES.attempted;
+          return (
+            <Link href={`/admin/applications/${log.applicationId}`} key={log._id}>
+              <div className={`flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors cursor-pointer ${log.status === "booked" ? "border-l-4 border-l-green-400" : log.status === "failed" ? "border-l-4 border-l-red-400" : "border-l-4 border-l-blue-300"}`}>
+                {/* Date badge */}
+                <div className="text-center min-w-[48px] flex-shrink-0 bg-slate-50 rounded-xl p-1.5">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold leading-none">
+                    {MONTHS[parseLocalDate(log.date).getMonth()].slice(0, 3)}
+                  </p>
+                  <p className="text-xl font-bold text-primary leading-none mt-0.5">
+                    {parseLocalDate(log.date).getDate()}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground">{parseLocalDate(log.date).getFullYear()}</p>
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.bg} ${s.text}`}>
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${s.dot} mr-1`} />
+                      {s.label}
+                    </span>
+                    <span className="text-xs font-bold text-primary truncate">{log.applicantName}</span>
+                    <span className="text-xs text-slate-500 font-mono">{log.time}</span>
+                  </div>
+                  {log.serviceName && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate flex items-center gap-1">
+                      <MapPin className="w-3 h-3 flex-shrink-0" /> {log.serviceName}
+                    </p>
+                  )}
+                  {log.locator && (
+                    <p className="text-[10px] text-slate-500 mt-0.5 font-mono">Ref: {log.locator}</p>
+                  )}
+                  {log.reason && log.status === "failed" && (
+                    <p className="text-[10px] text-red-500 mt-0.5 line-clamp-1">{log.reason}</p>
+                  )}
+                </div>
+
+                {/* Timestamp */}
+                <span className="text-[10px] text-muted-foreground flex-shrink-0 pt-1">
+                  {new Date(log.attemptedAt).toLocaleString("fr-FR", {
+                    day: "2-digit", month: "2-digit",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -202,6 +202,37 @@ export async function reportSlotFound(payload: {
   }
 }
 
+export async function reportBookingLog(payload: {
+  applicationId: string;
+  dossierId: string;
+  applicantName: string;
+  date: string;
+  time: string;
+  status: "attempted" | "booked" | "failed";
+  reason?: string;
+  locator?: string;
+  serviceName?: string;
+}): Promise<void> {
+  const url = `${CONVEX_SITE_URL}/hunter/spain-booking-log`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[reportBookingLog] ${res.status} ${text}`);
+    }
+  } catch (e) {
+    // fire-and-forget — ne jamais bloquer le worker sur une erreur d'email
+    console.warn(`[reportBookingLog] exception: ${e}`);
+  }
+}
+
 export async function sendHeartbeat(payload: {
   applicationId: string;
   result: "not_found" | "captcha" | "error" | "payment_required" | "slot_found";

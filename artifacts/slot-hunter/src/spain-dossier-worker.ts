@@ -58,6 +58,7 @@ import {
   reportSpainWatcherScan,
   attachConfirmationDoc,
   uploadFile,
+  reportBookingLog,
   type SlotDiscoveryEvent,
 } from "./convexClient.js";
 import { log } from "./scheduler-utils.js";
@@ -586,6 +587,17 @@ export async function runDossierWorker(
             };
             if (slot.agendaId) bookExtra["agendas[]"] = slot.agendaId;
 
+            // Email admin : tentative de booking (fire-and-forget — ne bloque pas)
+            reportBookingLog({
+              applicationId: config.applicationId,
+              dossierId: config.id,
+              applicantName: config.applicantName,
+              date: slot.date,
+              time: slot.time,
+              status: "attempted",
+              serviceName: scan.serviceName,
+            }).catch(() => {});
+
             // getsigninfields/ — amorce le nonce PHP (sans ça, signin/ → 0B)
             log("INFO", `${tag} 🔑 getsigninfields/…`);
             const gsfPayload = await callDirect(ds, "getsigninfields/", bookExtra);
@@ -659,6 +671,18 @@ export async function runDossierWorker(
 
             // Booking échoué → libérer le claim de créneau de CE dossier immédiatement.
             releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
+
+            // Email admin : booking échoué avec raison (fire-and-forget)
+            reportBookingLog({
+              applicationId: config.applicationId,
+              dossierId: config.id,
+              applicantName: config.applicantName,
+              date: slot.date,
+              time: slot.time,
+              status: "failed",
+              reason: bookResult.errorMessage ?? "Raison inconnue",
+              serviceName: scan.serviceName,
+            }).catch(() => {});
 
             // Délai 800ms post-booking : impit a besoin de temps pour se stabiliser
             // après getsigninfields/+signin/ — sans ce délai, le prochain datetime/
@@ -1357,6 +1381,18 @@ async function reportBookingSuccess(
 ): Promise<void> {
   const bookedDate = result.bookedDate ?? slot.date;
   const bookedTime = result.bookedTime ?? slot.time;
+
+  // Email admin : booking réussi avec date + heure + locator (fire-and-forget)
+  reportBookingLog({
+    applicationId: config.applicationId,
+    dossierId: config.id,
+    applicantName: config.applicantName,
+    date: bookedDate,
+    time: bookedTime,
+    status: "booked",
+    locator: result.locator,
+    serviceName: scan.serviceName,
+  }).catch(() => {});
 
   try {
     await reportSlotFound({
