@@ -112,8 +112,19 @@ export interface WorkerResult {
 
 /** Fenêtre de surveillance par dossier (25 min) — alignée TTL cf_clearance */
 const WORKER_WINDOW_MS = ((): number => {
-  const v = Number(process.env.SPAIN_WORKER_WINDOW_MIN ?? "25");
-  return (Number.isFinite(v) ? v : 25) * 60_000;
+  const v = Number(process.env.SPAIN_WORKER_WINDOW_MIN ?? "20");
+  return (Number.isFinite(v) ? v : 20) * 60_000;
+})();
+
+/**
+ * Minute absolue de fin de fenêtre dans l'heure courante (défaut: 25 → HH:25:00).
+ * La boucle de scan s'arrête à cette borne quel que soit le moment du démarrage du worker.
+ * Ainsi un restart à HH:28 n'étend pas la fenêtre : le worker sort immédiatement.
+ * Override : SPAIN_WINDOW_END_MIN
+ */
+const WINDOW_END_MIN = ((): number => {
+  const v = Number(process.env.SPAIN_WINDOW_END_MIN ?? "25");
+  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 25));
 })();
 
 /** Intervalle de scan start-to-start (secondes → ms) */
@@ -443,11 +454,26 @@ export async function runDossierWorker(
   }
 
   // ── 7. Boucle de scan — uniquement datetime/ (pas de réinit PHP) ───────────
-  // 0B de datetime/ = comportement normal Bookitit quand aucun créneau n'existe ce mois.
-  // NE PAS confondre avec une session morte — on ne tourne pas sur 0B.
-  // La session expire naturellement à la fin de la fenêtre (25 min).
-  const windowEnd = Date.now() + WORKER_WINDOW_MS;
+  // windowEnd = borne absolue HH:WINDOW_END_MIN:00 de l'heure courante.
+  // Un restart à HH:28 voit que HH:25 est passé → exit immédiat, pas de fenêtre prolongée.
+  // Fallback relatif (WORKER_WINDOW_MS) seulement si WINDOW_END_MIN non configuré.
+  const windowEnd = (() => {
+    const now = new Date();
+    const absEnd = new Date(
+      now.getFullYear(), now.getMonth(), now.getDate(),
+      now.getHours(), WINDOW_END_MIN, 0, 0,
+    ).getTime();
+    // Si on est déjà dans l'heure mais avant la borne → utiliser la borne absolue
+    // Si la borne est dans le passé (>1min) → fallback relatif pour rester fonctionnel
+    return absEnd > Date.now() + 60_000 ? absEnd : Date.now() + WORKER_WINDOW_MS;
+  })();
   let cycleCount = 0;
+
+  if (windowEnd <= Date.now()) {
+    log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} déjà expirée — exit immédiat`);
+    workerResult = { dossierId: config.id, status: "exited" };
+    return workerResult;
+  }
 
   while (Date.now() < windowEnd) {
     cycleCount++;

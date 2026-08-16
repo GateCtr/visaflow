@@ -67,18 +67,19 @@ const LOCK_RENEWAL_MS = 30_000;
  * Override via env : SPAIN_WINDOW_START_MIN (0-59)
  */
 const WINDOW_START_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "4");
-  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 4));
+  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "5");
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 5));
 })();
 
 /**
- * Durée de la fenêtre active (minutes). Doit correspondre à WORKER_WINDOW_MS dans
- * spain-dossier-worker.ts (défaut 25 min). Utilisée uniquement pour le guard spawn.
+ * Durée de la fenêtre active (minutes). Utilisée uniquement pour le guard spawn de
+ * l'orchestrateur (empêche de lancer un worker après la fin de fenêtre).
+ * La borne de fin réelle dans le worker est WINDOW_END_MIN (absolu).
  * Override via env : SPAIN_WINDOW_DURATION_MIN
  */
 const WINDOW_DURATION_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "25");
-  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 25);
+  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "20");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 20);
 })();
 
 // ─── État interne ─────────────────────────────────────────────────────────────
