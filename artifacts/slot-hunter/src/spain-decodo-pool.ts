@@ -49,16 +49,17 @@ function parseProxyCsv(filePath: string): string[] {
       const line = raw.trim();
       if (!line || line.startsWith("#")) continue;
 
-      // Format A : URL complète
+      // Format A : URL complète (http://user:pass@host:port)
+      // On n'utilise PAS new URL() car Node.js rejette les ports > 65535,
+      // or Decodo utilise des ports virtuels jusqu'à 110 000+.
       if (line.startsWith("http://") || line.startsWith("https://")) {
-        try {
-          new URL(line); // valider
+        // Validation légère : doit contenir @ et se terminer par :PORT
+        if (/@.+:\d+$/.test(line)) {
           urls.push(line);
-          continue;
-        } catch {
-          console.warn(`[spain-decodo] ⚠️ URL invalide ignorée: "${line}"`);
-          continue;
+        } else {
+          console.warn(`[spain-decodo] ⚠️ URL format inattendu ignorée: "${line}"`);
         }
+        continue;
       }
 
       // Format B : host:port:username:password
