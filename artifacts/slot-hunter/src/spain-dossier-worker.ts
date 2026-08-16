@@ -241,7 +241,7 @@ function parseMainSignals(html: string) {
 
 // ─── PHP State (init one-shot, partagé entre tous les cycles) ─────────────────
 
-interface WorkerPhpState {
+export interface WorkerPhpState {
   services: Array<{ serviceId: string; serviceName: string }>;
   agendaId: string;
   bestServiceId: string;
@@ -347,7 +347,7 @@ async function initPhpState(
  * @returns WorkerScanResult   — slots trouvés, not_found, ou proxy_error
  * @returns proxy_error        — toutes les requêtes datetime/ ont échoué en réseau (proxy CONNECT cassé)
  */
-async function scanDatetimeDirect(
+export async function scanDatetimeDirect(
   phpState: WorkerPhpState,
   config: SpainDossierConfig,
   tag: string,
