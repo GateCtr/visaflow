@@ -716,7 +716,7 @@ export async function runDossierWorker(
         // Proxy CONNECT cassé — toutes les requêtes datetime/ ont échoué en réseau.
         // Déclencher une rotation IP et réinitialiser la session PHP.
         log("WARN", `${tag} 🔄 proxy_error — rotation IP + réinit session`);
-        const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag);
+        const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "proxy_error");
         if (!newProxy) {
           log("WARN", `${tag} ❌ Rotation impossible — pool épuisé, exit worker`);
           workerResult = { dossierId: config.id, status: "error", errorMessage: "proxy_error: pool Decodo épuisé" };
@@ -1131,12 +1131,14 @@ async function rotateWorkerIp(
   config: SpainDossierConfig,
   capsolverKey: string,
   tag: string,
+  reason: "main-0b-rotation" | "proxy_error" = "main-0b-rotation",
 ): Promise<string | null> {
-  log("WARN", `${tag} 🔄 Rotation IP (/main/ 0B) — libération ${maskProxy(currentProxyUrl)} …`);
+  const reasonLabel = reason === "proxy_error" ? "proxy_error (CONNECT cassé)" : "/main/ 0B";
+  log("WARN", `${tag} 🔄 Rotation IP (${reasonLabel}) — libération ${maskProxy(currentProxyUrl)} …`);
 
   // 1. Libérer l'IP courante et la blacklister
   if (currentProxyUrl) {
-    flagDecodoIp(currentProxyUrl, "main-0b-rotation");
+    flagDecodoIp(currentProxyUrl, reason);
     await releaseWorkerIp(currentProxyUrl, config.id).catch(() => {});
   }
 
@@ -1171,6 +1173,10 @@ async function rotateWorkerIp(
   session.bookititState      = newSess.bookititState;
   session.prefetchedMainHtml = newSess.prefetchedMainHtml;
   session.phpSessionCreatedAt = newSess.phpSessionCreatedAt;
+
+  // Persister le nouveau stickyId → la prochaine fenêtre réutilisera la même exit IP
+  // et bénéficiera du cache CF Redis (évite un re-solve CapSolver inutile).
+  await saveLastStickyForDossier(config.id, stickyId).catch(() => {});
 
   log("INFO", `${tag} ✅ Rotation réussie — PHPSESSID ✅ | /main/ ${newSess.prefetchedMainHtml?.length ?? 0}B`);
   return stickyNewProxy;
