@@ -428,6 +428,27 @@ export async function runDossierWorker(
   const tag = `[WORKER:${config.applicantName.slice(0, 18)}]`;
   log("INFO", `${tag} ▶ Démarrage worker autonome — portalUrl: ${config.portalUrl.slice(-40)}`);
 
+  // ── 0. Calcul anticipé de windowEnd — AVANT toute init ──────────────────────
+  // Doit être fait ici, pas après l'init session, sinon si l'init dure trop longtemps
+  // et qu'il reste < 60s avant HH:WINDOW_END_MIN, le fallback WORKER_WINDOW_MS prolonge
+  // la fenêtre de 20 min supplémentaires (bug "dépasse HH:25").
+  const windowEndEarly = (() => {
+    const now = new Date();
+    return new Date(
+      now.getFullYear(), now.getMonth(), now.getDate(),
+      now.getHours(), WINDOW_END_MIN, 0, 0,
+    ).getTime();
+  })();
+  if (windowEndEarly <= Date.now()) {
+    log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} déjà expirée au démarrage — exit immédiat`);
+    return { dossierId: config.id, status: "exited" };
+  }
+  // Si moins de 3 min avant la fin de fenêtre → pas la peine d'init
+  if (windowEndEarly - Date.now() < 3 * 60_000) {
+    log("WARN", `${tag} ⏰ Moins de 3 min avant HH:${String(WINDOW_END_MIN).padStart(2, "0")} — skip init`);
+    return { dossierId: config.id, status: "exited" };
+  }
+
   // ── 1. Réserver une IP Decodo dédiée ────────────────────────────────────────
   let proxyUrl = await pickDedicatedProxy(config.id, tag);
   if (proxyUrl === null) {
@@ -560,23 +581,13 @@ export async function runDossierWorker(
   }
 
   // ── 7. Boucle de scan — uniquement datetime/ (pas de réinit PHP) ───────────
-  // windowEnd = borne absolue HH:WINDOW_END_MIN:00 de l'heure courante.
-  // Un restart à HH:28 voit que HH:25 est passé → exit immédiat, pas de fenêtre prolongée.
-  // Fallback relatif (WORKER_WINDOW_MS) seulement si WINDOW_END_MIN non configuré.
-  const windowEnd = (() => {
-    const now = new Date();
-    const absEnd = new Date(
-      now.getFullYear(), now.getMonth(), now.getDate(),
-      now.getHours(), WINDOW_END_MIN, 0, 0,
-    ).getTime();
-    // Si on est déjà dans l'heure mais avant la borne → utiliser la borne absolue
-    // Si la borne est dans le passé (>1min) → fallback relatif pour rester fonctionnel
-    return absEnd > Date.now() + 60_000 ? absEnd : Date.now() + WORKER_WINDOW_MS;
-  })();
+  // windowEnd calculé au tout début de runDossierWorker (avant init) pour éviter
+  // le bug du fallback WORKER_WINDOW_MS quand l'init dépasse HH:WINDOW_END_MIN.
+  const windowEnd = windowEndEarly;
   let cycleCount = 0;
 
   if (windowEnd <= Date.now()) {
-    log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} déjà expirée — exit immédiat`);
+    log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} expirée après init — exit`);
     workerResult = { dossierId: config.id, status: "exited" };
     return workerResult;
   }
