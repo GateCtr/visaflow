@@ -27,6 +27,7 @@ import {
   restoreResidentialPortStateFromRedis,
   saveWorkerCfClearance,
   loadWorkerCfClearance,
+  deleteWorkerCfClearance,
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
 import { cookieManager } from "./cookie-manager.js";
@@ -1790,20 +1791,57 @@ export async function initWorkerSession(
   }
 
   // ── Étape 3 : GET widget avec cf_clearance → token + PHPSESSID ──────────────
+  // Si la clearance vient du cache et que le portail la rejette (token absent),
+  // on invalide le cache et on re-solve via CapSolver avant de retenter.
   const jqCallback = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1_000_000_000)}`;
   let reqCounter = Date.now();
   let token: string | undefined;
-  try {
+
+  const attemptGetToken = async (): Promise<{ token: string | undefined; status: number; bytes: number }> => {
     const rGet = await (impit.fetch(targetUrl, {
       headers: { "User-Agent": WORKER_UA, "Cookie": buildCookieStr(jar) },
     } as any) as unknown as Promise<Response>);
     const bodyGet = await rGet.text();
     Object.assign(jar, extractCookies(rGet.headers as any));
-    token = bodyGet.match(/name="token"\s+value="([^"]+)"/i)?.[1];
-    if (!token) {
-      console.warn(`[spain-soax] 🔧   ❌ Token absent (HTTP ${rGet.status}, ${bodyGet.length}B)`);
+    return {
+      token: bodyGet.match(/name="token"\s+value="([^"]+)"/i)?.[1],
+      status: rGet.status,
+      bytes: bodyGet.length,
+    };
+  };
+
+  try {
+    const first = await attemptGetToken();
+    token = first.token;
+
+    if (!token && cfFromCache && challengeHtml !== undefined) {
+      // CF clearance du cache rejetée — invalider Redis et re-solver
+      console.warn(`[spain-soax] 🔧   ⚠️ CF cache invalide (HTTP ${first.status}, ${first.bytes}B) — suppression Redis + re-solve CapSolver`);
+      deleteWorkerCfClearance(stickyProxyUrl);
+      cfFromCache = false;
+
+      const capResult = await solveSpainCloudflare(targetUrl, capsolverApiKey, stickyProxyUrl, challengeHtml, WORKER_UA);
+      if (!capResult.success || !capResult.session?.cfClearance) {
+        console.warn(`[spain-soax] 🔧   ❌ Re-solve CapSolver échoué: ${capResult.error}`);
+        return null;
+      }
+      jar.cf_clearance = capResult.session.cfClearance;
+      const cfExpiresAt = Date.now() + (115 * 60_000);
+      saveWorkerCfClearance(stickyProxyUrl, jar.cf_clearance, cfExpiresAt);
+      console.log(`[spain-soax] 🔧   ✅ Re-solve réussi — cf_clearance: ${jar.cf_clearance.slice(0, 30)}… (sauvegardé Redis)`);
+
+      // Retenter GET portail avec la nouvelle clearance
+      const retry = await attemptGetToken();
+      token = retry.token;
+      if (!token) {
+        console.warn(`[spain-soax] 🔧   ❌ Token absent après re-solve (HTTP ${retry.status}, ${retry.bytes}B)`);
+        return null;
+      }
+    } else if (!token) {
+      console.warn(`[spain-soax] 🔧   ❌ Token absent (HTTP ${first.status}, ${first.bytes}B)`);
       return null;
     }
+
     console.log(`[spain-soax] 🔧   ✅ Token: ${token.slice(0, 15)}… | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
   } catch (e) {
     console.warn(`[spain-soax] 🔧   ❌ GET portail (token) échoué: ${e}`);

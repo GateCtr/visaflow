@@ -292,6 +292,18 @@ export function saveWorkerCfClearance(proxyUrl: string, cfClearance: string, exp
 }
 
 /**
+ * Invalide le cf_clearance d'un worker dans Redis (appelé quand la clearance
+ * en cache est rejetée par le portail pour forcer un re-solve CapSolver).
+ */
+export function deleteWorkerCfClearance(proxyUrl: string): void {
+  if (!redisReady || !redisClient) return;
+  const key = proxyToWorkerKey(proxyUrl);
+  redisClient.del(key).catch((err: Error) => {
+    console.warn(`[spain-redis] deleteWorkerCfClearance échouée: ${err.message}`);
+  });
+}
+
+/**
  * Restaure le cf_clearance d'un worker depuis Redis.
  * Retourne null si absent, expiré, ou moins de 5min de validité restante.
  */
