@@ -179,6 +179,8 @@ interface WorkerScanResult {
   serviceName?: string;
   agendaId?: string;
   errorMessage?: string;
+  /** true quand TOUS les mois ont retourné null (0B) — session PHP ou proxy mort */
+  allMonthsDead?: boolean;
 }
 
 
@@ -272,6 +274,8 @@ async function scanDatetimeDirect(
   const allSlots: WorkerSlot[] = [];
   let globalMaxDays: Date | null = null;
   let consecutiveEmpty = 0;
+  let nullMonths = 0; // mois ayant retourné payload=null (0B)
+  let totalMonths = 0; // mois effectivement consultés
   const MAX_MONTHS = Math.max(DATETIME_MONTHS_AHEAD + 2, 12); // ≥ 12 comme le test dynamic
 
   let monthOffset = 0;
@@ -291,10 +295,9 @@ async function scanDatetimeDirect(
     if (phpState.agendaId) extra["agendas[]"] = phpState.agendaId;
 
     const payload = await callDirect(ds, "datetime/", extra);
+    totalMonths++;
+    if (payload === null) nullMonths++;
 
-    // EXACTEMENT comme le test dynamic l.242-305 : si payload null (0B) →
-    // dtData = null → maxDaysRaw = "" → Slots = [] → 0 créneaux ce mois.
-    // On NE retourne PAS "session_dead" — c'est normal quand pas d'agenda.
     const dtData = payload as any;
     const maxDaysRaw: string = dtData?.maxDays ?? "";
     if (maxDaysRaw?.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -331,8 +334,17 @@ async function scanDatetimeDirect(
     }
   }
 
+  // Détecter session morte : TOUS les mois consultés ont retourné 0B (payload=null)
+  // Différent de "pas de créneaux" : ici le serveur n'a pas répondu du tout.
+  const allMonthsDead = totalMonths >= 2 && nullMonths === totalMonths;
+
   if (allSlots.length === 0) {
-    return { status: "not_found", serviceId: phpState.bestServiceId, serviceName: phpState.bestServiceName };
+    return {
+      status: "not_found",
+      serviceId: phpState.bestServiceId,
+      serviceName: phpState.bestServiceName,
+      allMonthsDead,
+    };
   }
 
   allSlots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
@@ -444,16 +456,46 @@ export async function runDossierWorker(
   // Si datetime/ → 0B (session morte) : rotation IP + réinit PHP, continue.
   const windowEnd = Date.now() + WORKER_WINDOW_MS;
   let cycleCount = 0;
+  // Compteur de cycles où TOUS les mois ont retourné 0B → détection proxy/session mort
+  let consecutiveDeadCycles = 0;
+  const MAX_DEAD_CYCLES_BEFORE_ROTATE = 2;
 
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
 
     try {
-      // phpState est toujours non-null ici : le seul chemin qui le ré-assigne
-      // (rotation IP) renvoie/break immédiatement si l'init échoue.
+      // phpState null → la rotation a échoué ou le pool est épuisé → sortir
       if (!phpState) break;
+
+      // ── Rotation automatique si session morte (tous mois 0B depuis N cycles) ──
+      if (consecutiveDeadCycles >= MAX_DEAD_CYCLES_BEFORE_ROTATE) {
+        log("WARN", `${tag} 🔄 ${consecutiveDeadCycles} cycles morts consécutifs → rotation IP + réinit PHP…`);
+        consecutiveDeadCycles = 0;
+        const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag);
+        if (!newProxy) {
+          log("WARN", `${tag} ❌ Rotation échouée — arrêt`);
+          phpState = null;
+          break;
+        }
+        proxyUrl = newProxy;
+        phpState = await initPhpState(session, config, tag);
+        if (!phpState) {
+          log("WARN", `${tag} ❌ Re-initPhpState après rotation échoué — arrêt`);
+          break;
+        }
+        log("INFO", `${tag} ✅ Session rechargée après rotation — reprise scan`);
+      }
+
       const scan = await scanDatetimeDirect(phpState, config, tag);
+
+      // Mise à jour compteur cycles morts
+      if (scan.allMonthsDead) {
+        consecutiveDeadCycles++;
+        log("WARN", `${tag} ⚠️ Session morte (tous mois 0B) — dead cycle ${consecutiveDeadCycles}/${MAX_DEAD_CYCLES_BEFORE_ROTATE}`);
+      } else {
+        consecutiveDeadCycles = 0;
+      }
 
       // ── Reporting scan Convex (par dossier) ─────────────────────────────────
       void reportSpainWatcherScan({
@@ -617,6 +659,11 @@ export async function runDossierWorker(
 
             // Booking échoué → libérer le claim de créneau de CE dossier immédiatement.
             releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
+
+            // Délai 800ms post-booking : impit a besoin de temps pour se stabiliser
+            // après getsigninfields/+signin/ — sans ce délai, le prochain datetime/
+            // retourne 0B sur le premier mois (comportement observé avec 3 workers).
+            await sleep(800);
 
             sendHeartbeat({
               applicationId: config.applicationId,

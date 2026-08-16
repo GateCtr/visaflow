@@ -46,4 +46,7 @@ Worker TEST CUBA, portail Cuba LMD, proxy es.decodo.com index 5419 :
 - `signin/` → ✅ "Usuario o contraseña incorrectos" — serveur a bien traité la requête (faux identifiants attendus)
 - ISP proxies (`es.decodo.com`) fonctionnent pour Cuba aux indices > 5419 — les premiers indices (0-10) étaient brûlés
 - Fix pickDedicatedProxy : démarre à `getDecodoCurrentIndex()` (index Redis persisté) plutôt qu'à 0
-- Fix booking : suppression du `refreshPhpsessidForCapsolver` + re-init PHP qui n'étaient pas dans le dynamic test ; getsigninfields/signin/summary utilisent maintenant `callDirect(phpState.ds)` sur le même PHPSESSID
+- Fix booking : suppression du `refreshPhpsessidForCapsolver` + re-init PHP ; getsigninfields/signin/summary utilisent `callDirect(phpState.ds)` sur le même PHPSESSID
+- Post-signin, `2026-08` retourne toujours `0 (0B)` le cycle suivant (comportement serveur, 1 mois seulement → n'est pas allMonthsDead)
+- 3-worker parallel confirmé stable (indices 5432-5434) : tous init OK, 214 créneaux, signin → "Usuario o contraseña incorrectos"
+- Dead-session rotation : consecutiveDeadCycles >= 2 → rotateWorkerIp + re-initPhpState automatique (évite spinning sur proxy brûlé)
