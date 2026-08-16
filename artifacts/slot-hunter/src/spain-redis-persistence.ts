@@ -1023,6 +1023,42 @@ export async function releaseWorkerIp(proxyUrl: string, dossierId: string): Prom
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// DERNIER PROXY PAR DOSSIER — réutilisation inter-fenêtres pour hit cache CF
+//
+// Quand le même port Decodo est réutilisé d'une fenêtre à l'autre, la clé Redis
+// du CF clearance (visaflow:spain-cf:worker:host_port) est la même → cache hit
+// → CapSolver évité (~20s économisés + économie de balance).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_LAST_PROXY_PREFIX  = "visaflow:spain-worker-last-proxy:";
+const REDIS_LAST_PROXY_TTL_SEC = 2 * 3600; // 2h — couvre le gap inter-fenêtres (~40min)
+
+/**
+ * Mémorise le proxy (base URL, sans sticky session) utilisé par ce dossier.
+ * Appelé juste avant releaseWorkerIp pour que la clé survive à la libération.
+ */
+export function saveLastProxyForDossier(dossierId: string, proxyUrl: string): void {
+  if (!redisReady || !redisClient || !proxyUrl) return;
+  const key = REDIS_LAST_PROXY_PREFIX + dossierId;
+  redisClient.set(key, proxyUrl, { EX: REDIS_LAST_PROXY_TTL_SEC }).catch((err: Error) => {
+    console.warn(`[spain-redis] saveLastProxyForDossier échouée: ${err.message}`);
+  });
+}
+
+/**
+ * Retourne le dernier proxy utilisé par ce dossier, ou null si absent/expiré.
+ */
+export async function getLastProxyForDossier(dossierId: string): Promise<string | null> {
+  if (!redisReady || !redisClient) return null;
+  const key = REDIS_LAST_PROXY_PREFIX + dossierId;
+  try {
+    return await redisClient.get(key);
+  } catch {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SLOT SNAPSHOT — mémoire partagée entre workers parallèles
 // ═══════════════════════════════════════════════════════════════════════════════
 

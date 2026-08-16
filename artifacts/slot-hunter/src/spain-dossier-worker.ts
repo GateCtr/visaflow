@@ -52,6 +52,10 @@ import {
   isDecodoIpBlacklisted,
 } from "./spain-decodo-pool.js";
 import {
+  saveLastProxyForDossier,
+  getLastProxyForDossier,
+} from "./spain-redis-persistence.js";
+import {
   reportSlotFound,
   sendHeartbeat,
   reportSlotDiscoveryBatch,
@@ -910,6 +914,8 @@ export async function runDossierWorker(
     // Owner-check Lua : seul ce dossier peut supprimer sa réservation.
     // proxyUrl = "" → mode direct, pas de réservation Redis à libérer.
     if (proxyUrl) {
+      // Mémoriser ce port pour la prochaine fenêtre → même port → CF cache hit
+      saveLastProxyForDossier(config.id, proxyUrl);
       releaseWorkerIp(proxyUrl, config.id).catch(() => {});
     }
   }
@@ -1083,8 +1089,22 @@ async function pickDedicatedProxy(
     return "";
   }
 
-  // Démarrer à l'index courant du pool (restauré depuis Redis par initDecodoPool)
-  // pour éviter de re-taper les premières IPs déjà usées/blacklistées.
+  // ── Priorité : réutiliser le dernier port de ce dossier ──────────────────────
+  // Si le même port est réutilisé, la clé Redis du CF clearance (host:port) est
+  // identique → cache hit → CapSolver évité (~20s + balance économisés).
+  const lastProxy = await getLastProxyForDossier(dossierId);
+  if (lastProxy && !isDecodoIpBlacklisted(lastProxy)) {
+    const reservedByOther = await isIpReservedByOther(lastProxy, dossierId);
+    if (!reservedByOther) {
+      const ok = await reserveWorkerIp(lastProxy, dossierId);
+      if (ok) {
+        log("INFO", `${tag} IP Decodo réutilisée (CF cache préservé) : ${maskProxy(lastProxy)}`);
+        return lastProxy;
+      }
+    }
+  }
+
+  // ── Fallback : round-robin depuis l'index courant ────────────────────────────
   const startIndex = getDecodoCurrentIndex();
 
   for (let i = 0; i < poolSize; i++) {
