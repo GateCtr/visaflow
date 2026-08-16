@@ -192,7 +192,7 @@ interface WorkerSlot {
 }
 
 interface WorkerScanResult {
-  status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error";
+  status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error" | "session_dead";
   slots?: WorkerSlot[];
   mainHtml?: string;
   serviceId?: string;
@@ -363,6 +363,7 @@ async function scanDatetimeDirect(
 
   let monthOffset = 0;
   let networkErrorCount = 0; // Compteur d'erreurs réseau (ProxyTunnelError, Timeout, etc.)
+  let httpNullCount = 0;     // Compteur de réponses HTTP 0B légitimes (payload null, pas sentinel)
   let monthsChecked = 0;
 
   while (monthOffset < MAX_MONTHS) {
@@ -387,7 +388,11 @@ async function scanDatetimeDirect(
     // ProxyTunnelError/Timeout → CALL_DIRECT_NETWORK_ERROR.
     // Réponse 0B serveur (pas de créneau, agenda absent) → null.
     const isNetworkError = raw === CALL_DIRECT_NETWORK_ERROR;
-    if (isNetworkError) networkErrorCount++;
+    if (isNetworkError) {
+      networkErrorCount++;
+    } else if (raw === null) {
+      httpNullCount++;
+    }
 
     const payload = isNetworkError ? null : raw;
     const rawBytes = JSON.stringify(payload ?? "").length;
@@ -431,13 +436,25 @@ async function scanDatetimeDirect(
     }
   }
 
-  // Si toutes les requêtes ont échoué en réseau (proxy CONNECT cassé), signaler proxy_error.
-  // UNIQUEMENT sur erreurs réseau réelles (sentinel), jamais sur réponses HTTP vides légitimes.
-  // Cas "agenda absent" : serveur retourne 0B (null), PAS le sentinel → pas de faux positif.
+  // Cas 1 — Proxy CONNECT cassé : toutes les requêtes ont levé une exception réseau.
+  // UNIQUEMENT sur le sentinel, jamais sur réponses HTTP vides légitimes.
   if (monthsChecked >= 2 && networkErrorCount === monthsChecked) {
     log("WARN", `${tag}   ⚠️ Proxy CONNECT cassé — ${networkErrorCount}/${monthsChecked} mois en erreur réseau → rotation IP`);
     return {
       status: "proxy_error",
+      serviceId: phpState.bestServiceId,
+      serviceName: phpState.bestServiceName,
+      monthTraces,
+    };
+  }
+
+  // Cas 2 — Session PHP morte : agenda présent mais datetime/ retourne 0B HTTP sur tous les mois.
+  // Si agendaId est absent le serveur retourne 0B normalement → pas de faux positif.
+  // Si agendaId est présent le serveur DOIT retourner du JSONP valide → 0B = session expirée.
+  if (monthsChecked >= 2 && phpState.agendaId && httpNullCount === monthsChecked) {
+    log("WARN", `${tag}   ⚠️ Session PHP morte — agendaId présent mais ${httpNullCount}/${monthsChecked} mois → 0B HTTP → réinit PHPSESSID`);
+    return {
+      status: "session_dead",
       serviceId: phpState.bestServiceId,
       serviceName: phpState.bestServiceName,
       monthTraces,
@@ -714,6 +731,19 @@ export async function runDossierWorker(
           return workerResult;
         }
         continue; // Repartir immédiatement sur le nouveau proxy
+      }
+
+      if (scan.status === "session_dead") {
+        // Session PHP morte (agendaId présent mais datetime/ retourne 0B sur tous les mois).
+        // Le proxy est sain — pas de rotation IP. Réinit PHPSESSID uniquement.
+        log("WARN", `${tag} 🔄 session_dead — réinit PHPSESSID (proxy conservé)`);
+        phpState = await initPhpState(session, config, tag);
+        if (!phpState) {
+          log("WARN", `${tag} ❌ Réinit PHP échouée après session_dead — exit worker`);
+          workerResult = { dossierId: config.id, status: "error", errorMessage: "session_dead: réinit PHP impossible" };
+          return workerResult;
+        }
+        continue; // Repartir avec le même proxy, nouveau PHPSESSID
       }
 
       if (scan.status === "not_found") {
