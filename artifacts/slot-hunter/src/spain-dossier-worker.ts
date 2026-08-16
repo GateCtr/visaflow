@@ -501,6 +501,7 @@ export async function runDossierWorker(
   const MAX_SESSION_RETRIES = 3;
 
   let session: SpainCfSession | null = null;
+  let cfFromCache = false;
   let solveT0 = Date.now();
 
   for (let attempt = 0; attempt < MAX_SESSION_RETRIES; attempt++) {
@@ -516,6 +517,7 @@ export async function runDossierWorker(
 
     if (result) {
       session = result.session;
+      cfFromCache = result.cfFromCache;
       // proxyUrl = stickyProxy pour que le finally libère la bonne URL
       proxyUrl = stickyProxy;
       log("INFO", `${tag} ✅ Session établie — PHPSESSID ✅ | /main/ ${session.prefetchedMainHtml?.length ?? 0}B`);
@@ -543,8 +545,7 @@ export async function runDossierWorker(
   const mainSigs = parseMainSignals(mainHtml);
   const workerTrace: WorkerSpainTrace = {
     solver: {
-      // CapSolver prend typiquement 8-30s ; < 6s = clearance depuis cache Redis
-      reused: solveMs < 6000,
+      reused: cfFromCache,
       ms: solveMs,
     },
     ip: { index: 0, total: 6000, proxy: maskProxy(proxyUrl) },
@@ -555,7 +556,7 @@ export async function runDossierWorker(
       dialogConfirm: mainSigs.dialogConfirm,
       isSpa: mainSigs.isSpa,
       idSvcText: mainSigs.idSvcText,
-      fromCache: solveMs < 6000,
+      fromCache: cfFromCache,
     },
     agendas: [],
     datetimes: [],

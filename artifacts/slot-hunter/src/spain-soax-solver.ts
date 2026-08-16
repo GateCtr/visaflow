@@ -25,6 +25,8 @@ import {
   restoreSoaxRotationFromRedis,
   syncResidentialPortStateToRedis,
   restoreResidentialPortStateFromRedis,
+  saveWorkerCfClearance,
+  loadWorkerCfClearance,
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
 import { cookieManager } from "./cookie-manager.js";
@@ -1722,7 +1724,7 @@ export async function initWorkerSession(
   stickyProxyUrl: string,
   targetUrl: string,
   capsolverApiKey: string,
-): Promise<{ session: SpainCfSession; impit: InstanceType<typeof Impit> } | null> {
+): Promise<{ session: SpainCfSession; impit: InstanceType<typeof Impit>; cfFromCache: boolean } | null> {
 
   /** Helpers locaux identiques au bloc capsolver-residential */
   const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
@@ -1764,15 +1766,27 @@ export async function initWorkerSession(
     return null;
   }
 
-  // ── Étape 2 : CapSolver si CF challenge (html + proxy + UA — identique à l'ancien) ──
+  // ── Étape 2 : CapSolver si CF challenge — cache Redis par proxy d'abord ────────
+  let cfFromCache = false;
   if (challengeHtml !== undefined) {
-    const capResult = await solveSpainCloudflare(targetUrl, capsolverApiKey, stickyProxyUrl, challengeHtml, WORKER_UA);
-    if (!capResult.success || !capResult.session?.cfClearance) {
-      console.warn(`[spain-soax] 🔧   ❌ CapSolver échoué: ${capResult.error}`);
-      return null;
+    // Vérifier le cache Redis avant d'invoquer CapSolver (~20s économisés si hit)
+    const cachedClearance = await loadWorkerCfClearance(stickyProxyUrl);
+    if (cachedClearance) {
+      jar.cf_clearance = cachedClearance;
+      cfFromCache = true;
+      console.log(`[spain-soax] 🔧   ✅ cf_clearance depuis cache Redis — CapSolver évité (proxy: ${masked.slice(0, 40)}…)`);
+    } else {
+      const capResult = await solveSpainCloudflare(targetUrl, capsolverApiKey, stickyProxyUrl, challengeHtml, WORKER_UA);
+      if (!capResult.success || !capResult.session?.cfClearance) {
+        console.warn(`[spain-soax] 🔧   ❌ CapSolver échoué: ${capResult.error}`);
+        return null;
+      }
+      jar.cf_clearance = capResult.session.cfClearance;
+      // Sauvegarder dans Redis pour les prochains lancements du même worker (TTL 1h55)
+      const cfExpiresAt = Date.now() + (115 * 60_000);
+      saveWorkerCfClearance(stickyProxyUrl, jar.cf_clearance, cfExpiresAt);
+      console.log(`[spain-soax] 🔧   ✅ cf_clearance: ${jar.cf_clearance.slice(0, 30)}… (sauvegardé Redis)`);
     }
-    jar.cf_clearance = capResult.session.cfClearance;
-    console.log(`[spain-soax] 🔧   ✅ cf_clearance: ${jar.cf_clearance.slice(0, 30)}…`);
   }
 
   // ── Étape 3 : GET widget avec cf_clearance → token + PHPSESSID ──────────────
@@ -1894,7 +1908,7 @@ export async function initWorkerSession(
     _ownImpit: impit,  // CRITIQUE : même impit que le probe → cohérence TLS garantie
   };
 
-  return { session, impit };
+  return { session, impit, cfFromCache };
 }
 
 /**

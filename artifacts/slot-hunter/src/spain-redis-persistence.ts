@@ -252,6 +252,74 @@ export function removeSpainCfSessionFromRedis(): void {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CACHE CF PAR WORKER (clé = identifiant sticky du proxy Decodo)
+//
+// La cf_clearance est liée à l'IP du proxy. Chaque worker dossier utilise son
+// propre proxy Decodo sticky (même IP entre les sessions si le sticky tient).
+// On cache la clearance pour éviter les ~20s de CapSolver si la CF est encore
+// valide lors du prochain lancement du worker (ex. redémarrage orchestrateur).
+//
+// Clé Redis : visaflow:spain-cf:worker:<session-id-proxy>
+// TTL dynamique aligné sur l'expiry réelle du cf_clearance.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_WORKER_CF_PREFIX = "visaflow:spain-cf:worker:";
+
+/**
+ * Extrait un identifiant stable depuis l'URL du proxy Decodo (partie user:session).
+ * Ex: http://user-session_abc123:pass@gate.decodo.com:10006 → "user-session_abc123"
+ */
+function proxyToWorkerKey(proxyUrl: string): string {
+  try {
+    const match = proxyUrl.match(/\/\/([^:@]+)/);
+    if (match) return REDIS_WORKER_CF_PREFIX + match[1].replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+  } catch { /* ignore */ }
+  // Fallback : fin de l'URL sanitisée
+  return REDIS_WORKER_CF_PREFIX + proxyUrl.slice(-60).replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+/**
+ * Sauvegarde le cf_clearance d'un worker dans Redis.
+ * Fire-and-forget — n'interrompt pas le scan en cas d'erreur Redis.
+ */
+export function saveWorkerCfClearance(proxyUrl: string, cfClearance: string, expiresAt: number): void {
+  if (!redisReady || !redisClient || !cfClearance) return;
+  const remainingSec = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
+  const key = proxyToWorkerKey(proxyUrl);
+  redisClient.set(key, JSON.stringify({ cfClearance, expiresAt }), { EX: remainingSec }).catch((err: Error) => {
+    console.warn(`[spain-redis] saveWorkerCfClearance échouée: ${err.message}`);
+  });
+}
+
+/**
+ * Restaure le cf_clearance d'un worker depuis Redis.
+ * Retourne null si absent, expiré, ou moins de 5min de validité restante.
+ */
+export async function loadWorkerCfClearance(proxyUrl: string): Promise<string | null> {
+  if (!redisReady || !redisClient) return null;
+  try {
+    const key = proxyToWorkerKey(proxyUrl);
+    const data = await redisClient.get(key);
+    if (!data) return null;
+    const parsed = JSON.parse(data) as { cfClearance: string; expiresAt: number };
+    if (Date.now() >= parsed.expiresAt) {
+      redisClient.del(key).catch(() => {});
+      return null;
+    }
+    const remainMin = Math.round((parsed.expiresAt - Date.now()) / 60_000);
+    if (remainMin < 5) {
+      redisClient.del(key).catch(() => {});
+      return null;
+    }
+    console.log(`[spain-redis] ✅ CF clearance worker restaurée (reste: ${remainMin}min, proxy: ${proxyUrl.slice(0, 40)}…)`);
+    return parsed.cfClearance;
+  } catch (err) {
+    console.warn(`[spain-redis] loadWorkerCfClearance échouée: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DISTRIBUTED LOCK (évite deux instances qui scannent simultanément)
 // ═══════════════════════════════════════════════════════════════════════════════
 
