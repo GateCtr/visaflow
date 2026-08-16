@@ -915,7 +915,9 @@ export async function runDossierWorker(
     // proxyUrl = "" → mode direct, pas de réservation Redis à libérer.
     if (proxyUrl) {
       // Mémoriser ce port pour la prochaine fenêtre → même port → CF cache hit
-      saveLastProxyForDossier(config.id, proxyUrl);
+      // await obligatoire : process.exit() (test) ou fin de boucle orchestrateur
+      // tuerait une Promise fire-and-forget avant qu'elle ne soit commitée Redis.
+      await saveLastProxyForDossier(config.id, proxyUrl).catch(() => {});
       releaseWorkerIp(proxyUrl, config.id).catch(() => {});
     }
   }

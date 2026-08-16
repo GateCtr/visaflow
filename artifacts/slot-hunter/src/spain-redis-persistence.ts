@@ -1037,12 +1037,14 @@ const REDIS_LAST_PROXY_TTL_SEC = 2 * 3600; // 2h — couvre le gap inter-fenêtr
  * Mémorise le proxy (base URL, sans sticky session) utilisé par ce dossier.
  * Appelé juste avant releaseWorkerIp pour que la clé survive à la libération.
  */
-export function saveLastProxyForDossier(dossierId: string, proxyUrl: string): void {
+export async function saveLastProxyForDossier(dossierId: string, proxyUrl: string): Promise<void> {
   if (!redisReady || !redisClient || !proxyUrl) return;
   const key = REDIS_LAST_PROXY_PREFIX + dossierId;
-  redisClient.set(key, proxyUrl, { EX: REDIS_LAST_PROXY_TTL_SEC }).catch((err: Error) => {
-    console.warn(`[spain-redis] saveLastProxyForDossier échouée: ${err.message}`);
-  });
+  try {
+    await redisClient.set(key, proxyUrl, { EX: REDIS_LAST_PROXY_TTL_SEC });
+  } catch (err: any) {
+    console.warn(`[spain-redis] saveLastProxyForDossier échouée: ${err?.message}`);
+  }
 }
 
 /**
