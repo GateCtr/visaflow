@@ -2129,7 +2129,7 @@ export default function AdminApplicationDetail() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Tentatives totales</p>
+                        <p className="text-xs text-muted-foreground">Scans totaux</p>
                         <p className="text-sm font-bold text-purple-700">{hc.checkCount ?? 0}</p>
                       </div>
                     </div>

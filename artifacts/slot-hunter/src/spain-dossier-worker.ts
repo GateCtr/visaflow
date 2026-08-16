@@ -669,6 +669,11 @@ export async function runDossierWorker(
         }
         void reportSpainWatcherScan({
           status: eligible.length > 0 ? "found" : "not_found",
+          // slotInfo requis pour éviter le fallback "Créneau disponible" dans l'email admin.
+          // Sans lui, l'email part avec un texte générique même si la date est connue.
+          slotInfo: eligible.length > 0
+            ? `${eligible[0].date}${eligible[0].time ? ` à ${eligible[0].time}` : ""} (${eligible.length} place${eligible.length > 1 ? "s" : ""})`
+            : undefined,
           applicationId: config.applicationId,
           dossierName: config.applicantName,
           detectedSlots: JSON.stringify(

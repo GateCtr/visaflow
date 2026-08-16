@@ -595,7 +595,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
           <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100 text-center">
             <div><p className="text-[10px] text-slate-400 uppercase">Dernier</p><p className="text-xs font-medium text-slate-700">{hc.lastCheckAt ? formatDate(hc.lastCheckAt) : "—"}</p></div>
             <div><p className="text-[10px] text-slate-400 uppercase">Résultat</p><p className="text-xs font-medium text-slate-700">{hc.lastResult ? (lastResultLabel[hc.lastResult] ?? hc.lastResult) : "—"}</p></div>
-            <div><p className="text-[10px] text-slate-400 uppercase">Tentatives</p><p className="text-xs font-bold text-purple-700">{hc.checkCount ?? 0}</p></div>
+            <div><p className="text-[10px] text-slate-400 uppercase">Scans</p><p className="text-xs font-bold text-purple-700">{hc.checkCount ?? 0}</p></div>
           </div>
         )}
       </div>
