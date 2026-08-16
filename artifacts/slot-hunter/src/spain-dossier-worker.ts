@@ -191,9 +191,45 @@ interface WorkerScanResult {
   serviceName?: string;
   agendaId?: string;
   errorMessage?: string;
-  /** true quand TOUS les mois ont retourné null (0B) — session PHP ou proxy mort */
+  /** Trace par mois — bytes/slots/ok pour chaque appel datetime/ */
+  monthTraces?: Array<{ month: string; bytes: number; slots: number; ok: boolean }>;
 }
 
+/**
+ * Trace complète d'un cycle de scan — sérialisée en JSON dans spainWatcherScans.scanTrace.
+ * Doit rester compatible avec SpainScanTraceData dans BotLogs.tsx (mêmes champs).
+ */
+interface WorkerSpainTrace {
+  /** Solve CF : nouveau ou réutilisé depuis cache Redis */
+  solver?: { reused: boolean; ms: number };
+  /** IP Decodo utilisée */
+  ip?: { index: number; total: number; proxy: string };
+  main?: {
+    bytes: number; ok: boolean;
+    serviceContainer: boolean; dialogConfirm: boolean;
+    isSpa?: boolean; idSvcText?: boolean; fromCache?: boolean;
+  };
+  initConfig?: { bytes: number; ok: boolean };
+  service?: {
+    bytes: number; ok: boolean; count: number; names?: string;
+    allowAppointment?: boolean; serviceContainer?: boolean; dialogConfirm?: boolean;
+  };
+  agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string }>;
+  datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
+  bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number }>;
+  ipRotations: number;
+}
+
+/** Extrait les signaux SPA Bookitit du HTML /main/ */
+function parseMainSignals(html: string) {
+  const h = html ?? "";
+  return {
+    serviceContainer: h.includes("bktDefaultServicesContainer") || h.includes("serviceContainer"),
+    dialogConfirm: h.includes("dialogConfirm") || h.includes("bktDialogConfirm"),
+    isSpa: h.includes("bookitit") || h.includes("bktDefault"),
+    idSvcText: h.includes("idBktDefaultServicesTextBeforeServicesList"),
+  };
+}
 
 // ─── PHP State (init one-shot, partagé entre tous les cycles) ─────────────────
 
@@ -204,6 +240,13 @@ interface WorkerPhpState {
   bestServiceName: string;
   /** DynamicSession partagé — même impit + reqCounter pour tous les appels impit directs */
   ds: DynamicSession;
+  /** Trace des appels d'init — transmise dans scanTrace de chaque cycle */
+  _trace?: {
+    cfgBytes: number;
+    svcBytes: number;
+    svcStr: string;
+    agBytes: number;
+  };
 }
 
 /**
@@ -229,10 +272,13 @@ async function initPhpState(
   }
 
   // 1. getwidgetconfigurations/ — initialise le widget PHP côté serveur
-  await callDirect(ds, "getwidgetconfigurations/");
+  const cfgPayload = await callDirect(ds, "getwidgetconfigurations/");
+  const cfgBytes = JSON.stringify(cfgPayload ?? "").length;
 
   // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
   const svcPayload = await callDirect(ds, "getservices/") as any;
+  const svcBytes = JSON.stringify(svcPayload ?? "").length;
+  const svcStr = JSON.stringify(svcPayload ?? "");
   const rawServices: Array<{ id: string; name: string }> =
     svcPayload?.Services ?? svcPayload?.services ?? [];
 
@@ -261,10 +307,14 @@ async function initPhpState(
   const rawAgendas: Array<{ id: string }> =
     agPayload?.Agendas ?? agPayload?.agendas ?? [];
   const agendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
+  const agBytes = JSON.stringify(agPayload ?? "").length;
 
   log("INFO", `${tag} ✅ PHP init OK — agenda=${agendaId || "(vide)"} | cycles suivants: datetime/ direct`);
 
-  return { services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName, ds };
+  return {
+    services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName, ds,
+    _trace: { cfgBytes, svcBytes, svcStr, agBytes },
+  };
 }
 
 /**
@@ -283,6 +333,7 @@ async function scanDatetimeDirect(
 
   const now = new Date();
   const allSlots: WorkerSlot[] = [];
+  const monthTraces: Array<{ month: string; bytes: number; slots: number; ok: boolean }> = [];
   let globalMaxDays: Date | null = null;
   let consecutiveEmpty = 0;
   const MAX_MONTHS = Math.max(DATETIME_MONTHS_AHEAD + 2, 12); // ≥ 12 comme le test dynamic
@@ -304,6 +355,7 @@ async function scanDatetimeDirect(
     if (phpState.agendaId) extra["agendas[]"] = phpState.agendaId;
 
     const payload = await callDirect(ds, "datetime/", extra);
+    const rawBytes = JSON.stringify(payload ?? "").length;
 
     const dtData = payload as any;
     const maxDaysRaw: string = dtData?.maxDays ?? "";
@@ -317,6 +369,9 @@ async function scanDatetimeDirect(
       "INFO",
       `${tag}   ${monthLabel}: ${slots.length > 0 ? slots.length + " créneau(x)" : payload === null ? "0 (0B)" : "0 (vide)"}  | maxDays=${maxDaysRaw || "(absent)"}`,
     );
+
+    // Trace par mois — 0B = null payload (normal quand aucun créneau), ok si non-null
+    monthTraces.push({ month: monthLabel, bytes: rawBytes, slots: slots.length, ok: payload !== null });
 
     if (slots.length > 0) {
       allSlots.push(...slots);
@@ -346,6 +401,7 @@ async function scanDatetimeDirect(
       status: "not_found",
       serviceId: phpState.bestServiceId,
       serviceName: phpState.bestServiceName,
+      monthTraces,
     };
   }
 
@@ -356,6 +412,7 @@ async function scanDatetimeDirect(
     serviceId: phpState.bestServiceId,
     serviceName: phpState.bestServiceName,
     agendaId: phpState.agendaId,
+    monthTraces,
   };
 }
 
@@ -408,6 +465,7 @@ export async function runDossierWorker(
   const MAX_SESSION_RETRIES = 3;
 
   let session: SpainCfSession | null = null;
+  let solveT0 = Date.now();
 
   for (let attempt = 0; attempt < MAX_SESSION_RETRIES; attempt++) {
     if (!proxyUrl) break; // mode direct sans proxy
@@ -416,6 +474,7 @@ export async function runDossierWorker(
     const stickyId = Math.random().toString(36).slice(2, 10);
     const stickyProxy = addStickySession(proxyUrl, stickyId);
     log("INFO", `${tag} 🔐 Session init (tentative ${attempt + 1}/${MAX_SESSION_RETRIES}) — ${maskProxy(stickyProxy)} sid=${stickyId}`);
+    solveT0 = Date.now(); // reset per attempt
 
     const result = await initWorkerSession(stickyProxy, portalUrlNoFrag, capsolverKey);
 
@@ -442,6 +501,32 @@ export async function runDossierWorker(
     return workerResult;
   }
 
+  // ── Trace de session : solver (timing → cache ou nouveau solve) + main/ signals ──
+  const solveMs = Date.now() - solveT0;
+  const mainHtml = session.prefetchedMainHtml ?? "";
+  const mainSigs = parseMainSignals(mainHtml);
+  const workerTrace: WorkerSpainTrace = {
+    solver: {
+      // CapSolver prend typiquement 8-30s ; < 6s = clearance depuis cache Redis
+      reused: solveMs < 6000,
+      ms: solveMs,
+    },
+    ip: { index: 0, total: 6000, proxy: maskProxy(proxyUrl) },
+    main: {
+      bytes: mainHtml.length,
+      ok: mainHtml.length > 1000,
+      serviceContainer: mainSigs.serviceContainer,
+      dialogConfirm: mainSigs.dialogConfirm,
+      isSpa: mainSigs.isSpa,
+      idSvcText: mainSigs.idSvcText,
+      fromCache: solveMs < 6000,
+    },
+    agendas: [],
+    datetimes: [],
+    bookings: [],
+    ipRotations: 0,
+  };
+
   // ── 6. PHP init one-shot ────────────────────────────────────────────────────
   // Reproduit la section 3 de test-bookitit-dynamic.ts : getwidget/ + getservices/ + getagendas/.
   // UNE SEULE FOIS par session PHP (règle §9 Bookitit).
@@ -451,6 +536,27 @@ export async function runDossierWorker(
   if (!phpState) {
     workerResult = { dossierId: config.id, status: "error", errorMessage: "initPhpState: aucun service découvert (getservices/ 0B?)" };
     return workerResult;
+  }
+
+  // Peupler la trace avec les données d'init PHP
+  if (phpState._trace) {
+    workerTrace.initConfig = { bytes: phpState._trace.cfgBytes, ok: phpState._trace.cfgBytes > 0 };
+    workerTrace.service = {
+      bytes: phpState._trace.svcBytes,
+      ok: phpState.services.length > 0,
+      count: phpState.services.length,
+      names: phpState.services.map((s) => s.serviceName).filter(Boolean).join(", "),
+      allowAppointment: phpState.services.length > 0,
+      serviceContainer: phpState._trace.svcStr.includes("serviceContainer"),
+      dialogConfirm: phpState._trace.svcStr.includes("dialogConfirm"),
+    };
+    workerTrace.agendas = [{
+      serviceId: phpState.bestServiceId,
+      serviceName: phpState.bestServiceName,
+      bytes: phpState._trace.agBytes,
+      ok: phpState.agendaId !== "" || phpState._trace.agBytes > 10,
+      agendaId: phpState.agendaId || undefined,
+    }];
   }
 
   // ── 7. Boucle de scan — uniquement datetime/ (pas de réinit PHP) ───────────
@@ -498,10 +604,22 @@ export async function runDossierWorker(
 
       if (scan.status === "not_found") {
         log("INFO", `${tag} ⏸ Cycle ${cycleCount}: aucun créneau — next`);
+        // Mettre à jour les datetimes de la trace pour ce cycle
+        if (scan.monthTraces) {
+          workerTrace.datetimes = scan.monthTraces.map((m) => ({
+            serviceId: phpState!.bestServiceId,
+            serviceName: phpState!.bestServiceName,
+            month: m.month,
+            bytes: m.bytes,
+            slots: m.slots,
+            ok: m.ok,
+          }));
+        }
         void reportSpainWatcherScan({
           status: "not_found",
           applicationId: config.applicationId,
           dossierName: config.applicantName,
+          scanTrace: JSON.stringify(workerTrace),
         }).catch(() => {});
       }
 
@@ -527,6 +645,17 @@ export async function runDossierWorker(
         // ── Reporting Convex APRÈS filtre — "found" seulement si créneaux éligibles ──
         // IMPORTANT : ne pas passer "found" si tous les créneaux sont hors-fenêtre,
         // sinon l'email admin "Créneau Espagne Disponible !" est déclenché à tort.
+        // Mettre à jour la trace datetimes pour ce cycle
+        if (scan.monthTraces) {
+          workerTrace.datetimes = scan.monthTraces.map((m) => ({
+            serviceId: phpState!.bestServiceId,
+            serviceName: phpState!.bestServiceName,
+            month: m.month,
+            bytes: m.bytes,
+            slots: m.slots,
+            ok: m.ok,
+          }));
+        }
         void reportSpainWatcherScan({
           status: eligible.length > 0 ? "found" : "not_found",
           applicationId: config.applicationId,
@@ -534,6 +663,7 @@ export async function runDossierWorker(
           detectedSlots: JSON.stringify(
             eligible.slice(0, 20).map((s) => ({ d: s.date, t: s.time, n: s.freeslots }))
           ),
+          scanTrace: JSON.stringify(workerTrace),
         }).catch(() => {});
 
         if (eligible.length === 0) {
@@ -666,6 +796,14 @@ export async function runDossierWorker(
               (bookResult.locator ? ` | locator: ${bookResult.locator}` : "") +
               (bookResult.errorMessage ? ` | ${bookResult.errorMessage}` : ""),
             );
+
+            // Enregistrer le résultat du booking dans la trace
+            workerTrace.bookings.push({
+              applicant: config.applicantName,
+              status: bookResult.status,
+              detail: (bookResult.locator ?? bookResult.errorMessage ?? "").slice(0, 80) || undefined,
+              ms: bookResult.durationMs,
+            });
 
             if (bookResult.status === "booked") {
               await reportBookingSuccess(config, bookResult, slot, scan, tag);

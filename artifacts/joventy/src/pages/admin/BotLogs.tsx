@@ -923,12 +923,17 @@ function SpainCaptureItem({ capture, index }: { capture: SpainPageCapture; index
 // Component to display Spain scan trace (main/initConfig/service/agenda/datetime/bookings)
 interface SpainScanTraceData {
   ipRotations?: number;
+  /** Solve CF : reused=true → clearance pris du cache Redis, false → nouveau CapSolver */
+  solver?: { reused: boolean; ms: number };
+  /** IP Decodo utilisée pour ce cycle */
+  ip?: { index: number; total: number; proxy: string };
   main?: {
     bytes: number;
     ok: boolean;
     serviceContainer: boolean;
     dialogConfirm: boolean;
     isSpa?: boolean;
+    idSvcText?: boolean;
     fromCache?: boolean;
     cfRay?: string;
   };
@@ -985,6 +990,26 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
 
   const steps: Step[] = [];
 
+  // ── Solver CF ──
+  if (trace.solver !== undefined) {
+    steps.push({
+      label: trace.solver.reused ? "cf↩" : "cf✨",
+      ok: true,
+      meta: `${(trace.solver.ms / 1000).toFixed(1)}s`,
+      color: trace.solver.reused ? "blue" : undefined,
+    });
+  }
+
+  // ── IP Decodo ──
+  if (trace.ip !== undefined) {
+    steps.push({
+      label: "ip",
+      ok: null,
+      meta: trace.ip.proxy,
+      color: "blue",
+    });
+  }
+
   // ── /main/ ──
   if (trace.main) {
     const cached = trace.main.fromCache;
@@ -997,6 +1022,7 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
       badges: [
         { k: "sc", v: trace.main.serviceContainer },
         { k: "dc", v: trace.main.dialogConfirm },
+        ...(trace.main.idSvcText !== undefined ? [{ k: "svc☑", v: trace.main.idSvcText }] : []),
       ],
     });
   }
@@ -1140,6 +1166,24 @@ function SpainScanTraceBlock({ scanTrace }: { scanTrace: string }) {
         <div className="mt-2 space-y-2 text-[10px] font-mono">
           {(trace.ipRotations ?? 0) > 0 && (
             <p className="text-slate-500">ipRotations={trace.ipRotations}</p>
+          )}
+
+          {/* Solver CF + IP */}
+          {(trace.solver !== undefined || trace.ip !== undefined) && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p className="font-semibold text-slate-700 mb-1">Session init</p>
+              <div className="flex flex-wrap gap-1">
+                {trace.solver !== undefined && (
+                  <>
+                    {boolBadge(trace.solver.reused, "cfCached")}
+                    <span className="text-slate-500">{(trace.solver.ms / 1000).toFixed(1)}s</span>
+                  </>
+                )}
+                {trace.ip !== undefined && (
+                  <span className="text-slate-500 break-all">ip={trace.ip.proxy}</span>
+                )}
+              </div>
+            </div>
           )}
 
           {trace.main && (
@@ -1445,10 +1489,7 @@ function SpainWatcherTab() {
       <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center text-lg">{"\u{1F1EA}\u{1F1F8}"}</div>
-          <div className="flex-1">
-            <h2 className="text-base font-semibold text-slate-800">Veilleur Espagne</h2>
-            <p className="text-xs text-muted-foreground">Scan automatique citaconsular.es</p>
-          </div>
+          <div className="flex-1" />
           <button
             onClick={handleToggle}
             disabled={data === undefined}
@@ -1669,7 +1710,7 @@ function SpainWatcherTab() {
         ) : (
           <>
             <div className="divide-y divide-slate-100">
-              {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string; detectedServices?: string; detectedSlots?: string; scanTrace?: string }) => {
+              {scans.map((scan: { _id: string; ts: number; status: string; slotInfo?: string; screenshotStorageId?: string; screenshotUrl?: string | null; errorMessage?: string; pageCaptures?: string; detectedServices?: string; detectedSlots?: string; scanTrace?: string; dossierName?: string }) => {
                 const meta = SCAN_META[scan.status as keyof typeof SCAN_META] ?? SCAN_META.error;
                 const isErrorExpanded = expandedErrors.has(scan._id);
                 return (
@@ -1681,6 +1722,11 @@ function SpainWatcherTab() {
                           <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded border ${meta.badge}`}>
                             {meta.icon} {meta.label}
                           </span>
+                          {scan.dossierName && (
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                              {scan.dossierName}
+                            </span>
+                          )}
                           <span className="text-[10px] text-slate-400 tabular-nums">{relativeTime(scan.ts)}</span>
                           <span className="text-[10px] text-slate-300 tabular-nums hidden sm:inline">{formatTsFull(scan.ts)}</span>
                           {scan.screenshotUrl && (
