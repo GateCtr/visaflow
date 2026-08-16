@@ -238,6 +238,8 @@ interface WorkerPhpState {
   agendaId: string;
   bestServiceId: string;
   bestServiceName: string;
+  /** Valeur réelle du champ AllowAppointment retourné par getservices/ (null = absent du payload) */
+  allowAppointment: boolean | null;
   /** DynamicSession partagé — même impit + reqCounter pour tous les appels impit directs */
   ds: DynamicSession;
   /** Trace des appels d'init — transmise dans scanTrace de chaque cycle */
@@ -279,6 +281,18 @@ async function initPhpState(
   const svcPayload = await callDirect(ds, "getservices/") as any;
   const svcBytes = JSON.stringify(svcPayload ?? "").length;
   const svcStr = JSON.stringify(svcPayload ?? "");
+
+  // Lire AllowAppointment depuis le payload top-level (même logique que spain-http-scanner.ts)
+  const rawAllow = svcPayload?.AllowAppointment ?? svcPayload?.allowAppointment;
+  const allowAppointment: boolean | null = rawAllow !== undefined
+    ? (rawAllow === true || rawAllow === "true" || rawAllow === 1 || rawAllow === "1")
+    : null;
+  if (allowAppointment === false) {
+    log("WARN", `${tag} initPhpState: getservices/ → AllowAppointment=false (portail fermé aux RDV?)`);
+  } else {
+    log("INFO", `${tag} initPhpState: AllowAppointment=${allowAppointment === null ? "absent" : allowAppointment}`);
+  }
+
   const rawServices: Array<{ id: string; name: string }> =
     svcPayload?.Services ?? svcPayload?.services ?? [];
 
@@ -312,7 +326,8 @@ async function initPhpState(
   log("INFO", `${tag} ✅ PHP init OK — agenda=${agendaId || "(vide)"} | cycles suivants: datetime/ direct`);
 
   return {
-    services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName, ds,
+    services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName,
+    allowAppointment, ds,
     _trace: { cfgBytes, svcBytes, svcStr, agBytes },
   };
 }
@@ -567,7 +582,7 @@ export async function runDossierWorker(
       ok: phpState.services.length > 0,
       count: phpState.services.length,
       names: phpState.services.map((s) => s.serviceName).filter(Boolean).join(", "),
-      allowAppointment: phpState.services.length > 0,
+      allowAppointment: phpState.allowAppointment ?? undefined,
       serviceContainer: phpState._trace.svcStr.includes("serviceContainer"),
       dialogConfirm: phpState._trace.svcStr.includes("dialogConfirm"),
     };
