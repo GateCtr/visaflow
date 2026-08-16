@@ -24,7 +24,7 @@ import { initSpainRedis } from "../spain-redis-persistence.js";
 import { initDecodoPool } from "../spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "../convexClient.js";
 import { runDossierWorker, type SpainDossierConfig } from "../spain-dossier-worker.js";
-import { CUBA_LMD_PORTAL_URL } from "../spain-portals.js";
+import { CUBA_LMD_PORTAL_URL, SAOPOLO_PORTAL_URL } from "../spain-portals.js";
 
 const T0 = Date.now();
 function ts(): string { return `+${((Date.now() - T0) / 1000).toFixed(1)}s`; }
@@ -34,8 +34,9 @@ function L(level: string, msg: string) {
 }
 
 const ARG = process.argv[2]?.toLowerCase() ?? "";
-const CUBA_MODE = ARG === "cuba";
-const NAME_FILTER = CUBA_MODE ? "" : ARG;
+const CUBA_MODE    = ARG === "cuba";
+const SAOPOLO_MODE = ARG === "saopolo";
+const NAME_FILTER  = (CUBA_MODE || SAOPOLO_MODE) ? "" : ARG;
 
 async function main() {
   L("STEP", "=== test-worker-single-dossier.ts ===");
@@ -76,6 +77,24 @@ async function main() {
     };
     L("OK", `Portal : ${CUBA_LMD_PORTAL_URL}`);
     L("INFO", "Proxy  : pool CSV (es.decodo.com)");
+  } else if (SAOPOLO_MODE) {
+    // Mode Saopolo : portail São Paulo, credentials factices
+    // Valide le flow complet : CF solve → session → getservices → datetime → signin rejet
+    L("STEP", "2 — Mode Saopolo (portail São Paulo, dossier fictif, proxy CSV)");
+    config = {
+      id:            "test-saopolo-001",
+      applicantName: "TEST SAOPOLO",
+      visaType:      "visa",
+      login:         "TESTSAOPOLA000",
+      password:      "FAKEPASS123",
+      applicationId: "test-saopolo-001",
+      otpChannel:    "email",
+      portalUrl:     SAOPOLO_PORTAL_URL,
+      groupSize:     1,
+    };
+    L("OK", `Portal : ${SAOPOLO_PORTAL_URL}`);
+    L("INFO", "Proxy  : pool CSV (es.decodo.com)");
+    L("INFO", "Credentials: fictifs — signin/ doit retourner rejet explicite (pas 0B)");
   } else {
     L("STEP", "2 — Récupération dossiers Espagne actifs depuis Convex");
     let jobs: HunterJob[] = [];

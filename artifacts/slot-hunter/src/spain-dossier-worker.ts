@@ -447,21 +447,30 @@ export async function runDossierWorker(
   // Doit être fait ici, pas après l'init session, sinon si l'init dure trop longtemps
   // et qu'il reste < 60s avant HH:WINDOW_END_MIN, le fallback WORKER_WINDOW_MS prolonge
   // la fenêtre de 20 min supplémentaires (bug "dépasse HH:25").
+  //
+  // SPAIN_BYPASS_WINDOW=1 : mode test — fenêtre relative à now (pas HH:25).
+  const bypassWindow = process.env.SPAIN_BYPASS_WINDOW === "1";
   const windowEndEarly = (() => {
+    if (bypassWindow) {
+      return Date.now() + WORKER_WINDOW_MS;
+    }
     const now = new Date();
     return new Date(
       now.getFullYear(), now.getMonth(), now.getDate(),
       now.getHours(), WINDOW_END_MIN, 0, 0,
     ).getTime();
   })();
-  if (windowEndEarly <= Date.now()) {
+  if (!bypassWindow && windowEndEarly <= Date.now()) {
     log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} déjà expirée au démarrage — exit immédiat`);
     return { dossierId: config.id, status: "exited" };
   }
   // Si moins de 3 min avant la fin de fenêtre → pas la peine d'init
-  if (windowEndEarly - Date.now() < 3 * 60_000) {
+  if (!bypassWindow && windowEndEarly - Date.now() < 3 * 60_000) {
     log("WARN", `${tag} ⏰ Moins de 3 min avant HH:${String(WINDOW_END_MIN).padStart(2, "0")} — skip init`);
     return { dossierId: config.id, status: "exited" };
+  }
+  if (bypassWindow) {
+    log("INFO", `${tag} 🧪 SPAIN_BYPASS_WINDOW=1 — fenêtre test ${WORKER_WINDOW_MS / 60_000} min depuis maintenant`);
   }
 
   // ── 1. Réserver une IP Decodo dédiée ────────────────────────────────────────
