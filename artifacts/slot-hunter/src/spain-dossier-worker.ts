@@ -54,6 +54,8 @@ import {
 import {
   saveLastProxyForDossier,
   getLastProxyForDossier,
+  saveLastStickyForDossier,
+  getLastStickyForDossier,
 } from "./spain-redis-persistence.js";
 import {
   reportSlotFound,
@@ -517,13 +519,26 @@ export async function runDossierWorker(
   let cfFromCache = false;
   let solveT0 = Date.now();
 
+  // Première tentative : récupérer le stickyId de la session précédente pour réutiliser
+  // la même exit IP Decodo → cf_clearance Redis encore valide → CapSolver évité.
+  // CRITIQUE : le cf_clearance CapSolver est lié à l'exit IP RÉELLE (pas au host:port).
+  // Même port Decodo + nouveau stickyId = nouvelle exit IP = clearance invalide → re-solve.
+  const lastStickyId = await getLastStickyForDossier(config.id).catch(() => null);
+  if (lastStickyId) {
+    log("INFO", `${tag} ♻️ StickyId précédent récupéré (${lastStickyId}) — même exit IP attendue → CF cache potentiel`);
+  }
+
   for (let attempt = 0; attempt < MAX_SESSION_RETRIES; attempt++) {
     if (!proxyUrl) break; // mode direct sans proxy
 
-    // Sticky session : même exit IP pour impit ET CapSolver
-    const stickyId = Math.random().toString(36).slice(2, 10);
+    // Sticky session : même exit IP pour impit ET CapSolver.
+    // Sur la 1ère tentative, réutiliser l'ancien stickyId pour préserver l'exit IP
+    // et donc la validité du cf_clearance en cache Redis (TTL 2h).
+    // Sur les tentatives suivantes (échec), générer un nouveau stickyId aléatoire.
+    const stickyId = (attempt === 0 && lastStickyId) ? lastStickyId : Math.random().toString(36).slice(2, 10);
     const stickyProxy = addStickySession(proxyUrl, stickyId);
-    log("INFO", `${tag} 🔐 Session init (tentative ${attempt + 1}/${MAX_SESSION_RETRIES}) — ${maskProxy(stickyProxy)} sid=${stickyId}`);
+    const cacheHint = (attempt === 0 && lastStickyId) ? " [CF cache possible]" : " [nouveau sticky]";
+    log("INFO", `${tag} 🔐 Session init (tentative ${attempt + 1}/${MAX_SESSION_RETRIES})${cacheHint} — ${maskProxy(stickyProxy)} sid=${stickyId}`);
     solveT0 = Date.now(); // reset per attempt
 
     const result = await initWorkerSession(stickyProxy, portalUrlNoFrag, capsolverKey);
@@ -533,7 +548,9 @@ export async function runDossierWorker(
       cfFromCache = result.cfFromCache;
       // proxyUrl = stickyProxy pour que le finally libère la bonne URL
       proxyUrl = stickyProxy;
-      log("INFO", `${tag} ✅ Session établie — PHPSESSID ✅ | /main/ ${session.prefetchedMainHtml?.length ?? 0}B`);
+      // Mémoriser le stickyId réussi → réutilisable à la prochaine fenêtre (TTL 2h)
+      await saveLastStickyForDossier(config.id, stickyId).catch(() => {});
+      log("INFO", `${tag} ✅ Session établie — PHPSESSID ✅ | /main/ ${session.prefetchedMainHtml?.length ?? 0}B | cfFromCache=${cfFromCache}`);
       break;
     }
 

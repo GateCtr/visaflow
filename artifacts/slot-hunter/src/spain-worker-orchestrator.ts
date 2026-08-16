@@ -90,6 +90,15 @@ interface RunningWorker {
   startedAt: number;
   /** Timer avant lequel l'orchestrateur ne relancera pas ce dossier */
   cooldownUntil: number;
+  /**
+   * true = ce "worker" est un placeholder de cooldown (sleep + resolve "exited").
+   * Il ne correspond pas à un worker réel — quand il se résout, l'orchestrateur
+   * doit simplement retirer l'entrée de la map SANS appliquer de nouveau cooldown.
+   * Cela évite le bug "fenêtre manquée" : sans ce flag, le cooldown placeholder
+   * qui se résout exactement à HH:WINDOW_START_MIN serait traité comme une vraie
+   * fin de fenêtre → nouveau cooldown de 60 min → worker jamais lancé ce cycle.
+   */
+  isCooldownPlaceholder?: boolean;
 }
 
 // ─── Entrée publique ──────────────────────────────────────────────────────────
@@ -321,6 +330,20 @@ async function harvestFinishedWorkers(
 
   for (const [id, w, result] of finished) {
     const elapsed = Math.round((Date.now() - w.startedAt) / 60_000);
+
+    // ── Placeholder de cooldown expiré ─────────────────────────────────────────
+    // Ce n'est pas un vrai worker mais un sleep() pour bloquer le restart prématuré.
+    // On retire simplement l'entrée de la map — aucun nouveau cooldown appliqué.
+    // L'orchestrateur lancera le vrai worker au prochain cycle si isInScanWindow().
+    if (w.isCooldownPlaceholder) {
+      log(
+        "INFO",
+        `[SPAIN-ORCH] ⏰ ${w.config.applicantName} cooldown expiré — prêt à scanner si fenêtre ouverte`,
+      );
+      workers.delete(id);
+      continue;
+    }
+
     log(
       "INFO",
       `[SPAIN-ORCH] Worker ${w.config.applicantName} terminé en ${elapsed}min — statut: ${result.status}` +
@@ -356,9 +379,12 @@ async function harvestFinishedWorkers(
 
     workers.delete(id);
 
-    // Si cooldown > 0, réinscrire un placeholder pour bloquer le restart prématuré
+    // Si cooldown > 0, réinscrire un placeholder pour bloquer le restart prématuré.
+    // IMPORTANT : isCooldownPlaceholder=true pour distinguer ce placeholder d'un vrai worker.
+    // Quand ce placeholder se résout (à HH:WINDOW_START_MIN), harvestFinishedWorkers le retire
+    // simplement de la map SANS appliquer de nouveau cooldown → l'orchestrateur peut lancer
+    // le vrai worker immédiatement si la fenêtre est ouverte.
     if (cooldownMs > 0) {
-      // Utiliser une Promise qui résout après le cooldown
       const cooldownPromise = sleep(cooldownMs).then(() => ({
         dossierId: id,
         status: "exited" as const,
@@ -368,6 +394,7 @@ async function harvestFinishedWorkers(
         config: w.config,
         startedAt: Date.now(),
         cooldownUntil: Date.now() + cooldownMs,
+        isCooldownPlaceholder: true,
       });
     }
   }
