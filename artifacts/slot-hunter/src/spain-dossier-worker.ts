@@ -30,6 +30,7 @@ import {
 import {
   buildDynamicSession,
   callDirect,
+  CALL_DIRECT_NETWORK_ERROR,
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
@@ -191,7 +192,7 @@ interface WorkerSlot {
 }
 
 interface WorkerScanResult {
-  status: "found" | "not_found" | "error" | "ajax_unavailable";
+  status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error";
   slots?: WorkerSlot[];
   mainHtml?: string;
   serviceId?: string;
@@ -281,11 +282,11 @@ async function initPhpState(
   }
 
   // 1. getwidgetconfigurations/ — initialise le widget PHP côté serveur
-  const cfgPayload = await callDirect(ds, "getwidgetconfigurations/");
+  const cfgPayload = await callDirect(ds, "getwidgetconfigurations/", undefined, tag);
   const cfgBytes = JSON.stringify(cfgPayload ?? "").length;
 
   // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
-  const svcPayload = await callDirect(ds, "getservices/") as any;
+  const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
   const svcBytes = JSON.stringify(svcPayload ?? "").length;
   const svcStr = JSON.stringify(svcPayload ?? "");
 
@@ -323,7 +324,7 @@ async function initPhpState(
   const agPayload = await callDirect(ds, "getagendas/", {
     "services[]": bestSvc.serviceId,
     selectedPeople: "1",
-  }) as any;
+  }, tag) as any;
 
   const rawAgendas: Array<{ id: string }> =
     agPayload?.Agendas ?? agPayload?.agendas ?? [];
@@ -343,8 +344,8 @@ async function initPhpState(
  * Un cycle de scan direct — appelle UNIQUEMENT datetime/ avec le phpState déjà initialisé.
  * Reproduit la section 4 de test-bookitit-dynamic.ts (boucle mois par mois).
  *
- * @returns WorkerScanResult   — slots trouvés ou not_found
- * @returns "session_dead"     — datetime/ retourne null (0B) → session PHP morte
+ * @returns WorkerScanResult   — slots trouvés, not_found, ou proxy_error
+ * @returns proxy_error        — toutes les requêtes datetime/ ont échoué en réseau (proxy CONNECT cassé)
  */
 async function scanDatetimeDirect(
   phpState: WorkerPhpState,
@@ -361,6 +362,9 @@ async function scanDatetimeDirect(
   const MAX_MONTHS = Math.max(DATETIME_MONTHS_AHEAD + 2, 12); // ≥ 12 comme le test dynamic
 
   let monthOffset = 0;
+  let networkErrorCount = 0; // Compteur d'erreurs réseau (ProxyTunnelError, Timeout, etc.)
+  let monthsChecked = 0;
+
   while (monthOffset < MAX_MONTHS) {
     const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
     const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
@@ -376,7 +380,16 @@ async function scanDatetimeDirect(
     };
     if (phpState.agendaId) extra["agendas[]"] = phpState.agendaId;
 
-    const payload = await callDirect(ds, "datetime/", extra);
+    const raw = await callDirect(ds, "datetime/", extra, tag);
+    monthsChecked++;
+
+    // Distinguer erreur réseau (sentinel) d'une réponse HTTP vide légitime (null).
+    // ProxyTunnelError/Timeout → CALL_DIRECT_NETWORK_ERROR.
+    // Réponse 0B serveur (pas de créneau, agenda absent) → null.
+    const isNetworkError = raw === CALL_DIRECT_NETWORK_ERROR;
+    if (isNetworkError) networkErrorCount++;
+
+    const payload = isNetworkError ? null : raw;
     const rawBytes = JSON.stringify(payload ?? "").length;
 
     const dtData = payload as any;
@@ -389,11 +402,11 @@ async function scanDatetimeDirect(
     const slots = extractAllSlotsFromPayload(payload, phpState.agendaId, config.groupSize ?? 1);
     log(
       "INFO",
-      `${tag}   ${monthLabel}: ${slots.length > 0 ? slots.length + " créneau(x)" : payload === null ? "0 (0B)" : "0 (vide)"}  | maxDays=${maxDaysRaw || "(absent)"}`,
+      `${tag}   ${monthLabel}: ${slots.length > 0 ? slots.length + " créneau(x)" : isNetworkError ? "0 (err réseau)" : payload === null ? "0 (0B)" : "0 (vide)"}  | maxDays=${maxDaysRaw || "(absent)"}`,
     );
 
     // Trace par mois — 0B = null payload (normal quand aucun créneau), ok si non-null
-    monthTraces.push({ month: monthLabel, bytes: rawBytes, slots: slots.length, ok: payload !== null });
+    monthTraces.push({ month: monthLabel, bytes: rawBytes, slots: slots.length, ok: !isNetworkError && payload !== null });
 
     if (slots.length > 0) {
       allSlots.push(...slots);
@@ -416,6 +429,19 @@ async function scanDatetimeDirect(
       log("WARN", `${tag}   ⏹ 3 mois vides sans maxDays — arrêt`);
       break;
     }
+  }
+
+  // Si toutes les requêtes ont échoué en réseau (proxy CONNECT cassé), signaler proxy_error.
+  // UNIQUEMENT sur erreurs réseau réelles (sentinel), jamais sur réponses HTTP vides légitimes.
+  // Cas "agenda absent" : serveur retourne 0B (null), PAS le sentinel → pas de faux positif.
+  if (monthsChecked >= 2 && networkErrorCount === monthsChecked) {
+    log("WARN", `${tag}   ⚠️ Proxy CONNECT cassé — ${networkErrorCount}/${monthsChecked} mois en erreur réseau → rotation IP`);
+    return {
+      status: "proxy_error",
+      serviceId: phpState.bestServiceId,
+      serviceName: phpState.bestServiceName,
+      monthTraces,
+    };
   }
 
   if (allSlots.length === 0) {
@@ -667,6 +693,27 @@ export async function runDossierWorker(
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
         emitDiscoveryEvents(scan.slots, scan.serviceId, scan.serviceName, config);
+      }
+
+      if (scan.status === "proxy_error") {
+        // Proxy CONNECT cassé — toutes les requêtes datetime/ ont échoué en réseau.
+        // Déclencher une rotation IP et réinitialiser la session PHP.
+        log("WARN", `${tag} 🔄 proxy_error — rotation IP + réinit session`);
+        const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag);
+        if (!newProxy) {
+          log("WARN", `${tag} ❌ Rotation impossible — pool épuisé, exit worker`);
+          workerResult = { dossierId: config.id, status: "error", errorMessage: "proxy_error: pool Decodo épuisé" };
+          return workerResult;
+        }
+        proxyUrl = newProxy;
+        // Réinitialiser la session PHP avec le nouveau proxy (impit + PHPSESSID).
+        phpState = await initPhpState(session, config, tag);
+        if (!phpState) {
+          log("WARN", `${tag} ❌ Réinit PHP échouée après rotation — exit worker`);
+          workerResult = { dossierId: config.id, status: "error", errorMessage: "proxy_error: réinit PHP impossible" };
+          return workerResult;
+        }
+        continue; // Repartir immédiatement sur le nouveau proxy
       }
 
       if (scan.status === "not_found") {

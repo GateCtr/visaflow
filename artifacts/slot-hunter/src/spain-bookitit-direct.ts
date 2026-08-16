@@ -153,30 +153,42 @@ export function parseDirectJsonp(raw: string): unknown | null {
 
 /**
  * Appelle un endpoint Bookitit directement via impit.fetch — exactement comme le
- * dynamic test.  Retourne le payload parsé, ou null si réponse vide / erreur.
+ * dynamic test.  Retourne le payload parsé, ou null si réponse vide / erreur réseau.
  *
  * @param ds        DynamicSession (impit + jar + état jQuery)
  * @param endpoint  Ex : "getservices/", "datetime/"
  * @param extra     Paramètres supplémentaires (services[], agendas[], start, end…)
+ * @param tag       Préfixe worker pour les logs (ex: "[WORKER:RANIA GHOUL]")
  */
 export async function callDirect(
   ds: DynamicSession,
   endpoint: string,
   extra?: Record<string, string>,
-): Promise<unknown | null> {
+  tag?: string,
+): Promise<unknown | null | typeof CALL_DIRECT_NETWORK_ERROR> {
   const url = makeDirectUrl(ds, endpoint, extra);
   const headers = makeDirectHeaders(ds);
+  const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
 
   try {
     const res = await (ds.impit.fetch(url, { headers } as any) as unknown as Promise<Response>);
     if (!res.ok) {
-      console.warn(`[bookitit-direct] ${endpoint} → HTTP ${res.status}`);
+      console.warn(`${prefix} ${endpoint} → HTTP ${res.status}`);
       return null;
     }
     const body = await res.text();
     return parseDirectJsonp(body);
   } catch (e) {
-    console.warn(`[bookitit-direct] ${endpoint} → erreur: ${e}`);
-    return null;
+    console.warn(`${prefix} ${endpoint} → erreur réseau: ${e}`);
+    // Distinguer l'erreur réseau d'une réponse vide légitime : retourner le symbole
+    // CALL_DIRECT_NETWORK_ERROR pour que l'appelant puisse détecter un proxy cassé.
+    return CALL_DIRECT_NETWORK_ERROR;
   }
 }
+
+/**
+ * Sentinel retourné par callDirect() quand l'appel échoue à cause d'une erreur
+ * réseau (ProxyTunnelError, TimeoutError, etc.), à distinguer d'une réponse HTTP
+ * vide légitime (null retourné par parseDirectJsonp sur corps vide).
+ */
+export const CALL_DIRECT_NETWORK_ERROR: unique symbol = Symbol("CALL_DIRECT_NETWORK_ERROR");
