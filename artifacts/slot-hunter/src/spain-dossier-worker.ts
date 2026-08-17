@@ -448,11 +448,6 @@ export async function scanDatetimeDirect(
     if (slots.length > 0) {
       allSlots.push(...slots);
       consecutiveEmpty = 0;
-      // Arrêt immédiat : le premier mois avec créneaux réels suffit pour le booking.
-      // Continuer les mois suivants épuise le compteur PHP interne Bookitit →
-      // getsigninfields/ → 0B → signin/ → 0B (confirmé spain-http-scanner.ts l.1692).
-      log("INFO", `${tag}   ⏹ créneaux trouvés au mois ${monthLabel} — arrêt immédiat (préserve nonce PHP pour getsigninfields/)`);
-      break;
     } else {
       consecutiveEmpty++;
     }
@@ -1041,11 +1036,12 @@ export async function runDossierWorker(
           (s) => isSlotInDateWindow(s.date, config, tag) && s.freeslots > 0,
         );
 
-        // Publier le snapshot pour les workers parallèles
+        // Publier le snapshot pour les workers parallèles — TOUS les slots (pas seulement éligibles)
+        // pour que Redis connaisse la capacité réelle de chaque créneau sur tous les mois.
         publishSlotSnapshot(
           scan.agendaId ?? "",
           scan.serviceId ?? "",
-          eligible.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
+          scan.slots.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
         ).catch(() => {});
 
         // ── Reporting Convex APRÈS filtre — "found" seulement si créneaux éligibles ──
@@ -1062,10 +1058,25 @@ export async function runDossierWorker(
             ok: m.ok,
           }));
         }
+
+        // Grouper les slots éligibles par date avec total de places — comme le tableau du test dynamic
+        // Permet au frontend de voir la disponibilité réelle par date (pas seulement les 20 premiers)
+        const slotsByDate = new Map<string, { total: number; count: number }>();
+        for (const s of eligible) {
+          const existing = slotsByDate.get(s.date);
+          if (existing) {
+            existing.total += s.freeslots;
+            existing.count++;
+          } else {
+            slotsByDate.set(s.date, { total: s.freeslots, count: 1 });
+          }
+        }
+        const detectedSlotsPayload = [...slotsByDate.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([d, { total, count }]) => ({ d, n: total, c: count }));
+
         void reportSpainWatcherScan({
           status: eligible.length > 0 ? "found" : "not_found",
-          // slotInfo requis pour éviter le fallback "Créneau disponible" dans l'email admin.
-          // Sans lui, l'email part avec un texte générique même si la date est connue.
           slotInfo: eligible.length > 0
             ? `${eligible[0].date}${eligible[0].time ? ` à ${eligible[0].time}` : ""} (${eligible.length} place${eligible.length > 1 ? "s" : ""})`
             : undefined,
@@ -1074,9 +1085,7 @@ export async function runDossierWorker(
           detectedServices: scan.serviceId
             ? JSON.stringify([{ serviceId: scan.serviceId, serviceName: scan.serviceName ?? scan.serviceId }])
             : undefined,
-          detectedSlots: JSON.stringify(
-            eligible.slice(0, 20).map((s) => ({ d: s.date, t: s.time, n: s.freeslots }))
-          ),
+          detectedSlots: JSON.stringify(detectedSlotsPayload),
           scanTrace: JSON.stringify(workerTrace),
         }).catch(() => {});
 
@@ -1090,8 +1099,16 @@ export async function runDossierWorker(
           // Plusieurs workers sur le même agenda partagent le même claim Redis — si le premier
           // créneau est déjà pris par un autre dossier, on essaie le suivant plutôt que d'attendre
           // le prochain cycle.
+          //
+          // Ordre de priorité :
+          // - groupSize=1 : ordre ASC par date/heure (le plus tôt possible)
+          // - groupSize>1 : slots avec le plus de places en premier (maximise les chances de claim)
+          const sortedEligible = groupSize > 1
+            ? [...eligible].sort((a, b) => b.freeslots - a.freeslots || a.date.localeCompare(b.date))
+            : eligible; // déjà trié ASC par date/heure
+
           let claimedSlot: WorkerSlot | undefined;
-          for (const candidate of eligible) {
+          for (const candidate of sortedEligible) {
             const ok = await tryClaimSlot(
               candidate.date,
               candidate.time,
