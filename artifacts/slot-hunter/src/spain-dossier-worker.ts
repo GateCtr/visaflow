@@ -1171,8 +1171,12 @@ export async function runDossierWorker(
               const summaryPayload = await callDirect(ds, "summary/", {
                 ...bookExtra,
                 bktToken,
-                login:     config.login,
-                logintype: "document",
+                login:          config.login,
+                password:       config.password,
+                logintype:      "document",
+                comments:       "",
+                client_signin:  "true",
+                event_created:  "true",
               }) as any;
 
               // Extraire locator — même logique que executeHttpBooking ligne 1607-1617
