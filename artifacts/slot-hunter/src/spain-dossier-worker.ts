@@ -1131,16 +1131,23 @@ export async function runDossierWorker(
               serviceName: scan.serviceName,
             }).catch(() => {});
 
-            // getsigninfields/ — amorce le nonce PHP (sans ça, signin/ → 0B)
+            // getsigninfields/ — amorce le nonce PHP + retourne les champs custom du formulaire
+            // Paramètres : services[] uniquement (pas de date/time/agendas)
             log("INFO", `${tag} 🔑 getsigninfields/…`);
-            const gsfPayload = await callDirect(ds, "getsigninfields/", bookExtra);
+            const gsfPayload = await callDirect(ds, "getsigninfields/", {
+              "services[]": bookExtra["services[]"],
+            }) as any;
             if (!gsfPayload) log("WARN", `${tag} getsigninfields/ → 0B (signin/ risque 0B)`);
 
-            // signin/ — logintype=document confirmé par capture 2026-07-28
+            // logintype : "document" pour citaconsular.es/Kinshasa (confirmé capture 2026-07-28)
+            // getsigninfields/ retourne CustomFields (champs formulaire) — pas de logintype
+            const logintype = "document";
+
+            // signin/
             log("INFO", `${tag} 🔑 signin/…`);
             const signinPayload = await callDirect(ds, "signin/", {
               ...bookExtra,
-              logintype: "document",
+              logintype,
               login:     config.login,
               password:  config.password,
               comments:  "",
