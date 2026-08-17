@@ -79,6 +79,18 @@ export const STEP_LABELS: Record<string, string> = {
   cev_http_no_integration_url: "⚠️ URL manquante",
   cev_http_no_cev_cookie: "⚠️ Cookie absent",
   cev_http_no_app_id: "⚠️ AppID absent",
+  cev_http_verdict_overview_detected: "📋 Overview détecté",
+  cev_http_overview_limit_reached: "🚫 Limite RDV",
+  cev_http_overview_new_appointment_follow: "👆 Clic New RDV",
+  cev_http_overview_new_rdv_chain: "🔀 New RDV → verdict",
+  cev_http_overview_new_rdv_unknown_result: "⚠️ New RDV inconnu",
+  cev_http_redirect_probe: "🔀 Probe redirect",
+  cev_http_selectslot_preloaded: "📄 SelectSlot",
+  cev_http_verdict_no_availability: "❌ Pas de créneau",
+  cev_http_verdict_slots_available: "✅ Créneaux dispo !",
+  cev_http_verdict_session_expired: "⏰ Session expirée",
+  cev_http_verdict_error_page: "⚠️ Page erreur CEV",
+  cev_http_vowint_redis_hit: "💾 VOWINT Redis hit",
   cev_captcha_submit: "📨 Captcha envoi",
   cev_redirect_probe: "🔀 Probe redirect",
   cev_no_availability: "🔍 Pas de créneaux",
@@ -143,6 +155,7 @@ export const STEP_CATEGORIES: Record<string, LogCategory> = {
   cev_http_booking_start: "work", cev_http_booking_confirmed: "work",
   cev_http_slot_selected: "work", cev_http_submit_attempt: "work",
   cev_http_submit_response: "work", cev_no_availability: "work",
+  cev_http_verdict_no_availability: "work", cev_http_verdict_slots_available: "work",
   cev_poll_result: "work", cev_poll_no_slots: "work",
   // OFC Watcher
   ofc_watcher_started: "work", ofc_watcher_summary: "refresh",
@@ -155,6 +168,11 @@ export const STEP_CATEGORIES: Record<string, LogCategory> = {
   cev_http_vowint_cache_hit: "network", cev_http_integration_url: "network",
   cev_http_cev_cookie_ok: "network", cev_http_redirect_discovery: "network",
   cev_redirect_probe: "network", cev_http_selectslot_fetched: "network",
+  cev_http_redirect_probe: "network", cev_http_selectslot_preloaded: "network",
+  cev_http_verdict_overview_detected: "network",
+  cev_http_overview_new_appointment_follow: "network",
+  cev_http_overview_new_rdv_chain: "network",
+  cev_http_vowint_redis_hit: "network",
   // Erreurs
   error: "error", rate_limit: "error", blocked: "error", restricted: "error",
   token_expired: "error", restriction_skip: "error", scan_cutoff: "error",
@@ -165,6 +183,10 @@ export const STEP_CATEGORIES: Record<string, LogCategory> = {
   cev_http_no_integration_url: "error", cev_http_no_cev_cookie: "error",
   cev_http_no_app_id: "error", cev_session_expired: "error",
   cev_http_booking_crash: "error",
+  cev_http_overview_limit_reached: "error",
+  cev_http_overview_new_rdv_unknown_result: "error",
+  cev_http_verdict_session_expired: "error",
+  cev_http_verdict_error_page: "error",
   // Germany
   germany_scan_start: "work",
   germany_config_invalid: "error",
@@ -581,6 +603,39 @@ export function getNarrativePreview(step: string, data: Record<string, unknown> 
 
     case "cev_http_no_app_id": {
       return "AppID introuvable";
+    }
+
+    case "cev_http_verdict_overview_detected": {
+      return "Page Overview détectée (RDV existant)";
+    }
+
+    case "cev_http_overview_limit_reached": {
+      return "Limite de RDV atteinte — seul Annuler disponible";
+    }
+
+    case "cev_http_overview_new_appointment_follow": {
+      const url = data.absoluteNewRdvUrl ?? data.newRdvHref ?? "";
+      return `Suivi lien New RDV${url ? ` → ${String(url).slice(0, 60)}` : ""}`;
+    }
+
+    case "cev_http_overview_new_rdv_chain": {
+      const final = data.finalUrl ?? "";
+      const hasCal = data.hasCalendar;
+      if (String(final).includes("NoAvailability")) return "New RDV → Pas de créneau";
+      if (hasCal) return "New RDV → Calendrier disponible !";
+      return `New RDV → ${String(final).slice(0, 60)}`;
+    }
+
+    case "cev_http_verdict_no_availability": {
+      return "Pas de créneau disponible";
+    }
+
+    case "cev_http_verdict_slots_available": {
+      return "Créneaux disponibles — booking en cours";
+    }
+
+    case "cev_http_vowint_redis_hit": {
+      return "Session VOWINT restaurée depuis Redis";
     }
 
     case "cev_no_availability": {
