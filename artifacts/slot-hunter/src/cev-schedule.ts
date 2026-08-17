@@ -104,8 +104,8 @@ async function loadScheduleConfig(): Promise<CachedScheduleConfig> {
   const timezone = tzRaw || "Europe/Brussels";
 
   const bands: ScheduleBand[] = [
-    ...parseBands(highRaw),
-    ...parseBands(medRaw),
+    ...parseBands(highRaw || "07:00-14:00=90"),
+    ...parseBands(medRaw || "05:00-07:00=180,15:00-22:00=180"),
     ...parseBands(lowRaw),
   ];
 
@@ -256,7 +256,7 @@ export async function getCevScheduleDecision(defaultIntervalMs: number): Promise
   return {
     allowed: false,
     intervalMs: 0,
-    sleepUntilNextWindowMs: Math.min(sleepMin * 60_000, 60 * 60_000), // cap 1h (re-évalue ensuite)
+    sleepUntilNextWindowMs: Math.min(sleepMin * 60_000, 5 * 60_000), // cap 5min (re-évalue fréquemment après redéploiement)
     bandLabel: `hors fenêtre (${String(Math.floor(minuteOfDay / 60)).padStart(2, "0")}:${String(minuteOfDay % 60).padStart(2, "0")} ${config.timezone})`,
   };
 }
