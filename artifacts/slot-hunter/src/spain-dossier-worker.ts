@@ -1147,7 +1147,14 @@ export async function runDossierWorker(
             }) as Record<string, unknown> | null;
 
             const signinInner = (signinPayload as any)?.Client ?? signinPayload;
-            const bktToken    = String(signinInner?.bktToken ?? (signinPayload as any)?.bktToken ?? "");
+            // bktToken peut être dans Access.bktToken (portail app.bookitit.com)
+            // ou dans Client.bktToken (portail citaconsular.es) selon la version Bookitit
+            const bktToken = String(
+              (signinPayload as any)?.Access?.bktToken ??
+              signinInner?.bktToken ??
+              (signinPayload as any)?.bktToken ??
+              ""
+            );
             const signinErrors: Array<{ message?: string }> = Array.isArray(signinInner?.errors) ? signinInner.errors : [];
 
             let bookResult: SpainBookingResult;
