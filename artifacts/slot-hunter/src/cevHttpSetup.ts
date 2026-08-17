@@ -377,12 +377,27 @@ async function getVowintSession(
       signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
     });
     if (loginRes.status !== 302) {
-      let bodyPreview = "";
-      try { bodyPreview = (await loginRes.text()).slice(0, 400); } catch { /* ignore */ }
+      let bodyFull = "";
+      try { bodyFull = await loginRes.text(); } catch { /* ignore */ }
       const redirectLocation = loginRes.headers.get("location") ?? "(none)";
+      
+      // Extraire le message d'erreur VOWINT depuis le HTML
+      // Patterns connus : <span class="field-validation-error">, <div class="validation-summary-errors">,
+      // ou tout texte dans un élément avec "error" dans la classe
+      const errorMsgMatch = bodyFull.match(
+        /class="[^"]*(?:validation-summary-errors|field-validation-error)[^"]*"[^>]*>([\s\S]*?)<\//i
+      );
+      const errorMsg = errorMsgMatch
+        ? errorMsgMatch[1].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+        : "";
+      
+      const bodyPreview = bodyFull.replace(/\s+/g, " ").slice(0, 400);
       console.error(`[CEV-SETUP] ❌ LOGIN VOWINT ÉCHOUÉ — status=${loginRes.status} redirect="${redirectLocation}" email="${vowintEmail.slice(0, 30)}…"`);
-      console.error(`[CEV-SETUP] ❌ Body preview: ${bodyPreview.replace(/\s+/g, " ").slice(0, 300)}`);
-      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status, redirect: redirectLocation, bodyPreview: bodyPreview.slice(0, 300), email: vowintEmail } });
+      if (errorMsg) {
+        console.error(`[CEV-SETUP] ❌ Message portail: "${errorMsg}"`);
+      }
+      console.error(`[CEV-SETUP] ❌ Body preview: ${bodyPreview.slice(0, 300)}`);
+      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status, redirect: redirectLocation, bodyPreview: bodyPreview.slice(0, 300), email: vowintEmail, errorMessage: errorMsg || undefined } });
       return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
     }
 
