@@ -30,10 +30,16 @@ import {
   SPAIN_INSTANCE_ID,
   getLastStickyForDossier,
   getLastProxyForDossier,
+  deleteLastStickyForDossier,
+  saveLastStickyForDossier,
+  saveLastProxyForDossier,
+  deleteWorkerCfClearance,
+  saveWorkerCfClearance,
 } from "./spain-redis-persistence.js";
-import { initDecodoPool } from "./spain-decodo-pool.js";
+import { initDecodoPool, flagDecodoIp, rotateDecodoUrl } from "./spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "./convexClient.js";
 import { runDossierWorker, type SpainDossierConfig, type WorkerResult } from "./spain-dossier-worker.js";
+import { initWorkerSession } from "./spain-soax-solver.js";
 import { log } from "./scheduler-utils.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -382,7 +388,7 @@ async function harvestFinishedWorkers(
           if (!stickyId) return;
           const baseProxy = await getLastProxyForDossier(id);
           if (!baseProxy) return;
-          startKeepAlive(id, baseProxy, stickyId);
+          startKeepAlive(id, baseProxy, stickyId, w.config.portalUrl);
         }).catch(() => {});
         break;
       }
@@ -559,33 +565,111 @@ function addStickyToUrl(baseUrl: string, sid: string): string {
  * Démarre un keep-alive périodique pour un dossier en pause inter-fenêtre.
  * Envoie un HEAD request à httpbin via le même proxy+sticky pour maintenir
  * la session Decodo active (même exit IP) → cf_clearance valide au prochain démarrage.
+ *
+ * Si le ping échoue (timeout/proxy mort) :
+ *   1. Blackliste le port actuel
+ *   2. Invalide stickyId + cf_clearance en Redis
+ *   3. Prend un nouveau port (rotation)
+ *   4. Solve CF sur le nouveau port → sauvegarde en Redis
+ *   5. Met à jour lastProxy/lastSticky → le worker démarre à 0s
  */
-function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string): void {
+function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, portalUrl: string): void {
   // Annuler un éventuel keep-alive précédent
   stopKeepAlive(dossierId);
 
-  const stickyUrl = addStickyToUrl(baseProxy, stickyId);
-  const masked = stickyUrl.replace(/:([^:@/]+)@/, ":***@").slice(0, 50);
+  let currentBaseProxy = baseProxy;
+  let currentStickyId = stickyId;
+  let currentStickyUrl = addStickyToUrl(baseProxy, stickyId);
+  let preWarmInProgress = false;
 
-  log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive démarré — ${dossierId.slice(0, 8)}… via ${masked}… (toutes les ${KEEPALIVE_INTERVAL_MS / 60_000}min)`);
+  const masked = () => currentStickyUrl.replace(/:([^:@/]+)@/, ":***@").slice(0, 50);
+
+  log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive démarré — ${dossierId.slice(0, 8)}… via ${masked()}… (toutes les ${KEEPALIVE_INTERVAL_MS / 60_000}min)`);
 
   const ping = async (): Promise<void> => {
+    if (preWarmInProgress) return; // éviter le chevauchement ping + pre-warm
+
     try {
-      // Import dynamique de Impit pour éviter une dépendance circulaire
       const { Impit } = await import("impit");
-      const impit = new Impit({ browser: "chrome", proxyUrl: stickyUrl, timeout: 10_000 } as any);
+      const impit = new Impit({ browser: "chrome", proxyUrl: currentStickyUrl, timeout: 10_000 } as any);
       const r = await (impit.fetch("https://httpbin.org/status/200", {
         method: "HEAD",
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0" },
       } as any) as unknown as Promise<Response>);
-      log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK — ${dossierId.slice(0, 8)}… HTTP ${r.status} (proxy: ${masked}…)`);
+
+      if (r.status >= 500) {
+        // 503 = httpbin surchargé mais le proxy a routé la requête → session maintenue
+        log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK (${r.status}) — ${dossierId.slice(0, 8)}… (proxy: ${masked()}…)`);
+      } else {
+        log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK — ${dossierId.slice(0, 8)}… HTTP ${r.status} (proxy: ${masked()}…)`);
+      }
     } catch (err) {
+      // ── PING FAIL — pre-warm : blacklister + rotation + solve CF ────────────
       log("WARN", `[SPAIN-ORCH] 🏓 Keep-alive FAIL — ${dossierId.slice(0, 8)}…: ${err instanceof Error ? err.message : err}`);
+      preWarmInProgress = true;
+
+      try {
+        // 1. Blacklister le port actuel
+        flagDecodoIp(currentBaseProxy, "keepalive-timeout");
+        log("INFO", `[SPAIN-ORCH] 🏓 Port blacklisté: ${currentBaseProxy.slice(-20)}`);
+
+        // 2. Invalider stickyId + cf_clearance en Redis
+        await deleteLastStickyForDossier(dossierId);
+        deleteWorkerCfClearance(currentStickyUrl);
+
+        // 3. Prendre un nouveau port
+        const newBaseProxy = rotateDecodoUrl();
+        if (!newBaseProxy) {
+          log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm impossible — pool Decodo épuisé`);
+          return;
+        }
+
+        // 4. Solve CF sur le nouveau port
+        const newStickyId = Math.random().toString(36).slice(2, 10);
+        const newStickyUrl = addStickyToUrl(newBaseProxy, newStickyId);
+        const capsolverKey = process.env.CAPSOLVER_API_KEY ?? process.env.NONECAP_API_KEY ?? "";
+
+        if (!capsolverKey) {
+          log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm impossible — CAPSOLVER_API_KEY absent`);
+          return;
+        }
+
+        log("INFO", `[SPAIN-ORCH] 🏓 Pre-warm CF — ${dossierId.slice(0, 8)}… nouveau port: ${newBaseProxy.slice(-20)} sid=${newStickyId}`);
+        const targetUrl = portalUrl.split("#")[0];
+        const result = await initWorkerSession(newStickyUrl, targetUrl, capsolverKey);
+
+        if (result) {
+          // 5. Sauvegarder en Redis pour que le worker démarre à 0s
+          const cfExpiresAt = Date.now() + (115 * 60_000);
+          saveWorkerCfClearance(newStickyUrl, result.session.cfClearance, cfExpiresAt);
+          await saveLastStickyForDossier(dossierId, newStickyId);
+          await saveLastProxyForDossier(dossierId, newBaseProxy);
+
+          // Mettre à jour le keep-alive pour le nouveau port
+          currentBaseProxy = newBaseProxy;
+          currentStickyId = newStickyId;
+          currentStickyUrl = newStickyUrl;
+
+          log("INFO", `[SPAIN-ORCH] 🏓 ✅ Pre-warm réussi — ${dossierId.slice(0, 8)}… cf_clearance prêt sur ${newBaseProxy.slice(-20)}`);
+        } else {
+          // Solve échoué aussi sur le nouveau port → on laisse le worker solve au démarrage
+          log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm CF échoué — ${dossierId.slice(0, 8)}… (worker solvera au démarrage)`);
+          // Sauver quand même le nouveau port/sticky (le worker solve dessus)
+          await saveLastStickyForDossier(dossierId, newStickyId);
+          await saveLastProxyForDossier(dossierId, newBaseProxy);
+          currentBaseProxy = newBaseProxy;
+          currentStickyId = newStickyId;
+          currentStickyUrl = newStickyUrl;
+        }
+      } catch (preWarmErr) {
+        log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm exception: ${preWarmErr instanceof Error ? preWarmErr.message : preWarmErr}`);
+      } finally {
+        preWarmInProgress = false;
+      }
     }
   };
 
-  // Premier ping immédiat (pas besoin d'attendre 12min)
-  // Mais on le décale de 30s pour laisser le réseau se stabiliser
+  // Premier ping décalé de 30s
   setTimeout(() => { ping().catch(() => {}); }, 30_000);
 
   const intervalId = setInterval(() => { ping().catch(() => {}); }, KEEPALIVE_INTERVAL_MS);
