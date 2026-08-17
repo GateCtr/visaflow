@@ -570,16 +570,17 @@ async function refreshSessionAndScan(
     Object.assign(jar, extractCookies(r.headers as any));
     const isCf = r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000));
     if (isCf) {
-      log("WARN", `${tag} refreshSession: CF challenge détecté (HTTP ${r.status}) → cf_expired`);
+      log("WARN", `${tag} ① GET widget → CF challenge (HTTP ${r.status}, ${body.length}B) → cf_expired`);
       return { status: "cf_expired", errorMessage: "CF challenge sur GET widget", monthTraces: [] };
     }
     token = body.match(/name="token"\s+value="([^"]+)"/i)?.[1] ?? "";
     if (!token) {
-      log("WARN", `${tag} refreshSession: token absent (HTTP ${r.status}, ${body.length}B)`);
+      log("WARN", `${tag} ① GET widget → token absent (HTTP ${r.status}, ${body.length}B)`);
       return { status: "error", errorMessage: `Token absent (HTTP ${r.status}, ${body.length}B)`, monthTraces: [] };
     }
+    log("INFO", `${tag} ① token ✅`);
   } catch (e) {
-    log("WARN", `${tag} refreshSession: GET widget erreur: ${e}`);
+    log("WARN", `${tag} ① GET widget → erreur réseau: ${e}`);
     return { status: "proxy_error", errorMessage: `GET widget: ${e}`, monthTraces: [] };
   }
 
@@ -604,11 +605,12 @@ async function refreshSessionAndScan(
     srvsrc = body.match(/srvsrc:\s*'([^']+)'/)?.[1] ?? baseHost;
     version = body.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
     if (!jar.PHPSESSID) {
-      log("WARN", `${tag} refreshSession: PHPSESSID absent après POST token`);
+      log("WARN", `${tag} ② POST → PHPSESSID absent`);
       return { status: "error", errorMessage: "PHPSESSID absent après POST", monthTraces: [] };
     }
+    log("INFO", `${tag} ② PHPSESSID=${jar.PHPSESSID.slice(0, 8)}…`);
   } catch (e) {
-    log("WARN", `${tag} refreshSession: POST token erreur: ${e}`);
+    log("WARN", `${tag} ② POST → erreur: ${e}`);
     return { status: "proxy_error", errorMessage: `POST token: ${e}`, monthTraces: [] };
   }
 
@@ -647,11 +649,12 @@ async function refreshSessionAndScan(
     Object.assign(ds.jar, newCookies);
     if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
     if (body.length < 1000) {
-      log("WARN", `${tag} refreshSession: /main/ trop court (${body.length}B) — proxy_error?`);
+      log("WARN", `${tag} ③ /main/ → ${body.length}B (trop court) → proxy_error`);
       return { status: "proxy_error", errorMessage: `/main/ ${body.length}B`, monthTraces: [] };
     }
+    log("INFO", `${tag} ③ /main/ → ${Math.round(body.length / 1024)}kB ✅`);
   } catch (e) {
-    log("WARN", `${tag} refreshSession: /main/ erreur: ${e}`);
+    log("WARN", `${tag} ③ /main/ → erreur: ${e}`);
     return { status: "proxy_error", errorMessage: `/main/: ${e}`, monthTraces: [] };
   }
 
@@ -661,6 +664,7 @@ async function refreshSessionAndScan(
   // 5. getservices/
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
   if (svcPayload === CALL_DIRECT_NETWORK_ERROR) {
+    log("WARN", `${tag} ⑤ getservices/ → erreur réseau`);
     return { status: "proxy_error", errorMessage: "getservices/ network error", monthTraces: [] };
   }
   const rawServices: Array<{ id: string; name: string }> =
@@ -670,9 +674,11 @@ async function refreshSessionAndScan(
     serviceName: (s.name ?? "").replace(/<[^>]*>/g, "").trim(),
   }));
   if (services.length === 0) {
+    log("WARN", `${tag} ⑤ getservices/ → 0 services (${JSON.stringify(svcPayload ?? "").length}B)`);
     return { status: "error", errorMessage: "getservices/ 0 services", monthTraces: [] };
   }
   const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
+  log("INFO", `${tag} ⑤ svc=${services.length} → "${bestSvc.serviceName.slice(0, 25)}" (${bestSvc.serviceId})`);
 
   // 6. getagendas/
   const agPayload = await callDirect(ds, "getagendas/", {
@@ -680,6 +686,7 @@ async function refreshSessionAndScan(
     selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
   }, tag) as any;
   if (agPayload === CALL_DIRECT_NETWORK_ERROR) {
+    log("WARN", `${tag} ⑥ getagendas/ → erreur réseau`);
     return { status: "proxy_error", errorMessage: "getagendas/ network error", monthTraces: [] };
   }
   const rawAgendas: Array<{ id: string }> = agPayload?.Agendas ?? agPayload?.agendas ?? [];
@@ -687,6 +694,7 @@ async function refreshSessionAndScan(
 
   if (!agendaId) {
     // Pas de créneau — comportement attendu quand le portail est fermé
+    log("INFO", `${tag} ⑥ agenda=(vide) — pas de créneau`);
     return {
       status: "not_found",
       serviceId: bestSvc.serviceId,
@@ -694,6 +702,8 @@ async function refreshSessionAndScan(
       monthTraces: [{ month: "ag", bytes: JSON.stringify(agPayload ?? "").length, slots: 0, ok: true }],
     };
   }
+
+  log("INFO", `${tag} ⑥ agenda=${agendaId} ✅ → datetime/`);
 
   // 7. datetime/ (multi-mois) — réutilise scanDatetimeDirect avec le phpState frais
   const phpState: WorkerPhpState = {
