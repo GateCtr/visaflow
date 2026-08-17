@@ -160,8 +160,9 @@ export function parseDirectJsonp(raw: string): unknown | null {
  * @param extra     Paramètres supplémentaires (services[], agendas[], start, end…)
  * @param tag       Préfixe worker pour les logs (ex: "[WORKER:RANIA GHOUL]")
  */
-/** Timeout par défaut pour les appels Bookitit (30s — largement au-dessus du p99 de ~2s). */
-const CALL_DIRECT_TIMEOUT_MS = 30_000;
+/** Timeout par défaut pour les appels Bookitit (60s — protège contre les blocages
+ *  infinis tout en laissant le temps au serveur de répondre sous forte charge). */
+const CALL_DIRECT_TIMEOUT_MS = 60_000;
 
 export async function callDirect(
   ds: DynamicSession,
