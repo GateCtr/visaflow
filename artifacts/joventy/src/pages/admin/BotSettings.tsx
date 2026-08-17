@@ -35,7 +35,7 @@ interface ConfigItem {
   label: string;
   description: string;
   type: "toggle" | "number" | "text" | "select";
-  category: "mode" | "timing" | "protection" | "proxy" | "prediction" | "v3strategy";
+  category: "mode" | "timing" | "protection" | "proxy" | "prediction" | "v3strategy" | "schedule";
   defaultValue: string;
   options?: { value: string; label: string }[];
   unit?: string;
@@ -392,6 +392,55 @@ const CONFIG_ITEMS: ConfigItem[] = [
       { value: "2captcha", label: "2captcha" },
     ],
   },
+  // ─── CEV Schedule (fenêtres horaires)
+  {
+    key: "cev_schedule_enabled",
+    label: "CEV Schedule Activé",
+    description: "Active les fenêtres horaires CEV. Si désactivé, le CEV tourne 24/7 comme avant.",
+    type: "toggle",
+    category: "schedule",
+    defaultValue: "0",
+  },
+  {
+    key: "cev_schedule_active_days",
+    label: "Jours actifs (1=Lun … 7=Dim)",
+    description: "Jours où le CEV est autorisé à scanner. CSV de numéros ISO (1=lundi, 7=dimanche). Ex: 1,2,3,4,5 = lun-ven.",
+    type: "text",
+    category: "schedule",
+    defaultValue: "1,2,3,4,5",
+  },
+  {
+    key: "cev_schedule_timezone",
+    label: "Timezone",
+    description: "Timezone pour évaluer les fenêtres (IANA). Heure belge = Europe/Brussels.",
+    type: "text",
+    category: "schedule",
+    defaultValue: "Europe/Brussels",
+  },
+  {
+    key: "cev_schedule_high",
+    label: "Haute densité (interval court)",
+    description: "Tranches à haute probabilité. Format: HH:MM-HH:MM=intervalSec,… Ex: 07:00-14:00=90 → poll toutes les 90s entre 7h et 14h.",
+    type: "text",
+    category: "schedule",
+    defaultValue: "07:00-14:00=90",
+  },
+  {
+    key: "cev_schedule_med",
+    label: "Densité moyenne",
+    description: "Tranches à probabilité moyenne. Même format. Ex: 05:00-07:00=180,15:00-22:00=180",
+    type: "text",
+    category: "schedule",
+    defaultValue: "05:00-07:00=180,15:00-22:00=180",
+  },
+  {
+    key: "cev_schedule_low",
+    label: "Basse densité (optionnel)",
+    description: "Tranches à faible probabilité (poll lent). Ex: 22:00-23:59=300. Heures non couvertes = OFF.",
+    type: "text",
+    category: "schedule",
+    defaultValue: "",
+  },
 ];
 
 // ─── Catégories ──────────────────────────────────────────────────────────────
@@ -400,6 +449,7 @@ const CATEGORIES = [
   { id: "v3strategy", label: "V3 Stratégie", shortLabel: "V3", icon: Target, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
   { id: "mode", label: "Exécution", shortLabel: "Mode", icon: Zap, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
   { id: "timing", label: "Timing", shortLabel: "Time", icon: Clock, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
+  { id: "schedule", label: "CEV Schedule", shortLabel: "Sched", icon: Clock, color: "text-teal-600", bg: "bg-teal-50", border: "border-teal-200" },
   { id: "protection", label: "Protection", shortLabel: "Sécu", icon: Shield, color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
   { id: "prediction", label: "Prédiction", shortLabel: "Pred", icon: RefreshCw, color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
   { id: "proxy", label: "Proxy", shortLabel: "Proxy", icon: Server, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },

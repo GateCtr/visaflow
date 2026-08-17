@@ -74,6 +74,7 @@ import { createLogger } from "../logger.js";
 import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
 import { solveHcaptchaWithProxy, parseProxyForAnticaptcha } from "../cev-hcaptcha.js";
 import { getCevDecodoUrlForAccount, hasCevDecodoProxy, getCevDecodoPoolSize } from "../cev-decodo-pool.js";
+import { getCevScheduleDecision } from "../cev-schedule.js";
 
 // ─── Constantes stealth Puppeteer ─────────────────────────────────────────────
 
@@ -2243,6 +2244,18 @@ async function runAccountLoop(job: any): Promise<void> {
         await sleep(waitMs);
       }
 
+      // ─── Schedule guard CEV : fenêtres horaires + jours OFF ─────────────────
+      // Vérifié à chaque cycle — si hors fenêtre, on dort jusqu'à la prochaine.
+      // Économie : ~65% de crédits captcha en moins (nuits + week-end coupés).
+      const scheduleDecision = await getCevScheduleDecision(intervalMs);
+      if (!scheduleDecision.allowed) {
+        const sleepMin = Math.round(scheduleDecision.sleepUntilNextWindowMs / 60_000);
+        logger.info(`⏸️ CEV Schedule OFF — ${scheduleDecision.bandLabel} — pause ${sleepMin}min`);
+        nextScanAllowedAt = Date.now() + scheduleDecision.sleepUntilNextWindowMs;
+        await sleep(scheduleDecision.sleepUntilNextWindowMs);
+        continue;
+      }
+
       // Re-check mode toutes les 50 scans
       if (state.scanCount > 0 && state.scanCount % 50 === 0) {
         const stillEnabled = await getBotConfigValue("cev_dossier_mode");
@@ -2676,13 +2689,15 @@ async function runAccountLoop(job: any): Promise<void> {
       // ─── Sync pool state vers Redis (fire-and-forget, chaque scan) ──────────
       syncPoolStateToRedis({ ...localPool.exportState(), scanCount: state.scanCount }, redisKey);
 
-      // ─── One-Shot: pause fixe ~2 min avec jitter log-normal (anti-shadow-ban) ──
+      // ─── One-Shot: pause adaptative (schedule) avec jitter log-normal (anti-shadow-ban) ──
+      // Utilise l'intervalle du schedule (haute/moyenne/basse densité) au lieu du fixe.
+      const effectiveIntervalMs = scheduleDecision.intervalMs || intervalMs;
       const jitterSign = Math.random() < 0.5 ? 1 : -1;
       const jitterAbs = logNormalJitter(20_000, 0.35); // centré ~20s d'écart
-      const jitter = jitterSign * Math.min(jitterAbs, intervalMs * 0.3);
-      const finalSleepMs = Math.max(60_000, intervalMs + jitter);
+      const jitter = jitterSign * Math.min(jitterAbs, effectiveIntervalMs * 0.3);
+      const finalSleepMs = Math.max(60_000, effectiveIntervalMs + jitter);
       nextScanAllowedAt = Date.now() + finalSleepMs;
-      logger.info(`Pause One-Shot: ${Math.round(finalSleepMs / 1000)}s (jitter: ${Math.round(jitter / 1000)}s)`);
+      logger.info(`Pause One-Shot: ${Math.round(finalSleepMs / 1000)}s (band: ${scheduleDecision.bandLabel}, jitter: ${Math.round(jitter / 1000)}s)`);
 
     } catch (loopErr) {
       logger.error(`Erreur loop: ${loopErr}`);
