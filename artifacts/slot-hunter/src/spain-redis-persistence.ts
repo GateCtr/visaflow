@@ -288,9 +288,13 @@ function proxyToWorkerKey(proxyUrl: string): string {
  * Fire-and-forget — n'interrompt pas le scan en cas d'erreur Redis.
  */
 export function saveWorkerCfClearance(proxyUrl: string, cfClearance: string, expiresAt: number): void {
-  if (!redisReady || !redisClient || !cfClearance) return;
-  const remainingSec = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
   const key = proxyToWorkerKey(proxyUrl);
+  if (!redisReady || !redisClient || !cfClearance) {
+    console.warn(`[spain-redis] saveWorkerCfClearance SKIP — redisReady=${redisReady} client=${!!redisClient} clearance=${!!cfClearance} (key=${key})`);
+    return;
+  }
+  const remainingSec = Math.max(60, Math.floor((expiresAt - Date.now()) / 1000));
+  console.log(`[spain-redis] 💾 saveWorkerCfClearance — key=${key} TTL=${remainingSec}s clearance=${cfClearance.slice(0, 20)}…`);
   redisClient.set(key, JSON.stringify({ cfClearance, expiresAt }), { EX: remainingSec }).catch((err: Error) => {
     console.warn(`[spain-redis] saveWorkerCfClearance échouée: ${err.message}`);
   });
@@ -313,25 +317,33 @@ export function deleteWorkerCfClearance(proxyUrl: string): void {
  * Retourne null si absent, expiré, ou moins de 5min de validité restante.
  */
 export async function loadWorkerCfClearance(proxyUrl: string): Promise<string | null> {
-  if (!redisReady || !redisClient) return null;
+  const key = proxyToWorkerKey(proxyUrl);
+  if (!redisReady || !redisClient) {
+    console.warn(`[spain-redis] loadWorkerCfClearance SKIP — redisReady=${redisReady} redisClient=${!!redisClient} (key=${key})`);
+    return null;
+  }
   try {
-    const key = proxyToWorkerKey(proxyUrl);
     const data = await redisClient.get(key);
-    if (!data) return null;
+    if (!data) {
+      console.log(`[spain-redis] loadWorkerCfClearance MISS — key absent dans Redis (key=${key}, proxy=${proxyUrl.slice(0, 50)}…)`);
+      return null;
+    }
     const parsed = JSON.parse(data) as { cfClearance: string; expiresAt: number };
     if (Date.now() >= parsed.expiresAt) {
+      console.log(`[spain-redis] loadWorkerCfClearance EXPIRED — expiresAt=${new Date(parsed.expiresAt).toISOString()} (key=${key})`);
       redisClient.del(key).catch(() => {});
       return null;
     }
     const remainMin = Math.round((parsed.expiresAt - Date.now()) / 60_000);
     if (remainMin < 5) {
+      console.log(`[spain-redis] loadWorkerCfClearance TOO_SHORT — reste ${remainMin}min < 5min (key=${key})`);
       redisClient.del(key).catch(() => {});
       return null;
     }
-    console.log(`[spain-redis] ✅ CF clearance worker restaurée (reste: ${remainMin}min, proxy: ${proxyUrl.slice(0, 40)}…)`);
+    console.log(`[spain-redis] ✅ CF clearance worker restaurée (reste: ${remainMin}min, key=${key}, proxy: ${proxyUrl.slice(0, 40)}…)`);
     return parsed.cfClearance;
   } catch (err) {
-    console.warn(`[spain-redis] loadWorkerCfClearance échouée: ${err instanceof Error ? err.message : err}`);
+    console.warn(`[spain-redis] loadWorkerCfClearance ERROR: ${err instanceof Error ? err.message : err} (key=${key})`);
     return null;
   }
 }

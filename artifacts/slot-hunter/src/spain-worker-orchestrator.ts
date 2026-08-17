@@ -28,6 +28,8 @@ import {
   renewSpainScannerLock,
   releaseSpainScannerLock,
   SPAIN_INSTANCE_ID,
+  getLastStickyForDossier,
+  getLastProxyForDossier,
 } from "./spain-redis-persistence.js";
 import { initDecodoPool } from "./spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "./convexClient.js";
@@ -253,6 +255,9 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           `[SPAIN-ORCH] 🚀 Lancement worker — ${config.applicantName} (${config.portalUrl.slice(-36)})`,
         );
 
+        // Arrêter le keep-alive Decodo — le worker prend le relai sur ce proxy
+        stopKeepAlive(config.id);
+
         const promise = runDossierWorker(config).then((result) => {
           return result;
         }).catch((err) => {
@@ -302,6 +307,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
     }
   } finally {
     clearInterval(lockRenewalTimer);
+    stopAllKeepAlives();
     if (lockHeld) {
       await releaseSpainScannerLock().catch(() => {});
     }
@@ -370,6 +376,14 @@ async function harvestFinishedWorkers(
           `[SPAIN-ORCH] 💤 ${w.config.applicantName} fenêtre terminée — prochain scan dans ` +
           `${Math.round(cooldownMs / 60_000)}min (prochaine fenêtre HH:${nextWakeMin})`,
         );
+        // Démarrer le keep-alive Decodo pour maintenir l'exit IP pendant la pause
+        // Récupérer le stickyId et baseProxy depuis Redis (sauvegardés par le worker dans finally)
+        getLastStickyForDossier(id).then(async (stickyId) => {
+          if (!stickyId) return;
+          const baseProxy = await getLastProxyForDossier(id);
+          if (!baseProxy) return;
+          startKeepAlive(id, baseProxy, stickyId);
+        }).catch(() => {});
         break;
       }
       case "error":
@@ -510,4 +524,95 @@ function isInScanWindow(): boolean {
   const now = new Date();
   const minInHour = now.getMinutes() + now.getSeconds() / 60;
   return minInHour >= WINDOW_START_MIN && minInHour < WINDOW_START_MIN + WINDOW_DURATION_MIN;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DECODO KEEP-ALIVE — Maintient les sessions sticky actives entre les fenêtres
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Intervalle entre les pings keep-alive (ms).
+ * Decodo sessionduration-60 a un idle timeout ~10-15min sur les résidentiels.
+ * 12 min entre pings garantit qu'on reste sous le seuil d'inactivité.
+ */
+const KEEPALIVE_INTERVAL_MS = 12 * 60_000; // 12 min
+
+/** Map dossierId → intervalId pour annuler les keep-alive au redémarrage du worker */
+const activeKeepAlives = new Map<string, ReturnType<typeof setInterval>>();
+
+/**
+ * Injecte un sticky session ID dans l'URL proxy Decodo (copie simplifiée de addStickySession).
+ */
+function addStickyToUrl(baseUrl: string, sid: string): string {
+  try {
+    const u = new URL(baseUrl);
+    const user = decodeURIComponent(u.username);
+    const stickyUser = user.includes("-session-")
+      ? user.replace(/-session-[^-]+/, `-session-${sid}`)
+      : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${sid}$2`);
+    u.username = encodeURIComponent(stickyUser);
+    return u.toString();
+  } catch { return baseUrl; }
+}
+
+/**
+ * Démarre un keep-alive périodique pour un dossier en pause inter-fenêtre.
+ * Envoie un HEAD request à httpbin via le même proxy+sticky pour maintenir
+ * la session Decodo active (même exit IP) → cf_clearance valide au prochain démarrage.
+ */
+function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string): void {
+  // Annuler un éventuel keep-alive précédent
+  stopKeepAlive(dossierId);
+
+  const stickyUrl = addStickyToUrl(baseProxy, stickyId);
+  const masked = stickyUrl.replace(/:([^:@/]+)@/, ":***@").slice(0, 50);
+
+  log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive démarré — ${dossierId.slice(0, 8)}… via ${masked}… (toutes les ${KEEPALIVE_INTERVAL_MS / 60_000}min)`);
+
+  const ping = async (): Promise<void> => {
+    try {
+      // Import dynamique de Impit pour éviter une dépendance circulaire
+      const { Impit } = await import("impit");
+      const impit = new Impit({ browser: "chrome", proxyUrl: stickyUrl, timeout: 10_000 } as any);
+      const r = await (impit.fetch("https://httpbin.org/status/200", {
+        method: "HEAD",
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0" },
+      } as any) as unknown as Promise<Response>);
+      log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK — ${dossierId.slice(0, 8)}… HTTP ${r.status} (proxy: ${masked}…)`);
+    } catch (err) {
+      log("WARN", `[SPAIN-ORCH] 🏓 Keep-alive FAIL — ${dossierId.slice(0, 8)}…: ${err instanceof Error ? err.message : err}`);
+    }
+  };
+
+  // Premier ping immédiat (pas besoin d'attendre 12min)
+  // Mais on le décale de 30s pour laisser le réseau se stabiliser
+  setTimeout(() => { ping().catch(() => {}); }, 30_000);
+
+  const intervalId = setInterval(() => { ping().catch(() => {}); }, KEEPALIVE_INTERVAL_MS);
+  activeKeepAlives.set(dossierId, intervalId);
+}
+
+/**
+ * Arrête le keep-alive pour un dossier (appelé quand le worker redémarre).
+ */
+function stopKeepAlive(dossierId: string): void {
+  const existing = activeKeepAlives.get(dossierId);
+  if (existing) {
+    clearInterval(existing);
+    activeKeepAlives.delete(dossierId);
+    log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive arrêté — ${dossierId.slice(0, 8)}…`);
+  }
+}
+
+/**
+ * Arrête tous les keep-alive actifs (cleanup à l'arrêt de l'orchestrateur).
+ */
+function stopAllKeepAlives(): void {
+  for (const [id, interval] of activeKeepAlives) {
+    clearInterval(interval);
+  }
+  if (activeKeepAlives.size > 0) {
+    log("INFO", `[SPAIN-ORCH] 🏓 ${activeKeepAlives.size} keep-alive(s) arrêté(s)`);
+  }
+  activeKeepAlives.clear();
 }

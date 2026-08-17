@@ -1771,12 +1771,14 @@ export async function initWorkerSession(
   let cfFromCache = false;
   if (challengeHtml !== undefined) {
     // Vérifier le cache Redis avant d'invoquer CapSolver (~20s économisés si hit)
+    console.log(`[spain-soax] 🔧   🔍 CF cache check — stickyProxyUrl=${stickyProxyUrl.slice(0, 60)}…`);
     const cachedClearance = await loadWorkerCfClearance(stickyProxyUrl);
     if (cachedClearance) {
       jar.cf_clearance = cachedClearance;
       cfFromCache = true;
       console.log(`[spain-soax] 🔧   ✅ cf_clearance depuis cache Redis — CapSolver évité (proxy: ${masked.slice(0, 40)}…)`);
     } else {
+      console.log(`[spain-soax] 🔧   ⏳ Cache miss → CapSolver solve…`);
       const capResult = await solveSpainCloudflare(targetUrl, capsolverApiKey, stickyProxyUrl, challengeHtml, WORKER_UA);
       if (!capResult.success || !capResult.session?.cfClearance) {
         console.warn(`[spain-soax] 🔧   ❌ CapSolver échoué: ${capResult.error}`);

@@ -51,6 +51,7 @@ import {
   getDecodoCurrentIndex,
   flagDecodoIp,
   isDecodoIpBlacklisted,
+  rotateDecodoUrl,
 } from "./spain-decodo-pool.js";
 import {
   saveLastProxyForDossier,
@@ -1243,6 +1244,10 @@ async function pickDedicatedProxy(
   }
 
   // ── Fallback : round-robin depuis l'index courant ────────────────────────────
+  // IMPORTANT : avancer l'index de départ pour que chaque appel à pickDedicatedProxy
+  // explore une zone différente du pool. Sans ça, tous les dossiers partent du même
+  // startIndex → tombent sur les mêmes 20-30 premiers proxies → on n'utilise jamais
+  // les 100K IPs disponibles.
   const startIndex = getDecodoCurrentIndex();
 
   for (let i = 0; i < poolSize; i++) {
@@ -1259,7 +1264,10 @@ async function pickDedicatedProxy(
     // Tenter de réserver
     const ok = await reserveWorkerIp(url, dossierId);
     if (ok) {
-      log("INFO", `${tag} IP Decodo réservée : ${maskProxy(url)} (index ${idx})`);
+      // Avancer l'index global APRÈS ce proxy pour que le prochain appel
+      // (même dossier ou autre) commence après celui-ci dans le pool.
+      rotateDecodoUrl();
+      log("INFO", `${tag} IP Decodo réservée : ${maskProxy(url)} (index ${idx}/${poolSize})`);
       return url;
     }
   }
