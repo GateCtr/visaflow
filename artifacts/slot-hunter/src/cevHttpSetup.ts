@@ -460,7 +460,12 @@ async function getVowintSession(
   }
 
   if (!appId) {
-    botLog({ applicationId: clientId, step: "cev_http_no_app_id", status: "fail" });
+    // Invalider le cache VOWINT — la session cachée est probablement expirée
+    // (le serveur retourne la page de login au lieu de MyList).
+    // Au prochain cycle, un nouveau login sera forcé → on verra le vrai message d'erreur.
+    invalidateVowintCache(vowintEmail, ipSlotId);
+    console.error(`[CEV-SETUP] ❌ AppID absent — cache VOWINT invalidé pour ${vowintEmail.slice(0, 20)}… (forcer re-login au prochain cycle)`);
+    botLog({ applicationId: clientId, step: "cev_http_no_app_id", status: "fail", data: { email: vowintEmail, dossier: vowintAppUrl ?? "default", cacheInvalidated: true } });
     return { success: false, error: "NO_APP_ID" };
   }
 
