@@ -1179,11 +1179,19 @@ export async function runDossierWorker(
                 event_created:  "true",
               }) as any;
 
-              // Extraire locator — même logique que executeHttpBooking ligne 1607-1617
-              const s0 = Array.isArray(summaryPayload) ? summaryPayload[0] : summaryPayload;
+              // Extraire locator depuis la réponse summary/
+              // Structure réelle: { Event: [{ Event: { locator, date, time... }, Client: {...} }], Access: {...} }
+              const eventList: any[] = Array.isArray(summaryPayload?.Event) ? summaryPayload.Event
+                : Array.isArray(summaryPayload) ? summaryPayload
+                : summaryPayload?.Event ? [summaryPayload.Event]
+                : [];
+              const firstEvent = eventList[0];
               const locator: string =
-                s0?.Event?.locator ?? s0?.Appointment?.locator ??
-                summaryPayload?.Event?.locator ?? summaryPayload?.Appointment?.locator ?? "";
+                firstEvent?.Event?.locator ??     // { Event: [{ Event: { locator } }] }
+                firstEvent?.locator ??             // { Event: [{ locator }] }
+                firstEvent?.Appointment?.locator ?? // variante Appointment
+                summaryPayload?.Event?.locator ??  // { Event: { locator } } (old structure)
+                summaryPayload?.locator ?? "";
 
               if (locator) {
                 bookResult = {
