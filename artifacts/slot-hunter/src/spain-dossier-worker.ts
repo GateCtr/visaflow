@@ -54,6 +54,7 @@ import {
   flagDecodoIp,
   isDecodoIpBlacklisted,
   rotateDecodoUrl,
+  initDecodoPool,
 } from "./spain-decodo-pool.js";
 import {
   saveLastProxyForDossier,
@@ -738,7 +739,10 @@ export async function runDossierWorker(
   const tag = `[WORKER:${config.applicantName.slice(0, 18)}]`;
   log("INFO", `${tag} ▶ Démarrage worker autonome — portalUrl: ${config.portalUrl.slice(-40)}`);
 
-  // ── 0. Calcul anticipé de windowEnd — AVANT toute init ──────────────────────
+  // ── 0. Init pool Decodo (index aléatoire si Redis absent) ────────────────────
+  await initDecodoPool();
+
+  // ── 0b. Calcul anticipé de windowEnd — AVANT toute init ─────────────────────
   // Doit être fait ici, pas après l'init session, sinon si l'init dure trop longtemps
   // et qu'il reste < 60s avant HH:WINDOW_END_MIN, le fallback WORKER_WINDOW_MS prolonge
   // la fenêtre de 20 min supplémentaires (bug "dépasse HH:25").
