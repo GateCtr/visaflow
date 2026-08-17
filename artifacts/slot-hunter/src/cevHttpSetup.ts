@@ -169,6 +169,14 @@ const VOWINT_SESSION_MAX_AGE_MS = 4 * 60 * 60_000; // 4h (sessions CEV expirent 
 // Durée max pour le cache appId (24h — les UUIDs ne changent pas)
 const VOWINT_APPID_CACHE_MAX_AGE_MS = 24 * 60 * 60_000;
 
+// ── Timeouts réseau ──────────────────────────────────────────────────────────
+/** Requêtes critiques : login VOWINT, GetEAppointmentUrl, intégration CEV, SetCaptchaToken */
+const TIMEOUT_CRITICAL_MS = 60_000;
+/** Requêtes importantes : redirects VOWINT, GetEAppointmentUrl hops */
+const TIMEOUT_IMPORTANT_MS = 60_000;
+/** Requêtes légères : telemetry, MyList, GetAllVisaStatusTypes */
+const TIMEOUT_LIGHT_MS = 30_000;
+
 export interface CevHttpSetupResult {
   success: boolean;
   sessionCookie?: string;
@@ -298,7 +306,7 @@ async function getVowintSession(
       method: "GET",
       headers: getCevBrowserHeaders({ fetchSite: "none", cookie: vowintCookies }),
       redirect: "manual",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
     });
     const initCookies = extractCookies(initRes);
     if (initCookies) vowintCookies = initCookies;
@@ -318,7 +326,7 @@ async function getVowintSession(
             ...(vowintCookies ? { cookie: vowintCookies } : {}),
           }),
           redirect: "manual",
-          signal: AbortSignal.timeout(20_000),
+          signal: AbortSignal.timeout(TIMEOUT_IMPORTANT_MS),
         });
         vowintCookies = mergeCookies(vowintCookies, hopRes);
         if (hopRes.status < 300) {
@@ -366,7 +374,7 @@ async function getVowintSession(
         Password: vowintPassword,
       }).toString(),
       redirect: "manual",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
     });
     if (loginRes.status !== 302) {
       let bodyPreview = "";
@@ -388,7 +396,7 @@ async function getVowintSession(
         method: "GET",
         headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/`, cookie: cookies, cacheControl: "max-age=0" }),
         redirect: "manual",
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(TIMEOUT_IMPORTANT_MS),
       });
       cookies = mergeCookies(cookies, r);
       if (r.status >= 300 && r.status < 400) { redirectUrl = r.headers.get("location"); }
@@ -460,7 +468,7 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
   await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(TIMEOUT_IMPORTANT_MS),
   }).then(r => r.text()).catch(() => {});
 
   // GET GetAllVisaStatusTypes — Burp Chrome 146 confirme cet appel entre DataTables et MyList
@@ -468,7 +476,7 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
   await cevSetupFetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/plain, */*", cacheControl: "max-age=0", ifModifiedSince: "0" }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(TIMEOUT_LIGHT_MS),
   }).then(r => r.text()).catch(() => {});
 
   // GET MyList — length=50 pour voir tous les dossiers (AngularJS $http)
@@ -476,7 +484,7 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
   const listRes = await cevSetupFetch(dtUrl, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
   });
   if (!listRes.ok) return null;
 
@@ -507,7 +515,7 @@ export async function resolveFirstAppIdFromMyList(cookies: string): Promise<stri
       method: "GET",
       headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: currentCookies }),
       redirect: "manual",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
     });
     currentCookies = mergeCookies(currentCookies, r);
     if (r.status >= 300 && r.status < 400) {
@@ -531,18 +539,18 @@ export async function resolveFirstAppIdFromMyList(cookies: string): Promise<stri
   await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(TIMEOUT_IMPORTANT_MS),
   }).then(r => r.text()).catch(() => {});
   await cevSetupFetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/plain, */*", cacheControl: "max-age=0", ifModifiedSince: "0" }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(TIMEOUT_LIGHT_MS),
   }).then(r => r.text()).catch(() => {});
   const dtUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=10&search%5Bvalue%5D=&search%5Bregex%5D=false`;
   const listRes = await cevSetupFetch(dtUrl, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
   });
   if (listRes.ok) {
     const text = await listRes.text();
@@ -578,7 +586,7 @@ export async function resolveAllAppIdsFromMyList(cookies: string): Promise<strin
       method: "GET",
       headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en`, cookie: currentCookies }),
       redirect: "manual",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
     });
     currentCookies = mergeCookies(currentCookies, r);
     if (r.status >= 300 && r.status < 400) {
@@ -605,19 +613,19 @@ export async function resolveAllAppIdsFromMyList(cookies: string): Promise<strin
   await cevSetupFetch(`${VOWINT_BASE}/VisaApplication/DataTables`, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01" }),
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(TIMEOUT_IMPORTANT_MS),
   }).then(r => r.text()).catch(() => {});
   await cevSetupFetch(`${VOWINT_BASE}/Common/GetAllVisaStatusTypes`, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/plain, */*", cacheControl: "max-age=0", ifModifiedSince: "0" }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(TIMEOUT_LIGHT_MS),
   }).then(r => r.text()).catch(() => {});
 
   const allUrl = `${VOWINT_BASE}/VisaApplication/MyList?draw=1&columns%5B0%5D%5Bdata%5D=VOWId&columns%5B0%5D%5Bname%5D=VOWUniqueId&columns%5B0%5D%5Bsearchable%5D=true&columns%5B0%5D%5Borderable%5D=true&columns%5B0%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B0%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B1%5D%5Bdata%5D=FName&columns%5B1%5D%5Bname%5D=FirstName&columns%5B1%5D%5Bsearchable%5D=true&columns%5B1%5D%5Borderable%5D=true&columns%5B1%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B1%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B2%5D%5Bdata%5D=LName&columns%5B2%5D%5Bname%5D=LastName&columns%5B2%5D%5Bsearchable%5D=true&columns%5B2%5D%5Borderable%5D=true&columns%5B2%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B2%5D%5Bsearch%5D%5Bregex%5D=false&columns%5B3%5D%5Bdata%5D=St&columns%5B3%5D%5Bname%5D=Status&columns%5B3%5D%5Bsearchable%5D=true&columns%5B3%5D%5Borderable%5D=true&columns%5B3%5D%5Bsearch%5D%5Bvalue%5D=&columns%5B3%5D%5Bsearch%5D%5Bregex%5D=false&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=asc&start=0&length=100&search%5Bvalue%5D=&search%5Bregex%5D=false`;
   const listRes2 = await cevSetupFetch(allUrl, {
     method: "GET",
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
   });
   if (listRes2.ok) {
     const text = await listRes2.text();
@@ -798,7 +806,7 @@ export async function setupCevSessionHttp(
           ifModifiedSince: "0",
         }),
         redirect: "manual",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
       });
 
       if (eRes.ok) {
@@ -921,7 +929,7 @@ export async function setupCevSessionHttp(
           userAgent: siphoned?.userAgent,
         }),
         redirect: "manual",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
       });
 
       // Extraire ASP.NET_SessionId ET PreferredCulture depuis les Set-Cookie de la réponse.
@@ -973,7 +981,7 @@ export async function setupCevSessionHttp(
             userAgent: siphoned?.userAgent,
           }),
           redirect: "manual",
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(TIMEOUT_LIGHT_MS),
         });
         // CRITIQUE : stocker la réponse pour capturer ses Set-Cookie (cookie de challenge OutSystems)
         captchaPageRes_captured = captchaPageRes;
@@ -1146,7 +1154,7 @@ export async function setupCevSessionHttp(
         }),
         body: new URLSearchParams({ captcha: hcaptchaToken }).toString(),
         redirect: "manual",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
       });
 
       if (!captchaRes.ok) {
@@ -1188,7 +1196,7 @@ export async function setupCevSessionHttp(
               userAgent: siphoned?.userAgent,
             }),
             redirect: "manual",
-            signal: AbortSignal.timeout(15_000),
+            signal: AbortSignal.timeout(TIMEOUT_LIGHT_MS),
           });
           const bypassLoc = bypassRes.headers.get("location") ?? "";
           const bypassStatus = bypassRes.status;
@@ -1281,7 +1289,7 @@ export async function setupCevSessionHttp(
         }),
         body: new URLSearchParams({ captcha: retryHcaptchaToken }).toString(),
         redirect: "manual",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
       });
       
       if (retryRes.ok) {
@@ -1381,7 +1389,7 @@ export async function setupCevSessionHttp(
             // utilisent le même UA que toutes les requêtes précédentes.
             userAgent: siphoned?.userAgent,
           }),
-          signal: AbortSignal.timeout(30_000),
+          signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
         });
 
         probeHttpStatus = hopRes.status;
@@ -1459,7 +1467,7 @@ export async function setupCevSessionHttp(
               cookie: fullCevCookie,
               userAgent: siphoned?.userAgent,
             }),
-            signal: AbortSignal.timeout(20_000),
+            signal: AbortSignal.timeout(TIMEOUT_IMPORTANT_MS),
           });
           
           const retryLoc = retryRes.headers.get("location") ?? "";
@@ -1650,7 +1658,7 @@ export async function setupCevSessionHttp(
             referer: finalUrl,          // Overview page = referer naturel
             userAgent: siphoned?.userAgent,
           }),
-          signal: AbortSignal.timeout(30_000),
+          signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
         });
 
         fullCevCookie = mergeCookies(fullCevCookie, hopRes);
@@ -2084,7 +2092,7 @@ async function solveHcaptcha(clientId: string, rqdata?: string): Promise<string 
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clientKey: captchaApiKey, task }),
-          signal: AbortSignal.timeout(30_000),
+          signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
         });
         const createData = await createRes.json() as { errorId: number; taskId?: number; errorCode?: string; errorDescription?: string };
         console.log(`[CEV-SETUP] ${captchaProvider} createTask (${label}):`, createData);

@@ -243,7 +243,7 @@ export async function discoverSlotBookingFlow(
       method: "GET",
       headers: getCevBrowserHeaders({ referer: `${CEV_BASE}/Captcha`, cookie: fullCookie }),
       redirect: "follow",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(60_000),
     }, "calendar_page");
     result.allRequests.push(pageReq);
     result.calendarPageHtml = pageReq.responseBody;
@@ -277,7 +277,7 @@ export async function discoverSlotBookingFlow(
       origin: CEV_BASE,
     }),
     body: slotsBody,
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(60_000),
   }, "available_time_slots");
   result.allRequests.push(slotsReq);
   result.availableTimeSlotsResponse = slotsReq;
@@ -294,7 +294,7 @@ export async function discoverSlotBookingFlow(
       origin: CEV_BASE,
     }),
     body: slotsBody,
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(60_000),
   }, "public_time_slots");
   result.allRequests.push(publicSlotsReq);
   result.publicTimeSlotsResponse = publicSlotsReq;
@@ -315,7 +315,7 @@ export async function discoverSlotBookingFlow(
         xRequestedWith: true,
         accept: "text/html, application/json, */*",
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     }, `explore_${endpoint.slice(-30)}`);
     result.allRequests.push(req);
   }
@@ -448,7 +448,7 @@ ${data.eligibleDossiers && data.eligibleDossiers.length > 1 ? `<p style="margin:
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: ADMIN_EMAILS, subject, html: htmlBody }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
@@ -488,7 +488,7 @@ async function sendLegacyDiscoveryEmail(vowintRef: string, discoveryResult: Slot
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: ADMIN_EMAILS, subject, html: htmlBody }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) return false;
     const resData = (await res.json()) as { id?: string };
