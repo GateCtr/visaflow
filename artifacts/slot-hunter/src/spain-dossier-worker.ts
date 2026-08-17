@@ -1869,76 +1869,52 @@ function extractAllSlotsFromPayload(
   const obj = payload as Record<string, unknown>;
   if (!Array.isArray(obj.Slots)) return [];
 
-  // Booking groupé : tenter d'abord avec seuil élevé (≥ 3 pour éviter collisions),
-  // fallback sur groupSize exact si aucun créneau suffisant n'existe.
-  // Booking normal : au moins 1 place.
-  const minFreeStrict = groupSize > 1 ? Math.max(groupSize, 3) : 1;
-  const minFreeFallback = groupSize > 1 ? groupSize : 1;
+  // Tout créneau avec au moins 1 place libre est bookable.
+  // groupSize est géré par Redis (coordination multi-dossier sur créneaux adjacents),
+  // pas par le filtrage des slots. Chaque dossier booke selectedPeople=1.
+  const minFree = 1;
 
   const result: WorkerSlot[] = [];
 
-  const extractWithMin = (minFree: number): WorkerSlot[] => {
-    const slots: WorkerSlot[] = [];
-    for (const day of (obj.Slots as unknown[])) {
-      if (!day || typeof day !== "object") continue;
-      const d = day as Record<string, unknown>;
-      const date = typeof d.date === "string" ? d.date : "";
-      if (!date) continue;
+  for (const day of (obj.Slots as unknown[])) {
+    if (!day || typeof day !== "object") continue;
+    const d = day as Record<string, unknown>;
+    const date = typeof d.date === "string" ? d.date : "";
+    if (!date) continue;
 
-      const stateNum =
-        typeof d.state === "number" ? d.state
-        : typeof d.state === "string" ? parseInt(d.state, 10) : -1;
-      if (stateNum !== 1) continue;
+    const stateNum =
+      typeof d.state === "number" ? d.state
+      : typeof d.state === "string" ? parseInt(d.state, 10) : -1;
+    if (stateNum !== 1) continue;
 
-      const slotAgendaId =
-        d.agenda != null ? String(d.agenda)
-        : d.agenda_id != null ? String(d.agenda_id)
-        : agendaId;
+    const slotAgendaId =
+      d.agenda != null ? String(d.agenda)
+      : d.agenda_id != null ? String(d.agenda_id)
+      : agendaId;
 
-      const times = d.times;
-      if (!times || typeof times !== "object" || Array.isArray(times)) continue;
-      const timesObj = times as Record<string, unknown>;
+    const times = d.times;
+    if (!times || typeof times !== "object" || Array.isArray(times)) continue;
+    const timesObj = times as Record<string, unknown>;
 
-      const entries = Object.entries(timesObj).sort(([a], [b]) => a.localeCompare(b));
+    const entries = Object.entries(timesObj).sort(([a], [b]) => a.localeCompare(b));
 
-      for (const [timeKey, v] of entries) {
-        if (!v || typeof v !== "object") continue;
-        const t = v as Record<string, unknown>;
-        const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
-        const free =
-          typeof freeRaw === "number" ? freeRaw
-          : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
+    for (const [timeKey, v] of entries) {
+      if (!v || typeof v !== "object") continue;
+      const t = v as Record<string, unknown>;
+      const freeRaw = t.freeSlots ?? t.freeslots ?? t.free_slots;
+      const free =
+        typeof freeRaw === "number" ? freeRaw
+        : typeof freeRaw === "string" ? parseInt(freeRaw, 10) : -1;
 
-        if (free <= 0) continue;
-        if (free < minFree) continue;
+      if (free < minFree) continue;
 
-        const time = /^\d{1,2}:\d{2}$/.test(timeKey)
-          ? timeKey
-          : typeof t.time === "string"
-            ? t.time
-            : "09:00";
+      const time = /^\d{1,2}:\d{2}$/.test(timeKey)
+        ? timeKey
+        : typeof t.time === "string"
+          ? t.time
+          : "09:00";
 
-        slots.push({ date, time, agendaId: slotAgendaId, freeslots: free });
-      }
-    }
-    return slots;
-  };
-
-  // Tentative 1 : seuil strict (≥ 3 pour groupe, ≥ 1 pour individuel)
-  const strictSlots = extractWithMin(minFreeStrict);
-  if (strictSlots.length > 0) return strictSlots;
-
-  // Tentative 2 (fallback groupe uniquement) : seuil exact groupSize
-  // si aucun créneau ne satisfait le seuil strict — évite de bloquer un
-  // dossier groupe quand le portail n'a que des créneaux à 1-2 places
-  if (groupSize > 1 && minFreeFallback < minFreeStrict) {
-    const fallbackSlots = extractWithMin(minFreeFallback);
-    if (fallbackSlots.length > 0) {
-      console.log(
-        `[spain-worker] ⚠️ Groupe (size=${groupSize}) — aucun créneau ≥${minFreeStrict} places,` +
-        ` fallback sur ≥${minFreeFallback} → ${fallbackSlots.length} créneau(x)`,
-      );
-      return fallbackSlots;
+      result.push({ date, time, agendaId: slotAgendaId, freeslots: free });
     }
   }
 
