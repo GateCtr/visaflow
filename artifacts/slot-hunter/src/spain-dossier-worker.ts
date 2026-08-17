@@ -30,6 +30,8 @@ import {
 import {
   buildDynamicSession,
   callDirect,
+  makeDirectUrl,
+  makeDirectHeaders,
   CALL_DIRECT_NETWORK_ERROR,
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
@@ -216,7 +218,7 @@ interface WorkerSlot {
 }
 
 interface WorkerScanResult {
-  status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error" | "session_dead";
+  status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error" | "session_dead" | "cf_expired";
   slots?: WorkerSlot[];
   mainHtml?: string;
   serviceId?: string;
@@ -505,6 +507,206 @@ export async function scanDatetimeDirect(
   };
 }
 
+// ─── Cycle complet par itération (GET token → POST → main → cfg → svc → ag → dt) ──
+
+/**
+ * Effectue un cycle de scan complet en obtenant un NOUVEAU PHPSESSID à chaque appel.
+ *
+ * Réutilise le même impit + cf_clearance (pas de re-solve CF).
+ * Si GET widget retourne 403 (CF challenge) → status "cf_expired".
+ * Si getagendas/ retourne vide → "not_found" (pas de créneau actuellement).
+ * Si datetime/ trouve des slots → "found".
+ *
+ * FLOW :
+ *   1. GET widget → token CSRF (utilise cf_clearance existant)
+ *   2. POST token → nouveau PHPSESSID + srvsrc
+ *   3. GET /main/ (JSONP)
+ *   4. getwidgetconfigurations/
+ *   5. getservices/ → trouver le service avec nom non-vide
+ *   6. getagendas/ → si vide = not_found
+ *   7. datetime/ (multi-mois) → found ou not_found
+ */
+async function refreshSessionAndScan(
+  session: SpainCfSession,
+  config: SpainDossierConfig,
+  tag: string,
+): Promise<WorkerScanResult> {
+  const impit = session._ownImpit;
+  if (!impit) {
+    return { status: "error", errorMessage: "refreshSessionAndScan: _ownImpit absent", monthTraces: [] };
+  }
+
+  const targetUrl = config.portalUrl.split("#")[0];
+  const UA = session.userAgent;
+  const cfClearance = session.cfClearance;
+
+  // Helpers
+  const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
+    const result: Record<string, string> = {};
+    const raw = headers.get("set-cookie") ?? "";
+    for (const part of raw.split(/,(?=[^ ])/)) {
+      const m = part.trim().match(/^([^=]+)=([^;]*)/);
+      if (m) result[m[1].trim()] = m[2];
+    }
+    return result;
+  };
+  const buildCookieStr = (jar: Record<string, string>): string =>
+    Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+
+  // Cookie jar : cf_clearance + cookies existants (sauf PHPSESSID qu'on veut frais)
+  const jar: Record<string, string> = {};
+  for (const c of session.allCookies) {
+    if (c.name !== "PHPSESSID") jar[c.name] = c.value;
+  }
+  if (cfClearance) jar.cf_clearance = cfClearance;
+
+  // ── 1. GET widget → token ───────────────────────────────────────────────────
+  let token = "";
+  try {
+    const r = await (impit.fetch(targetUrl, {
+      headers: { "User-Agent": UA, "Cookie": buildCookieStr(jar) },
+    } as any) as unknown as Promise<Response>);
+    const body = await r.text();
+    Object.assign(jar, extractCookies(r.headers as any));
+    const isCf = r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000));
+    if (isCf) {
+      log("WARN", `${tag} refreshSession: CF challenge détecté (HTTP ${r.status}) → cf_expired`);
+      return { status: "cf_expired", errorMessage: "CF challenge sur GET widget", monthTraces: [] };
+    }
+    token = body.match(/name="token"\s+value="([^"]+)"/i)?.[1] ?? "";
+    if (!token) {
+      log("WARN", `${tag} refreshSession: token absent (HTTP ${r.status}, ${body.length}B)`);
+      return { status: "error", errorMessage: `Token absent (HTTP ${r.status}, ${body.length}B)`, monthTraces: [] };
+    }
+  } catch (e) {
+    log("WARN", `${tag} refreshSession: GET widget erreur: ${e}`);
+    return { status: "proxy_error", errorMessage: `GET widget: ${e}`, monthTraces: [] };
+  }
+
+  // ── 2. POST token → PHPSESSID + srvsrc ──────────────────────────────────────
+  const baseHost = new URL(targetUrl).origin;
+  let srvsrc = baseHost;
+  let version = "4";
+  try {
+    const r = await (impit.fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "User-Agent": UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": buildCookieStr(jar),
+        "Referer": targetUrl,
+        "Origin": baseHost,
+      },
+      body: `token=${encodeURIComponent(token)}`,
+    } as any) as unknown as Promise<Response>);
+    const body = await r.text();
+    Object.assign(jar, extractCookies(r.headers as any));
+    srvsrc = body.match(/srvsrc:\s*'([^']+)'/)?.[1] ?? baseHost;
+    version = body.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
+    if (!jar.PHPSESSID) {
+      log("WARN", `${tag} refreshSession: PHPSESSID absent après POST token`);
+      return { status: "error", errorMessage: "PHPSESSID absent après POST", monthTraces: [] };
+    }
+  } catch (e) {
+    log("WARN", `${tag} refreshSession: POST token erreur: ${e}`);
+    return { status: "proxy_error", errorMessage: `POST token: ${e}`, monthTraces: [] };
+  }
+
+  // ── 3-7. Construire DynamicSession et faire cfg → svc → ag → dt ─────────────
+  const publickey = targetUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "";
+  const bookititBase = `${baseHost}/onlinebookings`;
+  const jqCallback = `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  let reqCounter = Date.now();
+
+  // Mettre à jour session.allCookies avec le nouveau PHPSESSID pour buildDynamicSession
+  session.allCookies = Object.entries(jar).filter(([, v]) => v).map(([name, value]) => ({ name, value }));
+  session.bookititState = {
+    jqCallback,
+    reqCounter,
+    srvsrc,
+    version,
+    widgetUrl: targetUrl.endsWith("/") ? targetUrl : targetUrl + "/",
+    publickey,
+    bookititBase,
+  };
+
+  // GET /main/ via DynamicSession
+  const ds = buildDynamicSession(session);
+  if (!ds) {
+    return { status: "error", errorMessage: "buildDynamicSession échoué", monthTraces: [] };
+  }
+
+  // 3. GET /main/
+  const mainUrl = makeDirectUrl(ds, "main/");
+  const mainHeaders = makeDirectHeaders(ds);
+  try {
+    const r = await (ds.impit.fetch(mainUrl, { headers: mainHeaders } as any) as unknown as Promise<Response>);
+    const body = await r.text();
+    // Merge Set-Cookie (PHPSESSID peut être renouvelé)
+    const newCookies = extractCookies(r.headers as any);
+    Object.assign(ds.jar, newCookies);
+    if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
+    if (body.length < 1000) {
+      log("WARN", `${tag} refreshSession: /main/ trop court (${body.length}B) — proxy_error?`);
+      return { status: "proxy_error", errorMessage: `/main/ ${body.length}B`, monthTraces: [] };
+    }
+  } catch (e) {
+    log("WARN", `${tag} refreshSession: /main/ erreur: ${e}`);
+    return { status: "proxy_error", errorMessage: `/main/: ${e}`, monthTraces: [] };
+  }
+
+  // 4. getwidgetconfigurations/
+  await callDirect(ds, "getwidgetconfigurations/", undefined, tag);
+
+  // 5. getservices/
+  const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
+  if (svcPayload === CALL_DIRECT_NETWORK_ERROR) {
+    return { status: "proxy_error", errorMessage: "getservices/ network error", monthTraces: [] };
+  }
+  const rawServices: Array<{ id: string; name: string }> =
+    svcPayload?.Services ?? svcPayload?.services ?? [];
+  const services = rawServices.filter((s) => s?.id).map((s) => ({
+    serviceId: String(s.id),
+    serviceName: (s.name ?? "").replace(/<[^>]*>/g, "").trim(),
+  }));
+  if (services.length === 0) {
+    return { status: "error", errorMessage: "getservices/ 0 services", monthTraces: [] };
+  }
+  const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
+
+  // 6. getagendas/
+  const agPayload = await callDirect(ds, "getagendas/", {
+    "services[]": bestSvc.serviceId,
+    selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+  }, tag) as any;
+  if (agPayload === CALL_DIRECT_NETWORK_ERROR) {
+    return { status: "proxy_error", errorMessage: "getagendas/ network error", monthTraces: [] };
+  }
+  const rawAgendas: Array<{ id: string }> = agPayload?.Agendas ?? agPayload?.agendas ?? [];
+  const agendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
+
+  if (!agendaId) {
+    // Pas de créneau — comportement attendu quand le portail est fermé
+    return {
+      status: "not_found",
+      serviceId: bestSvc.serviceId,
+      serviceName: bestSvc.serviceName,
+      monthTraces: [{ month: "ag", bytes: JSON.stringify(agPayload ?? "").length, slots: 0, ok: true }],
+    };
+  }
+
+  // 7. datetime/ (multi-mois) — réutilise scanDatetimeDirect avec le phpState frais
+  const phpState: WorkerPhpState = {
+    services,
+    agendaId,
+    bestServiceId: bestSvc.serviceId,
+    bestServiceName: bestSvc.serviceName,
+    allowAppointment: null,
+    ds,
+  };
+  return scanDatetimeDirect(phpState, config, tag);
+}
+
 // ─── Entrée publique ──────────────────────────────────────────────────────────
 
 /**
@@ -720,16 +922,14 @@ export async function runDossierWorker(
     const cycleStart = Date.now();
 
     try {
-      if (!phpState) break;
-
       // ── Header de cycle — visible pour chaque dossier en cours de scan ─────────
       const winRemain = Math.round((windowEnd - Date.now()) / 60_000);
       log(
         "INFO",
-        `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | service: "${phpState.bestServiceName}" | proxy: ${maskProxy(proxyUrl)}`,
+        `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | proxy: ${maskProxy(proxyUrl)}`,
       );
 
-      const scan = await scanDatetimeDirect(phpState, config, tag);
+      const scan = await refreshSessionAndScan(session, config, tag);
 
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
@@ -757,6 +957,22 @@ export async function runDossierWorker(
         continue; // Repartir immédiatement sur le nouveau proxy
       }
 
+      if (scan.status === "cf_expired") {
+        // CF clearance expiré — le GET widget a retourné un challenge 403.
+        // Re-solve via CapSolver avec le même proxy (exit IP inchangée).
+        log("WARN", `${tag} 🔄 cf_expired — re-solve CF (proxy conservé)`);
+        const freshResult = await initWorkerSession(proxyUrl, portalUrlNoFrag, capsolverKey);
+        if (!freshResult) {
+          log("WARN", `${tag} ❌ Re-solve CF échoué — exit worker`);
+          workerResult = { dossierId: config.id, status: "error", errorMessage: "cf_expired: re-solve échoué" };
+          return workerResult;
+        }
+        // Remplacer la session (nouveau cf_clearance + impit)
+        session = freshResult.session;
+        log("INFO", `${tag} ✅ CF re-résolu — reprise du scan`);
+        continue;
+      }
+
       if (scan.status === "session_dead") {
         // Session PHP morte (agendaId présent mais datetime/ retourne 0B sur tous les mois).
         // Le proxy est sain — pas de rotation IP. Réinit PHPSESSID uniquement.
@@ -775,8 +991,8 @@ export async function runDossierWorker(
         // Mettre à jour les datetimes de la trace pour ce cycle
         if (scan.monthTraces) {
           workerTrace.datetimes = scan.monthTraces.map((m) => ({
-            serviceId: phpState!.bestServiceId,
-            serviceName: phpState!.bestServiceName,
+            serviceId: scan.serviceId ?? "",
+            serviceName: scan.serviceName ?? "",
             month: m.month,
             bytes: m.bytes,
             slots: m.slots,
@@ -805,8 +1021,8 @@ export async function runDossierWorker(
 
         // Publier le snapshot pour les workers parallèles
         publishSlotSnapshot(
-          phpState.agendaId,
-          phpState.bestServiceId ?? "",
+          scan.agendaId ?? "",
+          scan.serviceId ?? "",
           eligible.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
         ).catch(() => {});
 
@@ -816,8 +1032,8 @@ export async function runDossierWorker(
         // Mettre à jour la trace datetimes pour ce cycle
         if (scan.monthTraces) {
           workerTrace.datetimes = scan.monthTraces.map((m) => ({
-            serviceId: phpState!.bestServiceId,
-            serviceName: phpState!.bestServiceName,
+            serviceId: scan.serviceId ?? "",
+            serviceName: scan.serviceName ?? "",
             month: m.month,
             bytes: m.bytes,
             slots: m.slots,
@@ -885,7 +1101,7 @@ export async function runDossierWorker(
             // Source de vérité : test-bookitit-dynamic.ts section 5.
             // Pas de refresh, pas de re-init : le PHPSESSID qui a fait datetime/ est
             // déjà dans le bon état PHP pour getsigninfields/.
-            const ds = phpState.ds;
+            const ds = buildDynamicSession(session)!;
             const bookExtra: Record<string, string> = {
               "services[]": scan.serviceId!,
               date:          slot.date,
