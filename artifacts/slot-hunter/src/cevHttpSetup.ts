@@ -1719,8 +1719,25 @@ export async function setupCevSessionHttp(
         },
       });
 
-      if (newRdvChainStr.includes("SelectSlot") || newRdvHasCalendar) {
-        console.log(`[CEV-SETUP] 🎯 Overview → "Nouveau rendez-vous" → SelectSlot ✅`);
+      // IMPORTANT : vérifier NoAvailability EN PREMIER — car newRdvChain contient
+      // TOUJOURS "SelectSlot" (c'est le href du bouton "New appointment").
+      // Le verdict réel est la RÉPONSE du serveur après ce SelectSlot.
+      if (newRdvChainStr.includes("NoAvailability")) {
+        console.log(`[CEV-SETUP] ⚠️  Overview → "Nouveau rendez-vous" → NoAvailability (aucun créneau)`);
+        unlockCevProxy(); // UNLOCK avant return success
+        return {
+          success: true,
+          sessionCookie: cevSessionCookie,
+          validUntilMs,
+          integrationUrl,
+          redirectUrl: captchaRedirectUrl,
+          slotsAvailable: false,
+          overviewState: 'new_appointment_available',
+        };
+      }
+
+      if (newRdvHasCalendar) {
+        console.log(`[CEV-SETUP] 🎯 Overview → "Nouveau rendez-vous" → SelectSlot avec calendrier ✅`);
         return {
           success: true,
           sessionCookie: cevSessionCookie,
@@ -1735,9 +1752,8 @@ export async function setupCevSessionHttp(
         };
       }
 
-      if (newRdvChainStr.includes("NoAvailability")) {
-        console.log(`[CEV-SETUP] ⚠️  Overview → "Nouveau rendez-vous" → NoAvailability (aucun créneau)`);
-        unlockCevProxy(); // UNLOCK avant return success
+      if (newRdvChainStr.includes("SessionExpired")) {
+        console.log(`[CEV-SETUP] ⚠️  Overview → "Nouveau rendez-vous" → SessionExpired`);
         return {
           success: true,
           sessionCookie: cevSessionCookie,
@@ -1746,6 +1762,8 @@ export async function setupCevSessionHttp(
           redirectUrl: captchaRedirectUrl,
           slotsAvailable: false,
           overviewState: 'new_appointment_available',
+          probeError: true,
+          probeErrorType: 'session_expired',
         };
       }
 
