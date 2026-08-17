@@ -160,6 +160,9 @@ export function parseDirectJsonp(raw: string): unknown | null {
  * @param extra     Paramètres supplémentaires (services[], agendas[], start, end…)
  * @param tag       Préfixe worker pour les logs (ex: "[WORKER:RANIA GHOUL]")
  */
+/** Timeout par défaut pour les appels Bookitit (30s — largement au-dessus du p99 de ~2s). */
+const CALL_DIRECT_TIMEOUT_MS = 30_000;
+
 export async function callDirect(
   ds: DynamicSession,
   endpoint: string,
@@ -171,7 +174,10 @@ export async function callDirect(
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
 
   try {
-    const res = await (ds.impit.fetch(url, { headers } as any) as unknown as Promise<Response>);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
+    const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
+    clearTimeout(timeout);
     if (!res.ok) {
       console.warn(`${prefix} ${endpoint} → HTTP ${res.status}`);
       return null;
