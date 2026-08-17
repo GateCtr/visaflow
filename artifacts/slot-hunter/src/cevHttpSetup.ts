@@ -392,12 +392,12 @@ async function getVowintSession(
         : "";
       
       const bodyPreview = bodyFull.replace(/\s+/g, " ").slice(0, 400);
-      console.error(`[CEV-SETUP] ❌ LOGIN VOWINT ÉCHOUÉ — status=${loginRes.status} redirect="${redirectLocation}" email="${vowintEmail.slice(0, 30)}…"`);
+      console.error(`[CEV-SETUP] ❌ LOGIN VOWINT ÉCHOUÉ — status=${loginRes.status} redirect="${redirectLocation}" email="${vowintEmail.slice(0, 30)}…" pass=${vowintPassword.slice(0, 2)}…${vowintPassword.slice(-2)} (${vowintPassword.length} chars)`);
       if (errorMsg) {
         console.error(`[CEV-SETUP] ❌ Message portail: "${errorMsg}"`);
       }
       console.error(`[CEV-SETUP] ❌ Body preview: ${bodyPreview.slice(0, 300)}`);
-      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status, redirect: redirectLocation, bodyPreview: bodyPreview.slice(0, 300), email: vowintEmail, errorMessage: errorMsg || undefined } });
+      botLog({ applicationId: clientId, step: "cev_http_login_failed", status: "fail", data: { status: loginRes.status, redirect: redirectLocation, bodyPreview: bodyPreview.slice(0, 300), email: vowintEmail, passwordHint: `${vowintPassword.slice(0, 2)}…${vowintPassword.slice(-2)} (${vowintPassword.length}c)`, errorMessage: errorMsg || undefined } });
       return { success: false, error: "CEV_VOWINT_SESSION_FAILED" };
     }
 
