@@ -1315,6 +1315,17 @@ export async function runDossierWorker(
             // Booking échoué → libérer le claim de créneau de CE dossier immédiatement.
             releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
 
+            // ── Erreur credentials permanente → sortie immédiate ──────────────────
+            // "Usuario o contraseña incorrectos" ne changera pas au prochain cycle.
+            // Inutile de boucler 20 min — on sort et on remonte l'erreur.
+            const isCredentialError = bookResult.status === "signin_failed"
+              && (bookResult.errorMessage ?? "").toLowerCase().includes("incorrect");
+            if (isCredentialError) {
+              log("WARN", `${tag} 🚫 Erreur credentials permanente — arrêt du worker`);
+              workerResult = { dossierId: config.id, status: "error", errorMessage: `signin_failed: ${bookResult.errorMessage}` };
+              return workerResult;
+            }
+
             // Email admin : booking échoué avec raison (fire-and-forget)
             reportBookingLog({
               applicationId: config.applicationId,
