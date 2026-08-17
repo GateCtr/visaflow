@@ -254,7 +254,7 @@ interface WorkerSpainTrace {
   };
   agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string }>;
   datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
-  bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number }>;
+  bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number; gsfBytes?: number; signinBytes?: number; bktToken?: string; locator?: string }>;
   ipRotations: number;
 }
 
@@ -1300,6 +1300,10 @@ export async function runDossierWorker(
               status: bookResult.status,
               detail: (bookResult.locator ?? bookResult.errorMessage ?? "").slice(0, 80) || undefined,
               ms: bookResult.durationMs,
+              gsfBytes: gsfBytes,
+              signinBytes: signinPayload ? JSON.stringify(signinPayload).length : 0,
+              bktToken: bktToken ? bktToken.slice(0, 12) + "…" : undefined,
+              locator: bookResult.locator || undefined,
             });
 
             if (bookResult.status === "booked") {

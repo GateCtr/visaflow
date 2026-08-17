@@ -966,7 +966,7 @@ interface SpainScanTraceData {
   };
   agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string }>;
   datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
-  bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number }>;
+  bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number; gsfBytes?: number; signinBytes?: number; bktToken?: string; locator?: string }>;
 }
 
 function boolBadge(value: boolean | null | undefined, label?: string) {
@@ -1275,9 +1275,19 @@ function SpainScanTraceBlock({ scanTrace }: { scanTrace: string }) {
               <p className="font-semibold text-amber-800 mb-1">bookings ({trace.bookings.length})</p>
               <div className="space-y-0.5">
                 {trace.bookings.map((b, i) => (
-                  <p key={i} className={`text-[9px] ${b.status === "booked" ? "text-green-700" : "text-red-600"}`}>
-                    {b.applicant}: {b.status}{b.ms ? ` (${b.ms}ms)` : ""}{b.detail ? ` — ${b.detail}` : ""}
-                  </p>
+                  <div key={i} className={`text-[9px] ${b.status === "booked" ? "text-green-700" : "text-red-600"}`}>
+                    <p>
+                      {b.applicant}: {b.status}{b.ms ? ` (${b.ms}ms)` : ""}{b.detail ? ` — ${b.detail}` : ""}
+                    </p>
+                    {(b.gsfBytes !== undefined || b.signinBytes !== undefined || b.bktToken || b.locator) && (
+                      <p className="text-[8px] text-slate-500 ml-2">
+                        {b.gsfBytes !== undefined && `gsf=${b.gsfBytes}B `}
+                        {b.signinBytes !== undefined && `signin=${b.signinBytes}B `}
+                        {b.bktToken && `token=${b.bktToken} `}
+                        {b.locator && <span className="text-green-600 font-bold">locator={b.locator}</span>}
+                      </p>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
