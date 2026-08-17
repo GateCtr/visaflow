@@ -1754,6 +1754,7 @@ export async function setupCevSessionHttp(
 
       if (newRdvChainStr.includes("SessionExpired")) {
         console.log(`[CEV-SETUP] ⚠️  Overview → "Nouveau rendez-vous" → SessionExpired`);
+        unlockCevProxy();
         return {
           success: true,
           sessionCookie: cevSessionCookie,
@@ -1778,6 +1779,7 @@ export async function setupCevSessionHttp(
           htmlPreview: newRdvBodyRaw.slice(0, 1000),
         },
       });
+      unlockCevProxy();
       return {
         success: true,
         sessionCookie: cevSessionCookie,
