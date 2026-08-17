@@ -225,6 +225,9 @@ interface WorkerScanResult {
   serviceName?: string;
   agendaId?: string;
   errorMessage?: string;
+  /** DynamicSession du cycle courant — à utiliser pour getsigninfields/ et signin/
+   *  car son jar contient le PHPSESSID frais créé par refreshSessionAndScan. */
+  ds?: import("./spain-bookitit-direct.js").DynamicSession;
   /** Trace par mois — bytes/slots/ok pour chaque appel datetime/ */
   monthTraces?: Array<{ month: string; bytes: number; slots: number; ok: boolean }>;
 }
@@ -293,7 +296,7 @@ export interface WorkerPhpState {
  * RÈGLE §9 : getagendas/ ne peut être appelé qu'UNE FOIS par PHPSESSID.
  * Ensuite, les cycles de scan n'appellent QUE datetime/ — pas de réinit.
  */
-async function initPhpState(
+export async function initPhpState(
   session: SpainCfSession,
   config: SpainDossierConfig,
   tag: string,
@@ -394,7 +397,10 @@ export async function scanDatetimeDirect(
 
   while (monthOffset < MAX_MONTHS) {
     const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-    const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    // Premier mois : start = date du jour pour ne pas rater les créneaux en milieu de mois.
+    // Mois suivants : start = 1er du mois (scan complet).
+    const startDay = monthOffset === 0 ? String(now.getDate()).padStart(2, "0") : "01";
+    const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${startDay}`;
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const endStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -442,6 +448,11 @@ export async function scanDatetimeDirect(
     if (slots.length > 0) {
       allSlots.push(...slots);
       consecutiveEmpty = 0;
+      // Arrêt immédiat : le premier mois avec créneaux réels suffit pour le booking.
+      // Continuer les mois suivants épuise le compteur PHP interne Bookitit →
+      // getsigninfields/ → 0B → signin/ → 0B (confirmé spain-http-scanner.ts l.1692).
+      log("INFO", `${tag}   ⏹ créneaux trouvés au mois ${monthLabel} — arrêt immédiat (préserve nonce PHP pour getsigninfields/)`);
+      break;
     } else {
       consecutiveEmpty++;
     }
@@ -503,6 +514,7 @@ export async function scanDatetimeDirect(
     serviceId: phpState.bestServiceId,
     serviceName: phpState.bestServiceName,
     agendaId: phpState.agendaId,
+    ds: phpState.ds,   // ← propagé pour que le booking utilise le bon PHPSESSID
     monthTraces,
   };
 }
@@ -526,7 +538,7 @@ export async function scanDatetimeDirect(
  *   6. getagendas/ → si vide = not_found
  *   7. datetime/ (multi-mois) → found ou not_found
  */
-async function refreshSessionAndScan(
+export async function refreshSessionAndScan(
   session: SpainCfSession,
   config: SpainDossierConfig,
   tag: string,
@@ -1114,7 +1126,9 @@ export async function runDossierWorker(
             // Source de vérité : test-bookitit-dynamic.ts section 5.
             // Pas de refresh, pas de re-init : le PHPSESSID qui a fait datetime/ est
             // déjà dans le bon état PHP pour getsigninfields/.
-            const ds = buildDynamicSession(session)!;
+            // IMPORTANT : utiliser scan.ds (jar du cycle courant créé par refreshSessionAndScan)
+            // et NON phpState!.ds (jar de l'initPhpState initial = vieux PHPSESSID).
+            const ds = scan.ds ?? phpState!.ds;
             const bookExtra: Record<string, string> = {
               "services[]": scan.serviceId!,
               date:          slot.date,
@@ -1135,13 +1149,18 @@ export async function runDossierWorker(
             }).catch(() => {});
 
             // getsigninfields/ — amorce le nonce PHP + retourne les champs custom du formulaire
-            // Paramètres : services[] uniquement (pas de date/time/agendas)
-            log("INFO", `${tag} 🔑 getsigninfields/…`);
+            // Paramètres : services[] + agendas[] + date + time (confirmé test-bookitit-dynamic.ts)
+            const gsfPhpsessid = Object.entries(ds.jar).find(([k]) => k === "PHPSESSID")?.[1]?.slice(0, 8) ?? "?";
+            log("INFO", `${tag} 🔑 getsigninfields/ — ds.PHPSESSID=${gsfPhpsessid}… src=${ds.widgetUrl.slice(-40)}`);
             const gsfPayload = await callDirect(ds, "getsigninfields/", {
               "services[]": bookExtra["services[]"],
+              "agendas[]":  bookExtra["agendas[]"] ?? "",
+              date:         bookExtra.date,
+              time:         bookExtra.time,
+              selectedPeople: bookExtra.selectedPeople,
             }) as any;
-            if (!gsfPayload) log("WARN", `${tag} getsigninfields/ → 0B (signin/ risque 0B)`);
-
+            const gsfBytes = gsfPayload ? JSON.stringify(gsfPayload).length : 0;
+            log("INFO", `${tag} 🔑 getsigninfields/ → ${gsfBytes}B${gsfPayload ? " ✅" : " ❌ 0B"}`);
             // logintype : "document" pour citaconsular.es/Kinshasa (confirmé capture 2026-07-28)
             // getsigninfields/ retourne CustomFields (champs formulaire) — pas de logintype
             const logintype = "document";
