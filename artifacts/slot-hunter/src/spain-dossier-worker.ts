@@ -1059,6 +1059,9 @@ export async function runDossierWorker(
             : undefined,
           applicationId: config.applicationId,
           dossierName: config.applicantName,
+          detectedServices: scan.serviceId
+            ? JSON.stringify([{ serviceId: scan.serviceId, serviceName: scan.serviceName ?? scan.serviceId }])
+            : undefined,
           detectedSlots: JSON.stringify(
             eligible.slice(0, 20).map((s) => ({ d: s.date, t: s.time, n: s.freeslots }))
           ),
@@ -1143,15 +1146,32 @@ export async function runDossierWorker(
             // getsigninfields/ retourne CustomFields (champs formulaire) — pas de logintype
             const logintype = "document";
 
-            // signin/
+            // signin/ — retry 3× si 0B sous charge serveur
             log("INFO", `${tag} 🔑 signin/…`);
-            const signinPayload = await callDirect(ds, "signin/", {
-              ...bookExtra,
-              logintype,
-              login:     config.login,
-              password:  config.password,
-              comments:  "",
-            }) as Record<string, unknown> | null;
+            let signinPayload: Record<string, unknown> | null = null;
+            for (let signinAttempt = 0; signinAttempt < 3; signinAttempt++) {
+              if (signinAttempt > 0) {
+                const delay = 3_000 * signinAttempt;
+                log("INFO", `${tag} 🔑 signin/ retry ${signinAttempt}/2 (délai ${delay}ms)…`);
+                await new Promise((r) => setTimeout(r, delay));
+              }
+              const raw = await callDirect(ds, "signin/", {
+                ...bookExtra,
+                logintype,
+                login:     config.login,
+                password:  config.password,
+                comments:  "",
+              });
+              if (raw === null) {
+                // 0B légitime ou erreur HTTP — si premier essai on retry, sinon on abandonne
+                if (signinAttempt < 2) continue;
+                break;
+              }
+              // Erreur réseau (proxy cassé) — pas la peine de retry
+              if (raw === CALL_DIRECT_NETWORK_ERROR) break;
+              signinPayload = raw as Record<string, unknown>;
+              break;
+            }
 
             const signinInner = (signinPayload as any)?.Client ?? signinPayload;
             // bktToken peut être dans Access.bktToken (portail app.bookitit.com)
@@ -1175,8 +1195,15 @@ export async function runDossierWorker(
             } else {
               // summary/ — confirmation finale
               log("INFO", `${tag} 📝 summary/ (bktToken: ${bktToken.slice(0, 15)}…)…`);
+              // summary/ : mêmes params que signin/ SAUF selectedPeople (absent du curl capturé)
+              const summaryExtra: Record<string, string> = {
+                "services[]": scan.serviceId!,
+                date:          slot.date,
+                time:          slot.time,
+              };
+              if (slot.agendaId) summaryExtra["agendas[]"] = slot.agendaId;
               const summaryPayload = await callDirect(ds, "summary/", {
-                ...bookExtra,
+                ...summaryExtra,
                 bktToken,
                 login:          config.login,
                 password:       config.password,

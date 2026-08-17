@@ -920,10 +920,9 @@ export async function ensureSpainCfSession(
         `${badCount > 0 ? ` | 🚫 ${badCount} port(s) exclus` : ""} | proxy: ${masked.slice(0, 60)}…`,
       );
 
-      // timeout: 12s — échoue rapide sur port Decodo injoignable (défaut impit = 30s),
-      // ce qui déclenche la rotation vers le port suivant sans attendre 30s.
-      // ⚠️ Utiliser stickyProxyUrl (avec session ID) pour que impit et CapSolver partagent le même exit IP.
-      const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 12_000 } as any);
+      // timeout: 60s — le serveur peut être lent sous charge (main/, signin/, summary/).
+      // Les proxys morts sont détectés par ProxyTunnelError (CONNECT cassé), pas par timeout.
+      const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 60_000 } as any);
       const jar: Record<string, string> = {};
 
       // Étape 1a : GET widget → détecter challenge CF
@@ -1744,7 +1743,9 @@ export async function initWorkerSession(
   console.log(`[spain-soax] 🔧 initWorkerSession — proxy: ${masked.slice(0, 60)}… url: ${targetUrl}`);
 
   // Même impit pour TOUTES les étapes (probe + portail + JSONP)
-  const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 12_000 } as any);
+  // timeout: 60s — le serveur peut être lent sous charge. Les proxys morts sont
+  // détectés par ProxyTunnelError (CONNECT cassé), pas par timeout.
+  const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 60_000 } as any);
   const jar: Record<string, string> = {};
 
   // ── Étape 1 : Probe GET widget (UA + Accept seulement — identique à l'ancien système) ──

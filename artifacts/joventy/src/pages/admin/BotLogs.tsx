@@ -342,7 +342,7 @@ function BotLogsTab() {
       statusFilter: statusFilter || undefined,
       stepFilter:   stepFilter   || undefined,
     },
-    { initialNumItems: 100 }
+    { initialNumItems: 500 }
   );
 
   const canLoadMore = paginationStatus === "CanLoadMore";
@@ -366,6 +366,13 @@ function BotLogsTab() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const safePage   = Math.min(page, Math.max(0, totalPages - 1));
   const slice      = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  // Auto-load quand on arrive sur la dernière page chargée et qu'il en reste côté serveur
+  useEffect(() => {
+    if (canLoadMore && !isLoadingMore && safePage >= totalPages - 1 && totalPages > 0) {
+      loadMore(500);
+    }
+  }, [safePage, totalPages, canLoadMore, isLoadingMore]);
 
   // Counts per flow
   const usaCount     = paginatedLogs.filter(l => getLogFlow(l) === "usa").length;

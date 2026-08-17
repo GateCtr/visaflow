@@ -725,7 +725,7 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
 
 
 // ── Paginated Discoveries Component ──────────────────────────────────────────
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 function PaginatedDiscoveries({ items }: { items: DiscoveryStats["recent"] }) {
   const [page, setPage] = useState(0);
