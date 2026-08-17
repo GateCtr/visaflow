@@ -409,7 +409,9 @@ export async function scanDatetimeDirect(
       "services[]": phpState.bestServiceId,
       start: startStr,
       end: endStr,
-      selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+      // selectedPeople toujours "1" dans le scan — on veut TOUS les créneaux visibles.
+      // Le filtrage par groupSize se fait côté notre code (extractAllSlotsFromPayload + Redis).
+      selectedPeople: "1",
     };
     if (phpState.agendaId) extra["agendas[]"] = phpState.agendaId;
 
@@ -690,7 +692,7 @@ export async function refreshSessionAndScan(
   // 6. getagendas/
   const agPayload = await callDirect(ds, "getagendas/", {
     "services[]": bestSvc.serviceId,
-    selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+    selectedPeople: "1",
   }, tag) as any;
   if (agPayload === CALL_DIRECT_NETWORK_ERROR) {
     log("WARN", `${tag} ⑥ getagendas/ → erreur réseau`);
@@ -1150,7 +1152,10 @@ export async function runDossierWorker(
               "services[]": scan.serviceId!,
               date:          slot.date,
               time:          slot.time,
-              selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
+              // selectedPeople est TOUJOURS "1" pour Bookitit — chaque booking = 1 personne.
+              // groupSize est notre concept interne (Redis claim) : on réserve N places sur le
+              // même créneau mais on booke N fois séparément, pas une fois avec selectedPeople=N.
+              selectedPeople: "1",
             };
             if (slot.agendaId) bookExtra["agendas[]"] = slot.agendaId;
 
