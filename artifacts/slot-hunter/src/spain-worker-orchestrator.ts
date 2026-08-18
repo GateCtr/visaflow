@@ -1,7 +1,7 @@
 /**
  * spain-worker-orchestrator.ts — Orchestrateur de workers autonomes Espagne (Task #52)
  *
- * Remplace startSpainWatcherLoop().
+ * Remplace startSpainWatcherLoop() tres.
  *
  * COMPORTEMENT :
  *   1. Vérifie SPAIN_SCAN_DISABLED=1 (si actif → exit silencieux, Railway gère)
