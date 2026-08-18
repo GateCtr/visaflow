@@ -83,7 +83,7 @@ export function forceReloadCevProxyConfig(): void {
 // ─── Configuration proxy ────────────────────────────────────────────────────
 
 /** Timeout pour les requêtes via proxy (ms). Si dépassé → retry ou fallback. */
-const PROXY_FETCH_TIMEOUT_MS = 60_000;
+const PROXY_FETCH_TIMEOUT_MS = 120_000;
 
 /** Nombre de retries proxy avant fallback direct. */
 const PROXY_MAX_RETRIES = 2;
@@ -1146,7 +1146,7 @@ export async function initCevProxyGuardWithExitIp(proxyUrl: string, identifier?:
  */
 const DIRECT_MAX_RETRIES = 2;
 const DIRECT_RETRY_DELAYS_MS = [400, 1000];
-const DIRECT_FETCH_TIMEOUT_MS = 60_000;
+const DIRECT_FETCH_TIMEOUT_MS = 120_000;
 
 const DIRECT_TRANSIENT_RE =
   /tls handshake eof|unexpectedeof|connectionreset|connection reset|econnreset|econnaborted|econnrefused|epipe|etimedout|broken pipe|socket hang up|failed to connect|hyper_util|abort|timeout|dns error/i;

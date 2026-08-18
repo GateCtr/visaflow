@@ -171,9 +171,9 @@ const VOWINT_APPID_CACHE_MAX_AGE_MS = 24 * 60 * 60_000;
 
 // ── Timeouts réseau ──────────────────────────────────────────────────────────
 /** Requêtes critiques : login VOWINT, GetEAppointmentUrl, intégration CEV, SetCaptchaToken */
-const TIMEOUT_CRITICAL_MS = 60_000;
+const TIMEOUT_CRITICAL_MS = 120_000;
 /** Requêtes importantes : redirects VOWINT, GetEAppointmentUrl hops */
-const TIMEOUT_IMPORTANT_MS = 60_000;
+const TIMEOUT_IMPORTANT_MS = 120_000;
 /** Requêtes légères : telemetry, MyList, GetAllVisaStatusTypes */
 const TIMEOUT_LIGHT_MS = 30_000;
 
