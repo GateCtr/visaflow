@@ -920,9 +920,9 @@ export async function ensureSpainCfSession(
         `${badCount > 0 ? ` | 🚫 ${badCount} port(s) exclus` : ""} | proxy: ${masked.slice(0, 60)}…`,
       );
 
-      // timeout: 60s — le serveur peut être lent sous charge (main/, signin/, summary/).
+      // timeout: 120s — le serveur peut être très lent sous forte charge (main/, signin/, summary/).
       // Les proxys morts sont détectés par ProxyTunnelError (CONNECT cassé), pas par timeout.
-      const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 60_000 } as any);
+      const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 120_000 } as any);
       const jar: Record<string, string> = {};
 
       // Étape 1a : GET widget → détecter challenge CF
@@ -1743,9 +1743,9 @@ export async function initWorkerSession(
   console.log(`[spain-soax] 🔧 initWorkerSession — proxy: ${masked.slice(0, 60)}… url: ${targetUrl}`);
 
   // Même impit pour TOUTES les étapes (probe + portail + JSONP)
-  // timeout: 60s — le serveur peut être lent sous charge. Les proxys morts sont
+  // timeout: 120s — le serveur peut être très lent sous forte charge. Les proxys morts sont
   // détectés par ProxyTunnelError (CONNECT cassé), pas par timeout.
-  const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 60_000 } as any);
+  const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 120_000 } as any);
   const jar: Record<string, string> = {};
 
   // ── Étape 1 : Probe GET widget (UA + Accept seulement — identique à l'ancien système) ──
