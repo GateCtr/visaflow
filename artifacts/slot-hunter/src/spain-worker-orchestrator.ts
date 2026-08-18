@@ -35,6 +35,8 @@ import {
   saveLastProxyForDossier,
   deleteWorkerCfClearance,
   saveWorkerCfClearance,
+  claimSentinelRole,
+  releaseSentinelRole,
 } from "./spain-redis-persistence.js";
 import { initDecodoPool, flagDecodoIp, rotateDecodoUrl } from "./spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "./convexClient.js";
@@ -75,8 +77,8 @@ const LOCK_RENEWAL_MS = 30_000;
  * Override via env : SPAIN_WINDOW_START_MIN (0-59)
  */
 const WINDOW_START_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "5");
-  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 5));
+  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "10");
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 10));
 })();
 
 /**
@@ -86,8 +88,8 @@ const WINDOW_START_MIN = ((): number => {
  * Override via env : SPAIN_WINDOW_DURATION_MIN
  */
 const WINDOW_DURATION_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "20");
-  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 20);
+  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "10");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 10);
 })();
 
 // ─── État interne ─────────────────────────────────────────────────────────────
@@ -245,7 +247,13 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
 
         // Guard fenêtre horaire : ne lancer un worker que si on est dans la fenêtre
         // de publication des créneaux [HH:WINDOW_START_MIN … HH:WINDOW_START_MIN+WINDOW_DURATION_MIN[
-        if (!isInScanWindow()) {
+        // P8 : La sentinelle peut démarrer 1 min en avance (WINDOW_START_MIN - 1) pour
+        // avoir sa session PHP prête quand la fenêtre réelle commence.
+        const isMeuteEnabled = process.env.SPAIN_MEUTE_ENABLED !== "0";
+        const couldBeSentinel = isMeuteEnabled && dossiers.length > 1 && !workers.has(config.id);
+        const sentinelEarlyStart = couldBeSentinel ? isInSentinelEarlyWindow() : false;
+
+        if (!isInScanWindow() && !sentinelEarlyStart) {
           const waitMs = msUntilNextWindowStart();
           const nextWakeMin = String(WINDOW_START_MIN).padStart(2, "0");
           log(
@@ -264,10 +272,33 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         // Arrêter le keep-alive Decodo — le worker prend le relai sur ce proxy
         stopKeepAlive(config.id);
 
-        const promise = runDossierWorker(config).then((result) => {
+        // ── P8 — Assigner le rôle Meute (sentinelle ou pack) ─────────────────────
+        // La sentinelle est le premier dossier à claimer le rôle Redis pour ce portail.
+        // Tous les autres deviennent "pack" et attendent le signal BURST.
+        // Rotation naturelle : le TTL du claim (30 min = durée fenêtre) expire → le
+        // premier dossier à démarrer la fenêtre suivante sera la nouvelle sentinelle.
+        let meuteRole: "sentinel" | "pack" | undefined;
+        if (isMeuteEnabled && dossiers.length > 1) {
+          const claimed = await claimSentinelRole(config.portalUrl, config.id);
+          meuteRole = claimed ? "sentinel" : "pack";
+          log(
+            "INFO",
+            `[SPAIN-ORCH] 🐺 Rôle Meute: ${config.applicantName} → ${meuteRole}${claimed ? " (sentinelle cette fenêtre)" : ""}`,
+          );
+        }
+
+        const workerConfig: SpainDossierConfig = { ...config, meuteRole };
+        const promise = runDossierWorker(workerConfig).then((result) => {
+          // Libérer le rôle sentinelle quand le worker se termine
+          if (meuteRole === "sentinel") {
+            releaseSentinelRole(config.portalUrl, config.id).catch(() => {});
+          }
           return result;
         }).catch((err) => {
           log("WARN", `[SPAIN-ORCH] Worker ${config.applicantName} exception non gérée: ${err}`);
+          if (meuteRole === "sentinel") {
+            releaseSentinelRole(config.portalUrl, config.id).catch(() => {});
+          }
           return {
             dossierId: config.id,
             status: "error" as const,
@@ -530,6 +561,18 @@ function isInScanWindow(): boolean {
   const now = new Date();
   const minInHour = now.getMinutes() + now.getSeconds() / 60;
   return minInHour >= WINDOW_START_MIN && minInHour < WINDOW_START_MIN + WINDOW_DURATION_MIN;
+}
+
+/**
+ * P8 — Retourne true si on est dans la fenêtre d'avance sentinelle :
+ * [WINDOW_START_MIN - 1, WINDOW_START_MIN[
+ * La sentinelle démarre 1 min avant les packs pour avoir sa session PHP prête.
+ */
+function isInSentinelEarlyWindow(): boolean {
+  const now = new Date();
+  const minInHour = now.getMinutes() + now.getSeconds() / 60;
+  const earlyStart = Math.max(0, WINDOW_START_MIN - 1);
+  return minInHour >= earlyStart && minInHour < WINDOW_START_MIN;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -1198,3 +1198,188 @@ export async function disconnectSpainRedis(): Promise<void> {
     console.log("[spain-redis] 🛑 Redis Spain déconnecté");
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// P8 — BURST PUB/SUB (Algorithme Meute)
+//
+// Le mode Meute utilise Redis PUB/SUB pour coordonner sentinelle et meute :
+//   - La sentinelle publie "BURST:{portalKey}" quand elle détecte des créneaux
+//   - Les workers meute écoutent ce canal et se réveillent immédiatement
+//   - Le message contient le timestamp de détection pour éviter les signaux périmés
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_BURST_CHANNEL_PREFIX = "spain:burst:";
+/** TTL du flag de burst dans Redis (fallback polling si PUB/SUB manqué) */
+const REDIS_BURST_FLAG_TTL_SEC = 120; // 2 min
+const REDIS_BURST_FLAG_PREFIX = "spain:burst_flag:";
+
+/**
+ * Dérive une clé de portail stable depuis une URL de portail.
+ * Ex: "https://www.citaconsular.es/…/bkt123456" → "bkt123456"
+ */
+export function portalUrlToKey(portalUrl: string): string {
+  const match = portalUrl.match(/bkt\d+/);
+  if (match) return match[0];
+  // Fallback : hash simplifié des 50 derniers caractères
+  const tail = portalUrl.slice(-50).replace(/[^a-zA-Z0-9]/g, "_");
+  return tail;
+}
+
+/**
+ * Publie un signal BURST sur le canal Redis du portail.
+ * Appelé par la sentinelle quand des créneaux sont détectés.
+ *
+ * Publie AUSSI un flag Redis (SET avec TTL) comme fallback pour les workers
+ * qui n'étaient pas encore abonnés au moment de la publication.
+ *
+ * @param portalUrl  URL du portail (pour dériver la clé du canal)
+ * @param slotsCount Nombre de créneaux détectés (informatif)
+ */
+export async function publishBurstSignal(portalUrl: string, slotsCount: number): Promise<void> {
+  if (!redisReady || !redisClient) return;
+
+  const key = portalUrlToKey(portalUrl);
+  const channel = `${REDIS_BURST_CHANNEL_PREFIX}${key}`;
+  const flagKey = `${REDIS_BURST_FLAG_PREFIX}${key}`;
+  const message = JSON.stringify({ ts: Date.now(), slots: slotsCount });
+
+  try {
+    // PUB/SUB : message instantané pour les abonnés
+    await redisClient.publish(channel, message);
+    // Flag : fallback pour les workers qui rejoignent après le signal
+    await redisClient.set(flagKey, message, { EX: REDIS_BURST_FLAG_TTL_SEC });
+  } catch (err) {
+    console.warn(`[spain-redis] publishBurstSignal: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/**
+ * Vérifie si un signal BURST récent existe (polling fallback).
+ * Retourne true si un burst a été signalé dans les 2 dernières minutes.
+ * Utilisé par les workers meute qui n'ont pas reçu le PUB/SUB (démarrage tardif).
+ */
+export async function checkBurstFlag(portalUrl: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return false;
+
+  const key = portalUrlToKey(portalUrl);
+  const flagKey = `${REDIS_BURST_FLAG_PREFIX}${key}`;
+
+  try {
+    const val = await redisClient.get(flagKey);
+    if (!val) return false;
+    const parsed = JSON.parse(val) as { ts: number; slots: number };
+    // Signal valide si < 2 min
+    return Date.now() - parsed.ts < REDIS_BURST_FLAG_TTL_SEC * 1000;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Souscrit au canal BURST d'un portail et appelle le callback quand un signal arrive.
+ * Retourne une fonction de désinscription.
+ *
+ * IMPORTANT : Redis PUB/SUB nécessite une connexion dédiée (le subscriber ne peut pas
+ * faire d'autres commandes sur cette connexion). On crée un duplicata du client.
+ *
+ * @param portalUrl URL du portail
+ * @param onBurst   Callback appelé quand un BURST est reçu
+ * @returns         Fonction pour se désabonner et fermer la connexion subscriber
+ */
+export async function subscribeToBurst(
+  portalUrl: string,
+  onBurst: (slotsCount: number) => void,
+): Promise<(() => Promise<void>) | null> {
+  if (!redisReady || !redisClient) return null;
+
+  const key = portalUrlToKey(portalUrl);
+  const channel = `${REDIS_BURST_CHANNEL_PREFIX}${key}`;
+
+  try {
+    // Créer un client subscriber dédié (duplicate de la connexion existante)
+    const subscriber = redisClient.duplicate();
+    await subscriber.connect();
+
+    await subscriber.subscribe(channel, (message: string) => {
+      try {
+        const parsed = JSON.parse(message) as { ts: number; slots: number };
+        // Ignorer les signaux de plus de 2 min (périmés)
+        if (Date.now() - parsed.ts < REDIS_BURST_FLAG_TTL_SEC * 1000) {
+          onBurst(parsed.slots);
+        }
+      } catch { /* ignore malformed messages */ }
+    });
+
+    console.log(`[spain-redis] 📡 Subscribed to burst channel: ${channel}`);
+
+    // Retourner la fonction de désinscription
+    return async () => {
+      try {
+        await subscriber.unsubscribe(channel);
+        await subscriber.quit();
+      } catch { /* ignore */ }
+    };
+  } catch (err) {
+    console.warn(`[spain-redis] subscribeToBurst: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// P8 — SENTINEL STATE (rotation et rôle actif)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_SENTINEL_KEY = "spain:sentinel:active";
+const REDIS_SENTINEL_TTL_SEC = 30 * 60; // 30 min — durée fenêtre
+
+/**
+ * Enregistre un dossier comme sentinelle active pour un portail.
+ * NX = un seul dossier peut être sentinelle à la fois.
+ * Le TTL expire à la fin de la fenêtre → rotation automatique.
+ *
+ * @returns true si ce dossier est maintenant la sentinelle
+ */
+export async function claimSentinelRole(portalUrl: string, dossierId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // dégradé → tout le monde est sentinelle
+
+  const key = `${REDIS_SENTINEL_KEY}:${portalUrlToKey(portalUrl)}`;
+  try {
+    const result = await redisClient.set(key, dossierId, { NX: true, EX: REDIS_SENTINEL_TTL_SEC });
+    return result === "OK";
+  } catch {
+    return true; // dégradé
+  }
+}
+
+/**
+ * Vérifie si un dossier est la sentinelle active.
+ */
+export async function isSentinel(portalUrl: string, dossierId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // dégradé
+
+  const key = `${REDIS_SENTINEL_KEY}:${portalUrlToKey(portalUrl)}`;
+  try {
+    const val = await redisClient.get(key);
+    return val === dossierId || val === null; // null = pas de sentinelle → ce dossier peut l'être
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Libère le rôle de sentinelle (owner-check atomique).
+ */
+export async function releaseSentinelRole(portalUrl: string, dossierId: string): Promise<void> {
+  if (!redisReady || !redisClient) return;
+
+  const key = `${REDIS_SENTINEL_KEY}:${portalUrlToKey(portalUrl)}`;
+  const lua = `
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      return redis.call("DEL", KEYS[1])
+    end
+    return 0
+  `;
+  try {
+    await (redisClient as any).eval(lua, { keys: [key], arguments: [dossierId] });
+  } catch { /* non-fatal */ }
+}

@@ -46,7 +46,11 @@ import {
   isIpReservedByOther,
   releaseWorkerIp,
   publishSlotSnapshot,
+  publishBurstSignal,
+  checkBurstFlag,
+  subscribeToBurst,
 } from "./spain-slot-coordinator.js";
+import { buildSlotAssignment } from "./spain-slot-assignment.js";
 import {
   getDecodoProxyForIndex,
   getDecodoPoolSize,
@@ -135,6 +139,13 @@ export interface SpainDossierConfig {
   slotDateFrom?: string;
   slotDateDeadline?: string;
   groupSize?: number;
+  /**
+   * P8 — Rôle dans l'algorithme Meute :
+   *   - "sentinel" : scanne vite (5-10s), publie BURST dès détection, booke en premier
+   *   - "pack"     : attend le signal BURST (PUB/SUB + polling), puis fait son propre scan + booking
+   *   - undefined  : mode legacy (pas de coordination Meute)
+   */
+  meuteRole?: "sentinel" | "pack";
 }
 
 export interface WorkerResult {
@@ -158,8 +169,8 @@ const WORKER_WINDOW_MS = ((): number => {
  * Override : SPAIN_WINDOW_END_MIN
  */
 const WINDOW_END_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_END_MIN ?? "25");
-  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 25));
+  const v = Number(process.env.SPAIN_WINDOW_END_MIN ?? "20");
+  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 20));
 })();
 
 /** Intervalle de scan start-to-start (secondes → ms) */
@@ -784,6 +795,7 @@ export async function runDossierWorker(
   // Toute sortie de la fonction (return, throw, exception async) passe par le finally.
   // proxyUrl = "" → mode direct sans proxy → pas de réservation à libérer.
   let workerResult: WorkerResult = { dossierId: config.id, status: "error", errorMessage: "init" };
+  let unsubscribeBurst: (() => Promise<void>) | null = null;
   try {
 
   const capsolverKey =
@@ -940,6 +952,69 @@ export async function runDossierWorker(
     return workerResult;
   }
 
+  // ── P8 — Mode Meute : rôle sentinelle/meute ─────────────────────────────────
+  const meuteRole = config.meuteRole; // "sentinel" | "pack" | undefined (legacy)
+  const SENTINEL_SCAN_INTERVAL_MS = 5_000; // 5s pour la sentinelle
+  const effectiveScanInterval = meuteRole === "sentinel" ? SENTINEL_SCAN_INTERVAL_MS : SCAN_INTERVAL_MS;
+  let burstPublished = false; // La sentinelle ne publie qu'une fois par fenêtre
+
+  // ── P8 — Pack : attendre le signal BURST avant de scanner ──────────────────
+  // Le pack worker subscribe au canal Redis et attend un signal ou poll le flag.
+  // PAS de timeout fixe : le pack attend le BURST jusqu'à la fin de la fenêtre.
+  // Si la sentinelle ne trouve rien → le pack sort sans avoir scanné (économie de requêtes).
+  if (meuteRole === "pack") {
+    log("INFO", `${tag} 🐺 Mode MEUTE (pack) — attente signal BURST (jusqu'à fin fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")})…`);
+
+    // Vérifier d'abord le flag Redis (cas où le burst a été publié avant qu'on soit prêt)
+    const alreadyBurst = await checkBurstFlag(config.portalUrl);
+    if (alreadyBurst) {
+      log("INFO", `${tag} 🐺 BURST flag détecté en Redis — scan immédiat`);
+    } else {
+      // Attendre le PUB/SUB jusqu'à fin de fenêtre — pas de timeout artificiel.
+      // La sentinelle est la SEULE à scanner pendant ce temps.
+      // Si elle détecte → BURST → les packs se réveillent et font leur propre scan.
+      // Si elle ne détecte rien → les packs sortent à windowEnd sans avoir consommé de requêtes.
+      let burstReceived = false;
+
+      const burstPromise = new Promise<void>((resolve) => {
+        subscribeToBurst(config.portalUrl, (_slotsCount) => {
+          burstReceived = true;
+          resolve();
+        }).then((unsub) => {
+          unsubscribeBurst = unsub;
+        }).catch(() => {});
+      });
+
+      // Polling fallback toutes les 15s (au cas où PUB/SUB ne fonctionne pas)
+      const pollFallback = (async () => {
+        while (!burstReceived && Date.now() < windowEnd) {
+          await sleep(15_000);
+          if (burstReceived) return;
+          const flagged = await checkBurstFlag(config.portalUrl);
+          if (flagged) {
+            burstReceived = true;
+            return;
+          }
+        }
+      })();
+
+      const windowTimeout = sleep(Math.max(0, windowEnd - Date.now()));
+
+      await Promise.race([burstPromise, pollFallback, windowTimeout]);
+
+      if (burstReceived) {
+        log("INFO", `${tag} 🐺 BURST reçu — lancement scan + booking immédiat`);
+      } else {
+        // Fin de fenêtre sans BURST — la sentinelle n'a rien trouvé cette heure.
+        log("INFO", `${tag} 🐺 Fin de fenêtre sans BURST — aucun créneau cette heure, exit`);
+        workerResult = { dossierId: config.id, status: "exited" };
+        return workerResult;
+      }
+    }
+  } else if (meuteRole === "sentinel") {
+    log("INFO", `${tag} 🦅 Mode MEUTE (sentinelle) — scan intensif toutes les ${effectiveScanInterval / 1000}s`);
+  }
+
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
@@ -949,7 +1024,7 @@ export async function runDossierWorker(
       const winRemain = Math.round((windowEnd - Date.now()) / 60_000);
       log(
         "INFO",
-        `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | proxy: ${maskProxy(proxyUrl)}`,
+        `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | proxy: ${maskProxy(proxyUrl)}${meuteRole ? ` | rôle: ${meuteRole}` : ""}`,
       );
 
       const scan = await refreshSessionAndScan(session, config, tag);
@@ -957,6 +1032,13 @@ export async function runDossierWorker(
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
         emitDiscoveryEvents(scan.slots, scan.serviceId, scan.serviceName, config);
+
+        // ── P8 — Sentinelle : publier BURST dès la première détection ──────────
+        if (meuteRole === "sentinel" && !burstPublished) {
+          burstPublished = true;
+          log("INFO", `${tag} 🦅📡 BURST publié — ${scan.slots.length} créneau(x) détecté(s) → signal aux pack workers`);
+          publishBurstSignal(config.portalUrl, scan.slots.length).catch(() => {});
+        }
       }
 
       if (scan.status === "proxy_error") {
@@ -1084,7 +1166,7 @@ export async function runDossierWorker(
         void reportSpainWatcherScan({
           status: eligible.length > 0 ? "found" : "not_found",
           slotInfo: eligible.length > 0
-            ? `${eligible[0].date}${eligible[0].time ? ` à ${eligible[0].time}` : ""} (${eligible.length} place${eligible.length > 1 ? "s" : ""})`
+            ? buildSlotInfoSummary(eligible)
             : undefined,
           applicationId: config.applicationId,
           dossierName: config.applicantName,
@@ -1101,20 +1183,31 @@ export async function runDossierWorker(
             `${tag} Cycle ${cycleCount}: ${scan.slots.length} créneau(x) hors fenêtre — next`,
           );
         } else {
-          // Itérer tous les créneaux éligibles jusqu'à en obtenir un (parallélisme multi-dossier).
-          // Plusieurs workers sur le même agenda partagent le même claim Redis — si le premier
-          // créneau est déjà pris par un autre dossier, on essaie le suivant plutôt que d'attendre
-          // le prochain cycle.
-          //
-          // Ordre de priorité :
-          // - groupSize=1 : ordre ASC par date/heure (le plus tôt possible)
-          // - groupSize>1 : slots avec le plus de places en premier (maximise les chances de claim)
-          const sortedEligible = groupSize > 1
-            ? [...eligible].sort((a, b) => b.freeslots - a.freeslots || a.date.localeCompare(b.date))
-            : eligible; // déjà trié ASC par date/heure
+          // P4 — Algorithme de distribution intelligente à 3 niveaux.
+          // Chaque dossier reçoit un ordre de tentative personnalisé basé sur son hash,
+          // ce qui distribue naturellement les workers sur des créneaux différents.
+          // Le nombre total de dossiers actifs est estimé via le pool Decodo (1 worker = 1 IP).
+          const estimatedTotalDossiers = getDecodoPoolSize() || 10;
+          const sortedEligible = buildSlotAssignment(
+            config.id,
+            eligible.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
+            groupSize,
+            estimatedTotalDossiers,
+          ).map((assigned) => {
+            // Retrouver le WorkerSlot original correspondant
+            return eligible.find(
+              (e) => e.date === assigned.date && e.time === assigned.time && (e.agendaId ?? "") === assigned.agendaId,
+            )!;
+          }).filter(Boolean);
 
-          let claimedSlot: WorkerSlot | undefined;
+          // ── P1+P2+P5 : Boucle de booking avec cascade fallback ───────────────
+          // Le worker itère tous les candidats éligibles. Si un créneau est pris par
+          // un humain ("seleccionada") ou que summary/ échoue après retries, on libère
+          // le claim Redis et on passe au candidat suivant — pas de sortie du cycle.
+          let bookingSucceeded = false;
+
           for (const candidate of sortedEligible) {
+            // ── Redis atomic claim ───────────────────────────────────────────────
             const ok = await tryClaimSlot(
               candidate.date,
               candidate.time,
@@ -1123,47 +1216,29 @@ export async function runDossierWorker(
               groupSize,
               candidate.freeslots,
             );
-            if (ok) { claimedSlot = candidate; break; }
-            log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà pris, prochain créneau…`);
-          }
+            if (!ok) {
+              log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà pris (Redis), prochain créneau…`);
+              continue;
+            }
 
-          if (!claimedSlot) {
-            log(
-              "INFO",
-              `${tag} Cycle ${cycleCount}: tous les créneaux éligibles (${eligible.length}) déjà pris → next`,
-            );
-          } else {
-            const slot = claimedSlot;
+            const slot = candidate;
             log(
               "INFO",
               `${tag} Cycle ${cycleCount}: ✅ Créneau ${slot.date} ${slot.time} (freeSlots=${slot.freeslots}) — booking en cours…`,
             );
 
-            // ── Booking inline — même session, même PHPSESSID que le scan ────────────
-            // Source de vérité : test-bookitit-dynamic.ts section 5.
-            // getsigninfields/ amorce le nonce PHP → signin/ le consomme → summary/ confirme.
-            // PAS de nouvelle session isolée : le nonce est lié au PHPSESSID du scan.
+            // ── Booking inline — même session, même PHPSESSID que le scan ────────
             const bookT0 = Date.now();
-
-            // ── getsigninfields/ → signin/ → summary/ sur le MÊME PHPSESSID ────────
-            // Source de vérité : test-bookitit-dynamic.ts section 5.
-            // Pas de refresh, pas de re-init : le PHPSESSID qui a fait datetime/ est
-            // déjà dans le bon état PHP pour getsigninfields/.
-            // IMPORTANT : utiliser scan.ds (jar du cycle courant créé par refreshSessionAndScan)
-            // et NON phpState!.ds (jar de l'initPhpState initial = vieux PHPSESSID).
             const ds = scan.ds ?? phpState!.ds;
             const bookExtra: Record<string, string> = {
               "services[]": scan.serviceId!,
               date:          slot.date,
               time:          slot.time,
-              // selectedPeople est TOUJOURS "1" pour Bookitit — chaque booking = 1 personne.
-              // groupSize est notre concept interne (Redis claim) : on réserve N places sur le
-              // même créneau mais on booke N fois séparément, pas une fois avec selectedPeople=N.
               selectedPeople: "1",
             };
             if (slot.agendaId) bookExtra["agendas[]"] = slot.agendaId;
 
-            // Email admin : tentative de booking (fire-and-forget — ne bloque pas)
+            // Email admin : tentative de booking (fire-and-forget)
             reportBookingLog({
               applicationId: config.applicationId,
               dossierId: config.id,
@@ -1174,24 +1249,33 @@ export async function runDossierWorker(
               serviceName: scan.serviceName,
             }).catch(() => {});
 
-            // getsigninfields/ — amorce le nonce PHP + retourne les champs custom du formulaire
-            // Paramètres : services[] + agendas[] + date + time (confirmé test-bookitit-dynamic.ts)
+            // ── P5 : getsigninfields/ avec retry si null ─────────────────────────
             const gsfPhpsessid = Object.entries(ds.jar).find(([k]) => k === "PHPSESSID")?.[1]?.slice(0, 8) ?? "?";
             log("INFO", `${tag} 🔑 getsigninfields/ — ds.PHPSESSID=${gsfPhpsessid}… src=${ds.widgetUrl.slice(-40)}`);
-            const gsfPayload = await callDirect(ds, "getsigninfields/", {
+            let gsfPayload = await callDirect(ds, "getsigninfields/", {
               "services[]": bookExtra["services[]"],
               "agendas[]":  bookExtra["agendas[]"] ?? "",
               date:         bookExtra.date,
               time:         bookExtra.time,
               selectedPeople: bookExtra.selectedPeople,
-            }) as any;
+            }, tag) as any;
+            // P5 — Si gsfPayload null (0B sous charge), retry 1× après 2s
+            if (gsfPayload === null) {
+              log("INFO", `${tag} 🔑 getsigninfields/ → 0B — retry P5 (2s)…`);
+              await sleep(2_000);
+              gsfPayload = await callDirect(ds, "getsigninfields/", {
+                "services[]": bookExtra["services[]"],
+                "agendas[]":  bookExtra["agendas[]"] ?? "",
+                date:         bookExtra.date,
+                time:         bookExtra.time,
+                selectedPeople: bookExtra.selectedPeople,
+              }, tag) as any;
+            }
             const gsfBytes = gsfPayload ? JSON.stringify(gsfPayload).length : 0;
             log("INFO", `${tag} 🔑 getsigninfields/ → ${gsfBytes}B${gsfPayload ? " ✅" : " ❌ 0B"}`);
-            // logintype : "document" pour citaconsular.es/Kinshasa (confirmé capture 2026-07-28)
-            // getsigninfields/ retourne CustomFields (champs formulaire) — pas de logintype
             const logintype = "document";
 
-            // signin/ — retry 3× si 0B sous charge serveur
+            // ── signin/ — retry 3× si 0B sous charge serveur ─────────────────────
             log("INFO", `${tag} 🔑 signin/…`);
             let signinPayload: Record<string, unknown> | null = null;
             for (let signinAttempt = 0; signinAttempt < 3; signinAttempt++) {
@@ -1208,19 +1292,15 @@ export async function runDossierWorker(
                 comments:  "",
               });
               if (raw === null) {
-                // 0B légitime ou erreur HTTP — si premier essai on retry, sinon on abandonne
                 if (signinAttempt < 2) continue;
                 break;
               }
-              // Erreur réseau (proxy cassé) — pas la peine de retry
               if (raw === CALL_DIRECT_NETWORK_ERROR) break;
               signinPayload = raw as Record<string, unknown>;
               break;
             }
 
             const signinInner = (signinPayload as any)?.Client ?? signinPayload;
-            // bktToken peut être dans Access.bktToken (portail app.bookitit.com)
-            // ou dans Client.bktToken (portail citaconsular.es) selon la version Bookitit
             const bktToken = String(
               (signinPayload as any)?.Access?.bktToken ??
               signinInner?.bktToken ??
@@ -1238,16 +1318,15 @@ export async function runDossierWorker(
               log("WARN", `${tag} ❌ signin/ échoué: ${errMsg}`);
               bookResult = { status: "signin_failed", errorMessage: errMsg, durationMs: Date.now() - bookT0 };
             } else {
-              // summary/ — confirmation finale
+              // ── P2 : summary/ avec retry 2× sur 504/null ───────────────────────
               log("INFO", `${tag} 📝 summary/ (bktToken: ${bktToken.slice(0, 15)}…)…`);
-              // summary/ : mêmes params que signin/ SAUF selectedPeople (absent du curl capturé)
               const summaryExtra: Record<string, string> = {
                 "services[]": scan.serviceId!,
                 date:          slot.date,
                 time:          slot.time,
               };
               if (slot.agendaId) summaryExtra["agendas[]"] = slot.agendaId;
-              const summaryPayload = await callDirect(ds, "summary/", {
+              const summaryParams = {
                 ...summaryExtra,
                 bktToken,
                 login:          config.login,
@@ -1256,48 +1335,71 @@ export async function runDossierWorker(
                 comments:       "",
                 client_signin:  "true",
                 event_created:  "true",
-              }) as any;
+              };
 
-              // Extraire locator depuis la réponse summary/
-              // Structure réelle: { Event: [{ Event: { locator, date, time... }, Client: {...} }], Access: {...} }
-              const eventList: any[] = Array.isArray(summaryPayload?.Event) ? summaryPayload.Event
-                : Array.isArray(summaryPayload) ? summaryPayload
-                : summaryPayload?.Event ? [summaryPayload.Event]
-                : [];
-              const firstEvent = eventList[0];
-              const locator: string =
-                firstEvent?.Event?.locator ??     // { Event: [{ Event: { locator } }] }
-                firstEvent?.locator ??             // { Event: [{ locator }] }
-                firstEvent?.Appointment?.locator ?? // variante Appointment
-                summaryPayload?.Event?.locator ??  // { Event: { locator } } (old structure)
-                summaryPayload?.locator ?? "";
+              let summaryPayload: any = null;
+              const SUMMARY_MAX_RETRIES = 2;
+              for (let summaryAttempt = 0; summaryAttempt <= SUMMARY_MAX_RETRIES; summaryAttempt++) {
+                if (summaryAttempt > 0) {
+                  const backoff = 3_000 * summaryAttempt; // 3s, 6s
+                  log("INFO", `${tag} 📝 summary/ retry ${summaryAttempt}/${SUMMARY_MAX_RETRIES} (${backoff}ms)…`);
+                  await sleep(backoff);
+                }
+                const raw = await callDirect(ds, "summary/", summaryParams);
+                if (raw === CALL_DIRECT_NETWORK_ERROR) {
+                  // Proxy cassé — pas la peine de retry summary/
+                  break;
+                }
+                if (raw !== null) {
+                  summaryPayload = raw;
+                  break;
+                }
+                // raw === null (HTTP 504/0B) → retry si tentatives restantes
+              }
 
-              if (locator) {
-                bookResult = {
-                  status:           "booked",
-                  locator,
-                  bookedDate:       slot.date,
-                  bookedTime:       slot.time,
-                  bookedServiceName: scan.serviceName,
-                  durationMs:       Date.now() - bookT0,
-                };
+              if (summaryPayload === null) {
+                bookResult = { status: "booking_failed", errorMessage: "summary/ → null après retries", durationMs: Date.now() - bookT0 };
               } else {
-                // Kinshasa ne retourne pas de locator — vérifier state=1 + date comme confirmation
-                const eventState = firstEvent?.Event?.state ?? firstEvent?.state ?? "";
-                const eventDate  = firstEvent?.Event?.date  ?? firstEvent?.date  ?? "";
-                if (String(eventState) === "1" && eventDate) {
-                  log("INFO", `${tag} ✅ Booking confirmé (state=1, date=${eventDate}) — locator absent (comportement Kinshasa)`);
+                // Extraire locator depuis la réponse summary/
+                const eventList: any[] = Array.isArray(summaryPayload?.Event) ? summaryPayload.Event
+                  : Array.isArray(summaryPayload) ? summaryPayload
+                  : summaryPayload?.Event ? [summaryPayload.Event]
+                  : [];
+                const firstEvent = eventList[0];
+                const locator: string =
+                  firstEvent?.Event?.locator ??
+                  firstEvent?.locator ??
+                  firstEvent?.Appointment?.locator ??
+                  summaryPayload?.Event?.locator ??
+                  summaryPayload?.locator ?? "";
+
+                if (locator) {
                   bookResult = {
                     status:           "booked",
-                    locator:          `state1-${eventDate}`,  // locator synthétique pour le reporting
-                    bookedDate:       eventDate,
-                    bookedTime:       firstEvent?.Event?.time ?? firstEvent?.time ?? slot.time,
+                    locator,
+                    bookedDate:       slot.date,
+                    bookedTime:       slot.time,
                     bookedServiceName: scan.serviceName,
                     durationMs:       Date.now() - bookT0,
                   };
                 } else {
-                  const summaryErr = JSON.stringify(summaryPayload?.Exception?.errors ?? summaryPayload?.errors ?? summaryPayload).slice(0, 200);
-                  bookResult = { status: "booking_failed", errorMessage: `summary/ sans locator: ${summaryErr}`, durationMs: Date.now() - bookT0 };
+                  // Kinshasa : state=1 + date = confirmation sans locator
+                  const eventState = firstEvent?.Event?.state ?? firstEvent?.state ?? "";
+                  const eventDate  = firstEvent?.Event?.date  ?? firstEvent?.date  ?? "";
+                  if (String(eventState) === "1" && eventDate) {
+                    log("INFO", `${tag} ✅ Booking confirmé (state=1, date=${eventDate}) — locator absent (comportement Kinshasa)`);
+                    bookResult = {
+                      status:           "booked",
+                      locator:          `state1-${eventDate}`,
+                      bookedDate:       eventDate,
+                      bookedTime:       firstEvent?.Event?.time ?? firstEvent?.time ?? slot.time,
+                      bookedServiceName: scan.serviceName,
+                      durationMs:       Date.now() - bookT0,
+                    };
+                  } else {
+                    const summaryErr = JSON.stringify(summaryPayload?.Exception?.errors ?? summaryPayload?.errors ?? summaryPayload).slice(0, 200);
+                    bookResult = { status: "booking_failed", errorMessage: `summary/ sans locator: ${summaryErr}`, durationMs: Date.now() - bookT0 };
+                  }
                 }
               }
             }
@@ -1327,12 +1429,10 @@ export async function runDossierWorker(
               return workerResult;
             }
 
-            // Booking échoué → libérer le claim de créneau de CE dossier immédiatement.
+            // Booking échoué → libérer le claim Redis de CE dossier immédiatement.
             releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
 
             // ── Erreur credentials permanente → sortie immédiate ──────────────────
-            // "Usuario o contraseña incorrectos" ne changera pas au prochain cycle.
-            // Inutile de boucler 20 min — on sort et on remonte l'erreur.
             const isCredentialError = bookResult.status === "signin_failed"
               && (bookResult.errorMessage ?? "").toLowerCase().includes("incorrect");
             if (isCredentialError) {
@@ -1341,7 +1441,21 @@ export async function runDossierWorker(
               return workerResult;
             }
 
-            // Email admin : booking échoué avec raison (fire-and-forget)
+            // ── P1 : "seleccionada por otra persona" → continuer au créneau suivant ──
+            // Le serveur dit que ce créneau est pris par un humain/autre agent.
+            // On ne quitte pas le cycle : on tente immédiatement le prochain candidat.
+            const errLower = (bookResult.errorMessage ?? "").toLowerCase();
+            const isSlotTakenByOther = errLower.includes("seleccionada por otra persona")
+              || errLower.includes("elegida")
+              || errLower.includes("ya no está disponible")
+              || errLower.includes("no disponible");
+            if (isSlotTakenByOther) {
+              log("INFO", `${tag} ⏭️ P1: Créneau ${slot.date} ${slot.time} pris par un humain — fallback au prochain candidat`);
+              await sleep(300); // micro-délai pour ne pas spammer
+              continue; // → prochain candidat dans sortedEligible
+            }
+
+            // Booking échoué (autre raison) → reporter puis passer au créneau suivant
             reportBookingLog({
               applicationId: config.applicationId,
               dossierId: config.id,
@@ -1353,16 +1467,21 @@ export async function runDossierWorker(
               serviceName: scan.serviceName,
             }).catch(() => {});
 
-            // Délai 800ms post-booking : impit a besoin de temps pour se stabiliser
-            // après getsigninfields/+signin/ — sans ce délai, le prochain datetime/
-            // retourne 0B sur le premier mois (comportement observé avec 3 workers).
-            await sleep(800);
-
             sendHeartbeat({
               applicationId: config.applicationId,
               result: "error",
               errorMessage: `Booking ${bookResult.status}: ${bookResult.errorMessage}`,
             }).catch(() => {});
+
+            // Délai 800ms post-booking pour stabiliser impit
+            await sleep(800);
+          } // fin boucle for (const candidate of sortedEligible)
+
+          if (!bookingSucceeded) {
+            log(
+              "INFO",
+              `${tag} Cycle ${cycleCount}: tous les créneaux éligibles (${sortedEligible.length}) épuisés — next cycle`,
+            );
           }
         }
       }
@@ -1378,7 +1497,7 @@ export async function runDossierWorker(
 
     // Attendre jusqu'au prochain cycle (start-to-start)
     const elapsed = Date.now() - cycleStart;
-    const wait = Math.max(0, SCAN_INTERVAL_MS - elapsed);
+    const wait = Math.max(0, effectiveScanInterval - elapsed);
     if (Date.now() + wait < windowEnd) {
       await sleep(wait);
     }
@@ -1392,6 +1511,10 @@ export async function runDossierWorker(
   return workerResult;
 
   } finally {
+    // P8 — Cleanup burst subscriber si pack worker
+    if (unsubscribeBurst) {
+      unsubscribeBurst().catch(() => {});
+    }
     // Libération garantie de l'IP, quelle que soit la sortie (return, throw, exception).
     // Owner-check Lua : seul ce dossier peut supprimer sa réservation.
     // proxyUrl = "" → mode direct, pas de réservation Redis à libérer.
@@ -1976,6 +2099,60 @@ function extractFirstAgendaId(payload: unknown): string {
     return "";
   };
   return walk(payload);
+}
+
+// ─── P6 : SlotInfo enrichi pour l'email admin ──────────────────────────────────
+
+/**
+ * Construit un résumé complet des créneaux éligibles pour l'email admin.
+ * Format : "23 sept (08:30-12:30, 9 crén., 12 places), 24 sept (6 crén., 9 places)"
+ * Montre TOUTES les dates avec plage horaire + nombre de créneaux + total places.
+ */
+function buildSlotInfoSummary(eligible: WorkerSlot[]): string {
+  if (eligible.length === 0) return "";
+
+  // Grouper par date
+  const byDate = new Map<string, { times: string[]; totalFree: number }>();
+  for (const s of eligible) {
+    const entry = byDate.get(s.date);
+    if (entry) {
+      if (s.time && !entry.times.includes(s.time)) entry.times.push(s.time);
+      entry.totalFree += s.freeslots;
+    } else {
+      byDate.set(s.date, { times: s.time ? [s.time] : [], totalFree: s.freeslots });
+    }
+  }
+
+  // Formater chaque date
+  const parts: string[] = [];
+  const sortedDates = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+  for (const [dateStr, { times, totalFree }] of sortedDates) {
+    // Formater la date en "23 sept" ou "3 oct"
+    const d = new Date(dateStr);
+    const months = ["janv", "fév", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"];
+    const dateFmt = !isNaN(d.getTime())
+      ? `${d.getDate()} ${months[d.getMonth()]}`
+      : dateStr;
+
+    times.sort();
+    const timeRange = times.length > 1
+      ? `${times[0]}-${times[times.length - 1]}`
+      : times.length === 1 ? times[0] : "";
+
+    const countStr = `${times.length} crén.`;
+    const freeStr = `${totalFree} place${totalFree > 1 ? "s" : ""}`;
+    const detail = [timeRange, countStr, freeStr].filter(Boolean).join(", ");
+    parts.push(`${dateFmt} (${detail})`);
+  }
+
+  // Si trop de dates, tronquer avec "…"
+  if (parts.length > 5) {
+    const totalSlots = eligible.length;
+    const totalFree = eligible.reduce((sum, s) => sum + s.freeslots, 0);
+    return `${parts.slice(0, 4).join(", ")}… +${parts.length - 4} dates (${totalSlots} crén., ${totalFree} places total)`;
+  }
+  return parts.join(", ");
 }
 
 // ─── Fenêtre de dates ─────────────────────────────────────────────────────────

@@ -164,6 +164,13 @@ export function parseDirectJsonp(raw: string): unknown | null {
  *  infinis tout en laissant le temps au serveur de répondre sous forte charge). */
 const CALL_DIRECT_TIMEOUT_MS = 120_000;
 
+/** Codes HTTP retryables (erreurs serveur sous charge) */
+const RETRYABLE_HTTP_CODES = new Set([502, 503, 504]);
+/** Nombre de retries sur 502/503/504 */
+const CALL_DIRECT_MAX_RETRIES = 2;
+/** Backoff exponentiel : 2s, 4s */
+const CALL_DIRECT_RETRY_BASE_MS = 2_000;
+
 export async function callDirect(
   ds: DynamicSession,
   endpoint: string,
@@ -174,23 +181,34 @@ export async function callDirect(
   const headers = makeDirectHeaders(ds);
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
-    const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
-    clearTimeout(timeout);
-    if (!res.ok) {
-      console.warn(`${prefix} ${endpoint} → HTTP ${res.status}`);
-      return null;
+  for (let attempt = 0; attempt <= CALL_DIRECT_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
+      const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
+      clearTimeout(timeout);
+      if (!res.ok) {
+        // P3 — Retry sur 502/503/504 (serveur surchargé sous publication)
+        if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < CALL_DIRECT_MAX_RETRIES) {
+          const backoff = CALL_DIRECT_RETRY_BASE_MS * (2 ** attempt);
+          console.warn(`${prefix} ${endpoint} → HTTP ${res.status} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        console.warn(`${prefix} ${endpoint} → HTTP ${res.status}`);
+        return null;
+      }
+      const body = await res.text();
+      return parseDirectJsonp(body);
+    } catch (e) {
+      console.warn(`${prefix} ${endpoint} → erreur réseau: ${e}`);
+      // Distinguer l'erreur réseau d'une réponse vide légitime : retourner le symbole
+      // CALL_DIRECT_NETWORK_ERROR pour que l'appelant puisse détecter un proxy cassé.
+      return CALL_DIRECT_NETWORK_ERROR;
     }
-    const body = await res.text();
-    return parseDirectJsonp(body);
-  } catch (e) {
-    console.warn(`${prefix} ${endpoint} → erreur réseau: ${e}`);
-    // Distinguer l'erreur réseau d'une réponse vide légitime : retourner le symbole
-    // CALL_DIRECT_NETWORK_ERROR pour que l'appelant puisse détecter un proxy cassé.
-    return CALL_DIRECT_NETWORK_ERROR;
   }
+  // Épuisement des retries (ne devrait jamais arriver grâce au return dans la boucle)
+  return null;
 }
 
 /**
