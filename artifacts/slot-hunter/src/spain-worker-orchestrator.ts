@@ -247,13 +247,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
 
         // Guard fenêtre horaire : ne lancer un worker que si on est dans la fenêtre
         // de publication des créneaux [HH:WINDOW_START_MIN … HH:WINDOW_START_MIN+WINDOW_DURATION_MIN[
-        // P8 : La sentinelle peut démarrer 1 min en avance (WINDOW_START_MIN - 1) pour
-        // avoir sa session PHP prête quand la fenêtre réelle commence.
-        const isMeuteEnabled = process.env.SPAIN_MEUTE_ENABLED !== "0";
-        const couldBeSentinel = isMeuteEnabled && dossiers.length > 1 && !workers.has(config.id);
-        const sentinelEarlyStart = couldBeSentinel ? isInSentinelEarlyWindow() : false;
-
-        if (!isInScanWindow() && !sentinelEarlyStart) {
+        if (!isInScanWindow()) {
           const waitMs = msUntilNextWindowStart();
           const nextWakeMin = String(WINDOW_START_MIN).padStart(2, "0");
           log(
@@ -277,6 +271,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         // Tous les autres deviennent "pack" et attendent le signal BURST.
         // Rotation naturelle : le TTL du claim (30 min = durée fenêtre) expire → le
         // premier dossier à démarrer la fenêtre suivante sera la nouvelle sentinelle.
+        const isMeuteEnabled = process.env.SPAIN_MEUTE_ENABLED !== "0";
         let meuteRole: "sentinel" | "pack" | undefined;
         if (isMeuteEnabled && dossiers.length > 1) {
           const claimed = await claimSentinelRole(config.portalUrl, config.id);
@@ -561,18 +556,6 @@ function isInScanWindow(): boolean {
   const now = new Date();
   const minInHour = now.getMinutes() + now.getSeconds() / 60;
   return minInHour >= WINDOW_START_MIN && minInHour < WINDOW_START_MIN + WINDOW_DURATION_MIN;
-}
-
-/**
- * P8 — Retourne true si on est dans la fenêtre d'avance sentinelle :
- * [WINDOW_START_MIN - 1, WINDOW_START_MIN[
- * La sentinelle démarre 1 min avant les packs pour avoir sa session PHP prête.
- */
-function isInSentinelEarlyWindow(): boolean {
-  const now = new Date();
-  const minInHour = now.getMinutes() + now.getSeconds() / 60;
-  const earlyStart = Math.max(0, WINDOW_START_MIN - 1);
-  return minInHour >= earlyStart && minInHour < WINDOW_START_MIN;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
