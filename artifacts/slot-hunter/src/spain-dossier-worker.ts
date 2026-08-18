@@ -962,6 +962,10 @@ export async function runDossierWorker(
   // Le pack worker subscribe au canal Redis et attend un signal ou poll le flag.
   // PAS de timeout fixe : le pack attend le BURST jusqu'à la fin de la fenêtre.
   // Si la sentinelle ne trouve rien → le pack sort sans avoir scanné (économie de requêtes).
+  //
+  // WARM-UP : Toutes les 2 min, un GET léger sur le portail pour valider le cf_clearance.
+  // Si 403 → re-solve CF immédiatement (pendant l'attente, pas après le BURST).
+  // Ainsi quand le BURST arrive, la session est garantie chaude.
   if (meuteRole === "pack") {
     log("INFO", `${tag} 🐺 Mode MEUTE (pack) — attente signal BURST (jusqu'à fin fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")})…`);
 
@@ -970,10 +974,6 @@ export async function runDossierWorker(
     if (alreadyBurst) {
       log("INFO", `${tag} 🐺 BURST flag détecté en Redis — scan immédiat`);
     } else {
-      // Attendre le PUB/SUB jusqu'à fin de fenêtre — pas de timeout artificiel.
-      // La sentinelle est la SEULE à scanner pendant ce temps.
-      // Si elle détecte → BURST → les packs se réveillent et font leur propre scan.
-      // Si elle ne détecte rien → les packs sortent à windowEnd sans avoir consommé de requêtes.
       let burstReceived = false;
 
       const burstPromise = new Promise<void>((resolve) => {
@@ -985,22 +985,61 @@ export async function runDossierWorker(
         }).catch(() => {});
       });
 
-      // Polling fallback toutes les 15s (au cas où PUB/SUB ne fonctionne pas)
-      const pollFallback = (async () => {
+      // ── Warm-up périodique : garder la session CF à chaud ──────────────────
+      // Un GET portail toutes les 2 min pour vérifier le cf_clearance.
+      // Si 403 → re-solve CapSolver immédiatement (pendant l'attente).
+      const PACK_WARMUP_INTERVAL_MS = 120_000; // 2 min
+      const warmupLoop = (async () => {
+        const portalUrlNoFrag = config.portalUrl.split("#")[0];
         while (!burstReceived && Date.now() < windowEnd) {
-          await sleep(15_000);
+          await sleep(PACK_WARMUP_INTERVAL_MS);
           if (burstReceived) return;
+
+          // Check burst flag (polling fallback si PUB/SUB manqué)
           const flagged = await checkBurstFlag(config.portalUrl);
-          if (flagged) {
-            burstReceived = true;
-            return;
+          if (flagged) { burstReceived = true; return; }
+
+          // Warm-up : GET portail avec cf_clearance
+          try {
+            const impit = session._ownImpit;
+            if (!impit) continue;
+            const jar: Record<string, string> = {};
+            for (const c of session.allCookies) jar[c.name] = c.value;
+            if (session.cfClearance) jar.cf_clearance = session.cfClearance;
+            const cookieStr = Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+
+            const r = await (impit.fetch(portalUrlNoFrag, {
+              headers: { "User-Agent": session.userAgent, "Cookie": cookieStr },
+            } as any) as unknown as Promise<Response>);
+
+            const body = await r.text();
+            const isCf = r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000));
+
+            if (isCf) {
+              // CF expiré → re-solve immédiatement pendant l'attente
+              log("WARN", `${tag} 🐺🔄 Warm-up 403 → re-solve CF pendant attente BURST`);
+              const capKey = process.env.CAPSOLVER_API_KEY ?? process.env.NONECAP_API_KEY ?? "";
+              if (capKey) {
+                const freshResult = await initWorkerSession(proxyUrl, portalUrlNoFrag, capKey);
+                if (freshResult) {
+                  session = freshResult.session;
+                  log("INFO", `${tag} 🐺✅ CF re-résolu — session chaude`);
+                } else {
+                  log("WARN", `${tag} 🐺❌ Re-solve CF échoué — sera retryé au prochain warm-up`);
+                }
+              }
+            } else {
+              log("INFO", `${tag} 🐺🏓 Warm-up OK (HTTP ${r.status}, ${body.length}B) — session chaude`);
+            }
+          } catch (e) {
+            log("WARN", `${tag} 🐺 Warm-up erreur: ${e instanceof Error ? e.message : e}`);
           }
         }
       })();
 
       const windowTimeout = sleep(Math.max(0, windowEnd - Date.now()));
 
-      await Promise.race([burstPromise, pollFallback, windowTimeout]);
+      await Promise.race([burstPromise, warmupLoop, windowTimeout]);
 
       if (burstReceived) {
         log("INFO", `${tag} 🐺 BURST reçu — lancement scan + booking immédiat`);
