@@ -77,8 +77,8 @@ const LOCK_RENEWAL_MS = 30_000;
  * Override via env : SPAIN_WINDOW_START_MIN (0-59)
  */
 const WINDOW_START_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "10");
-  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 10));
+  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "5");
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 5));
 })();
 
 /**
@@ -88,8 +88,8 @@ const WINDOW_START_MIN = ((): number => {
  * Override via env : SPAIN_WINDOW_DURATION_MIN
  */
 const WINDOW_DURATION_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "10");
-  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 10);
+  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "15");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 15);
 })();
 
 // ─── État interne ─────────────────────────────────────────────────────────────
