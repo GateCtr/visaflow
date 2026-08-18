@@ -1282,8 +1282,23 @@ export async function runDossierWorker(
                   durationMs:       Date.now() - bookT0,
                 };
               } else {
-                const summaryErr = JSON.stringify(summaryPayload?.Exception?.errors ?? summaryPayload?.errors ?? summaryPayload).slice(0, 200);
-                bookResult = { status: "booking_failed", errorMessage: `summary/ sans locator: ${summaryErr}`, durationMs: Date.now() - bookT0 };
+                // Kinshasa ne retourne pas de locator — vérifier state=1 + date comme confirmation
+                const eventState = firstEvent?.Event?.state ?? firstEvent?.state ?? "";
+                const eventDate  = firstEvent?.Event?.date  ?? firstEvent?.date  ?? "";
+                if (String(eventState) === "1" && eventDate) {
+                  log("INFO", `${tag} ✅ Booking confirmé (state=1, date=${eventDate}) — locator absent (comportement Kinshasa)`);
+                  bookResult = {
+                    status:           "booked",
+                    locator:          `state1-${eventDate}`,  // locator synthétique pour le reporting
+                    bookedDate:       eventDate,
+                    bookedTime:       firstEvent?.Event?.time ?? firstEvent?.time ?? slot.time,
+                    bookedServiceName: scan.serviceName,
+                    durationMs:       Date.now() - bookT0,
+                  };
+                } else {
+                  const summaryErr = JSON.stringify(summaryPayload?.Exception?.errors ?? summaryPayload?.errors ?? summaryPayload).slice(0, 200);
+                  bookResult = { status: "booking_failed", errorMessage: `summary/ sans locator: ${summaryErr}`, durationMs: Date.now() - bookT0 };
+                }
               }
             }
 
