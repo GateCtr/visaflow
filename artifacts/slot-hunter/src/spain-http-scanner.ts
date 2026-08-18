@@ -1,5 +1,5 @@
 /**
- * spain-http-scanner.ts — Scanner HTTP Espagne avec session navigateur préalable
+ * spain-http-scanner.ts — Scanner HTTP Espagne avec session navigateur préalable code mort
  *
  * ARCHITECTURE :
  *   1. Obtient une session Cloudflare via Playwright par défaut
