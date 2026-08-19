@@ -77,6 +77,9 @@ export interface HunterJob {
     nightModeEnabled?: boolean;
     // CEV Dossier Loop v3
     cevDossierPool?: string;
+    cevDossierExclude?: string;
+    cevBookingTargetPool?: string;
+    cevCompletedDossiers?: string;
     cevUseProxy?: boolean;
     cevScanIntervalSec?: number;
     // Group booking — min places libres requises par créneau
@@ -185,6 +188,7 @@ export async function reportSlotFound(payload: {
   location: string;
   confirmationCode?: string;
   screenshotStorageId?: string;
+  bookedDossierRef?: string;
 }): Promise<void> {
   const url = `${CONVEX_SITE_URL}/hunter/slot-found`;
   const res = await fetchWithRetry(url, {

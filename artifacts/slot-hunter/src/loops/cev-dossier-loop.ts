@@ -1411,6 +1411,7 @@ async function handleSlotFound(
           time: httpResult.bookedTime ?? "",
           location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
           confirmationCode: httpResult.confirmationCode,
+          bookedDossierRef: dossier.vowintRef,
         });
         _bookingSucceeded = true;
         _bookedDate = httpResult.bookedDate;
@@ -1459,6 +1460,7 @@ async function handleSlotFound(
         time: httpResult.bookedTime ?? "",
         location: `CEV Belgique (Dossier ${dossier.vowintRef})`,
         confirmationCode: httpResult.confirmationCode,
+        bookedDossierRef: dossier.vowintRef,
       });
       _bookingSucceeded = true;
       _bookedDate = httpResult.bookedDate;
@@ -1753,6 +1755,7 @@ async function handleSlotFoundMulti(
           time: detectingBookingResult.bookedTime ?? "",
           location: `CEV Belgique (${detectingDossier.vowintRef})`,
           confirmationCode: detectingBookingResult.confirmationCode,
+          bookedDossierRef: detectingDossier.vowintRef,
         });
         botLog({ applicationId, step: "cev_multi_booking_success", status: "ok", data: { vowintRef: detectingDossier.vowintRef, confirmationCode: detectingBookingResult.confirmationCode, strategy: "immediate" } });
       } else {
@@ -1825,6 +1828,7 @@ async function handleSlotFoundMulti(
           location: `CEV Belgique (${r.vowintRef})`,
           confirmationCode: r.confirmationCode,
           screenshotStorageId: r.screenshotStorageId,
+          bookedDossierRef: r.vowintRef,
         });
         botLog({ applicationId, step: "cev_multi_booking_success", status: "ok", data: { vowintRef: r.vowintRef, confirmationCode: r.confirmationCode, strategy: "parallel" } });
       } else {
@@ -2026,10 +2030,20 @@ async function runAccountLoop(job: any): Promise<void> {
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
     savedScanCount = savedPoolState.scanCount || 0;
-    // Les pausedDossiers ne sont PAS restaurés depuis Redis — état runtime transitoire uniquement.
-    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}, paused=0 (pauses non restaurées)`);
+    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}`);
   } else {
     logger.info( "Pas de pool state en Redis — démarrage frais");
+  }
+
+  // ─── Restaurer les dossiers déjà bookés (cevCompletedDossiers) depuis Convex ──
+  // Survit aux redémarrages : un dossier booké ne sera JAMAIS re-scanné.
+  const completedStr: string = hunterConfig.cevCompletedDossiers ?? "";
+  if (completedStr.trim()) {
+    const completedRefs = completedStr.split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
+    for (const ref of completedRefs) {
+      pausedDossiers.add(ref);
+    }
+    logger.info(`  ✅ ${completedRefs.length} dossier(s) déjà booké(s) restauré(s) en pause: [${completedRefs.join(", ")}]`);
   }
 
   const soaxBaseUrl = process.env.SOAX_PROXY_URL;
@@ -2327,6 +2341,25 @@ async function runAccountLoop(job: any): Promise<void> {
             resetCevImpitInstances();
             proxyExitIp = null;
             logger.info(`  • Proxy désactivé — connexion directe`);
+          }
+        }
+      }
+
+      // ─── Refresh dossiers complétés depuis Convex (survit aux redémarrages) ───
+      if (state.scanCount % 5 === 0) {
+        const latestJobForCompleted = await getActiveJobs().then(
+          jobs => jobs.find((j: any) => j.id === accountId),
+        ).catch(() => null);
+        if (latestJobForCompleted) {
+          const freshCompleted: string = latestJobForCompleted.hunterConfig?.cevCompletedDossiers ?? "";
+          if (freshCompleted.trim()) {
+            const completedRefs = freshCompleted.split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
+            for (const ref of completedRefs) {
+              if (!pausedDossiers.has(ref)) {
+                pausedDossiers.add(ref);
+                logger.info(`  ✅ Dossier ${ref} marqué booké (via Convex refresh) — mis en pause`);
+              }
+            }
           }
         }
       }

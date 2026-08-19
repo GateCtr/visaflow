@@ -126,6 +126,11 @@ const hunterConfig = v.object({
   // Annulation automatique du RDV existant quand la limite Overview est atteinte (Cas 2)
   // Quand true : détecte overviewState='limit_reached' → extrait le lien Annuler → suit le flow d'annulation
   cevAutoCancelOnLimitReached: v.optional(v.boolean()),
+  // ── Multi-dossier : suivi des dossiers bookés ──────────────────────────────
+  // CSV des VOWINT refs qui ont déjà obtenu un booking sur ce compte.
+  // Le bot continue à scanner pour les dossiers restants du pool.
+  // isActive passe à false UNIQUEMENT quand tous les dossiers du pool sont complétés.
+  cevCompletedDossiers: v.optional(v.string()),
 });
 
 export default defineSchema({

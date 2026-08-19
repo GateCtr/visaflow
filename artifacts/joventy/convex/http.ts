@@ -487,6 +487,7 @@ http.route({
       location: string;
       confirmationCode?: string;
       screenshotStorageId?: string;
+      bookedDossierRef?: string;
     };
 
     try {
@@ -507,6 +508,7 @@ http.route({
         location: body.location,
         confirmationCode: body.confirmationCode,
         screenshotStorageId: body.screenshotStorageId,
+        bookedDossierRef: body.bookedDossierRef,
       });
 
       return new Response(JSON.stringify({ ok: true }), {
