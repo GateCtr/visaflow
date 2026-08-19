@@ -136,6 +136,8 @@ export interface SpainDossierConfig {
   slotDateFrom?: string;
   slotDateDeadline?: string;
   groupSize?: number;
+  /** Nombre total de dossiers actifs sur ce portail (pour la distribution P4) */
+  activeDossierCount?: number;
 }
 
 export interface WorkerResult {
@@ -1106,13 +1108,12 @@ export async function runDossierWorker(
           // P4 — Algorithme de distribution intelligente à 3 niveaux.
           // Chaque dossier reçoit un ordre de tentative personnalisé basé sur son hash,
           // ce qui distribue naturellement les workers sur des créneaux différents.
-          // Le nombre total de dossiers actifs est estimé via le pool Decodo (1 worker = 1 IP).
-          const estimatedTotalDossiers = getDecodoPoolSize() || 10;
+          const totalDossiers = config.activeDossierCount || 10;
           const sortedEligible = buildSlotAssignment(
             config.id,
             eligible.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
             groupSize,
-            estimatedTotalDossiers,
+            totalDossiers,
           ).map((assigned) => {
             // Retrouver le WorkerSlot original correspondant
             return eligible.find(
