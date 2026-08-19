@@ -1375,7 +1375,7 @@ export default function AdminApplicationDetail() {
                     <Search className="w-3.5 h-3.5" /> Mettre en révision
                   </Button>
                 )}
-                {!isDossierOnly && app.status !== "slot_hunting" && isEngagementPaid && (
+                {!isDossierOnly && app.status !== "slot_hunting" && (
                   <Button
                     variant="outline"
                     size="sm"
