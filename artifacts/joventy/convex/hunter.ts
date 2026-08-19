@@ -234,7 +234,50 @@ export const getActiveJobs = internalQuery({
       .withIndex("by_status", (q) => q.eq("status", "slot_hunting"))
       .collect();
 
-    return apps
+    // ── Multi-dossier CEV : inclure aussi les jobs dans d'autres statuts
+    // quand le pool n'est pas entièrement complété et isActive=true ──────────────
+    // Cas : un dossier du pool a été booké → status passe à "slot_found_awaiting_success_fee"
+    // ou le client a payé la prime pour un dossier → status revient à "awaiting_engagement_payment"
+    const multiDossierExtraStatuses = ["slot_found_awaiting_success_fee", "awaiting_engagement_payment"] as const;
+    const extraApps: typeof apps = [];
+    for (const extraStatus of multiDossierExtraStatuses) {
+      const batch = await ctx.db
+        .query("applications")
+        .withIndex("by_status", (q) => q.eq("status", extraStatus))
+        .collect();
+      extraApps.push(...batch);
+    }
+
+    const eligibleAwaitingFee = extraApps.filter((app) => {
+      const hc = (app as { hunterConfig?: {
+        isActive?: boolean;
+        cevDossierPool?: string;
+        cevBookingTargetPool?: string;
+        cevCompletedDossiers?: string;
+        cevDossierExclude?: string;
+      } }).hunterConfig;
+      if (!hc?.isActive) return false;
+
+      const poolStr = hc.cevDossierPool || hc.cevBookingTargetPool || "";
+      if (!poolStr) return false; // pas multi-dossier → skip
+
+      const poolRefs = poolStr.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+      const excludeRefs = new Set(
+        (hc.cevDossierExclude ?? "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
+      );
+      const activePoolRefs = poolRefs.filter(ref => !excludeRefs.has(ref));
+
+      const completedRefs = new Set(
+        (hc.cevCompletedDossiers ?? "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
+      );
+
+      // Retourner le job seulement s'il reste des dossiers non-complétés
+      return !activePoolRefs.every(ref => completedRefs.has(ref));
+    });
+
+    const allApps = [...apps, ...eligibleAwaitingFee];
+
+    return allApps
       .filter((app) => {
         const hc = (app as { hunterConfig?: { isActive?: boolean } }).hunterConfig;
         return hc?.isActive === true;
