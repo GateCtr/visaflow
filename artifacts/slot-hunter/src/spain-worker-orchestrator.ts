@@ -35,8 +35,6 @@ import {
   saveLastProxyForDossier,
   deleteWorkerCfClearance,
   saveWorkerCfClearance,
-  claimSentinelRole,
-  releaseSentinelRole,
 } from "./spain-redis-persistence.js";
 import { initDecodoPool, flagDecodoIp, rotateDecodoUrl } from "./spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "./convexClient.js";
@@ -266,34 +264,10 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         // Arrêter le keep-alive Decodo — le worker prend le relai sur ce proxy
         stopKeepAlive(config.id);
 
-        // ── P8 — Assigner le rôle Meute (sentinelle ou pack) ─────────────────────
-        // La sentinelle est le premier dossier à claimer le rôle Redis pour ce portail.
-        // Tous les autres deviennent "pack" et attendent le signal BURST.
-        // Rotation naturelle : le TTL du claim (30 min = durée fenêtre) expire → le
-        // premier dossier à démarrer la fenêtre suivante sera la nouvelle sentinelle.
-        const isMeuteEnabled = process.env.SPAIN_MEUTE_ENABLED !== "0";
-        let meuteRole: "sentinel" | "pack" | undefined;
-        if (isMeuteEnabled && dossiers.length > 1) {
-          const claimed = await claimSentinelRole(config.portalUrl, config.id);
-          meuteRole = claimed ? "sentinel" : "pack";
-          log(
-            "INFO",
-            `[SPAIN-ORCH] 🐺 Rôle Meute: ${config.applicantName} → ${meuteRole}${claimed ? " (sentinelle cette fenêtre)" : ""}`,
-          );
-        }
-
-        const workerConfig: SpainDossierConfig = { ...config, meuteRole };
-        const promise = runDossierWorker(workerConfig).then((result) => {
-          // Libérer le rôle sentinelle quand le worker se termine
-          if (meuteRole === "sentinel") {
-            releaseSentinelRole(config.portalUrl, config.id).catch(() => {});
-          }
+        const promise = runDossierWorker(config).then((result) => {
           return result;
         }).catch((err) => {
           log("WARN", `[SPAIN-ORCH] Worker ${config.applicantName} exception non gérée: ${err}`);
-          if (meuteRole === "sentinel") {
-            releaseSentinelRole(config.portalUrl, config.id).catch(() => {});
-          }
           return {
             dossierId: config.id,
             status: "error" as const,

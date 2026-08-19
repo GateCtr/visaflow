@@ -46,9 +46,6 @@ import {
   isIpReservedByOther,
   releaseWorkerIp,
   publishSlotSnapshot,
-  publishBurstSignal,
-  checkBurstFlag,
-  subscribeToBurst,
 } from "./spain-slot-coordinator.js";
 import { buildSlotAssignment } from "./spain-slot-assignment.js";
 import {
@@ -139,13 +136,6 @@ export interface SpainDossierConfig {
   slotDateFrom?: string;
   slotDateDeadline?: string;
   groupSize?: number;
-  /**
-   * P8 — Rôle dans l'algorithme Meute :
-   *   - "sentinel" : scanne vite (5-10s), publie BURST dès détection, booke en premier
-   *   - "pack"     : attend le signal BURST (PUB/SUB + polling), puis fait son propre scan + booking
-   *   - undefined  : mode legacy (pas de coordination Meute)
-   */
-  meuteRole?: "sentinel" | "pack";
 }
 
 export interface WorkerResult {
@@ -795,7 +785,6 @@ export async function runDossierWorker(
   // Toute sortie de la fonction (return, throw, exception async) passe par le finally.
   // proxyUrl = "" → mode direct sans proxy → pas de réservation à libérer.
   let workerResult: WorkerResult = { dossierId: config.id, status: "error", errorMessage: "init" };
-  let unsubscribeBurst: (() => Promise<void>) | null = null;
   try {
 
   const capsolverKey =
@@ -952,108 +941,6 @@ export async function runDossierWorker(
     return workerResult;
   }
 
-  // ── P8 — Mode Meute : rôle sentinelle/meute ─────────────────────────────────
-  const meuteRole = config.meuteRole; // "sentinel" | "pack" | undefined (legacy)
-  const SENTINEL_SCAN_INTERVAL_MS = 5_000; // 5s pour la sentinelle
-  const effectiveScanInterval = meuteRole === "sentinel" ? SENTINEL_SCAN_INTERVAL_MS : SCAN_INTERVAL_MS;
-  let burstPublished = false; // La sentinelle ne publie qu'une fois par fenêtre
-
-  // ── P8 — Pack : attendre le signal BURST avant de scanner ──────────────────
-  // Le pack worker subscribe au canal Redis et attend un signal ou poll le flag.
-  // PAS de timeout fixe : le pack attend le BURST jusqu'à la fin de la fenêtre.
-  // Si la sentinelle ne trouve rien → le pack sort sans avoir scanné (économie de requêtes).
-  //
-  // WARM-UP : Toutes les 2 min, un GET léger sur le portail pour valider le cf_clearance.
-  // Si 403 → re-solve CF immédiatement (pendant l'attente, pas après le BURST).
-  // Ainsi quand le BURST arrive, la session est garantie chaude.
-  if (meuteRole === "pack") {
-    log("INFO", `${tag} 🐺 Mode MEUTE (pack) — attente signal BURST (jusqu'à fin fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")})…`);
-
-    // Vérifier d'abord le flag Redis (cas où le burst a été publié avant qu'on soit prêt)
-    const alreadyBurst = await checkBurstFlag(config.portalUrl);
-    if (alreadyBurst) {
-      log("INFO", `${tag} 🐺 BURST flag détecté en Redis — scan immédiat`);
-    } else {
-      let burstReceived = false;
-
-      const burstPromise = new Promise<void>((resolve) => {
-        subscribeToBurst(config.portalUrl, (_slotsCount) => {
-          burstReceived = true;
-          resolve();
-        }).then((unsub) => {
-          unsubscribeBurst = unsub;
-        }).catch(() => {});
-      });
-
-      // ── Warm-up périodique : garder la session CF à chaud ──────────────────
-      // Un GET portail toutes les 2 min pour vérifier le cf_clearance.
-      // Si 403 → re-solve CapSolver immédiatement (pendant l'attente).
-      const PACK_WARMUP_INTERVAL_MS = 120_000; // 2 min
-      const warmupLoop = (async () => {
-        const portalUrlNoFrag = config.portalUrl.split("#")[0];
-        while (!burstReceived && Date.now() < windowEnd) {
-          await sleep(PACK_WARMUP_INTERVAL_MS);
-          if (burstReceived) return;
-
-          // Check burst flag (polling fallback si PUB/SUB manqué)
-          const flagged = await checkBurstFlag(config.portalUrl);
-          if (flagged) { burstReceived = true; return; }
-
-          // Warm-up : GET portail avec cf_clearance
-          try {
-            const impit = session._ownImpit;
-            if (!impit) continue;
-            const jar: Record<string, string> = {};
-            for (const c of session.allCookies) jar[c.name] = c.value;
-            if (session.cfClearance) jar.cf_clearance = session.cfClearance;
-            const cookieStr = Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
-
-            const r = await (impit.fetch(portalUrlNoFrag, {
-              headers: { "User-Agent": session.userAgent, "Cookie": cookieStr },
-            } as any) as unknown as Promise<Response>);
-
-            const body = await r.text();
-            const isCf = r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000));
-
-            if (isCf) {
-              // CF expiré → re-solve immédiatement pendant l'attente
-              log("WARN", `${tag} 🐺🔄 Warm-up 403 → re-solve CF pendant attente BURST`);
-              const capKey = process.env.CAPSOLVER_API_KEY ?? process.env.NONECAP_API_KEY ?? "";
-              if (capKey) {
-                const freshResult = await initWorkerSession(proxyUrl, portalUrlNoFrag, capKey);
-                if (freshResult) {
-                  session = freshResult.session;
-                  log("INFO", `${tag} 🐺✅ CF re-résolu — session chaude`);
-                } else {
-                  log("WARN", `${tag} 🐺❌ Re-solve CF échoué — sera retryé au prochain warm-up`);
-                }
-              }
-            } else {
-              log("INFO", `${tag} 🐺🏓 Warm-up OK (HTTP ${r.status}, ${body.length}B) — session chaude`);
-            }
-          } catch (e) {
-            log("WARN", `${tag} 🐺 Warm-up erreur: ${e instanceof Error ? e.message : e}`);
-          }
-        }
-      })();
-
-      const windowTimeout = sleep(Math.max(0, windowEnd - Date.now()));
-
-      await Promise.race([burstPromise, warmupLoop, windowTimeout]);
-
-      if (burstReceived) {
-        log("INFO", `${tag} 🐺 BURST reçu — lancement scan + booking immédiat`);
-      } else {
-        // Fin de fenêtre sans BURST — la sentinelle n'a rien trouvé cette heure.
-        log("INFO", `${tag} 🐺 Fin de fenêtre sans BURST — aucun créneau cette heure, exit`);
-        workerResult = { dossierId: config.id, status: "exited" };
-        return workerResult;
-      }
-    }
-  } else if (meuteRole === "sentinel") {
-    log("INFO", `${tag} 🦅 Mode MEUTE (sentinelle) — scan intensif toutes les ${effectiveScanInterval / 1000}s`);
-  }
-
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
@@ -1063,7 +950,7 @@ export async function runDossierWorker(
       const winRemain = Math.round((windowEnd - Date.now()) / 60_000);
       log(
         "INFO",
-        `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | proxy: ${maskProxy(proxyUrl)}${meuteRole ? ` | rôle: ${meuteRole}` : ""}`,
+        `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | proxy: ${maskProxy(proxyUrl)}`,
       );
 
       const scan = await refreshSessionAndScan(session, config, tag);
@@ -1071,13 +958,6 @@ export async function runDossierWorker(
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
         emitDiscoveryEvents(scan.slots, scan.serviceId, scan.serviceName, config);
-
-        // ── P8 — Sentinelle : publier BURST dès la première détection ──────────
-        if (meuteRole === "sentinel" && !burstPublished) {
-          burstPublished = true;
-          log("INFO", `${tag} 🦅📡 BURST publié — ${scan.slots.length} créneau(x) détecté(s) → signal aux pack workers`);
-          publishBurstSignal(config.portalUrl, scan.slots.length).catch(() => {});
-        }
       }
 
       if (scan.status === "proxy_error") {
@@ -1536,7 +1416,7 @@ export async function runDossierWorker(
 
     // Attendre jusqu'au prochain cycle (start-to-start)
     const elapsed = Date.now() - cycleStart;
-    const wait = Math.max(0, effectiveScanInterval - elapsed);
+    const wait = Math.max(0, SCAN_INTERVAL_MS - elapsed);
     if (Date.now() + wait < windowEnd) {
       await sleep(wait);
     }
@@ -1550,10 +1430,6 @@ export async function runDossierWorker(
   return workerResult;
 
   } finally {
-    // P8 — Cleanup burst subscriber si pack worker
-    if (unsubscribeBurst) {
-      unsubscribeBurst().catch(() => {});
-    }
     // Libération garantie de l'IP, quelle que soit la sortie (return, throw, exception).
     // Owner-check Lua : seul ce dossier peut supprimer sa réservation.
     // proxyUrl = "" → mode direct, pas de réservation Redis à libérer.
