@@ -138,6 +138,8 @@ export interface SpainDossierConfig {
   groupSize?: number;
   /** Nombre total de dossiers actifs sur ce portail (pour la distribution P4) */
   activeDossierCount?: number;
+  /** Index de ce dossier dans la liste triée (0-based, déterministe) */
+  dossierIndex?: number;
 }
 
 export interface WorkerResult {
@@ -1105,15 +1107,15 @@ export async function runDossierWorker(
             `${tag} Cycle ${cycleCount}: ${scan.slots.length} créneau(x) hors fenêtre — next`,
           );
         } else {
-          // P4 — Algorithme de distribution intelligente à 3 niveaux.
-          // Chaque dossier reçoit un ordre de tentative personnalisé basé sur son hash,
-          // ce qui distribue naturellement les workers sur des créneaux différents.
+          // P4 — Distribution déterministe des créneaux.
+          // Chaque dossier a un index fixe (0-based) → premier choix garanti différent.
           const totalDossiers = config.activeDossierCount || 10;
           const sortedEligible = buildSlotAssignment(
             config.id,
             eligible.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
             groupSize,
             totalDossiers,
+            config.dossierIndex,
           ).map((assigned) => {
             // Retrouver le WorkerSlot original correspondant
             return eligible.find(

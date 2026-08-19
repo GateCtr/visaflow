@@ -264,7 +264,11 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         // Arrêter le keep-alive Decodo — le worker prend le relai sur ce proxy
         stopKeepAlive(config.id);
 
-        const promise = runDossierWorker({ ...config, activeDossierCount: dossiers.length }).then((result) => {
+        const promise = runDossierWorker({
+          ...config,
+          activeDossierCount: dossiers.length,
+          dossierIndex: dossiers.sort((a, b) => a.id.localeCompare(b.id)).findIndex((d) => d.id === config.id),
+        }).then((result) => {
           return result;
         }).catch((err) => {
           log("WARN", `[SPAIN-ORCH] Worker ${config.applicantName} exception non gérée: ${err}`);
