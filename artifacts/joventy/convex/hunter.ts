@@ -1045,6 +1045,20 @@ export const internalSaveBotConfig = internalMutation({
   },
 });
 
+// ─── INTERNAL: forcer le status d'un dossier à slot_hunting (multi-dossier CEV) ──────────────
+export const internalForceSlotHunting = internalMutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+    await ctx.db.patch(args.applicationId, {
+      status: "slot_hunting",
+      updatedAt: Date.now(),
+    });
+    return { ok: true, previousStatus: app.status };
+  },
+});
+
 // ─── INTERNAL: injecter des cookies F5 siphonnés dans un dossier (application) ───────────────
 export const internalInjectF5CookiesToApplication = internalMutation({
   args: {
