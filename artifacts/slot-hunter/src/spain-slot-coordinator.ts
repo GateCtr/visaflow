@@ -23,12 +23,4 @@ export {
   isIpReservedByOther,
   releaseWorkerIp,
   publishSlotSnapshot,
-  // P8 — Burst PUB/SUB (Algorithme Meute)
-  publishBurstSignal,
-  checkBurstFlag,
-  subscribeToBurst,
-  claimSentinelRole,
-  isSentinel,
-  releaseSentinelRole,
-  portalUrlToKey,
 } from "./spain-redis-persistence.js";
