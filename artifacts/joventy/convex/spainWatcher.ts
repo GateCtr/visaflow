@@ -277,6 +277,9 @@ export const internalRecordScan = internalMutation({
           slotInfo: args.slotInfo ?? "Créneau disponible",
           portalUrl: watcher.portalUrl,
           screenshotStorageId: args.screenshotStorageId,
+          detectedSlots: args.detectedSlots,
+          dossierName: args.dossierName,
+          serviceName: args.detectedServices,
         });
       }
     }
@@ -291,6 +294,9 @@ export const internalSendWatcherAlert = internalAction({
     slotInfo: v.string(),
     portalUrl: v.string(),
     screenshotStorageId: v.optional(v.string()),
+    detectedSlots: v.optional(v.string()),
+    dossierName: v.optional(v.string()),
+    serviceName: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
     const apiKey = process.env.RESEND_API_KEY;
@@ -299,22 +305,71 @@ export const internalSendWatcherAlert = internalAction({
       return;
     }
 
+    // Parse detectedSlots pour le tableau HTML
+    let slotsTable = "";
+    if (args.detectedSlots) {
+      try {
+        const slots = JSON.parse(args.detectedSlots) as Array<{ d: string; t: string; n: number }>;
+        if (slots.length > 0) {
+          // Extraire le nom du service si disponible
+          let serviceName = "TRAMITACIÓN DE VISADOS";
+          if (args.serviceName) {
+            try {
+              const svcs = JSON.parse(args.serviceName) as Array<{ serviceName: string }>;
+              if (svcs[0]?.serviceName) serviceName = svcs[0].serviceName;
+            } catch { /* ignore */ }
+          }
+
+          const rows = slots.map((s) => `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${s.d}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${s.t || "—"}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${s.n > 0 ? s.n : "—"}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">${serviceName}</td>
+            </tr>`).join("");
+
+          slotsTable = `
+          <div style="margin: 20px 0;">
+            <h3 style="font-size: 14px; color: #374151; margin-bottom: 8px;">📅 Créneaux détectés (${slots.length})</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+              <thead>
+                <tr style="background: #f9fafb;">
+                  <th style="padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Date</th>
+                  <th style="padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Heure</th>
+                  <th style="padding: 8px 12px; text-align: center; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Places</th>
+                  <th style="padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Service</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    const dossierLine = args.dossierName
+      ? `<p style="color: #6b7280; font-size: 12px; margin: 4px 0 0;">Dossier : <strong>${args.dossierName}</strong></p>`
+      : "";
+
     const html = `
 <!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="utf-8"><title>Créneau Espagne trouvé</title></head>
-<body style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
+<body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
   <div style="background: linear-gradient(135deg, #c60b1e 0%, #f1bf00 100%); border-radius: 12px; padding: 24px; margin-bottom: 24px; text-align: center;">
     <h1 style="color: white; margin: 0; font-size: 24px;">🇪🇸 Créneau Espagne Disponible !</h1>
   </div>
 
   <div style="background: #f0fdf4; border: 2px solid #16a34a; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
     <h2 style="color: #15803d; margin-top: 0; font-size: 18px;">✅ Créneau trouvé</h2>
-    <p style="font-size: 16px; font-weight: 600; margin: 0 0 8px;">${args.slotInfo}</p>
+    <p style="font-size: 16px; font-weight: 600; margin: 0 0 4px;">${args.slotInfo}</p>
+    ${dossierLine}
   </div>
 
+  ${slotsTable}
+
   <p style="color: #444; font-size: 14px; margin-bottom: 16px;">
-    Le veilleur automatique Espagne a détecté une disponibilité sur le portail citaconsular.es.
+    Le veilleur automatique Espagne a détecté une disponibilité sur le portail <a href="${args.portalUrl}" style="color: #c60b1e;">citaconsular.es</a>.
     Cliquez rapidement pour le réserver avant qu'il ne disparaisse.
   </p>
 

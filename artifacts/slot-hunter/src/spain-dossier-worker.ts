@@ -1078,9 +1078,10 @@ export async function runDossierWorker(
             slotsByDate.set(s.date, { total: s.freeslots, count: 1 });
           }
         }
-        const detectedSlotsPayload = [...slotsByDate.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([d, { total, count }]) => ({ d, n: total, c: count }));
+        const detectedSlotsPayload = eligible
+          .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+          .slice(0, 50) // limiter à 50 slots pour ne pas exploser le payload
+          .map((s) => ({ d: s.date, t: s.time, n: s.freeslots }));
 
         void reportSpainWatcherScan({
           status: eligible.length > 0 ? "found" : "not_found",
