@@ -360,7 +360,7 @@ export const markSlotFoundByHunter = internalMutation({
     // ── Multi-dossier CEV : ne désactiver que si TOUS les dossiers du pool sont bookés ──
     // Si bookedDossierRef est fourni et qu'un pool existe, on ajoute ce ref aux complétés
     // et on ne désactive le job que quand tous les dossiers du pool sont traités.
-    const poolStr = existing.cevDossierPool ?? "";
+    const poolStr = existing.cevDossierPool || existing.cevBookingTargetPool || "";
     const bookedRef = args.bookedDossierRef?.trim().toUpperCase();
 
     if (bookedRef && poolStr) {
