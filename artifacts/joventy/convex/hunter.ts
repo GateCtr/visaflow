@@ -345,8 +345,6 @@ export const markSlotFoundByHunter = internalMutation({
     bookedDossierRef: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await coreMarkSlotFound(ctx, { ...args, logAuthor: "Joventy Hunter" });
-
     const app = await ctx.db.get(args.applicationId);
     const existing = (app as { hunterConfig?: {
       embassyUsername: string; embassyPassword: string; isActive: boolean;
@@ -355,39 +353,36 @@ export const markSlotFoundByHunter = internalMutation({
       cevDossierPool?: string; cevCompletedDossiers?: string;
       cevDossierExclude?: string; cevBookingTargetPool?: string;
     } } | null)?.hunterConfig;
-    if (!existing) return args.applicationId;
 
-    // ── Multi-dossier CEV : ne désactiver que si TOUS les dossiers du pool sont bookés ──
-    // Si bookedDossierRef est fourni et qu'un pool existe, on ajoute ce ref aux complétés
-    // et on ne désactive le job que quand tous les dossiers du pool sont traités.
-    const poolStr = existing.cevDossierPool || existing.cevBookingTargetPool || "";
+    // ── Déterminer si c'est un mode multi-dossier ────────────────────────────
+    const poolStr = existing?.cevDossierPool || existing?.cevBookingTargetPool || "";
     const bookedRef = args.bookedDossierRef?.trim().toUpperCase();
+    const isMultiDossier = !!(bookedRef && poolStr);
 
-    if (bookedRef && poolStr) {
-      // Ajouter ce dossier aux complétés (CSV)
+    // ── Multi-dossier : déterminer si tous sont complétés ────────────────────
+    let allCompleted = false;
+    if (isMultiDossier && existing) {
       const completedSet = new Set(
         (existing.cevCompletedDossiers ?? "")
           .split(",")
           .map(s => s.trim().toUpperCase())
           .filter(Boolean),
       );
-      completedSet.add(bookedRef);
+      completedSet.add(bookedRef!);
       const newCompletedCsv = [...completedSet].join(",");
 
-      // Déterminer les dossiers actifs du pool (pool - exclude)
       const poolRefs = poolStr.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
       const excludeRefs = new Set(
         (existing.cevDossierExclude ?? "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
       );
       const activePoolRefs = poolRefs.filter(ref => !excludeRefs.has(ref));
+      allCompleted = activePoolRefs.every(ref => completedSet.has(ref));
 
-      // Vérifier si tous les dossiers actifs du pool sont complétés
-      const allCompleted = activePoolRefs.every(ref => completedSet.has(ref));
-
+      // Enregistrer le booking dans cevCompletedDossiers (PAS de coreMarkSlotFound)
       await ctx.db.patch(args.applicationId, {
         hunterConfig: {
           ...existing,
-          isActive: allCompleted ? false : existing.isActive, // ne tue le job que si TOUT est booké
+          isActive: allCompleted ? false : existing.isActive,
           lastResult: allCompleted ? "all_slots_captured" : "slot_captured_partial",
           lastCheckAt: Date.now(),
           checkCount: (existing.checkCount ?? 0) + 1,
@@ -396,28 +391,40 @@ export const markSlotFoundByHunter = internalMutation({
         updatedAt: Date.now(),
       });
 
-      // Log pour traçabilité
+      // Log + stocker les détails du booking dans les logs de l'application
       const remainingCount = activePoolRefs.filter(ref => !completedSet.has(ref)).length;
       const logMsg = allCompleted
-        ? `✅ Tous les dossiers du pool bookés (${completedSet.size}/${activePoolRefs.length}) — arrêt du scan.`
-        : `✅ Dossier ${bookedRef} booké (${completedSet.size}/${activePoolRefs.length}). ${remainingCount} dossier(s) restant(s) — scan continue.`;
+        ? `✅ Tous les dossiers du pool bookés (${completedSet.size}/${activePoolRefs.length}) — arrêt du scan. Dernier: ${bookedRef} le ${args.date} à ${args.time}.`
+        : `✅ Dossier ${bookedRef} booké le ${args.date} à ${args.time} (code: ${args.confirmationCode ?? "—"}). ${completedSet.size}/${activePoolRefs.length} complété(s), ${remainingCount} restant(s) — scan continue.`;
       const existingLogs = (app as { logs?: Array<{ msg: string; time: number; author: string }> }).logs ?? [];
       await ctx.db.patch(args.applicationId, {
         logs: [...existingLogs, { msg: logMsg, time: Date.now(), author: "Joventy Hunter" }],
       });
-    } else {
-      // Pas de multi-dossier ou pas de ref → comportement legacy (désactive tout)
-      await ctx.db.patch(args.applicationId, {
-        hunterConfig: {
-          ...existing,
-          isActive: false,
-          lastResult: "slot_captured",
-          lastCheckAt: Date.now(),
-          checkCount: (existing.checkCount ?? 0) + 1,
-        },
-        updatedAt: Date.now(),
-      });
+
+      // Si TOUS les dossiers sont complétés → déclencher coreMarkSlotFound (clôture + paiement)
+      if (allCompleted) {
+        await coreMarkSlotFound(ctx, { ...args, logAuthor: "Joventy Hunter" });
+      }
+      // Sinon : PAS de coreMarkSlotFound, le status reste "slot_hunting", scan continue.
+
+      return args.applicationId;
     }
+
+    // ── Mode single-dossier (pas de pool) → comportement legacy ──────────────
+    await coreMarkSlotFound(ctx, { ...args, logAuthor: "Joventy Hunter" });
+
+    if (!existing) return args.applicationId;
+
+    await ctx.db.patch(args.applicationId, {
+      hunterConfig: {
+        ...existing,
+        isActive: false,
+        lastResult: "slot_captured",
+        lastCheckAt: Date.now(),
+        checkCount: (existing.checkCount ?? 0) + 1,
+      },
+      updatedAt: Date.now(),
+    });
 
     return args.applicationId;
   },
