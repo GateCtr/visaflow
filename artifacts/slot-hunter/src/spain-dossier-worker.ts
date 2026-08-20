@@ -1150,10 +1150,19 @@ export async function runDossierWorker(
             log("INFO", `${tag} 🏁 MODE RACE activé (${eligible.length} créneau(x) ≤ ${RACE_MODE_SLOT_THRESHOLD}) — pas de lock Redis, tous les workers foncent`);
           }
 
-          // En mode race : tous les créneaux triés par date/heure (chaque worker a sa chance sur tout)
-          // En mode normal : distribution P4 (sous-ensemble assigné par dossier)
+          // En mode race : premier choix = P4 (distribution déterministe), mais les
+          // créneaux restants sont ajoutés en fallback. Chaque worker commence par son
+          // slot assigné, et s'il échoue (seleccionada) il tente les autres.
+          // En mode normal : distribution P4 stricte (pas de fallback cross-slot).
           const bookingCandidates = raceMode
-            ? eligible.slice().sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+            ? (() => {
+                // Start with P4 assignment, then append remaining eligible slots as fallbacks
+                const p4Set = new Set(sortedEligible.map(s => `${s.date}|${s.time}`));
+                const fallbacks = eligible
+                  .filter(s => !p4Set.has(`${s.date}|${s.time}`))
+                  .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+                return [...sortedEligible, ...fallbacks];
+              })()
             : sortedEligible;
 
           for (const candidate of bookingCandidates) {
