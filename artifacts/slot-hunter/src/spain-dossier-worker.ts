@@ -187,6 +187,16 @@ const DATETIME_MONTHS_AHEAD = ((): number => {
 
 const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
 
+/**
+ * Mode Race : quand le nombre total de créneaux distincts détectés dans un cycle
+ * est ≤ ce seuil, on SKIP le lock Redis et tous les workers foncent en parallèle.
+ * Le serveur Bookitit est l'arbitre final (premier summary/ qui passe gagne).
+ * Les perdants recevront "seleccionada por otra persona" → fallback au prochain candidat.
+ *
+ * Quand > seuil : mode normal (Redis claim atomique empêche la collision inter-dossiers).
+ */
+const RACE_MODE_SLOT_THRESHOLD = 3;
+
 // ─── Détection erreur proxy ────────────────────────────────────────────────────
 
 /**
@@ -1127,21 +1137,32 @@ export async function runDossierWorker(
           // Le worker itère tous les candidats éligibles. Si un créneau est pris par
           // un humain ("seleccionada") ou que summary/ échoue après retries, on libère
           // le claim Redis et on passe au candidat suivant — pas de sortie du cycle.
+          //
+          // MODE RACE (≤ RACE_MODE_SLOT_THRESHOLD créneaux) :
+          //   Pas de lock Redis — tous les workers foncent en parallèle sur le même
+          //   créneau. Le serveur Bookitit décide du gagnant. Les perdants reçoivent
+          //   "seleccionada" et passent au prochain candidat.
           let bookingSucceeded = false;
+          const raceMode = eligible.length <= RACE_MODE_SLOT_THRESHOLD;
+          if (raceMode) {
+            log("INFO", `${tag} 🏁 MODE RACE activé (${eligible.length} créneau(x) ≤ ${RACE_MODE_SLOT_THRESHOLD}) — pas de lock Redis, tous les workers foncent`);
+          }
 
           for (const candidate of sortedEligible) {
-            // ── Redis atomic claim ───────────────────────────────────────────────
-            const ok = await tryClaimSlot(
-              candidate.date,
-              candidate.time,
-              candidate.agendaId ?? "",
-              config.id,
-              groupSize,
-              candidate.freeslots,
-            );
-            if (!ok) {
-              log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà pris (Redis), prochain créneau…`);
-              continue;
+            // ── Redis atomic claim (désactivé en mode race) ──────────────────────
+            if (!raceMode) {
+              const ok = await tryClaimSlot(
+                candidate.date,
+                candidate.time,
+                candidate.agendaId ?? "",
+                config.id,
+                groupSize,
+                candidate.freeslots,
+              );
+              if (!ok) {
+                log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà pris (Redis), prochain créneau…`);
+                continue;
+              }
             }
 
             const slot = candidate;
@@ -1353,7 +1374,9 @@ export async function runDossierWorker(
             }
 
             // Booking échoué → libérer le claim Redis de CE dossier immédiatement.
-            releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
+            if (!raceMode) {
+              releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
+            }
 
             // ── Erreur credentials permanente → sortie immédiate ──────────────────
             const isCredentialError = bookResult.status === "signin_failed"
@@ -1366,6 +1389,7 @@ export async function runDossierWorker(
 
             // ── P1 : "seleccionada por otra persona" → continuer au créneau suivant ──
             // Le serveur dit que ce créneau est pris par un humain/autre agent.
+            // En mode race, c'est probablement un de NOS workers qui a gagné — pas grave.
             // On ne quitte pas le cycle : on tente immédiatement le prochain candidat.
             const errLower = (bookResult.errorMessage ?? "").toLowerCase();
             const isSlotTakenByOther = errLower.includes("seleccionada por otra persona")
@@ -1373,7 +1397,11 @@ export async function runDossierWorker(
               || errLower.includes("ya no está disponible")
               || errLower.includes("no disponible");
             if (isSlotTakenByOther) {
-              log("INFO", `${tag} ⏭️ P1: Créneau ${slot.date} ${slot.time} pris par un humain — fallback au prochain candidat`);
+              if (raceMode) {
+                log("INFO", `${tag} 🏁 Race perdue: ${slot.date} ${slot.time} pris (un de nos workers ou humain) — fallback`);
+              } else {
+                log("INFO", `${tag} ⏭️ P1: Créneau ${slot.date} ${slot.time} pris par un humain — fallback au prochain candidat`);
+              }
               await sleep(300); // micro-délai pour ne pas spammer
               continue; // → prochain candidat dans sortedEligible
             }
