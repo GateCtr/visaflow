@@ -195,7 +195,7 @@ const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
  *
  * Quand > seuil : mode normal (Redis claim atomique empêche la collision inter-dossiers).
  */
-const RACE_MODE_SLOT_THRESHOLD = 3;
+const RACE_MODE_SLOT_THRESHOLD = 5;
 
 // ─── Détection erreur proxy ────────────────────────────────────────────────────
 
