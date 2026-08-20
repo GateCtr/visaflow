@@ -1142,13 +1142,21 @@ export async function runDossierWorker(
           //   Pas de lock Redis — tous les workers foncent en parallèle sur le même
           //   créneau. Le serveur Bookitit décide du gagnant. Les perdants reçoivent
           //   "seleccionada" et passent au prochain candidat.
+          //   En race, chaque worker a accès à TOUS les créneaux (pas seulement son
+          //   sous-ensemble P4) pour maximiser les chances de fallback.
           let bookingSucceeded = false;
           const raceMode = eligible.length <= RACE_MODE_SLOT_THRESHOLD;
           if (raceMode) {
             log("INFO", `${tag} 🏁 MODE RACE activé (${eligible.length} créneau(x) ≤ ${RACE_MODE_SLOT_THRESHOLD}) — pas de lock Redis, tous les workers foncent`);
           }
 
-          for (const candidate of sortedEligible) {
+          // En mode race : tous les créneaux triés par date/heure (chaque worker a sa chance sur tout)
+          // En mode normal : distribution P4 (sous-ensemble assigné par dossier)
+          const bookingCandidates = raceMode
+            ? eligible.slice().sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+            : sortedEligible;
+
+          for (const candidate of bookingCandidates) {
             // ── Redis atomic claim (désactivé en mode race) ──────────────────────
             if (!raceMode) {
               const ok = await tryClaimSlot(
