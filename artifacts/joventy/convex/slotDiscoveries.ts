@@ -220,7 +220,8 @@ export const getStats = query({
       else byHour[hour].ignored++;
     }
 
-    // Regrouper par jour de la semaine (0=dimanche, 6=samedi)
+    // Regrouper par jour de la semaine de DÉCOUVERTE (quand le bot a trouvé le créneau)
+    // Permet de savoir "quels jours de la semaine le portail libère des créneaux"
     const byDayOfWeek: Record<number, { captured: number; ignored: number }> = {};
     for (const d of filtered) {
       const dow = new Date(d.discoveredAt).getUTCDay();

@@ -443,13 +443,38 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
   const [selectedDow, setSelectedDow] = useState<number | null>(null);
 
   // Filter recent discoveries by selected day of week
+  // Filters by the day of week when the discovery HAPPENED (discoveredAt)
+  // Grouped by date+hour to show "Jeudi 14/08 à 18h — 15 créneaux"
   const dowFilteredRecent = useMemo(() => {
     if (selectedDow === null || !stats?.recent) return null;
     return stats.recent.filter((d) => {
-      const date = parseLocalDate(d.dateFound);
-      return (date.getDay() + 6) % 7 === selectedDow; // convert to Mon=0 format
+      return new Date(d.discoveredAt).getUTCDay() === selectedDow;
     });
   }, [selectedDow, stats?.recent]);
+
+  // Group filtered discoveries by discovery date+hour for summary display
+  const dowGrouped = useMemo(() => {
+    if (!dowFilteredRecent || dowFilteredRecent.length === 0) return [];
+    const groups: Record<string, { dateLabel: string; hour: string; items: typeof dowFilteredRecent }> = {};
+    for (const d of dowFilteredRecent) {
+      const dt = new Date(d.discoveredAt);
+      const dateKey = dt.toISOString().slice(0, 13); // "2026-08-14T18"
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          dateLabel: dt.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }),
+          hour: dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+          items: [],
+        };
+      }
+      groups[dateKey].items.push(d);
+      // Update hour to latest minute in the group for a more precise label
+      const existing = new Date(groups[dateKey].items[0].discoveredAt);
+      if (dt > existing) {
+        groups[dateKey].hour = `${existing.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}–${dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+      }
+    }
+    return Object.values(groups).sort((a, b) => b.items[0].discoveredAt - a.items[0].discoveredAt);
+  }, [dowFilteredRecent]);
 
   if (stats === undefined) {
     return <div className="p-12 text-center text-muted-foreground">Chargement des statistiques de découverte...</div>;
@@ -668,7 +693,7 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-primary flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-secondary" />
-              Créneaux découverts le {DAY_NAMES[selectedDow]} ({dowFilteredRecent.length})
+              Découvertes le {DAY_NAMES[selectedDow]} ({dowFilteredRecent.length} créneau{dowFilteredRecent.length > 1 ? "x" : ""})
             </h3>
             <button
               onClick={() => setSelectedDow(null)}
@@ -677,10 +702,35 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
               ✕ Fermer
             </button>
           </div>
-          {dowFilteredRecent.length === 0 ? (
+          {dowGrouped.length === 0 ? (
             <p className="text-sm text-muted-foreground">Aucune découverte ce jour-là.</p>
           ) : (
-            <PaginatedDiscoveries items={dowFilteredRecent} />
+            <div className="space-y-4">
+              {dowGrouped.map((group, gi) => (
+                <div key={gi}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-slate-700 capitalize">{group.dateLabel}</span>
+                    <span className="text-xs text-muted-foreground">à {group.hour}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                      {group.items.length} créneau{group.items.length > 1 ? "x" : ""}
+                    </span>
+                  </div>
+                  <div className="space-y-1 pl-3 border-l-2 border-slate-200">
+                    {group.items.slice(0, 10).map((d) => (
+                      <div key={d._id} className={`flex items-center gap-2 px-2 py-1 rounded-lg text-xs ${d.outcome === "captured" ? "bg-green-50" : "bg-amber-50"}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${d.outcome === "captured" ? "bg-green-500" : "bg-amber-500"}`} />
+                        <span className="font-bold text-primary">{d.dateFound}</span>
+                        {d.timeFound && <span className="text-slate-500">{d.timeFound}</span>}
+                        <span className="text-muted-foreground truncate">{d.office}</span>
+                      </div>
+                    ))}
+                    {group.items.length > 10 && (
+                      <p className="text-[10px] text-muted-foreground pl-2">+ {group.items.length - 10} autres…</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
