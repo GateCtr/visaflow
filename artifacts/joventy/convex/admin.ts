@@ -924,7 +924,9 @@ export const getCalendarData = query({
     const withAppointment = all.filter(
       (a) => a.appointmentDetails?.date && (
         a.status === "slot_found_awaiting_success_fee" ||
-        a.status === "completed"
+        a.status === "completed" ||
+        // Multi-dossier CEV : le dossier reste en slot_hunting mais appointmentDetails est posé
+        a.status === "slot_hunting"
       )
     );
 

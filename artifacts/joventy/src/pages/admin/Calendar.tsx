@@ -440,6 +440,17 @@ type DiscoveryStats = {
 };
 
 function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDestFilter }: { stats: DiscoveryStats | null | undefined; modeFilter: "schedule" | "reschedule" | undefined; setModeFilter: (m: "schedule" | "reschedule" | undefined) => void; destFilter: string | undefined; setDestFilter: (d: string | undefined) => void }) {
+  const [selectedDow, setSelectedDow] = useState<number | null>(null);
+
+  // Filter recent discoveries by selected day of week
+  const dowFilteredRecent = useMemo(() => {
+    if (selectedDow === null || !stats?.recent) return null;
+    return stats.recent.filter((d) => {
+      const date = parseLocalDate(d.dateFound);
+      return (date.getDay() + 6) % 7 === selectedDow; // convert to Mon=0 format
+    });
+  }, [selectedDow, stats?.recent]);
+
   if (stats === undefined) {
     return <div className="p-12 text-center text-muted-foreground">Chargement des statistiques de découverte...</div>;
   }
@@ -609,7 +620,7 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
             Jours de la semaine
           </h3>
           <p className="text-xs text-muted-foreground mb-4">
-            Jours où des créneaux sont détectés
+            Jours où des créneaux sont détectés — cliquez pour filtrer
           </p>
           <div className="space-y-2">
             {DAY_NAMES.map((name, dow) => {
@@ -617,9 +628,14 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
               const total = data.captured + data.ignored;
               const maxDow = Math.max(...Object.values(stats.byDayOfWeek).map(d => d.captured + d.ignored), 1);
               const pct = (total / maxDow) * 100;
+              const isSelected = selectedDow === dow;
               return (
-                <div key={dow} className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-600 w-8">{name}</span>
+                <div
+                  key={dow}
+                  className={`flex items-center gap-2 cursor-pointer rounded-lg px-1 py-0.5 transition-all ${isSelected ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-slate-50"}`}
+                  onClick={() => setSelectedDow(isSelected ? null : dow)}
+                >
+                  <span className={`text-xs font-semibold w-8 ${isSelected ? "text-primary" : "text-slate-600"}`}>{name}</span>
                   <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden relative">
                     {data.captured > 0 && (
                       <div
@@ -645,6 +661,29 @@ function DiscoveriesPanel({ stats, modeFilter, setModeFilter, destFilter, setDes
           </div>
         </div>
       </div>
+
+      {/* Day-of-week filtered discoveries */}
+      {selectedDow !== null && dowFilteredRecent && (
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-primary flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-secondary" />
+              Créneaux découverts le {DAY_NAMES[selectedDow]} ({dowFilteredRecent.length})
+            </h3>
+            <button
+              onClick={() => setSelectedDow(null)}
+              className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              ✕ Fermer
+            </button>
+          </div>
+          {dowFilteredRecent.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucune découverte ce jour-là.</p>
+          ) : (
+            <PaginatedDiscoveries items={dowFilteredRecent} />
+          )}
+        </div>
+      )}
 
       {/* By Office/Service breakdown */}
       {stats.byOffice && Object.keys(stats.byOffice).length > 0 && (
@@ -729,8 +768,20 @@ const PAGE_SIZE = 20;
 
 function PaginatedDiscoveries({ items }: { items: DiscoveryStats["recent"] }) {
   const [page, setPage] = useState(0);
-  const totalPages = Math.ceil(items.length / PAGE_SIZE);
-  const pageItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Deduplicate: same dateFound + timeFound discovered at the same minute = one entry
+  const deduped = useMemo(() => {
+    const seen = new Set<string>();
+    return items.filter((d) => {
+      const minuteKey = `${d.dateFound}|${d.timeFound ?? ""}|${Math.floor(d.discoveredAt / 60_000)}`;
+      if (seen.has(minuteKey)) return false;
+      seen.add(minuteKey);
+      return true;
+    });
+  }, [items]);
+
+  const totalPages = Math.ceil(deduped.length / PAGE_SIZE);
+  const pageItems = deduped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
     <div>
@@ -772,7 +823,7 @@ function PaginatedDiscoveries({ items }: { items: DiscoveryStats["recent"] }) {
             Precedent
           </button>
           <span className="text-xs text-muted-foreground">
-            Page {page + 1} / {totalPages} ({items.length} resultats)
+            Page {page + 1} / {totalPages} ({deduped.length} résultats{deduped.length < items.length ? `, ${items.length - deduped.length} doublons masqués` : ""})
           </span>
           <button
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}

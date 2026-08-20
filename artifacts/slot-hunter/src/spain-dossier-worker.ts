@@ -1383,6 +1383,16 @@ export async function runDossierWorker(
               && (bookResult.errorMessage ?? "").toLowerCase().includes("incorrect");
             if (isCredentialError) {
               log("WARN", `${tag} 🚫 Erreur credentials permanente — arrêt du worker`);
+              reportBookingLog({
+                applicationId: config.applicationId,
+                dossierId: config.id,
+                applicantName: config.applicantName,
+                date: slot.date,
+                time: slot.time,
+                status: "failed",
+                reason: bookResult.errorMessage ?? "Credentials incorrects",
+                serviceName: scan.serviceName,
+              }).catch(() => {});
               workerResult = { dossierId: config.id, status: "error", errorMessage: `signin_failed: ${bookResult.errorMessage}` };
               return workerResult;
             }
