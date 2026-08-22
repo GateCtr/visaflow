@@ -23,39 +23,60 @@ id = "N80qOowk_JB7ASf7dYHpR"
 uri = "file://debug_dumps/bundles/cev-bundles.zip"
 type = "unspecified"
 title = "CEV Bundles — sharedScripts.js + layoutBundle.css (265 KB)"
+logical_id = "f207e026-dca1-403d-b58f-7719bd626c27"
 
 [[outputs]]
 id = "WHIYKhSEfR0ogjItf4TAH"
 uri = "file://artifacts/cev-extension.zip"
 type = "unspecified"
 title = "CEV Slot Hunter — champs email/mdp visibles en haut"
+logical_id = "6c8539b7-f32f-474c-91c4-dc09dd6a2d2d"
 
 [[outputs]]
 id = "Go6Ru4UnrQct3oD1Vw3nO"
 uri = "file://cev-slot-hunter-v3.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.0 — Extension Chrome"
+logical_id = "a8006d9d-0d91-4dd0-8806-a5a1e4facba5"
 
 [[outputs]]
 id = "uFraOVQbhlfMvjBIyyTOw"
 uri = "file://cev-slot-hunter-v3.1.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.1 — Rate-limit intelligent"
+logical_id = "9714220c-1c12-4a63-99bc-f3cb6b69699d"
 
 [[outputs]]
 id = "lgeoiNQBVBASm_W-gvDPA"
 uri = "file://cev-slot-hunter-v3.2.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.2 — Notification live lock screen"
+logical_id = "4dc45f1a-269b-45b8-852b-e657302d7f2c"
 
 [[outputs]]
 id = "pAvaAQELeA3XTCALr-KG1"
 uri = "file://cev-slot-hunter-v3.3.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.3 — Bouton état réel + refresh Mes Applications"
+logical_id = "f5197dca-3a90-47bf-9ac0-4ac9696eb36b"
 
 [[outputs]]
 id = "ZH3n18SIkd9jDozq-xcoA"
 uri = "file://cev-extension-fixed.zip"
 type = "unspecified"
 title = "CEV Slot Hunter v3.3.0 — fix Angular wait + debug log"
+logical_id = "f48fb99c-b9d1-4418-8cff-c313b2c7aaac"
+
+[[outputs]]
+id = "fqJBgIgmhEsADC37TVsFv"
+uri = "file://artifacts/joventy/docs/joventy-presentation-agent-whatsapp.md"
+type = "text"
+title = "Joventy — Présentation pour agent WhatsApp"
+description = "Base de connaissance en français pour l’agent WhatsApp Business : présentation, services, tarifs, règles Espagne, délais, destinations, parcours client et réponses prêtes à l’emploi."
+logical_id = "4fbbbfb2-5ffa-4c88-b86d-60103d207bc2"
+content_hash = "sha256:6d10bb6047f4f1f145064cf57081961b1daa56bd0025a8c01c34f0ed57e6f6f4"
+size = 24622
+mtime_ms = 1787379400648
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:89ef7422-5b19-42df-9375-42396b2b4451/4fbbbfb2-5ffa-4c88-b86d-60103d207bc2/74e82e18-b4c5-45d3-8e57-df300a4de1d7"
+storage_version_token = "1787379409545104"
+content_type = "text/markdown"
