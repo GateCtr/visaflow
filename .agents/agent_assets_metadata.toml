@@ -80,3 +80,17 @@ mtime_ms = 1787381298204
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:89ef7422-5b19-42df-9375-42396b2b4451/4fbbbfb2-5ffa-4c88-b86d-60103d207bc2/50a4fb54-3987-4a6c-80e2-9ae68a9f10b2"
 storage_version_token = "1787381305544146"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "pcUoFt1bWBDuFvCNYoddk"
+uri = "file://artifacts/joventy/docs/joventy-presentation-agent-whatsapp.pdf"
+type = "pdf"
+title = "Joventy — Base WhatsApp complète PDF"
+description = "Version PDF complète de la base de connaissance WhatsApp, avec scénarios, rôles, arbre de décision, tarifs, paiements, statuts, confidentialité, anglais et réponses courtes."
+logical_id = "704f0f0c-a589-496a-95b9-92aedeeb717a"
+content_hash = "sha256:e380d9213d740e51d11ce9c3bba12f1a4c73e4eb10881d162c5e5c931e1813c2"
+size = 611039
+mtime_ms = 1787382020302
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:89ef7422-5b19-42df-9375-42396b2b4451/704f0f0c-a589-496a-95b9-92aedeeb717a/0bf452a9-21c2-4c8a-9b3c-dc4db079e4d7"
+storage_version_token = "1787382025186197"
+content_type = "application/pdf"
