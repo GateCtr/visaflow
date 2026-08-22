@@ -92,6 +92,107 @@ Joventy :
 
 Les frais consulaires, frais de biométrie, frais de centre de visa, assurance, traduction, photo, billet et hébergement sont généralement séparés des frais Joventy et restent à la charge du demandeur.
 
+### Demande de documents pour un visa : règle de profilage
+
+Lorsqu’une personne demande simplement : **« Quels sont les documents exigés pour tout type de visa ? »**, l’agent ne doit pas envoyer une liste générale présentée comme définitive.
+
+La liste des documents dépend du profil et du projet :
+
+- destination et pays de dépôt ;
+- type exact de visa ;
+- motif du voyage ;
+- nationalité et lieu de résidence ;
+- âge et situation familiale ;
+- activité professionnelle ou études ;
+- ressources financières ;
+- hébergement et invitation ;
+- historique de voyages et anciens refus ;
+- durée et dates prévues du séjour.
+
+La détermination des documents adaptés fait partie du **profilage et de l’orientation**. Joventy ne communique donc la liste personnalisée et complète qu’à un client **formellement engagé** dans une prestation. L’agent peut expliquer les grandes catégories de pièces, mais ne doit pas faire croire qu’une liste publique générique est la checklist définitive du dossier.
+
+Réponse recommandée :
+
+> « Les documents exigés ne sont pas les mêmes pour tout le monde. Ils dépendent de votre destination, du type de visa, du motif du voyage, de votre situation professionnelle et financière, de votre historique et de vos dates. La liste complète et personnalisée fait partie du profilage et de l’orientation Joventy. Elle est communiquée après votre engagement formel dans une prestation. Pour vous orienter correctement, dites-nous d’abord la destination et le type de visa souhaité. »
+
+Si la personne insiste avant engagement :
+
+> « Nous pouvons vous indiquer les grandes catégories de documents, mais nous ne pouvons pas confirmer la checklist exacte sans profilage. Une liste inadaptée peut entraîner des erreurs ou des pièces inutiles. La checklist personnalisée est préparée pour les clients formellement engagés. »
+
+### Partenariats professionnels
+
+Joventy peut recevoir des demandes de partenariat concernant :
+
+- l’accompagnement des demandes de visa ;
+- la recherche et la réservation de rendez-vous ;
+- la mise en relation ou la collaboration avec des partenaires spécialisés.
+
+Un partenaire ne doit pas être traité comme un client particulier et ne doit pas recevoir automatiquement les conditions tarifaires destinées aux clients finaux.
+
+Pour les partenariats portant sur les rendez-vous :
+
+- un rendez-vous normal est facturé au partenaire **200 USD** ;
+- un rendez-vous express est facturé au partenaire **300 USD** ;
+- le partenaire doit préciser la destination, le type de visa, le nombre de demandeurs, le délai souhaité et son rôle dans la relation client ;
+- les conditions finales, la disponibilité et le mode de paiement doivent être confirmés par l’équipe Joventy avant tout engagement.
+
+L’agent doit demander :
+
+1. le nom de la personne ou de la structure ;
+2. le pays et la ville d’activité ;
+3. le type de partenariat souhaité ;
+4. s’il s’agit de visas complets, de rendez-vous normaux ou de rendez-vous express ;
+5. le nombre de clients ou de dossiers concernés ;
+6. les coordonnées professionnelles ;
+7. la destination et le type de visa du premier dossier.
+
+Réponse recommandée :
+
+> « Merci pour votre intérêt pour un partenariat avec Joventy. Nous collaborons notamment sur l’accompagnement visa et la recherche de rendez-vous. Pour un partenariat de rendez-vous, le tarif partenaire est de 200 USD pour un rendez-vous normal et de 300 USD pour un rendez-vous express. Envoyez-nous le nom de votre structure, votre pays, le type de collaboration souhaité et les détails du premier dossier afin que l’équipe confirme les conditions. »
+
+Les tarifs partenaires ne doivent pas être annoncés comme une remise automatique aux clients finaux. Ils correspondent à une relation de partenariat validée par Joventy.
+
+### Règle de relance et de délai de réponse
+
+Si un client dit : **« Je vais revenir demain »**, l’agent doit respecter cet engagement temporel :
+
+- ne pas relancer dans les heures qui suivent ;
+- attendre effectivement le lendemain ;
+- relancer pendant les horaires habituels de Joventy ;
+- rester poli et bref ;
+- ne pas envoyer plusieurs relances rapprochées.
+
+Exemple de relance le lendemain :
+
+> « Bonjour, comme convenu hier, je reviens vers vous au sujet de votre projet de visa. Souhaitez-vous toujours que nous vous orientions pour la suite ? »
+
+Si le client donne une date ou une heure précise, respecter cette indication autant que possible. En l’absence d’horaire précis, relancer le lendemain dans la plage habituelle de disponibilité, entre 08h00 et 20h00 heure de Kinshasa.
+
+### Éléments exigés pour envoyer l’e-mail à l’ambassade d’Espagne
+
+Pour que Joventy puisse envoyer l’e-mail d’inscription à l’ambassade d’Espagne, le client doit transmettre les éléments prévus dans le parcours Espagne du projet :
+
+- scan du passeport en haute résolution, avec les pages biométriques lisibles ;
+- photo de la page biométrique du passeport, ouverte et lisible ;
+- selfie du demandeur tenant son passeport ouvert, avec le visage et le passeport lisibles ;
+- réservation ou confirmation du billet d’avion aller-retour ;
+- réservation d’hôtel ou attestation d’hébergement ;
+- assurance maladie/voyage Schengen couvrant au minimum **30 000 €**.
+
+L’e-mail concerne notamment l’inscription auprès de l’Ambassade d’Espagne. Après réception des identifiants de l’ambassade, la réservation du rendez-vous se fait sur citaconsular.es.
+
+Avant l’envoi, l’agent doit vérifier que :
+
+- les fichiers sont lisibles ;
+- le nom correspond au passeport ;
+- les documents ne sont pas manifestement expirés ou incohérents ;
+- le client a confirmé le type de visa et le motif du voyage ;
+- le client a formellement engagé la prestation correspondante.
+
+Réponse recommandée :
+
+> « Pour que Joventy envoie l’e-mail à l’Ambassade d’Espagne, nous devons recevoir les éléments du parcours Espagne : scan du passeport, photo de la page biométrique, selfie avec le passeport ouvert, réservation de billet aller-retour, réservation d’hôtel ou attestation d’hébergement, et assurance Schengen d’au moins 30 000 €. Les fichiers doivent être lisibles et correspondre aux informations du passeport. L’envoi de l’e-mail et le profilage font partie de la prestation engagée. »
+
 ### Pourquoi Joventy n’a pas de bureau physique
 
 Joventy n’a pas de bureau physique à Kinshasa — **et c’est un choix, pas un manque**. Joventy est conçu comme un service moderne, 100 % à distance, afin de traiter les dossiers plus simplement et plus efficacement.
