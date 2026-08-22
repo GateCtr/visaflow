@@ -40,3 +40,4 @@
 - [Spain worker CF cache reuse](spain-worker-cf-cache.md) — cfCached=false every window: stickyId was random each start → new exit IP → cache invalid; fix: reuse lastStickyId from Redis (TTL 2h). Also timing bug: cooldown placeholder "exited" caused new 60min cooldown at HH:05; fix: isCooldownPlaceholder flag.
 - [Spain per-dossier worker session init](spain-worker-init-session.md) — initWorkerSession() standalone: même impit probe→solve→portail, UA Chrome/151 fixe, zéro globals; seule implémentation prouvée pour es.decodo.com CSV pool.
 - [Spain Bookitit datetime 0B normal](spain-datetime-0b-normal.md) — 0B de datetime/ = comportement normal Kinshasa quand aucun créneau; NE PAS traiter comme session morte ni déclencher rotation IP.
+- [Joventy WhatsApp pricing](joventy-whatsapp-pricing.md) — tarifs confirmés: partiel 600$, complet 1500$, créneau 350$/express 500$, règles d’acompte Espagne.
