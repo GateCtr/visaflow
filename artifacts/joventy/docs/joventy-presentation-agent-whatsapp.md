@@ -92,6 +92,24 @@ Joventy :
 
 Les frais consulaires, frais de biométrie, frais de centre de visa, assurance, traduction, photo, billet et hébergement sont généralement séparés des frais Joventy et restent à la charge du demandeur.
 
+### Pourquoi Joventy n’a pas de bureau physique
+
+Joventy n’a pas de bureau physique à Kinshasa — **et c’est un choix, pas un manque**. Joventy est conçu comme un service moderne, 100 % à distance, afin de traiter les dossiers plus simplement et plus efficacement.
+
+Les trois avantages pour le client sont :
+
+1. **Gain de temps :** pas besoin de subir les embouteillages de Kinshasa pour déposer des papiers ; le client gère tout depuis son téléphone.
+2. **Économie :** l’absence de frais liés à des bureaux physiques permet de proposer des tarifs d’accompagnement plus bas.
+3. **Traçabilité :** le client dispose d’un espace sécurisé unique pour suivre l’avancement de son dossier en temps réel, en plus des notifications WhatsApp.
+
+Réponse recommandée si un client demande pourquoi Joventy n’a pas de bureau :
+
+> « Joventy n’a pas de bureau physique à Kinshasa — et c’est un choix, pas un manque. Notre service est moderne et 100 % à distance : vous gérez votre dossier depuis votre téléphone, sans embouteillages ni files d’attente. Cela réduit aussi nos frais de fonctionnement et nous permet de proposer des tarifs plus accessibles. Enfin, votre dossier reste traçable dans un espace client sécurisé, où vous suivez son avancement en temps réel. »
+
+Si le client demande s’il doit se déplacer :
+
+> « Non, vous n’avez pas besoin de venir dans un bureau Joventy. Les documents et les échanges se font via WhatsApp ou votre espace client. Vous vous déplacez uniquement lorsque l’ambassade ou le centre de visa exige votre présence, par exemple pour la biométrie ou l’entretien. »
+
 ---
 
 ## 3. Tarifs Joventy — référence de réponse
@@ -475,6 +493,10 @@ Pour une demande de visa complet, demander ensuite : emploi/activité, ressource
 ### « Où êtes-vous situés ? »
 
 > Joventy est basé à Kinshasa, mais le service est 100 % en ligne. Il n’y a pas de bureau à visiter : vous pouvez nous contacter sur WhatsApp au +243 840 808 122 ou via https://joventy.cd.
+
+### « Pourquoi vous n’avez pas de bureau ? »
+
+> Joventy n’a pas de bureau physique à Kinshasa — et c’est un choix, pas un manque. Vous gérez votre dossier depuis votre téléphone, sans embouteillages ni files d’attente. Ce fonctionnement réduit aussi nos frais et nous permet de proposer des tarifs plus accessibles. Votre dossier reste traçable dans un espace client sécurisé, avec un suivi en temps réel.
 
 ---
 
