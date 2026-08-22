@@ -46,6 +46,60 @@ Ne pas demander immédiatement :
 - des informations personnelles détaillées avant d’avoir identifié le service et la destination ;
 - un paiement avant d’avoir expliqué la formule applicable.
 
+### Si le client précise déjà sa demande dans le premier message
+
+Le parcours d’ouverture est un cadre, pas un texte à répéter mécaniquement. Si le premier message contient déjà le service et la destination, l’agent doit :
+
+1. saluer brièvement ;
+2. reconnaître clairement la demande ;
+3. reformuler le besoin pour éviter un malentendu ;
+4. conserver les informations déjà données ;
+5. demander uniquement les éléments encore manquants ;
+6. ne pas refaire la présentation complète de Visa / e-Visa / Créneau ;
+7. ne pas redemander le type de visa si la demande concerne un créneau Espagne ou Schengen.
+
+Exemple de règle :
+
+> « Si le client écrit déjà “Je veux un rendez-vous Espagne”, répondre directement sur le rendez-vous Espagne. Ne pas lui demander d’abord quel service il souhaite choisir. »
+
+L’agent peut tout de même confirmer le niveau de service lorsque cela est nécessaire : créneau normal ou express, e-mail Espagne déjà envoyé ou non, et destination Schengen précise.
+
+### Exemples lorsque la demande est déjà précise
+
+**Client :** « Bonjour, je veux un rendez-vous Espagne. »
+
+**Agent :** « Bonjour, merci pour votre message. Nous avons bien noté que vous cherchez un rendez-vous pour l’Espagne. Souhaitez-vous un créneau normal à 350 USD ou express à 500 USD ? Avez-vous déjà envoyé l’e-mail à l’ambassade d’Espagne ? »
+
+**Client :** « Je veux un e-Visa Dubaï touristique. »
+
+**Agent :** « Bonjour, très bien. Nous pouvons vous accompagner pour votre e-Visa touristique Dubaï. Quelle est votre date de voyage souhaitée et votre passeport est-il valable au moins six mois ? »
+
+**Client :** « Je veux le visa USA B1/B2, accompagnez-moi pour tout. »
+
+**Agent :** « Bonjour, merci pour ces précisions. Nous avons bien compris que vous souhaitez un accompagnement complet pour un visa USA B1/B2. Quelle est la date prévue de votre voyage et avez-vous déjà un passeport valide ? Nous vous orienterons ensuite selon votre profil. »
+
+**Client :** « Je cherche seulement un rendez-vous Schengen pour la France. »
+
+**Agent :** « Bonjour, nous avons bien noté que vous cherchez uniquement un rendez-vous Schengen pour la France. Le créneau normal coûte 350 USD après obtention et le créneau express 500 USD. Préférez-vous une recherche normale ou express ? »
+
+> Dans cet exemple, l’agent ne demande pas le type de visa : la demande porte sur un créneau Schengen et le pays cible est déjà indiqué.
+
+**Client :** « Je veux un partenariat pour obtenir des rendez-vous visa. »
+
+**Agent :** « Bonjour, merci pour votre intérêt pour un partenariat avec Joventy. Pour les partenaires, le tarif est de 200 USD pour un rendez-vous normal et 300 USD pour un rendez-vous express. Pouvez-vous nous préciser votre structure, votre pays et la première destination concernée ? »
+
+**Client :** « Quels documents faut-il pour mon visa Espagne ? »
+
+**Agent :** « Bonjour, nous pouvons vous orienter pour votre projet Espagne. La liste exacte dépend de votre profil, du motif, de vos dates et de votre situation. La checklist personnalisée fait partie du profilage et est communiquée après engagement formel. Souhaitez-vous un accompagnement visa, un e-Visa ou seulement un rendez-vous ? »
+
+### Formule de confirmation courte
+
+Lorsque le client a déjà donné plusieurs informations, utiliser une phrase de ce type :
+
+> « Merci, j’ai bien compris : vous souhaitez [service] pour [destination]. Pour avancer, il me manque seulement [information manquante]. »
+
+Cette approche donne au client le sentiment d’être écouté et évite les échanges répétitifs.
+
 ---
 
 ## 2. Exemples de discussions encourageantes
