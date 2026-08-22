@@ -288,7 +288,7 @@ Ces exemples servent de modèles de ton. L’agent doit rester naturel, répondr
 - terminer chaque message par une question simple qui fait progresser la conversation ;
 - ne jamais promettre un visa ou une date exacte.
 
-## 13. Règles opérationnelles complémentaires pour l’agent
+## 3. Règles opérationnelles complémentaires pour l’agent
 
 ### 13.1 Identifier l’intention principale
 
@@ -388,7 +388,7 @@ Terminer par une prochaine action simple :
 
 ---
 
-## 3. Présentation courte de Joventy
+## 4. Présentation courte de Joventy
 
 Joventy est un service privé d’assistance visa **100 % en ligne**, basé à Kinshasa, en République démocratique du Congo. Joventy accompagne principalement les voyageurs congolais dans la préparation de leurs dossiers, le remplissage des formulaires officiels, la recherche de rendez-vous consulaires et la soumission de demandes de visa électronique.
 
@@ -425,7 +425,7 @@ Joventy combine :
 
 ---
 
-## 4. Ce que Joventy fait
+## 5. Ce que Joventy fait
 
 Selon la destination et la formule choisie, Joventy peut :
 
@@ -592,7 +592,7 @@ Si le client demande s’il doit se déplacer :
 
 ---
 
-## 5. Tarifs Joventy — référence de réponse
+## 6. Tarifs Joventy — référence de réponse
 
 Tous les montants ci-dessous sont en **USD** et concernent les frais de service Joventy. Les frais des ambassades, gouvernements et centres de visa ne sont pas inclus sauf mention contraire.
 
@@ -702,7 +702,7 @@ Ne jamais demander au client de communiquer un mot de passe, un code PIN ou un c
 
 ---
 
-## 6. Délais réalistes des créneaux
+## 7. Délais réalistes des créneaux
 
 Les créneaux ne sont pas fabriqués par Joventy : ils dépendent de l’ouverture des portails officiels et des quotas des ambassades.
 
@@ -725,7 +725,7 @@ Réponse recommandée :
 
 ---
 
-## 7. Destinations et services couverts
+## 8. Destinations et services couverts
 
 ### États-Unis
 
@@ -834,7 +834,7 @@ Joventy indique également pouvoir accompagner des étrangers qui souhaitent vis
 
 ---
 
-## 8. Transit de 21 jours — situation urgente
+## 9. Transit de 21 jours — situation urgente
 
 Le projet contient une offre d’accompagnement pour les personnes qui doivent séjourner au moins 21 jours dans un pays neutre avant de poursuivre vers les États-Unis, le Canada ou le Mexique, lorsque les règles sanitaires ou d’entrée l’exigent.
 
@@ -862,7 +862,7 @@ Réponse prudente :
 
 ---
 
-## 9. Parcours client type
+## 10. Parcours client type
 
 1. Le client indique sa destination, son type de visa et son objectif.
 2. L’agent vérifie s’il demande :
@@ -884,7 +884,7 @@ Réponse prudente :
 
 ---
 
-## 10. Questions à poser au premier contact
+## 11. Questions à poser au premier contact
 
 Ne pas demander toutes les questions à la fois si cela alourdit l’échange. Commencer par les éléments essentiels :
 
@@ -903,7 +903,7 @@ Pour une demande de visa complet, demander ensuite : emploi/activité, ressource
 
 ---
 
-## 11. Règles de ton et de sécurité pour l’agent
+## 12. Règles de ton et de sécurité pour l’agent
 
 ### À faire
 
@@ -936,7 +936,7 @@ Pour une demande de visa complet, demander ensuite : emploi/activité, ressource
 
 ---
 
-## 12. Réponses rapides prêtes à l’emploi
+## 13. Réponses rapides prêtes à l’emploi
 
 ### « C’est quoi Joventy ? »
 
@@ -980,7 +980,7 @@ Pour une demande de visa complet, demander ensuite : emploi/activité, ressource
 
 ---
 
-## 13. Liens utiles à envoyer au client
+## 14. Liens utiles à envoyer au client
 
 - Accueil : https://joventy.cd
 - Tarifs : https://joventy.cd/prix
@@ -994,7 +994,7 @@ Pour une demande de visa complet, demander ensuite : emploi/activité, ressource
 
 ---
 
-## 14. Limites de cette base de connaissance
+## 15. Limites de cette base de connaissance
 
 Les délais, frais officiels, portails, conditions d’éligibilité et restrictions d’entrée peuvent changer. L’agent WhatsApp doit présenter les informations comme des repères, puis transférer à un conseiller humain les cas suivants :
 
