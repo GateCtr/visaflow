@@ -1391,6 +1391,22 @@ Transférer à l’équipe humaine lorsque la réponse n’est pas confirmée, q
 
 ### 15.3 Procédure de paiement
 
+#### Numéros de paiement Joventy
+
+Les numéros de paiement configurés dans le projet sont :
+
+| Réseau | Numéro |
+|---|---|
+| **M-Pesa (Vodacom)** | **0820 344 541** |
+| **Airtel Money** | **0990 775 880** |
+| **Orange Money** | **+243 840 808 122** |
+
+Instructions à communiquer :
+
+> « Envoyez le montant exact au numéro correspondant à votre réseau, puis envoyez la capture d’écran ou la référence du reçu dans le canal indiqué par Joventy. Ne partagez jamais votre code PIN, votre mot de passe ou un code OTP. »
+
+Le numéro Orange Money est également le numéro WhatsApp officiel de Joventy. Un paiement doit toutefois toujours être accompagné de la preuve ou de la référence de transaction afin d’être vérifié.
+
 #### Avant le paiement
 
 L’agent doit confirmer :
