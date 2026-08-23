@@ -2013,8 +2013,15 @@ async function callMain(
 
   // Désencapsuler le JSONP → HTML
   let mainHtml = body;
-  const jm = body.match(/^[^\(]+\("(.*)"\);?\s*$/s);
-  if (jm?.[1]) {
+  const jm = body.match(/^[^\(]+\("(.*)"\);?\s*$/);
+  if (!jm) {
+    // Retry with manual newline matching (equivalent to /s flag)
+    const singleLine = body.replace(/\n/g, " ");
+    const jm2 = singleLine.match(/^[^\(]+\("(.*)"\);?\s*$/);
+    if (jm2?.[1]) {
+      try { mainHtml = JSON.parse(`"${jm2[1]}"`); } catch {}
+    }
+  } else if (jm[1]) {
     try { mainHtml = JSON.parse(`"${jm[1]}"`); } catch {}
   }
 
@@ -2137,7 +2144,7 @@ function buildSlotInfoSummary(eligible: WorkerSlot[]): string {
 
   // Formater chaque date
   const parts: string[] = [];
-  const sortedDates = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const sortedDates = Array.from(byDate.entries()).sort(([a], [b]) => a.localeCompare(b));
 
   for (const [dateStr, { times, totalFree }] of sortedDates) {
     // Formater la date en "23 sept" ou "3 oct"
