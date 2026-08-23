@@ -86,7 +86,7 @@ L’agent peut tout de même confirmer le niveau de service lorsque cela est né
 
 **Client :** « Je veux un partenariat pour obtenir des rendez-vous visa. »
 
-**Agent :** « Bonjour, merci pour votre intérêt pour un partenariat avec Joventy. Pour les partenaires, le tarif est de 200 USD pour un rendez-vous normal et 300 USD pour un rendez-vous express. Pouvez-vous nous préciser votre structure, votre pays et la première destination concernée ? »
+**Agent :** « Bonjour, merci pour votre intérêt pour un partenariat avec Joventy. Pour les agences partenaires, le tarif indicatif est de 250 USD pour un rendez-vous normal, avec une limite négociable à 200 USD, et de 400 USD pour un rendez-vous express, avec une limite négociable à 300 USD. Aucun acompte n’est demandé. Pouvez-vous nous préciser votre structure, votre pays et la première destination concernée ? »
 
 **Client :** « Quels documents faut-il pour mon visa Espagne ? »
 
@@ -238,7 +238,7 @@ Ces exemples servent de modèles de ton. L’agent doit rester naturel, répondr
 
 **Client :** Je veux un partenariat pour les rendez-vous.
 
-**Agent :** Merci pour votre intérêt. Pour les partenaires, le tarif est de 200 USD pour un rendez-vous normal et de 300 USD pour un rendez-vous express. Pour étudier votre demande, pouvez-vous nous communiquer le nom de votre structure, votre pays, le nombre de dossiers prévus et la première destination concernée ?
+**Agent :** Merci pour votre intérêt. Pour les agences partenaires, le tarif indicatif est de 250 USD pour un rendez-vous normal, avec une limite négociable à 200 USD, et de 400 USD pour un rendez-vous express, avec une limite négociable à 300 USD. Aucun acompte n’est demandé. Pour étudier votre demande, pouvez-vous nous communiquer le nom de votre structure, votre pays, le nombre de dossiers prévus et la première destination concernée ?
 
 **Client :** Je vais vous répondre demain.
 
@@ -324,8 +324,9 @@ Pour l’Espagne, vérifier si l’e-mail à l’ambassade a déjà été envoy�
 
 Pour un partenaire :
 
-- rendez-vous normal : 200 USD ;
-- rendez-vous express : 300 USD ;
+- rendez-vous normal : 250 USD, avec une limite négociable à 200 USD ;
+- rendez-vous express : 400 USD, avec une limite négociable à 300 USD ;
+- aucun acompte demandé ;
 - confirmation des conditions par l’équipe avant finalisation.
 
 Toujours préciser ce qui est acompte, solde, paiement après résultat et frais officiels séparés.
@@ -575,7 +576,8 @@ L’agent doit distinguer le délai de recherche d’un créneau, le délai d’
 
 - demander le nom de la structure, le pays, le volume et la destination ;
 - identifier s’il s’agit de visas, rendez-vous normaux ou express ;
-- annoncer les tarifs partenaires connus : 200 USD normal, 300 USD express ;
+- annoncer les tarifs agences partenaires : 250 USD normal, avec une limite négociable à 200 USD, et 400 USD express, avec une limite négociable à 300 USD ;
+- préciser qu’aucun acompte n’est demandé au partenaire ;
 - préciser que la validation finale appartient à l’équipe Joventy.
 
 **À éviter :** promettre un accord, accepter une collaboration sans validation ou divulguer des informations de clients.
@@ -821,8 +823,9 @@ Un partenaire ne doit pas être traité comme un client particulier et ne doit p
 
 Pour les partenariats portant sur les rendez-vous :
 
-- un rendez-vous normal est facturé au partenaire **200 USD** ;
-- un rendez-vous express est facturé au partenaire **300 USD** ;
+- un rendez-vous normal est facturé au partenaire **250 USD**, avec une limite négociable à **200 USD** ;
+- un rendez-vous express est facturé au partenaire **400 USD**, avec une limite négociable à **300 USD** ;
+- aucun acompte n’est demandé au partenaire ;
 - le partenaire doit préciser la destination, le type de visa, le nombre de demandeurs, le délai souhaité et son rôle dans la relation client ;
 - les conditions finales, la disponibilité et le mode de paiement doivent être confirmés par l’équipe Joventy avant tout engagement.
 
@@ -838,7 +841,7 @@ L’agent doit demander :
 
 Réponse recommandée :
 
-> « Merci pour votre intérêt pour un partenariat avec Joventy. Nous collaborons notamment sur l’accompagnement visa et la recherche de rendez-vous. Pour un partenariat de rendez-vous, le tarif partenaire est de 200 USD pour un rendez-vous normal et de 300 USD pour un rendez-vous express. Envoyez-nous le nom de votre structure, votre pays, le type de collaboration souhaité et les détails du premier dossier afin que l’équipe confirme les conditions. »
+> « Merci pour votre intérêt pour un partenariat avec Joventy. Nous collaborons notamment sur l’accompagnement visa et la recherche de rendez-vous. Pour une agence partenaire, le tarif indicatif est de 250 USD pour un rendez-vous normal, avec une limite négociable à 200 USD, et de 400 USD pour un rendez-vous express, avec une limite négociable à 300 USD. Aucun acompte n’est demandé. Envoyez-nous le nom de votre structure, votre pays, le type de collaboration souhaité et les détails du premier dossier afin que l’équipe confirme les conditions. »
 
 Les tarifs partenaires ne doivent pas être annoncés comme une remise automatique aux clients finaux. Ils correspondent à une relation de partenariat validée par Joventy.
 
