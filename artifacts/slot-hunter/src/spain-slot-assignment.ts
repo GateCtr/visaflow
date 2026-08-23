@@ -53,21 +53,22 @@ export function buildSlotAssignment(
   const myIndex = dossierIndex ?? hashFallback(dossierId, totalDossiers);
 
   // ── Trier les slots par attractivité ───────────────────────────────────────
-  // Priorité : free ≥ groupSize d'abord, puis free DESC, puis heure DESC (tardives)
+  // Priorité : date la plus proche d'abord (une annulation est plus précieuse),
+  // puis free ≥ groupSize, puis heure (premières heures en premier pour les dates proches)
   const sorted = [...eligible].sort((a, b) => {
-    // 1. Slots qui peuvent accueillir notre groupSize en premier
+    // 1. Dates les plus proches en premier (priorité absolue)
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+
+    // 2. Slots qui peuvent accueillir notre groupSize en premier
     const aFits = a.freeslots >= groupSize ? 1 : 0;
     const bFits = b.freeslots >= groupSize ? 1 : 0;
     if (bFits !== aFits) return bFits - aFits;
 
-    // 2. Plus de places libres = plus sûr (moins de risque "seleccionada")
+    // 3. Plus de places libres = plus sûr (moins de risque "seleccionada")
     if (b.freeslots !== a.freeslots) return b.freeslots - a.freeslots;
 
-    // 3. Dates différentes : distribuer sur plusieurs dates (diversification)
-    if (a.date !== b.date) return a.date.localeCompare(b.date);
-
-    // 4. Heures tardives d'abord (les humains prennent les premières heures)
-    return b.time.localeCompare(a.time);
+    // 4. Heures les plus tôt d'abord (pour les dates proches, on veut le matin)
+    return a.time.localeCompare(b.time);
   });
 
   // ── Assignement déterministe ───────────────────────────────────────────────
