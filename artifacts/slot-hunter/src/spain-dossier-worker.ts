@@ -136,6 +136,8 @@ export interface SpainDossierConfig {
   slotDateFrom?: string;
   slotDateDeadline?: string;
   groupSize?: number;
+  /** Priorité manuelle pour la distribution P4 (0 = premier choix) */
+  spainPriorityIndex?: number;
   /** Nombre total de dossiers actifs sur ce portail (pour la distribution P4) */
   activeDossierCount?: number;
   /** Index de ce dossier dans la liste triée (0-based, déterministe) */

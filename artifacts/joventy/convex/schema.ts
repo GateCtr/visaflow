@@ -131,6 +131,10 @@ const hunterConfig = v.object({
   // Le bot continue à scanner pour les dossiers restants du pool.
   // isActive passe à false UNIQUEMENT quand tous les dossiers du pool sont complétés.
   cevCompletedDossiers: v.optional(v.string()),
+  // ── Priorité d'index pour la distribution P4 (Espagne) ─────────────────────
+  // Un dossier avec spainPriorityIndex=0 obtient le premier choix de slot (date la plus proche).
+  // Les dossiers sans index sont placés après ceux qui en ont un, par tri alphabétique ID.
+  spainPriorityIndex: v.optional(v.number()),
 });
 
 export default defineSchema({

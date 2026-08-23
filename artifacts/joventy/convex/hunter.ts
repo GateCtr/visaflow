@@ -65,6 +65,8 @@ export const setHunterConfig = mutation({
     groupSize: v.optional(v.number()),
     // Annulation automatique du RDV existant quand la limite Overview Cas 2 est atteinte
     cevAutoCancelOnLimitReached: v.optional(v.boolean()),
+    // Priorité d'index pour la distribution P4 Espagne (0 = premier choix de slot)
+    spainPriorityIndex: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();

@@ -110,6 +110,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [groupSize, setGroupSize] = useState("");
   // CEV — annulation automatique
   const [cevAutoCancel, setCevAutoCancel] = useState(false);
+  // Spain priority index
+  const [spainPriorityIndex, setSpainPriorityIndex] = useState("");
   // Visa Class (meute)
   const [visaClassInput, setVisaClassInput] = useState(broadcastVisaClass ?? "");
   const [savingVisaClass, setSavingVisaClass] = useState(false);
@@ -157,6 +159,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setGroupSize(hc.groupSize ? String(hc.groupSize) : "");
       // CEV — annulation automatique
       setCevAutoCancel(hc.cevAutoCancelOnLimitReached ?? false);
+      // Spain priority
+      setSpainPriorityIndex((hc as { spainPriorityIndex?: number }).spainPriorityIndex != null ? String((hc as { spainPriorityIndex?: number }).spainPriorityIndex) : "");
     }
   }, [hc]);
 
@@ -194,6 +198,8 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         groupSize: groupSize ? Number(groupSize) : undefined,
         // CEV — annulation automatique
         cevAutoCancelOnLimitReached: cevAutoCancel,
+        // Spain priority index
+        spainPriorityIndex: spainPriorityIndex !== "" ? Number(spainPriorityIndex) : undefined,
       });
       // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
       if (destination === "usa" && visaClassInput && visaClassInput !== (broadcastVisaClass ?? "")) {
@@ -328,6 +334,28 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
                 {groupSize && Number(groupSize) > 1
                   ? `Bot ne booke que si ≥ ${groupSize} places libres simultanées`
                   : "Laisser vide ou 1 = solo (défaut)"}
+              </span>
+            </div>
+          </Field>
+        )}
+
+        {/* Destination-specific */}
+        {(destination === "spain" || destination === "espagne") && (
+          <Field label="Priorité (index P4)">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={99}
+                value={spainPriorityIndex}
+                onChange={(e) => setSpainPriorityIndex(e.target.value)}
+                placeholder="auto"
+                className="h-9 bg-slate-50/80 text-sm font-mono w-24"
+              />
+              <span className="text-[11px] text-slate-500">
+                {spainPriorityIndex !== ""
+                  ? `Index ${spainPriorityIndex} → priorité ${Number(spainPriorityIndex) === 0 ? "maximale (1er choix)" : `#${Number(spainPriorityIndex) + 1}`}`
+                  : "Vide = après les prioritaires (auto)"}
               </span>
             </div>
           </Field>

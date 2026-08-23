@@ -267,7 +267,18 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         const promise = runDossierWorker({
           ...config,
           activeDossierCount: dossiers.length,
-          dossierIndex: dossiers.sort((a, b) => a.id.localeCompare(b.id)).findIndex((d) => d.id === config.id),
+          dossierIndex: dossiers
+            .sort((a, b) => {
+              // Dossiers avec spainPriorityIndex en premier (triés par index croissant)
+              // Dossiers sans index après, triés par ID alphabétique
+              const aIdx = (a as { spainPriorityIndex?: number }).spainPriorityIndex;
+              const bIdx = (b as { spainPriorityIndex?: number }).spainPriorityIndex;
+              if (aIdx != null && bIdx != null) return aIdx - bIdx;
+              if (aIdx != null) return -1;
+              if (bIdx != null) return 1;
+              return a.id.localeCompare(b.id);
+            })
+            .findIndex((d) => d.id === config.id),
         }).then((result) => {
           return result;
         }).catch((err) => {
@@ -492,6 +503,7 @@ async function fetchActiveDossiers(): Promise<SpainDossierConfig[]> {
         (j.hunterConfig as { scheduleUrl?: string }).scheduleUrl ??
         "",
       groupSize: j.hunterConfig.groupSize,
+      spainPriorityIndex: (j.hunterConfig as { spainPriorityIndex?: number }).spainPriorityIndex,
     }));
   } catch (err) {
     log("WARN", `[SPAIN-ORCH] Échec récupération dossiers: ${err}`);
