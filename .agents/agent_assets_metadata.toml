@@ -94,3 +94,17 @@ mtime_ms = 1787382020302
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:89ef7422-5b19-42df-9375-42396b2b4451/704f0f0c-a589-496a-95b9-92aedeeb717a/0bf452a9-21c2-4c8a-9b3c-dc4db079e4d7"
 storage_version_token = "1787382025186197"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "3PIs9NzXuHJkUuYO53vEE"
+uri = "file://artifacts/joventy/docs/joventy-tarifs-creneaux.pdf"
+type = "pdf"
+title = "Joventy — Tarifs des créneaux consulaires"
+description = "Document tarifaire PDF au branding Joventy avec logo officiel, tarifs normal et express, règle d’acompte spécifique à l’Espagne, tarifs des autres destinations et moyens de paiement."
+logical_id = "d0826f95-905f-4469-930b-397edd25c311"
+content_hash = "sha256:d187a76ebebe81e3772f20eae29efc050f728b62f1f5ddf088391eb8e36e7b1a"
+size = 159441
+mtime_ms = 1787458433852
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:89ef7422-5b19-42df-9375-42396b2b4451/d0826f95-905f-4469-930b-397edd25c311/17d2962a-c07f-4772-bab4-b6da10cb581a"
+storage_version_token = "1787458439573486"
+content_type = "application/pdf"
