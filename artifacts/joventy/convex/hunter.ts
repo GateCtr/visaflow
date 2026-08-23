@@ -160,6 +160,8 @@ export const setHunterConfig = mutation({
         groupSize: args.groupSize ?? undefined,
         // Annulation automatique du RDV existant quand la limite Overview Cas 2 est atteinte
         cevAutoCancelOnLimitReached: args.cevAutoCancelOnLimitReached ?? (existing as any)?.cevAutoCancelOnLimitReached ?? undefined,
+        // Spain priority index (0 est valide → ne pas utiliser ?? qui ignorerait 0)
+        spainPriorityIndex: args.spainPriorityIndex !== undefined ? args.spainPriorityIndex : (existing as any)?.spainPriorityIndex,
       },
       updatedAt: Date.now(),
     });
