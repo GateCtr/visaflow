@@ -197,6 +197,14 @@ const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
  */
 const RACE_MODE_SLOT_THRESHOLD = 5;
 
+/**
+ * Pre-publication proxy refresh : à la minute PREPUB_REFRESH_MINUTE de chaque heure,
+ * chaque worker force une rotation de proxy frais + re-solve CF.
+ * Objectif : arriver à la fenêtre de publication (min 13-14) avec un proxy tout neuf.
+ * Valeur 11 → refresh à XX:11, prêt pour XX:13.
+ */
+const PREPUB_REFRESH_MINUTE = 11;
+
 // ─── Détection erreur proxy ────────────────────────────────────────────────────
 
 /**
@@ -955,11 +963,41 @@ export async function runDossierWorker(
     return workerResult;
   }
 
+  // ── Tracking pre-publication proxy refresh (1x par heure) ─────────────────
+  let lastPrepubRefreshHour = -1;
+
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
 
     try {
+      // ── Pre-publication proxy refresh ─────────────────────────────────────────
+      // À la minute PREPUB_REFRESH_MINUTE, forcer une rotation de proxy frais pour
+      // arriver à la publication (min 13-14) avec une IP neuve et CF résolu.
+      const nowDate = new Date();
+      const currentMinute = nowDate.getUTCMinutes();
+      const currentHour = nowDate.getUTCHours();
+      if (
+        currentMinute >= PREPUB_REFRESH_MINUTE &&
+        currentMinute < PREPUB_REFRESH_MINUTE + 1 &&
+        currentHour !== lastPrepubRefreshHour
+      ) {
+        lastPrepubRefreshHour = currentHour;
+        log("INFO", `${tag} 🔄 Pre-pub refresh (min ${currentMinute}) — rotation proxy frais avant publication`);
+        const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "main-0b-rotation");
+        if (newProxy) {
+          proxyUrl = newProxy;
+          phpState = await initPhpState(session, config, tag);
+          if (phpState) {
+            log("INFO", `${tag} ✅ Pre-pub refresh OK — proxy frais prêt`);
+          } else {
+            log("WARN", `${tag} ⚠️ Pre-pub refresh: PHP reinit échouée, proxy OK quand même`);
+          }
+        } else {
+          log("WARN", `${tag} ⚠️ Pre-pub refresh: rotation impossible — proxy actuel conservé`);
+        }
+      }
+
       // ── Header de cycle — visible pour chaque dossier en cours de scan ─────────
       const winRemain = Math.round((windowEnd - Date.now()) / 60_000);
       log(
