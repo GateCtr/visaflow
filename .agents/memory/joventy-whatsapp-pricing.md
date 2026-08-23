@@ -19,7 +19,7 @@ The confirmed operational pricing is:
 ## Additional operational rules
 
 - A complete visa-document checklist is part of profiling and orientation; provide it only after formal client engagement, not as a generic free response.
-- Partnership rendezvous pricing: 200 USD for a normal appointment and 300 USD for an express appointment, subject to team confirmation.
+- Agency partner appointment pricing: 250 USD normal (negotiable down to 200 USD) and 400 USD express (negotiable down to 300 USD), with no deposit and team confirmation required.
 - If a client says they will return tomorrow, wait until the following day and follow up during Joventy’s normal hours rather than relaunching a few hours later.
 - Spain embassy-email preparation requires the project-defined passport scan, passport-page photo, passport selfie, return-flight booking, hotel/accommodation proof, and Schengen insurance covering at least 30,000 EUR.
 
