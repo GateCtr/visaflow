@@ -1064,6 +1064,7 @@ export async function runDossierWorker(
       );
 
       const scan = await refreshSessionAndScan(session, config, tag);
+      log("INFO", `${tag} 📊 Cycle ${cycleCount} scan=${scan.status} | cfClearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
 
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
@@ -1094,7 +1095,7 @@ export async function runDossierWorker(
       if (scan.status === "cf_expired") {
         // CF clearance expiré — le GET widget a retourné un challenge 403.
         // Re-solve via CapSolver avec le même proxy (exit IP inchangée).
-        log("WARN", `${tag} 🔄 cf_expired — re-solve CF (proxy conservé)`);
+        log("WARN", `${tag} 🔄 cf_expired — re-solve CF (proxy conservé) | cycle=${cycleCount} | clearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}`);
         const freshResult = await initWorkerSession(proxyUrl, portalUrlNoFrag, capsolverKey);
         if (!freshResult) {
           log("WARN", `${tag} ❌ Re-solve CF échoué — exit worker`);
