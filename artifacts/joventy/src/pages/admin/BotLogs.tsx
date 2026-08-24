@@ -967,6 +967,8 @@ interface SpainScanTraceData {
   agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string }>;
   datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
   bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number; gsfBytes?: number; signinBytes?: number; bktToken?: string; locator?: string }>;
+  /** Durée réelle du cycle de scan (ms) */
+  scanMs?: number;
 }
 
 function boolBadge(value: boolean | null | undefined, label?: string) {
@@ -1105,6 +1107,16 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
       label: "rot",
       ok: null,
       meta: `×${trace.ipRotations}`,
+      color: "blue",
+    });
+  }
+
+  // ── Durée totale du cycle ──
+  if (trace.scanMs !== undefined) {
+    steps.push({
+      label: "⏱",
+      ok: null,
+      meta: trace.scanMs >= 1000 ? `${(trace.scanMs / 1000).toFixed(1)}s` : `${trace.scanMs}ms`,
       color: "blue",
     });
   }

@@ -324,6 +324,8 @@ interface WorkerSpainTrace {
   datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
   bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number; gsfBytes?: number; signinBytes?: number; bktToken?: string; locator?: string }>;
   ipRotations: number;
+  /** Durée réelle du cycle de scan (ms) — datetime/ uniquement */
+  scanMs?: number;
 }
 
 /** Extrait les signaux SPA Bookitit du HTML /main/ */
@@ -1184,6 +1186,7 @@ export async function runDossierWorker(
             ok: m.ok,
           }));
         }
+        workerTrace.scanMs = Date.now() - cycleStart;
         void reportSpainWatcherScan({
           status: "not_found",
           applicationId: config.applicationId,
@@ -1244,6 +1247,7 @@ export async function runDossierWorker(
           .slice(0, 50) // limiter à 50 slots pour ne pas exploser le payload
           .map((s) => ({ d: s.date, t: s.time, n: s.freeslots }));
 
+        workerTrace.scanMs = Date.now() - cycleStart;
         void reportSpainWatcherScan({
           status: eligible.length > 0 ? "found" : "not_found",
           slotInfo: eligible.length > 0
