@@ -35,7 +35,6 @@ import {
   saveLastProxyForDossier,
   deleteWorkerCfClearance,
   saveWorkerCfClearance,
-  shouldSleepAfterSlots,
 } from "./spain-redis-persistence.js";
 import { initDecodoPool, flagDecodoIp, rotateDecodoUrl } from "./spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "./convexClient.js";
@@ -226,18 +225,8 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
       }
 
       // 4. Démarrer un worker pour chaque dossier sans worker en cours
-      // ── V2 : check sommeil post-détection ────────────────────────────────────
-      const sleeping = await shouldSleepAfterSlots();
-      if (sleeping) {
-        if (iteration % 10 === 1) {
-          log(
-            "INFO",
-            `[SPAIN-ORCH] 🌙 Sommeil post-détection actif — aucun worker lancé (expire à 22:05 UTC)`,
-          );
-        }
-        // Ne pas lancer de workers — attendre que le flag Redis expire
-        // Les workers existants (en cours de booking) continuent naturellement
-      } else {
+      // ── V2 : check sommeil post-détection (DÉSACTIVÉ — annulations arrivent à tout moment) ──
+      {
         for (const config of dossiers) {
         const existing = workers.get(config.id);
 
@@ -310,7 +299,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           cooldownUntil: 0,
         });
         }
-      } // end else (not sleeping)
+      } // end dossier launch block
 
       // 5. Logging état des workers
       if (iteration % 5 === 1 || workers.size > 0) {

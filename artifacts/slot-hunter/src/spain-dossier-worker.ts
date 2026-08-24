@@ -65,8 +65,6 @@ import {
   deleteLastStickyForDossier,
   tryAcquireBookingSlot,
   releaseBookingSlot,
-  setSlotFoundToday,
-  shouldSleepAfterSlots,
 } from "./spain-redis-persistence.js";
 import {
   reportSlotFound,
@@ -1052,12 +1050,8 @@ export async function runDossierWorker(
     // Mettre à jour l'IP courante (peut avoir changé via rotation)
     workerTrace.ip = { index: 0, total: 6000, proxy: maskProxy(proxyUrl) };
 
-    // V2 : si un autre worker a posé le flag sommeil → sortie immédiate
-    if (cycleCount > 1 && await shouldSleepAfterSlots()) {
-      log("INFO", `${tag} 🌙 Flag sommeil détecté (posé par un autre worker) — exit`);
-      workerResult = { dossierId: config.id, status: "exited" };
-      return workerResult;
-    }
+    // V2 : si un autre worker a posé le flag sommeil → (DÉSACTIVÉ — les annulations arrivent à tout moment)
+    // if (cycleCount > 1 && await shouldSleepAfterSlots()) { ... }
 
     try {
       // ── Pre-publication proxy refresh ─────────────────────────────────────────
@@ -1161,19 +1155,8 @@ export async function runDossierWorker(
       if (scan.status === "not_found") {
         log("INFO", `${tag} ⏸ Cycle ${cycleCount}: aucun créneau — next`);
 
-        // V2 : si on avait détecté des slots précédemment dans cette fenêtre,
-        // datetime/ vide = les créneaux sont partis → déclencher le sommeil post-détection
-        if (slotsDetectedThisWindow) {
-          log("INFO", `${tag} 🌙 datetime/ VIDE après détection — publication terminée, déclenchement sommeil`);
-          await setSlotFoundToday();
-          // Libérer le booking slot si on en détenait un
-          if (holdingBookingSlot) {
-            await releaseBookingSlot(config.id);
-            holdingBookingSlot = false;
-          }
-          workerResult = { dossierId: config.id, status: "exited" };
-          return workerResult;
-        }
+        // V2 (DÉSACTIVÉ) : le sommeil post-détection empêchait de capter les annulations.
+        // Les workers continuent de scanner normalement même après avoir vu des slots disparaître.
 
         // Mettre à jour les datetimes de la trace pour ce cycle
         if (scan.monthTraces) {
