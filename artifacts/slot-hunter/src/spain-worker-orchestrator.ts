@@ -622,17 +622,31 @@ function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, 
     try {
       const { Impit } = await import("impit");
       const impit = new Impit({ browser: "chrome", proxyUrl: currentStickyUrl, timeout: 10_000 } as any);
-      const r = await (impit.fetch("https://httpbin.org/status/200", {
-        method: "HEAD",
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0" },
+
+      // Ping le PORTAIL avec cf_clearance (pas httpbin) pour vérifier que la clearance est encore valide.
+      // Si le portail retourne un CF challenge (403 ou HTML challenge) → pre-warm immédiat.
+      const { loadWorkerCfClearance } = await import("./spain-redis-persistence.js");
+      const cfClearance = await loadWorkerCfClearance(currentStickyUrl);
+      const cookieStr = cfClearance ? `cf_clearance=${cfClearance}` : "";
+      const targetUrl = portalUrl.split("#")[0];
+
+      const r = await (impit.fetch(targetUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0",
+          "Cookie": cookieStr,
+        },
       } as any) as unknown as Promise<Response>);
 
-      if (r.status >= 500) {
-        // 503 = httpbin surchargé mais le proxy a routé la requête → session maintenue
-        log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK (${r.status}) — ${dossierId.slice(0, 8)}… (proxy: ${masked()}…)`);
-      } else {
-        log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK — ${dossierId.slice(0, 8)}… HTTP ${r.status} (proxy: ${masked()}…)`);
+      const body = await r.text();
+      const isCf = r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000));
+
+      if (isCf) {
+        // CF challenge → clearance morte → pre-warm
+        log("WARN", `[SPAIN-ORCH] 🏓 Keep-alive CF INVALID (HTTP ${r.status}) — ${dossierId.slice(0, 8)}… → pre-warm`);
+        throw new Error("CF challenge on portal ping");
       }
+
+      log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK (portal ${r.status}, ${body.length}B) — ${dossierId.slice(0, 8)}… cf_clearance valide`);
     } catch (err) {
       // ── PING FAIL — pre-warm : blacklister + rotation + solve CF ────────────
       log("WARN", `[SPAIN-ORCH] 🏓 Keep-alive FAIL — ${dossierId.slice(0, 8)}…: ${err instanceof Error ? err.message : err}`);
