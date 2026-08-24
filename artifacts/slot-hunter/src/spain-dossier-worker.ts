@@ -63,6 +63,10 @@ import {
   saveLastStickyForDossier,
   getLastStickyForDossier,
   deleteLastStickyForDossier,
+  tryAcquireBookingSlot,
+  releaseBookingSlot,
+  setSlotFoundToday,
+  shouldSleepAfterSlots,
 } from "./spain-redis-persistence.js";
 import {
   reportSlotFound,
@@ -174,6 +178,45 @@ const SCAN_INTERVAL_MS = ((): number => {
   const s = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "10");
   return Math.max(5, Number.isFinite(s) ? s : 10) * 1_000;
 })();
+
+// ─── V2 Adaptive Scan Intervals ──────────────────────────────────────────────
+
+/** Intervalle warm-up : HH:05 → HH:10 (60s entre cycles) */
+const SCAN_WARMUP_INTERVAL_MS = 60_000;
+
+/** Intervalle normal : HH:10 → détection (10s, identique à l'actuel) */
+const SCAN_NORMAL_INTERVAL_MS = SCAN_INTERVAL_MS;
+
+/** Intervalle rapide : après détection, workers en attente de place sémaphore (2-3s) */
+const SCAN_FAST_INTERVAL_MS = 2_500;
+
+/**
+ * Détermine l'intervalle de scan adaptatif selon la phase du cycle.
+ *
+ * Phases :
+ *   - Warm-up (HH:05 → HH:10) : 60s — init PHP, CF cache chaud
+ *   - Normal  (HH:10 → détection) : 10s — scan actif, en attente de publication
+ *   - Fast    (après détection, sémaphore plein) : 2-3s — cycle complet rapide
+ *
+ * @param slotsDetectedThisWindow  true si des slots ont été vus dans cette fenêtre horaire
+ * @param holdingBookingSlot       true si ce worker est armé (a acquis le sémaphore)
+ */
+function getAdaptiveScanInterval(slotsDetectedThisWindow: boolean, holdingBookingSlot: boolean): number {
+  if (holdingBookingSlot) {
+    // Worker armé = en cours de booking, pas de scan interval (il ne scanne plus)
+    return SCAN_NORMAL_INTERVAL_MS;
+  }
+  if (slotsDetectedThisWindow) {
+    // Slots détectés mais ce worker attend sa place au sémaphore → scan rapide
+    return SCAN_FAST_INTERVAL_MS;
+  }
+  // Pas encore de détection — adapter selon la minute dans l'heure (UTC)
+  const minInHour = new Date().getUTCMinutes();
+  if (minInHour < 10) {
+    return SCAN_WARMUP_INTERVAL_MS; // HH:05 → HH:10 = warm-up 60s
+  }
+  return SCAN_NORMAL_INTERVAL_MS; // HH:10+ = scan normal 10s
+}
 
 /** Tolérance slotDateFrom (jours) — identique au watcher legacy */
 const SLOT_FROM_TOLERANCE_DAYS = ((): number => {
@@ -809,6 +852,8 @@ export async function runDossierWorker(
   // Toute sortie de la fonction (return, throw, exception async) passe par le finally.
   // proxyUrl = "" → mode direct sans proxy → pas de réservation à libérer.
   let workerResult: WorkerResult = { dossierId: config.id, status: "error", errorMessage: "init" };
+  // V2 : déclaré ici (pas dans le try) pour être accessible dans le finally
+  let holdingBookingSlot = false;
   try {
 
   const capsolverKey =
@@ -959,6 +1004,10 @@ export async function runDossierWorker(
   const windowEnd = windowEndEarly;
   let cycleCount = 0;
 
+  // ── V2 : état adaptatif du scan ─────────────────────────────────────────────
+  /** true si des slots ont été détectés dans cette fenêtre horaire */
+  let slotsDetectedThisWindow = false;
+
   if (windowEnd <= Date.now()) {
     log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} expirée après init — exit`);
     workerResult = { dossierId: config.id, status: "exited" };
@@ -971,6 +1020,13 @@ export async function runDossierWorker(
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
+
+    // V2 : si un autre worker a posé le flag sommeil → sortie immédiate
+    if (cycleCount > 1 && await shouldSleepAfterSlots()) {
+      log("INFO", `${tag} 🌙 Flag sommeil détecté (posé par un autre worker) — exit`);
+      workerResult = { dossierId: config.id, status: "exited" };
+      return workerResult;
+    }
 
     try {
       // ── Pre-publication proxy refresh ─────────────────────────────────────────
@@ -1066,6 +1122,21 @@ export async function runDossierWorker(
 
       if (scan.status === "not_found") {
         log("INFO", `${tag} ⏸ Cycle ${cycleCount}: aucun créneau — next`);
+
+        // V2 : si on avait détecté des slots précédemment dans cette fenêtre,
+        // datetime/ vide = les créneaux sont partis → déclencher le sommeil post-détection
+        if (slotsDetectedThisWindow) {
+          log("INFO", `${tag} 🌙 datetime/ VIDE après détection — publication terminée, déclenchement sommeil`);
+          await setSlotFoundToday();
+          // Libérer le booking slot si on en détenait un
+          if (holdingBookingSlot) {
+            await releaseBookingSlot(config.id);
+            holdingBookingSlot = false;
+          }
+          workerResult = { dossierId: config.id, status: "exited" };
+          return workerResult;
+        }
+
         // Mettre à jour les datetimes de la trace pour ce cycle
         if (scan.monthTraces) {
           workerTrace.datetimes = scan.monthTraces.map((m) => ({
@@ -1157,6 +1228,9 @@ export async function runDossierWorker(
             `${tag} Cycle ${cycleCount}: ${scan.slots.length} créneau(x) hors fenêtre — next`,
           );
         } else {
+          // V2 : marquer la détection SEULEMENT quand il y a des slots éligibles (dans la fenêtre de dates)
+          slotsDetectedThisWindow = true;
+
           // P4 — Distribution déterministe des créneaux.
           // Chaque dossier a un index fixe (0-based) → premier choix garanti différent.
           const totalDossiers = config.activeDossierCount || 10;
@@ -1205,6 +1279,21 @@ export async function runDossierWorker(
               })()
             : sortedEligible;
 
+          // ── V2 : Sémaphore de booking — limiter à MAX_CONCURRENT_BOOKERS signin/ simultanés ──
+          // Si le sémaphore est plein, ce worker reste en scan rapide (2-3s) sans tenter le booking.
+          // Il reviendra au prochain cycle et re-checkera armed_count.
+          if (!holdingBookingSlot) {
+            const acquired = await tryAcquireBookingSlot(config.id);
+            if (!acquired) {
+              log("INFO", `${tag} ⏳ Sémaphore plein — scan rapide (pas de booking ce cycle)`);
+              // Ne pas entrer dans la boucle de booking — scan rapide au prochain cycle
+              // Le reporting "found" est déjà fait ci-dessus, pas besoin de le refaire
+            } else {
+              holdingBookingSlot = true;
+            }
+          }
+
+          if (holdingBookingSlot) {
           for (const candidate of bookingCandidates) {
             // ── Redis atomic claim (désactivé en mode race) ──────────────────────
             if (!raceMode) {
@@ -1408,6 +1497,11 @@ export async function runDossierWorker(
 
             if (bookResult.status === "booked") {
               await reportBookingSuccess(config, bookResult, slot, scan, tag);
+              // V2 : libérer le sémaphore de booking
+              if (holdingBookingSlot) {
+                await releaseBookingSlot(config.id);
+                holdingBookingSlot = false;
+              }
               workerResult = { dossierId: config.id, status: "booked" };
               return workerResult;
             }
@@ -1432,6 +1526,11 @@ export async function runDossierWorker(
                 reason: bookResult.errorMessage ?? "Credentials incorrects",
                 serviceName: scan.serviceName,
               }).catch(() => {});
+              // V2 : libérer le sémaphore
+              if (holdingBookingSlot) {
+                await releaseBookingSlot(config.id);
+                holdingBookingSlot = false;
+              }
               workerResult = { dossierId: config.id, status: "error", errorMessage: `signin_failed: ${bookResult.errorMessage}` };
               return workerResult;
             }
@@ -1491,7 +1590,13 @@ export async function runDossierWorker(
               "INFO",
               `${tag} Cycle ${cycleCount}: tous les créneaux éligibles (${sortedEligible.length}) épuisés — next cycle`,
             );
+            // V2 : libérer le sémaphore — ce worker n'a pas réussi à booker
+            if (holdingBookingSlot) {
+              await releaseBookingSlot(config.id);
+              holdingBookingSlot = false;
+            }
           }
+          } // end if (holdingBookingSlot)
         }
       }
 
@@ -1504,9 +1609,10 @@ export async function runDossierWorker(
       log("WARN", `${tag} Cycle ${cycleCount} exception: ${err}`);
     }
 
-    // Attendre jusqu'au prochain cycle (start-to-start)
+    // Attendre jusqu'au prochain cycle (start-to-start) — V2 adaptatif
+    const adaptiveInterval = getAdaptiveScanInterval(slotsDetectedThisWindow, holdingBookingSlot);
     const elapsed = Date.now() - cycleStart;
-    const wait = Math.max(0, SCAN_INTERVAL_MS - elapsed);
+    const wait = Math.max(0, adaptiveInterval - elapsed);
     if (Date.now() + wait < windowEnd) {
       await sleep(wait);
     }
@@ -1520,6 +1626,11 @@ export async function runDossierWorker(
   return workerResult;
 
   } finally {
+    // V2 : libérer le sémaphore de booking si encore détenu (crash, exception…)
+    if (holdingBookingSlot) {
+      await releaseBookingSlot(config.id).catch(() => {});
+      holdingBookingSlot = false;
+    }
     // Libération garantie de l'IP, quelle que soit la sortie (return, throw, exception).
     // Owner-check Lua : seul ce dossier peut supprimer sa réservation.
     // proxyUrl = "" → mode direct, pas de réservation Redis à libérer.

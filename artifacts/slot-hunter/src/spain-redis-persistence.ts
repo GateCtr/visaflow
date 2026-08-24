@@ -1383,3 +1383,185 @@ export async function releaseSentinelRole(portalUrl: string, dossierId: string):
     await (redisClient as any).eval(lua, { keys: [key], arguments: [dossierId] });
   } catch { /* non-fatal */ }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V2 BOOKING STRATEGY — Sémaphore de booking + sommeil post-détection
+//
+// Le sémaphore limite le nombre de workers en booking simultané à MAX_CONCURRENT_BOOKERS.
+// Objectif : éviter les réponses 0B du serveur Bookitit quand > 5 signin/ arrivent
+// en même temps (rate-limit observé sur l'endpoint signin/).
+//
+// Le flag slots_found_today déclenche le sommeil prolongé après une détection réussie
+// (la publication quotidienne a eu lieu → inutile de continuer à scanner).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_BOOKING_ARMED_KEY = "spain:booking:armed_count";
+const REDIS_BOOKING_ARMED_TTL_SEC = 90; // Auto-reset si crash (personne ne DECR)
+
+/** Nombre maximum de workers en booking simultané. Au-delà → scan rapide 2-3s sans booking. */
+export const MAX_CONCURRENT_BOOKERS = 5;
+
+/**
+ * Tente d'acquérir une place dans le sémaphore de booking.
+ *
+ * Lua atomique : INCR → si > MAX → DECR + return 0 ; sinon return 1.
+ * Le TTL est renouvelé à chaque INCR pour éviter l'expiration pendant un booking actif.
+ *
+ * @returns true si la place est acquise (ce worker peut faire signin/ + summary/)
+ *          false si le sémaphore est plein (ce worker doit rester en scan rapide)
+ *          En mode dégradé (Redis absent) → true (pas de coordination)
+ */
+export async function tryAcquireBookingSlot(dossierId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // dégradé → pas de coordination
+
+  const lua = `
+    local key = KEYS[1]
+    local max = tonumber(ARGV[1])
+    local ttl = tonumber(ARGV[2])
+    local current = redis.call("INCR", key)
+    if current == 1 then
+      redis.call("EXPIRE", key, ttl)
+    end
+    if current > max then
+      redis.call("DECR", key)
+      return 0
+    end
+    -- Renouveler le TTL tant qu'il y a des bookers actifs
+    redis.call("EXPIRE", key, ttl)
+    return 1
+  `;
+  try {
+    const result = await (redisClient as any).eval(lua, {
+      keys: [REDIS_BOOKING_ARMED_KEY],
+      arguments: [String(MAX_CONCURRENT_BOOKERS), String(REDIS_BOOKING_ARMED_TTL_SEC)],
+    });
+    if (result === 1) {
+      console.log(`[spain-redis] 🎯 Booking slot acquis — ${dossierId.slice(0, 8)}…`);
+    } else {
+      console.log(`[spain-redis] ⏳ Booking slot FULL (${MAX_CONCURRENT_BOOKERS} max) — ${dossierId.slice(0, 8)}… reste en scan rapide`);
+    }
+    return result === 1;
+  } catch (err) {
+    console.warn(`[spain-redis] tryAcquireBookingSlot: ${err instanceof Error ? err.message : err}`);
+    return true; // dégradé → laisser tenter
+  }
+}
+
+/**
+ * Libère une place dans le sémaphore de booking.
+ * Appelé après booking (succès ou échec), credentials mort, ou abandon.
+ *
+ * DECR atomique avec floor à 0 (ne descend jamais en négatif).
+ */
+export async function releaseBookingSlot(dossierId: string): Promise<void> {
+  if (!redisReady || !redisClient) return;
+
+  const lua = `
+    local key = KEYS[1]
+    local val = tonumber(redis.call("GET", key) or "0")
+    if val > 0 then
+      redis.call("DECR", key)
+    end
+    return val - 1
+  `;
+  try {
+    await (redisClient as any).eval(lua, {
+      keys: [REDIS_BOOKING_ARMED_KEY],
+      arguments: [],
+    });
+    console.log(`[spain-redis] ✅ Booking slot libéré — ${dossierId.slice(0, 8)}…`);
+  } catch (err) {
+    console.warn(`[spain-redis] releaseBookingSlot: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/**
+ * Retourne le nombre actuel de workers en booking (informatif, pour les logs).
+ */
+export async function getBookingArmedCount(): Promise<number> {
+  if (!redisReady || !redisClient) return 0;
+  try {
+    const val = await redisClient.get(REDIS_BOOKING_ARMED_KEY);
+    return val ? Math.max(0, parseInt(val, 10)) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// ─── SOMMEIL POST-DÉTECTION ─────────────────────────────────────────────────
+
+const REDIS_SLOTS_FOUND_TODAY_KEY = "spain:slots_found_today";
+
+/**
+ * Calcule le nombre de secondes jusqu'à 22:05 UTC.
+ * Si l'heure actuelle est >= 22:05 UTC → retourne 0 (pas de sommeil prolongé).
+ */
+export function getSecondsUntil2205UTC(): number {
+  const now = new Date();
+  const target = new Date(now);
+  target.setUTCHours(22, 5, 0, 0);
+
+  const diffMs = target.getTime() - now.getTime();
+  if (diffMs <= 0) return 0; // Déjà passé 22:05 → pas de sommeil prolongé
+  return Math.ceil(diffMs / 1000);
+}
+
+/**
+ * Pose le flag "slots trouvés aujourd'hui" dans Redis.
+ * Le TTL expire automatiquement à 22:05 UTC (calculé dynamiquement).
+ * Si l'heure actuelle est >= 22:05 → TTL court (sommeil normal jusqu'au prochain cycle).
+ *
+ * Appelé quand datetime/ retourne vide APRÈS avoir détecté des slots (= les créneaux sont partis).
+ */
+export async function setSlotFoundToday(): Promise<void> {
+  if (!redisReady || !redisClient) return;
+
+  const ttl = getSecondsUntil2205UTC();
+  if (ttl <= 0) {
+    // Heure >= 22:05 UTC → pas de sommeil prolongé, on pose un flag court (5 min)
+    // pour que les workers finissent leur cycle courant proprement
+    try {
+      await redisClient.set(REDIS_SLOTS_FOUND_TODAY_KEY, String(Date.now()), { EX: 300 });
+      console.log(`[spain-redis] 🌙 Slots trouvés après 22:05 UTC — flag court (5min, cycle normal)`);
+    } catch {}
+    return;
+  }
+
+  try {
+    await redisClient.set(REDIS_SLOTS_FOUND_TODAY_KEY, String(Date.now()), { EX: ttl });
+    const hours = Math.floor(ttl / 3600);
+    const mins = Math.round((ttl % 3600) / 60);
+    console.log(`[spain-redis] 🌙 Slots trouvés — sommeil jusqu'à 22:05 UTC (${hours}h${mins}min, TTL=${ttl}s)`);
+  } catch (err) {
+    console.warn(`[spain-redis] setSlotFoundToday: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/**
+ * Vérifie si les workers doivent dormir (flag encore actif dans Redis).
+ *
+ * @returns true → les workers ne doivent PAS scanner (sommeil prolongé)
+ *          false → scan normal
+ *          En mode dégradé (Redis absent) → false (pas de sommeil)
+ */
+export async function shouldSleepAfterSlots(): Promise<boolean> {
+  if (!redisReady || !redisClient) return false;
+
+  try {
+    const val = await redisClient.get(REDIS_SLOTS_FOUND_TODAY_KEY);
+    return val !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Supprime le flag de sommeil (reset manuel ou pour tests).
+ */
+export async function clearSlotFoundToday(): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  try {
+    await redisClient.del(REDIS_SLOTS_FOUND_TODAY_KEY);
+    console.log(`[spain-redis] 🔓 Flag slots_found_today supprimé — scan reprend`);
+  } catch {}
+}
