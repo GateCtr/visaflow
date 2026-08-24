@@ -1250,56 +1250,38 @@ export async function runDossierWorker(
               serviceName: scan.serviceName,
             }).catch(() => {});
 
-            // ── P5 : getsigninfields/ avec retry si null ─────────────────────────
+            // ── P5 : getsigninfields/ — skip immédiat si 0B (pas de retry en booking) ──
             const gsfPhpsessid = Object.entries(ds.jar).find(([k]) => k === "PHPSESSID")?.[1]?.slice(0, 8) ?? "?";
             log("INFO", `${tag} 🔑 getsigninfields/ — ds.PHPSESSID=${gsfPhpsessid}… src=${ds.widgetUrl.slice(-40)}`);
-            let gsfPayload = await callDirect(ds, "getsigninfields/", {
+            const gsfPayload = await callDirect(ds, "getsigninfields/", {
               "services[]": bookExtra["services[]"],
               "agendas[]":  bookExtra["agendas[]"] ?? "",
               date:         bookExtra.date,
               time:         bookExtra.time,
               selectedPeople: bookExtra.selectedPeople,
             }, tag) as any;
-            // P5 — Si gsfPayload null (0B sous charge), retry 1× après 2s
-            if (gsfPayload === null) {
-              log("INFO", `${tag} 🔑 getsigninfields/ → 0B — retry P5 (2s)…`);
-              await sleep(2_000);
-              gsfPayload = await callDirect(ds, "getsigninfields/", {
-                "services[]": bookExtra["services[]"],
-                "agendas[]":  bookExtra["agendas[]"] ?? "",
-                date:         bookExtra.date,
-                time:         bookExtra.time,
-                selectedPeople: bookExtra.selectedPeople,
-              }, tag) as any;
-            }
             const gsfBytes = gsfPayload ? JSON.stringify(gsfPayload).length : 0;
-            log("INFO", `${tag} 🔑 getsigninfields/ → ${gsfBytes}B${gsfPayload ? " ✅" : " ❌ 0B"}`);
+            log("INFO", `${tag} 🔑 getsigninfields/ → ${gsfBytes}B${gsfPayload ? " ✅" : " ❌ 0B — skip slot"}`);
+            if (gsfPayload === null) {
+              // Serveur surchargé — passer au créneau suivant immédiatement
+              await sleep(200);
+              continue;
+            }
             const logintype = "document";
 
-            // ── signin/ — retry 3× si 0B sous charge serveur ─────────────────────
+            // ── signin/ — appel unique, skip immédiat si 0B ─────────────────────
             log("INFO", `${tag} 🔑 signin/…`);
-            let signinPayload: Record<string, unknown> | null = null;
-            for (let signinAttempt = 0; signinAttempt < 3; signinAttempt++) {
-              if (signinAttempt > 0) {
-                const delay = 3_000 * signinAttempt;
-                log("INFO", `${tag} 🔑 signin/ retry ${signinAttempt}/2 (délai ${delay}ms)…`);
-                await new Promise((r) => setTimeout(r, delay));
-              }
-              const raw = await callDirect(ds, "signin/", {
-                ...bookExtra,
-                logintype,
-                login:     config.login,
-                password:  config.password,
-                comments:  "",
-              });
-              if (raw === null) {
-                if (signinAttempt < 2) continue;
-                break;
-              }
-              if (raw === CALL_DIRECT_NETWORK_ERROR) break;
-              signinPayload = raw as Record<string, unknown>;
-              break;
-            }
+            const signinRaw = await callDirect(ds, "signin/", {
+              ...bookExtra,
+              logintype,
+              login:     config.login,
+              password:  config.password,
+              comments:  "",
+            });
+            const signinPayload: Record<string, unknown> | null =
+              (signinRaw === null || signinRaw === CALL_DIRECT_NETWORK_ERROR)
+                ? null
+                : signinRaw as Record<string, unknown>;
 
             const signinInner = (signinPayload as any)?.Client ?? signinPayload;
             const bktToken = String(
@@ -1471,6 +1453,15 @@ export async function runDossierWorker(
               }
               await sleep(300); // micro-délai pour ne pas spammer
               continue; // → prochain candidat dans sortedEligible
+            }
+
+            // ── signin/ → 0B (serveur surchargé) → skip immédiat au prochain slot ──
+            const isServerOverload = bookResult.status === "signin_failed"
+              && (bookResult.errorMessage ?? "").includes("0B");
+            if (isServerOverload) {
+              log("INFO", `${tag} ⏭️ signin/ 0B (surcharge) — skip au prochain slot`);
+              await sleep(200);
+              continue;
             }
 
             // Booking échoué (autre raison) → reporter puis passer au créneau suivant
