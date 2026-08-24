@@ -998,6 +998,29 @@ export async function runDossierWorker(
     }];
   }
 
+  // ── Helper : met à jour workerTrace avec les données d'init PHP courantes ──
+  // Appelé après chaque initPhpState() réussi (init + proxy_error + session_dead + pre-pub refresh)
+  function updatePhpTrace(): void {
+    if (!phpState?._trace) return;
+    workerTrace.initConfig = { bytes: phpState._trace.cfgBytes, ok: phpState._trace.cfgBytes > 0 };
+    workerTrace.service = {
+      bytes: phpState._trace.svcBytes,
+      ok: phpState.services.length > 0,
+      count: phpState.services.length,
+      names: phpState.services.map((s) => s.serviceName).filter(Boolean).join(", "),
+      allowAppointment: phpState.allowAppointment ?? undefined,
+      serviceContainer: phpState._trace.svcStr.includes("serviceContainer"),
+      dialogConfirm: phpState._trace.svcStr.includes("dialogConfirm"),
+    };
+    workerTrace.agendas = [{
+      serviceId: phpState.bestServiceId,
+      serviceName: phpState.bestServiceName,
+      bytes: phpState._trace.agBytes,
+      ok: phpState.agendaId !== "" || phpState._trace.agBytes > 10,
+      agendaId: phpState.agendaId || undefined,
+    }];
+  }
+
   // ── 7. Boucle de scan — uniquement datetime/ (pas de réinit PHP) ───────────
   // windowEnd calculé au tout début de runDossierWorker (avant init) pour éviter
   // le bug du fallback WORKER_WINDOW_MS quand l'init dépasse HH:WINDOW_END_MIN.
@@ -1020,6 +1043,12 @@ export async function runDossierWorker(
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
+
+    // ── Per-cycle solver trace : par défaut = réutilisation du CF existant (pas de re-solve) ──
+    // Sera mis à jour si cf_expired déclenche un re-solve dans ce cycle.
+    workerTrace.solver = { reused: true, ms: 0 };
+    // Mettre à jour l'IP courante (peut avoir changé via rotation)
+    workerTrace.ip = { index: 0, total: 6000, proxy: maskProxy(proxyUrl) };
 
     // V2 : si un autre worker a posé le flag sommeil → sortie immédiate
     if (cycleCount > 1 && await shouldSleepAfterSlots()) {
@@ -1047,6 +1076,7 @@ export async function runDossierWorker(
           proxyUrl = newProxy;
           phpState = await initPhpState(session, config, tag);
           if (phpState) {
+            updatePhpTrace();
             log("INFO", `${tag} ✅ Pre-pub refresh OK — proxy frais prêt`);
           } else {
             log("WARN", `${tag} ⚠️ Pre-pub refresh: PHP reinit échouée, proxy OK quand même`);
@@ -1089,6 +1119,7 @@ export async function runDossierWorker(
           workerResult = { dossierId: config.id, status: "error", errorMessage: "proxy_error: réinit PHP impossible" };
           return workerResult;
         }
+        updatePhpTrace();
         continue; // Repartir immédiatement sur le nouveau proxy
       }
 
@@ -1096,6 +1127,7 @@ export async function runDossierWorker(
         // CF clearance expiré — le GET widget a retourné un challenge 403.
         // Re-solve via CapSolver avec le même proxy (exit IP inchangée).
         log("WARN", `${tag} 🔄 cf_expired — re-solve CF (proxy conservé) | cycle=${cycleCount} | clearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}`);
+        const reSolveT0 = Date.now();
         const freshResult = await initWorkerSession(proxyUrl, portalUrlNoFrag, capsolverKey);
         if (!freshResult) {
           log("WARN", `${tag} ❌ Re-solve CF échoué — exit worker`);
@@ -1104,7 +1136,9 @@ export async function runDossierWorker(
         }
         // Remplacer la session (nouveau cf_clearance + impit)
         session = freshResult.session;
-        log("INFO", `${tag} ✅ CF re-résolu — reprise du scan`);
+        // Mettre à jour la trace solver pour ce cycle (vrai re-solve, pas du cache)
+        workerTrace.solver = { reused: false, ms: Date.now() - reSolveT0 };
+        log("INFO", `${tag} ✅ CF re-résolu (${workerTrace.solver.ms}ms) — reprise du scan`);
         continue;
       }
 
@@ -1118,6 +1152,7 @@ export async function runDossierWorker(
           workerResult = { dossierId: config.id, status: "error", errorMessage: "session_dead: réinit PHP impossible" };
           return workerResult;
         }
+        updatePhpTrace();
         continue; // Repartir avec le même proxy, nouveau PHPSESSID
       }
 
