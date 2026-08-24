@@ -8,6 +8,7 @@
  * Les workers en cours finissent naturellement.
  */
 
+import "dotenv/config";
 import { initSpainRedis, setSlotFoundToday, getSecondsUntil2205UTC } from "../spain-redis-persistence.js";
 
 async function main(): Promise<void> {
