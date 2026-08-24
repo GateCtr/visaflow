@@ -2489,8 +2489,12 @@ async function runAccountLoop(job: any): Promise<void> {
           // déclencher un rate-limit VOWINT.
           localPool.recordClick(dossier);
           invalidateAnticaptchaCache();
-          invalidateVowintCache(vowintEmail);
-          logger.warn(`  🔄 Cache VOWINT et Anti-Captcha invalidés — prochain cycle utilisera des credentials frais`);
+          // FIX cascade : invalider UNIQUEMENT le cache du dossier en erreur (ipSlotId = vowintRef).
+          // Avant : invalidateVowintCache(vowintEmail) sans ipSlotId = nuke TOUS les dossiers
+          // du même email → cascade "AppID absent" sur les dossiers #1-#N qui perdaient
+          // leur session valide à cause d'un seul dossier en échec.
+          invalidateVowintCache(vowintEmail, dossier.vowintRef);
+          logger.warn(`  🔄 Cache VOWINT invalidé pour ${dossier.vowintRef} + Anti-Captcha — prochain cycle utilisera des credentials frais`);
           break;
         case "no_slot":
           recordScan(uniqueJobId, dossier.vowintRef);

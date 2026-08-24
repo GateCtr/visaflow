@@ -506,7 +506,10 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
     headers: getCevBrowserHeaders({ referer: `${VOWINT_BASE}/en/VisaApplication/IndexByUserId`, cookie: cookies, xRequestedWith: true, accept: "application/json, text/javascript, */*; q=0.01", cacheControl: "max-age=0", ifModifiedSince: "0" }),
     signal: AbortSignal.timeout(TIMEOUT_CRITICAL_MS),
   });
-  if (!listRes.ok) return null;
+  if (!listRes.ok) {
+    console.error(`[CEV-SETUP] ❌ MyList HTTP ${listRes.status} pour ${vowintRefNumber} — session VOWINT probablement expirée`);
+    return null;
+  }
 
   const text = await listRes.text();
   try {
@@ -515,8 +518,16 @@ async function resolveVowintRefViaMyList(vowintRefNumber: string, cookies: strin
       const match = data.data.find(d => d.VOWId?.toUpperCase() === vowintRefNumber);
       if (match?.Id) return match.Id;
       console.log(`[CEV-SETUP] ⚠️ ${vowintRefNumber} non trouvé dans MyList (${data.data.length} dossiers). Disponibles: ${data.data.map(d => d.VOWId).join(', ')}`);
+    } else {
+      // JSON parsé mais pas de champ "data" → réponse inattendue (page login? erreur serveur?)
+      const isLoginRedirect = text.includes("Account/Login") || text.includes("__RequestVerificationToken");
+      console.error(`[CEV-SETUP] ❌ MyList JSON sans .data pour ${vowintRefNumber} — isLoginPage=${isLoginRedirect} preview=${text.slice(0, 200)}`);
     }
-  } catch { /* non-JSON */ }
+  } catch {
+    // Non-JSON — probablement une page HTML de login ou une erreur serveur
+    const isLoginRedirect = text.includes("Account/Login") || text.includes("__RequestVerificationToken");
+    console.error(`[CEV-SETUP] ❌ MyList non-JSON pour ${vowintRefNumber} — isLoginPage=${isLoginRedirect} status=${listRes.status} len=${text.length} preview=${text.replace(/\s+/g, ' ').slice(0, 200)}`);
+  }
   return null;
 }
 
@@ -875,6 +886,11 @@ export async function setupCevSessionHttp(
             integrationUrl = eText.trim().replace(/^"|"$/g, "");
           }
         }
+        // Diagnostic : si eRes.ok mais pas d'integrationUrl → log ce que le serveur a retourné
+        if (!integrationUrl) {
+          const isLoginPage = eText.includes("Account/Login") || eText.includes("__RequestVerificationToken");
+          console.error(`[CEV-SETUP] ⚠️ GetEAppointmentUrl OK (200) mais pas d'URL VOW — isLoginPage=${isLoginPage} len=${eText.length} preview=${eText.replace(/\s+/g, ' ').slice(0, 250)}`);
+        }
         // Burp Chrome 146 (2026-06-26) : le vrai navigateur NE remplace PAS /en-US par /fr-BE.
         // VOWINT retourne toujours /en-US pour ce compte (_culture=en-US) et le serveur CEV
         // pose PreferredCulture=en-US via Set-Cookie sur le GET Integration/VOW — cohérent.
@@ -915,7 +931,10 @@ export async function setupCevSessionHttp(
     if (!integrationUrl) {
       // Si GetEAppointmentUrl a échoué, la session VOWINT est peut-être expirée → invalider le cache du slot
       invalidateVowintCache(vowintEmail, ipSlotId);
-      botLog({ applicationId: clientId, step: "cev_http_no_integration_url", status: "fail" });
+      botLog({ applicationId: clientId, step: "cev_http_no_integration_url", status: "fail", data: {
+        appId: vowintAppId,
+        dossier: vowintAppUrl ?? "default",
+      } });
       return { success: false, error: "NO_INTEGRATION_URL" };
     }
 
