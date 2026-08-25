@@ -166,10 +166,10 @@ const CALL_DIRECT_TIMEOUT_MS = 120_000;
 
 /** Codes HTTP retryables (erreurs serveur sous charge) */
 const RETRYABLE_HTTP_CODES = new Set([502, 503, 504]);
-/** Nombre de retries sur 502/503/504 */
+/** Nombre de retries sur 502/503/504 ou erreur réseau */
 const CALL_DIRECT_MAX_RETRIES = 2;
-/** Backoff exponentiel : 2s, 4s */
-const CALL_DIRECT_RETRY_BASE_MS = 2_000;
+/** Backoff entre retries : 500ms, 1000ms (publication = fenêtre courte, chaque seconde compte) */
+const CALL_DIRECT_RETRY_BASE_MS = 500;
 
 export async function callDirect(
   ds: DynamicSession,
@@ -201,9 +201,14 @@ export async function callDirect(
       const body = await res.text();
       return parseDirectJsonp(body);
     } catch (e) {
+      // Retry sur erreur réseau (TLS corrompue, proxy timeout, CONNECT cassé)
+      if (attempt < CALL_DIRECT_MAX_RETRIES) {
+        const backoff = CALL_DIRECT_RETRY_BASE_MS * (2 ** attempt);
+        console.warn(`${prefix} ${endpoint} → erreur réseau: ${e} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
       console.warn(`${prefix} ${endpoint} → erreur réseau: ${e}`);
-      // Distinguer l'erreur réseau d'une réponse vide légitime : retourner le symbole
-      // CALL_DIRECT_NETWORK_ERROR pour que l'appelant puisse détecter un proxy cassé.
       return CALL_DIRECT_NETWORK_ERROR;
     }
   }
