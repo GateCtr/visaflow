@@ -1062,8 +1062,6 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
       meta: `×${trace.service.count}`,
       badges: [
         { k: "aa", v: trace.service.allowAppointment },
-        { k: "sc", v: trace.service.serviceContainer },
-        { k: "dc", v: trace.service.dialogConfirm },
       ],
     });
   }

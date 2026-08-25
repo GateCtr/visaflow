@@ -985,8 +985,6 @@ export async function runDossierWorker(
       count: phpState.services.length,
       names: phpState.services.map((s) => s.serviceName).filter(Boolean).join(", "),
       allowAppointment: phpState.allowAppointment ?? undefined,
-      serviceContainer: phpState._trace.svcStr.includes("serviceContainer"),
-      dialogConfirm: phpState._trace.svcStr.includes("dialogConfirm"),
     };
     workerTrace.agendas = [{
       serviceId: phpState.bestServiceId,
@@ -1008,8 +1006,6 @@ export async function runDossierWorker(
       count: phpState.services.length,
       names: phpState.services.map((s) => s.serviceName).filter(Boolean).join(", "),
       allowAppointment: phpState.allowAppointment ?? undefined,
-      serviceContainer: phpState._trace.svcStr.includes("serviceContainer"),
-      dialogConfirm: phpState._trace.svcStr.includes("dialogConfirm"),
     };
     workerTrace.agendas = [{
       serviceId: phpState.bestServiceId,
