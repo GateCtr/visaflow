@@ -1031,18 +1031,12 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
 
   // ── /main/ ──
   if (trace.main) {
-    const cached = trace.main.fromCache;
     steps.push({
-      label: cached ? "main↩" : "main",
+      label: "main",
       ok: trace.main.ok,
       meta: trace.main.bytes >= 1024
         ? `${(trace.main.bytes / 1024).toFixed(0)}kB`
         : `${trace.main.bytes}B`,
-      badges: [
-        { k: "sc", v: trace.main.serviceContainer },
-        { k: "dc", v: trace.main.dialogConfirm },
-        ...(trace.main.idSvcText !== undefined ? [{ k: "svc☑", v: trace.main.idSvcText }] : []),
-      ],
     });
   }
 
@@ -1063,8 +1057,6 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
       meta: `×${trace.service.count}`,
       badges: [
         { k: "aa", v: trace.service.allowAppointment },
-        { k: "sc", v: trace.service.serviceContainer },
-        { k: "dc", v: trace.service.dialogConfirm },
       ],
     });
   }

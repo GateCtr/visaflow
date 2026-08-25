@@ -958,7 +958,6 @@ export async function runDossierWorker(
       dialogConfirm: mainSigs.dialogConfirm,
       isSpa: mainSigs.isSpa,
       idSvcText: mainSigs.idSvcText,
-      fromCache: cfFromCache,
     },
     agendas: [],
     datetimes: [],
