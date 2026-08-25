@@ -1037,6 +1037,9 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
       meta: trace.main.bytes >= 1024
         ? `${(trace.main.bytes / 1024).toFixed(0)}kB`
         : `${trace.main.bytes}B`,
+      badges: [
+        ...(trace.main.isSpa !== undefined ? [{ k: "spa", v: trace.main.isSpa }] : []),
+      ],
     });
   }
 
