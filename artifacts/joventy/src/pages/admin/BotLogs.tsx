@@ -1038,6 +1038,8 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
         ? `${(trace.main.bytes / 1024).toFixed(0)}kB`
         : `${trace.main.bytes}B`,
       badges: [
+        { k: "sc", v: trace.main.serviceContainer },
+        { k: "dc", v: trace.main.dialogConfirm },
         ...(trace.main.isSpa !== undefined ? [{ k: "spa", v: trace.main.isSpa }] : []),
       ],
     });
@@ -1060,6 +1062,8 @@ function SpainCycleSteps({ trace }: { trace: SpainScanTraceData }) {
       meta: `×${trace.service.count}`,
       badges: [
         { k: "aa", v: trace.service.allowAppointment },
+        { k: "sc", v: trace.service.serviceContainer },
+        { k: "dc", v: trace.service.dialogConfirm },
       ],
     });
   }
