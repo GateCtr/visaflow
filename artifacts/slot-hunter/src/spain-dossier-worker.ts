@@ -330,8 +330,8 @@ interface WorkerSpainTrace {
 function parseMainSignals(html: string) {
   const h = html ?? "";
   return {
-    serviceContainer: h.includes("bktDefaultServicesContainer") || h.includes("serviceContainer"),
-    dialogConfirm: h.includes("dialogConfirm") || h.includes("bktDialogConfirm"),
+    serviceContainer: h.includes("idBktDefaultServicesTextBeforeServicesList") || h.includes("bktDefaultServicesContainer"),
+    dialogConfirm: h.includes("dialog-confirm") || h.includes("dialogConfirm") || h.includes("bktDialogConfirm"),
     isSpa: h.includes("bookitit") || h.includes("bktDefault"),
     idSvcText: h.includes("idBktDefaultServicesTextBeforeServicesList"),
   };
