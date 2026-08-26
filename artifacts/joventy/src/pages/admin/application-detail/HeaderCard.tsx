@@ -6,7 +6,7 @@ import { useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDateOnly } from "@/lib/format";
 import { SERVICE_PACKAGES } from "@convex/constants";
-import { User, Package, Link, Check, Copy, Plane, MapPin, Phone, Mail } from "lucide-react";
+import { User, Package, Link, Check, Copy, Plane, MapPin, Phone, Mail, MessageCircle } from "lucide-react";
 
 interface Props {
   app: {
@@ -127,11 +127,22 @@ export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly, isE
               <span className="truncate max-w-[140px]">{app.userEmail}</span>
             </span>
           )}
-          {(app.userPhone || userWhatsapp) && (
+          {app.userPhone && (
             <span className="hidden lg:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-50 border border-slate-150 text-slate-500">
               <Phone className="w-3 h-3 text-slate-400" />
-              {app.userPhone || userWhatsapp}
+              {app.userPhone}
             </span>
+          )}
+          {userWhatsapp && (
+            <a
+              href={`https://wa.me/${userWhatsapp.replace(/[^0-9]/g, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200/60 text-emerald-700 hover:bg-emerald-100 transition-colors"
+            >
+              <MessageCircle className="w-3 h-3 text-emerald-500" />
+              {userWhatsapp}
+            </a>
           )}
 
           {/* Travel date */}

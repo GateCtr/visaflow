@@ -209,6 +209,49 @@ const INDIA_STUDENT: VisaDoc[] = [
 ];
 
 // ─────────────────────────────────────────────
+// ESPAGNE
+// ─────────────────────────────────────────────
+const SPAIN_COMMON: VisaDoc[] = [
+  { key: "passport_scan",    category: "upload",  required: false, label: "Scan du passeport (pages biométriques recto-verso, haute résolution)" },
+  { key: "photo_passport",   category: "upload",  required: false, label: "Photo de la page biométrique du passeport ouverte, lisible" },
+  { key: "selfie_passport",  category: "upload",  required: false, label: "Selfie avec le passeport ouvert (visage + passeport lisibles)" },
+  { key: "flight_booking",   category: "upload",  required: false, label: "Réservation de vol aller-retour confirmée" },
+  { key: "hotel_booking",    category: "upload",  required: false, label: "Réservation hôtel ou attestation d'hébergement" },
+  { key: "health_insurance", category: "upload",  required: false, label: "Assurance maladie voyage Schengen (min. 30 000 €)" },
+  { category: "joventy", required: true,  label: "Inscription par email à l'ambassade (avec photo+passeport, formulaire, réservation vol et assurance)" },
+  { category: "joventy", required: true,  label: "Réservation du créneau sur citaconsular.es avec les identifiants reçus" },
+  { category: "direct",  required: true,  label: "Frais consulaires : 90 € (adulte) — payés directement à l'ambassade le jour du RDV" },
+];
+
+// ─────────────────────────────────────────────
+// SCHENGEN / CEV
+// ─────────────────────────────────────────────
+const SCHENGEN_VISA_C: VisaDoc[] = [
+  { key: "cev_form",         category: "upload",  required: false, label: "Formulaire CEV (visaonweb.diplomatie.be)" },
+  { key: "passport_scan",    category: "upload",  required: false, label: "Scan passeport HD (validité 6 mois après retour)" },
+  { key: "photo_id",         category: "upload",  required: false, label: "Photo d'identité 3,5×4,5 cm fond blanc" },
+  { key: "proof_of_funds",   category: "upload",  required: false, label: "Relevés bancaires (3 derniers mois)" },
+  { key: "travel_insurance", category: "upload",  required: false, label: "Assurance voyage Schengen (min. 30 000 €)" },
+  { key: "flight_booking",   category: "upload",  required: false, label: "Réservation de vol aller-retour" },
+  { key: "hotel_booking",    category: "upload",  required: false, label: "Réservation hôtel ou attestation d'hébergement" },
+  { category: "joventy", required: true,  label: "Création du dossier VOWINT (visaonweb.diplomatie.be)" },
+  { category: "joventy", required: true,  label: "Réservation du créneau CEV (appointment.cloud.diplomatie.be)" },
+  { category: "direct",  required: true,  label: "Frais consulaires : 90 € adulte / 45 € enfant 6-12 / gratuit -6 ans — payés au CEV" },
+];
+
+const SCHENGEN_VISA_D: VisaDoc[] = [
+  { key: "cev_form",         category: "upload",  required: false, label: "Formulaire CEV / TLScontact" },
+  { key: "passport_scan",    category: "upload",  required: false, label: "Scan passeport HD" },
+  { key: "photo_id",         category: "upload",  required: false, label: "Photo d'identité fond blanc" },
+  { key: "proof_of_funds",   category: "upload",  required: false, label: "Relevés bancaires (3 derniers mois)" },
+  { key: "travel_insurance", category: "upload",  required: false, label: "Assurance voyage" },
+  { key: "civil_status",     category: "upload",  required: false, label: "Acte de naissance / acte de mariage" },
+  { category: "joventy", required: true,  label: "Soumission du dossier sur france-visas.gouv.fr / TLScontact" },
+  { category: "joventy", required: true,  label: "Réservation du RDV biométrique TLScontact Kinshasa" },
+  { category: "direct",  required: true,  label: "Frais Visa D : 99 € (France-Visas) + ~30 € TLScontact" },
+];
+
+// ─────────────────────────────────────────────
 // Export principal
 // ─────────────────────────────────────────────
 export const VISA_DOCUMENTS: Record<string, Record<string, VisaDoc[]>> = {
@@ -233,6 +276,16 @@ export const VISA_DOCUMENTS: Record<string, Record<string, VisaDoc[]>> = {
     "e-Visa Touriste":        INDIA_TOURIST,
     "Médical (e-Medical)":    INDIA_MEDICAL,
     "Études (Regular Visa)":  INDIA_STUDENT,
+  },
+  spain: {
+    "Visa C — Tourisme / Affaires":                       SPAIN_COMMON,
+    "Visa C — Études court séjour":                       SPAIN_COMMON,
+    "Visa D — Long Séjour (études / regroupement familial)": SPAIN_COMMON,
+  },
+  schengen: {
+    "Visa C — Tourisme / Affaires":                       SCHENGEN_VISA_C,
+    "Visa C — Études court séjour (gratuit*)":            SCHENGEN_VISA_C,
+    "Visa D — Long Séjour (études / regroupement familial)": SCHENGEN_VISA_D,
   },
 };
 
