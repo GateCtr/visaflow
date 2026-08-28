@@ -65,6 +65,7 @@ import {
   deleteLastStickyForDossier,
   tryAcquireBookingSlot,
   releaseBookingSlot,
+  MAX_CONCURRENT_BOOKERS,
 } from "./spain-redis-persistence.js";
 import {
   reportSlotFound,
@@ -249,6 +250,28 @@ const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
  * Quand > seuil : mode normal (Redis claim atomique empêche la collision inter-dossiers).
  */
 const RACE_MODE_SLOT_THRESHOLD = 5;
+
+/**
+ * Seuil "assez de places" pour BYPASSER le sémaphore de booking.
+ *
+ * Le sémaphore (MAX_CONCURRENT_BOOKERS) sert à éviter les réponses 0B du serveur
+ * Bookitit quand trop de signin/ frappent LA MÊME place simultanément (collision).
+ *
+ * Mais quand il y a AUTANT de places libres que de bookers potentiels, il n'y a
+ * pas de collision : chaque worker (via distribution P4) vise une place différente.
+ * Dans ce cas, brider à 5 bookers fait perdre un temps énorme — tous les workers qui
+ * ont une place attribuée doivent pouvoir booker immédiatement.
+ *
+ * NB : on compte les PLACES réelles (somme des freeslots), pas les créneaux.
+ * Un créneau peut offrir plusieurs places : 14 créneaux × 2 places = 28 places.
+ *
+ * Règle : si totalFreeCapacity >= ce seuil → skip sémaphore, tous foncent en parallèle.
+ * Configurable via SPAIN_SEMAPHORE_BYPASS_SLOTS (défaut : MAX_CONCURRENT_BOOKERS = 5).
+ */
+const SEMAPHORE_BYPASS_SLOT_THRESHOLD = ((): number => {
+  const v = Number(process.env.SPAIN_SEMAPHORE_BYPASS_SLOTS ?? String(MAX_CONCURRENT_BOOKERS));
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : MAX_CONCURRENT_BOOKERS);
+})();
 
 /**
  * Pre-publication proxy refresh : à la minute PREPUB_REFRESH_MINUTE de chaque heure,
@@ -864,6 +887,10 @@ export async function runDossierWorker(
   let workerResult: WorkerResult = { dossierId: config.id, status: "error", errorMessage: "init" };
   // V2 : déclaré ici (pas dans le try) pour être accessible dans le finally
   let holdingBookingSlot = false;
+  // true seulement si le sémaphore Redis a réellement été acquis (INCR). Reste false
+  // quand le sémaphore est bypassé (assez de créneaux) → on ne fait PAS de releaseBookingSlot
+  // pour ne pas décrémenter un compteur jamais incrémenté.
+  let usedSemaphore = false;
   try {
 
   const capsolverKey =
@@ -1310,7 +1337,28 @@ export async function runDossierWorker(
           // ── V2 : Sémaphore de booking — limiter à MAX_CONCURRENT_BOOKERS signin/ simultanés ──
           // Si le sémaphore est plein, ce worker reste en scan rapide (2-3s) sans tenter le booking.
           // Il reviendra au prochain cycle et re-checkera armed_count.
-          if (!holdingBookingSlot) {
+          //
+          // BYPASS : quand il y a AUTANT de PLACES RÉELLES que le seuil de bypass
+          // (≥ SEMAPHORE_BYPASS_SLOT_THRESHOLD), chaque worker vise une place différente
+          // (distribution P4) → aucune collision signin/ → aucun risque de 0B.
+          // On skip donc le sémaphore : tous les workers avec un créneau attribué bookent
+          // immédiatement en parallèle. Gain de temps massif quand beaucoup de places
+          // s'ouvrent (ex. 25 places → 25 dossiers bookent en même temps, pas 5 par 5).
+          //
+          // IMPORTANT : on compte les PLACES (somme des freeslots), pas les créneaux.
+          // Un créneau peut offrir plusieurs places (ex. 14 créneaux × 2 places = 28 places).
+          // La capacité réelle bookable est la somme des freeslots de tous les créneaux éligibles.
+          const totalFreeCapacity = eligible.reduce((sum, s) => sum + Math.max(0, s.freeslots), 0);
+          const enoughSlotsForAll = totalFreeCapacity >= SEMAPHORE_BYPASS_SLOT_THRESHOLD;
+          if (enoughSlotsForAll) {
+            if (!holdingBookingSlot) {
+              log(
+                "INFO",
+                `${tag} 🚀 Sémaphore bypassé — ${totalFreeCapacity} places (${eligible.length} créneaux) ≥ ${SEMAPHORE_BYPASS_SLOT_THRESHOLD} (assez pour tous, pas de collision) → booking immédiat`,
+              );
+            }
+            holdingBookingSlot = true; // marque le worker comme armé sans consommer le sémaphore
+          } else if (!holdingBookingSlot) {
             const acquired = await tryAcquireBookingSlot(config.id);
             if (!acquired) {
               log("INFO", `${tag} ⏳ Sémaphore plein — scan rapide (pas de booking ce cycle)`);
@@ -1318,6 +1366,7 @@ export async function runDossierWorker(
               // Le reporting "found" est déjà fait ci-dessus, pas besoin de le refaire
             } else {
               holdingBookingSlot = true;
+              usedSemaphore = true; // slot Redis réellement consommé → à libérer
             }
           }
 
@@ -1525,9 +1574,9 @@ export async function runDossierWorker(
 
             if (bookResult.status === "booked") {
               await reportBookingSuccess(config, bookResult, slot, scan, tag);
-              // V2 : libérer le sémaphore de booking
+              // V2 : libérer le sémaphore de booking (seulement si réellement acquis)
               if (holdingBookingSlot) {
-                await releaseBookingSlot(config.id);
+                if (usedSemaphore) { await releaseBookingSlot(config.id); usedSemaphore = false; }
                 holdingBookingSlot = false;
               }
               workerResult = { dossierId: config.id, status: "booked" };
@@ -1554,9 +1603,9 @@ export async function runDossierWorker(
                 reason: bookResult.errorMessage ?? "Credentials incorrects",
                 serviceName: scan.serviceName,
               }).catch(() => {});
-              // V2 : libérer le sémaphore
+              // V2 : libérer le sémaphore (seulement si réellement acquis)
               if (holdingBookingSlot) {
-                await releaseBookingSlot(config.id);
+                if (usedSemaphore) { await releaseBookingSlot(config.id); usedSemaphore = false; }
                 holdingBookingSlot = false;
               }
               workerResult = { dossierId: config.id, status: "error", errorMessage: `signin_failed: ${bookResult.errorMessage}` };
@@ -1626,7 +1675,7 @@ export async function runDossierWorker(
             );
             // V2 : libérer le sémaphore — ce worker n'a pas réussi à booker
             if (holdingBookingSlot) {
-              await releaseBookingSlot(config.id);
+              if (usedSemaphore) { await releaseBookingSlot(config.id); usedSemaphore = false; }
               holdingBookingSlot = false;
             }
           }
@@ -1661,8 +1710,9 @@ export async function runDossierWorker(
 
   } finally {
     // V2 : libérer le sémaphore de booking si encore détenu (crash, exception…)
+    // Seulement si le slot Redis a réellement été acquis (pas en cas de bypass).
     if (holdingBookingSlot) {
-      await releaseBookingSlot(config.id).catch(() => {});
+      if (usedSemaphore) { await releaseBookingSlot(config.id).catch(() => {}); usedSemaphore = false; }
       holdingBookingSlot = false;
     }
     // Libération garantie de l'IP, quelle que soit la sortie (return, throw, exception).
