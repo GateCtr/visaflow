@@ -188,13 +188,20 @@ const SCAN_NORMAL_INTERVAL_MS = SCAN_INTERVAL_MS;
 /** Intervalle rapide : après détection, workers en attente de place sémaphore (2-3s) */
 const SCAN_FAST_INTERVAL_MS = 2_500;
 
+/** Intervalle hyper-rapide : à partir de HH:12 (pic de publication) → 1s entre cycles */
+const SCAN_HYPERFAST_INTERVAL_MS = 1_000;
+
+/** Minute (UTC) à partir de laquelle on passe en scan hyper-rapide (1s) */
+const HYPERFAST_START_MINUTE = 12;
+
 /**
  * Détermine l'intervalle de scan adaptatif selon la phase du cycle.
  *
  * Phases :
- *   - Warm-up (HH:05 → HH:10) : 60s — init PHP, CF cache chaud
- *   - Normal  (HH:10 → détection) : 10s — scan actif, en attente de publication
- *   - Fast    (après détection, sémaphore plein) : 2-3s — cycle complet rapide
+ *   - Warm-up   (HH:05 → HH:10) : 60s — init PHP, CF cache chaud
+ *   - Normal    (HH:10 → HH:12) : 10s — scan actif, en attente de publication
+ *   - Hyperfast (HH:12+)        : 1s  — pic de publication, on scanne au max
+ *   - Fast      (après détection, sémaphore plein) : 2-3s — cycle complet rapide
  *
  * @param slotsDetectedThisWindow  true si des slots ont été vus dans cette fenêtre horaire
  * @param holdingBookingSlot       true si ce worker est armé (a acquis le sémaphore)
@@ -213,7 +220,10 @@ function getAdaptiveScanInterval(slotsDetectedThisWindow: boolean, holdingBookin
   if (minInHour < 10) {
     return SCAN_WARMUP_INTERVAL_MS; // HH:05 → HH:10 = warm-up 60s
   }
-  return SCAN_NORMAL_INTERVAL_MS; // HH:10+ = scan normal 10s
+  if (minInHour >= HYPERFAST_START_MINUTE) {
+    return SCAN_HYPERFAST_INTERVAL_MS; // HH:12+ = pic de publication, scan 1s
+  }
+  return SCAN_NORMAL_INTERVAL_MS; // HH:10 → HH:12 = scan normal 10s
 }
 
 /** Tolérance slotDateFrom (jours) — identique au watcher legacy */
@@ -1572,11 +1582,17 @@ export async function runDossierWorker(
               continue; // → prochain candidat dans sortedEligible
             }
 
-            // ── signin/ → 0B (serveur surchargé) → skip immédiat au prochain slot ──
-            const isServerOverload = bookResult.status === "signin_failed"
+            // ── signin/ → 0B → slot déjà pris (ou serveur surchargé) → skip immédiat ──
+            // Quand getsigninfields/ a réussi (nonce PHP activé) mais que signin/ retourne
+            // 0B juste après, le serveur signale le plus souvent que le créneau n'existe
+            // plus : un concurrent l'a capturé entre le scan et le booking (fréquent en
+            // mode RACE sur un slot freeSlots=1). Le 0B peut aussi venir d'une surcharge
+            // serveur, mais dans les deux cas il n'y a plus rien à faire sur ce créneau →
+            // on passe immédiatement au suivant.
+            const isSlotGoneOrOverload = bookResult.status === "signin_failed"
               && (bookResult.errorMessage ?? "").includes("0B");
-            if (isServerOverload) {
-              log("INFO", `${tag} ⏭️ signin/ 0B (surcharge) — skip au prochain slot`);
+            if (isSlotGoneOrOverload) {
+              log("INFO", `${tag} ⏭️ signin/ 0B (slot déjà pris ou surcharge) — skip au prochain slot`);
               await sleep(200);
               continue;
             }
