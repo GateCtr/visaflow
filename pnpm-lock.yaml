@@ -605,6 +605,9 @@ importers:
 
   artifacts/slot-hunter:
     dependencies:
+      '@messagebird/sdk':
+        specifier: ^0.42.1
+        version: 0.42.1
       '@types/lz-string':
         specifier: ^1.5.0
         version: 1.5.0
@@ -964,6 +967,10 @@ packages:
     resolution: {integrity: sha512-BPeQXc1bRd0QBOklvsP+AjoRnUzKbPNE6rfx7VNxrebhh09MKld2ibstgKWn6ejQLEcfKEoUJ+WAWIhX4AOsIg==}
     cpu: [x64]
     os: [win32]
+
+  '@messagebird/sdk@0.42.1':
+    resolution: {integrity: sha512-+DJZJu4gM0IXM1KvfOmXOJpEy2QnmcVK2EjEXhqAxFQ+fepgeHeSBOTJACUAD09DSOJOtG4JAlNkCWDkb5RsYw==}
+    engines: {node: '>=20.3.0'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -3049,6 +3056,7 @@ packages:
 
   koffi@3.1.4:
     resolution: {integrity: sha512-KHX39XIg7afe8ds+0MHPoLiKR9dCzsVK4oAmBUSaeJlcX0xur22f15C2DILbZ6GJ9eyqC+e6Sb1cTG7M17z+Tg==}
+    deprecated: Unstable Windows builds
 
   lazy-cache@0.2.7:
     resolution: {integrity: sha512-gkX52wvU/R8DVMMt78ATVPFMJqfW8FPz1GZ1sVHBVQHmu/WvhIWE4cE1GBzhJNFicDeYhnwp6Rl35BcAIM3YOQ==}
@@ -4452,6 +4460,10 @@ snapshots:
 
   '@koromix/koffi-win32-x64@3.1.4':
     optional: true
+
+  '@messagebird/sdk@0.42.1':
+    dependencies:
+      standardwebhooks: 1.0.0
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

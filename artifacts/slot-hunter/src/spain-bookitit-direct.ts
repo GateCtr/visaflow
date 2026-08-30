@@ -166,10 +166,26 @@ const CALL_DIRECT_TIMEOUT_MS = 120_000;
 
 /** Codes HTTP retryables (erreurs serveur sous charge) */
 const RETRYABLE_HTTP_CODES = new Set([502, 503, 504]);
-/** Nombre de retries sur 502/503/504 ou erreur réseau */
-const CALL_DIRECT_MAX_RETRIES = 2;
-/** Backoff entre retries : 500ms, 1000ms (publication = fenêtre courte, chaque seconde compte) */
-const CALL_DIRECT_RETRY_BASE_MS = 500;
+/**
+ * Nombre de retries sur 502/503/504 ou erreur réseau.
+ * Pendant le pic de publication, le serveur Bookitit crache des 504 pendant
+ * plusieurs secondes (surcharge réelle côté serveur, pas notre fait). 2 retries
+ * ne suffisent pas : beaucoup de workers abandonnent le scan et ratent les créneaux.
+ * Configurable via SPAIN_BOOKITIT_MAX_RETRIES (défaut 4 = 5 tentatives).
+ */
+const CALL_DIRECT_MAX_RETRIES = ((): number => {
+  const v = Number(process.env.SPAIN_BOOKITIT_MAX_RETRIES ?? "4");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 4);
+})();
+/** Backoff de base entre retries (ms). Plafonné à CALL_DIRECT_RETRY_MAX_MS. */
+const CALL_DIRECT_RETRY_BASE_MS = 400;
+/** Plafond du backoff — évite d'exploser le temps de cycle pendant le pic. */
+const CALL_DIRECT_RETRY_MAX_MS = 1_500;
+
+/** Backoff plafonné : 400, 800, 1200, 1500, 1500… (pas d'explosion exponentielle). */
+function retryBackoffMs(attempt: number): number {
+  return Math.min(CALL_DIRECT_RETRY_BASE_MS * (attempt + 1) + attempt * 200, CALL_DIRECT_RETRY_MAX_MS);
+}
 
 export async function callDirect(
   ds: DynamicSession,
@@ -190,7 +206,7 @@ export async function callDirect(
       if (!res.ok) {
         // P3 — Retry sur 502/503/504 (serveur surchargé sous publication)
         if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < CALL_DIRECT_MAX_RETRIES) {
-          const backoff = CALL_DIRECT_RETRY_BASE_MS * (2 ** attempt);
+          const backoff = retryBackoffMs(attempt);
           console.warn(`${prefix} ${endpoint} → HTTP ${res.status} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
           await new Promise((r) => setTimeout(r, backoff));
           continue;
@@ -203,7 +219,7 @@ export async function callDirect(
     } catch (e) {
       // Retry sur erreur réseau (TLS corrompue, proxy timeout, CONNECT cassé)
       if (attempt < CALL_DIRECT_MAX_RETRIES) {
-        const backoff = CALL_DIRECT_RETRY_BASE_MS * (2 ** attempt);
+        const backoff = retryBackoffMs(attempt);
         console.warn(`${prefix} ${endpoint} → erreur réseau: ${e} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
         await new Promise((r) => setTimeout(r, backoff));
         continue;

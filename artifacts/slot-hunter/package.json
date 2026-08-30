@@ -53,6 +53,7 @@
     "diag:2captcha-browser:status": "tsx scripts/diag-2captcha-browser.ts --status-only"
   },
   "dependencies": {
+    "@messagebird/sdk": "^0.42.1",
     "@types/lz-string": "^1.5.0",
     "dotenv": "^16.4.5",
     "https-proxy-agent": "^9.1.0",

@@ -157,8 +157,8 @@ export interface WorkerResult {
 
 /** Fenêtre de surveillance par dossier (25 min) — alignée TTL cf_clearance */
 const WORKER_WINDOW_MS = ((): number => {
-  const v = Number(process.env.SPAIN_WORKER_WINDOW_MIN ?? "20");
-  return (Number.isFinite(v) ? v : 20) * 60_000;
+  const v = Number(process.env.SPAIN_WORKER_WINDOW_MIN ?? "25");
+  return (Number.isFinite(v) ? v : 25) * 60_000;
 })();
 
 /**
@@ -168,8 +168,8 @@ const WORKER_WINDOW_MS = ((): number => {
  * Override : SPAIN_WINDOW_END_MIN
  */
 const WINDOW_END_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_END_MIN ?? "20");
-  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 20));
+  const v = Number(process.env.SPAIN_WINDOW_END_MIN ?? "25");
+  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 25));
 })();
 
 /** Intervalle de scan start-to-start (secondes → ms) */

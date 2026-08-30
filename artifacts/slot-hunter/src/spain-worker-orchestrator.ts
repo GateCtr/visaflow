@@ -86,8 +86,8 @@ const WINDOW_START_MIN = ((): number => {
  * Override via env : SPAIN_WINDOW_DURATION_MIN
  */
 const WINDOW_DURATION_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "15");
-  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 15);
+  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "20");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 20);
 })();
 
 // ─── État interne ─────────────────────────────────────────────────────────────
