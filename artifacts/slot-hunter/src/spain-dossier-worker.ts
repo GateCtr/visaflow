@@ -186,9 +186,6 @@ const SCAN_WARMUP_INTERVAL_MS = 60_000;
 /** Intervalle normal : HH:10 → détection (10s, identique à l'actuel) */
 const SCAN_NORMAL_INTERVAL_MS = SCAN_INTERVAL_MS;
 
-/** Intervalle rapide : après détection, workers en attente de place sémaphore (2-3s) */
-const SCAN_FAST_INTERVAL_MS = 2_500;
-
 /** Intervalle hyper-rapide : à partir de HH:12 (pic de publication) → 1s entre cycles */
 const SCAN_HYPERFAST_INTERVAL_MS = 1_000;
 
@@ -198,25 +195,22 @@ const HYPERFAST_START_MINUTE = 12;
 /**
  * Détermine l'intervalle de scan adaptatif selon la phase du cycle.
  *
- * Phases :
+ * Phases (basées sur la minute UTC dans l'heure) :
  *   - Warm-up   (HH:05 → HH:10) : 60s — init PHP, CF cache chaud
  *   - Normal    (HH:10 → HH:12) : 10s — scan actif, en attente de publication
  *   - Hyperfast (HH:12+)        : 1s  — pic de publication, on scanne au max
- *   - Fast      (après détection, sémaphore plein) : 2-3s — cycle complet rapide
  *
- * @param slotsDetectedThisWindow  true si des slots ont été vus dans cette fenêtre horaire
- * @param holdingBookingSlot       true si ce worker est armé (a acquis le sémaphore)
+ * Note : plus de mode "fast" post-détection. Pendant le pic (HH:12+), hyperfast (1s)
+ * est déjà le mode le plus rapide — inutile de repasser à un intervalle plus lent
+ * juste parce qu'un créneau a été vu. Le worker continue à scanner à 1s.
+ *
+ * @param holdingBookingSlot  true si ce worker est armé (a acquis le sémaphore de booking)
  */
-function getAdaptiveScanInterval(slotsDetectedThisWindow: boolean, holdingBookingSlot: boolean): number {
+function getAdaptiveScanInterval(holdingBookingSlot: boolean): number {
   if (holdingBookingSlot) {
     // Worker armé = en cours de booking, pas de scan interval (il ne scanne plus)
     return SCAN_NORMAL_INTERVAL_MS;
   }
-  if (slotsDetectedThisWindow) {
-    // Slots détectés mais ce worker attend sa place au sémaphore → scan rapide
-    return SCAN_FAST_INTERVAL_MS;
-  }
-  // Pas encore de détection — adapter selon la minute dans l'heure (UTC)
   const minInHour = new Date().getUTCMinutes();
   if (minInHour < 10) {
     return SCAN_WARMUP_INTERVAL_MS; // HH:05 → HH:10 = warm-up 60s
@@ -237,6 +231,25 @@ const SLOT_FROM_TOLERANCE_DAYS = ((): number => {
 const DATETIME_MONTHS_AHEAD = ((): number => {
   const v = Number(process.env.SPAIN_DATETIME_MONTHS_AHEAD ?? "4");
   return Math.max(1, Number.isFinite(v) ? v : 4);
+})();
+
+/**
+ * Plancher de mois à scanner (offset minimum avant d'autoriser l'arrêt par maxDays).
+ *
+ * Logique volontaire : en milieu de mois, scanner "mois courant + suivant" (offset 2)
+ * suffit — les annulations arrivent sur le mois courant et le mois suivant.
+ *
+ * MAIS en FIN de mois (ex. le 30/31), le mois courant n'a plus que quelques jours
+ * restants où une annulation est quasi impossible. "Mois courant + 1" revient alors
+ * à ne scanner qu'UN seul mois utile → on rate le mois d'après.
+ *
+ * FIX : quand il reste peu de jours dans le mois courant (< END_OF_MONTH_THRESHOLD_DAYS),
+ * on décale le plancher d'un mois (offset 3 au lieu de 2) pour couvrir un mois de plus.
+ * Configurable via SPAIN_END_OF_MONTH_THRESHOLD_DAYS (défaut 5 : les 5 derniers jours).
+ */
+const END_OF_MONTH_THRESHOLD_DAYS = ((): number => {
+  const v = Number(process.env.SPAIN_END_OF_MONTH_THRESHOLD_DAYS ?? "5");
+  return Math.max(0, Number.isFinite(v) ? Math.round(v) : 5);
 })();
 
 const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
@@ -486,21 +499,33 @@ export async function scanDatetimeDirect(
   const ds = phpState.ds;
 
   const now = new Date();
+  // Dernier jour du mois courant (28-31) — sert au plancher d'arrêt adaptatif fin-de-mois.
+  const lastDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const allSlots: WorkerSlot[] = [];
   const monthTraces: Array<{ month: string; bytes: number; slots: number; ok: boolean }> = [];
   let globalMaxDays: Date | null = null;
   let consecutiveEmpty = 0;
   const MAX_MONTHS = Math.max(DATETIME_MONTHS_AHEAD + 2, 12); // ≥ 12 comme le test dynamic
 
-  let monthOffset = 0;
+  // Décalage fin-de-mois : si le mois courant est quasi épuisé (jours restants ≤ seuil),
+  // une annulation sur les jours restants est quasi impossible → on démarre directement
+  // au mois SUIVANT. On scanne alors "mois+1 et mois+2" au lieu de "mois courant + mois+1"
+  // (dont le premier serait quasi vide). Même nombre de requêtes, 2 mois UTILES.
+  const daysRemainingInMonth = lastDayOfCurrentMonth - now.getDate();
+  const startMonthOffset = daysRemainingInMonth <= END_OF_MONTH_THRESHOLD_DAYS ? 1 : 0;
+  if (startMonthOffset > 0) {
+    log("INFO", `${tag}   📅 Fin de mois (${daysRemainingInMonth}j restants ≤ ${END_OF_MONTH_THRESHOLD_DAYS}) — scan démarre au mois suivant`);
+  }
+
+  let monthOffset = startMonthOffset;
   let networkErrorCount = 0; // Compteur d'erreurs réseau (ProxyTunnelError, Timeout, etc.)
   let httpNullCount = 0;     // Compteur de réponses HTTP 0B légitimes (payload null, pas sentinel)
   let monthsChecked = 0;
 
   while (monthOffset < MAX_MONTHS) {
     const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-    // Premier mois : start = date du jour pour ne pas rater les créneaux en milieu de mois.
-    // Mois suivants : start = 1er du mois (scan complet).
+    // Premier mois scanné : start = date du jour (si mois courant) pour ne pas rater les
+    // créneaux en milieu de mois. Mois suivants : start = 1er du mois (scan complet).
     const startDay = monthOffset === 0 ? String(now.getDate()).padStart(2, "0") : "01";
     const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${startDay}`;
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -558,8 +583,12 @@ export async function scanDatetimeDirect(
 
     monthOffset++;
 
-    // Stop condition identique au test dynamic (section 4 l.288-304)
-    if (monthOffset >= 2 && globalMaxDays) {
+    // Stop condition identique au test dynamic (section 4 l.288-304).
+    // Le décalage fin-de-mois est géré en amont via startMonthOffset (on démarre au mois
+    // suivant quand le mois courant est quasi épuisé), donc offset 2 fixe ici reste correct :
+    // on scanne toujours 2 mois UTILES.
+    const relativeOffset = monthOffset - startMonthOffset;
+    if (relativeOffset >= 2 && globalMaxDays) {
       const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
       if (firstOfNextMonth > globalMaxDays) {
         log("INFO", `${tag}   ⏹ fin : ${firstOfNextMonth.toISOString().slice(0, 10)} > maxDays ${globalMaxDays.toISOString().slice(0, 10)}`);
@@ -664,6 +693,45 @@ export async function refreshSessionAndScan(
   const buildCookieStr = (jar: Record<string, string>): string =>
     Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
 
+  // fetch avec retry sur 502/503/504 ET erreur réseau (corrupt message, TLS, timeout).
+  // Sous charge, le GET widget / POST token / GET /main/ tombent en 504 ou "corrupt
+  // message" pendant plusieurs secondes. Sans retry, le cycle sort en proxy_error →
+  // rotation IP inutile (l'IP est bonne, c'est la surcharge serveur). Avec retry, on
+  // traverse la surcharge sur la même IP (CF déjà résolu). ProxyTunnelError = proxy mort
+  // → on ne retry pas, on laisse remonter pour déclencher la vraie rotation.
+  const RS_MAX_RETRIES = Math.max(1, Number(process.env.SPAIN_INIT_MAX_RETRIES ?? "2") || 2);
+  const RS_OVERLOAD = new Set([502, 503, 504]);
+  const fetchRetry = async (
+    url: string, options: Record<string, unknown>, label: string,
+  ): Promise<{ res: Response; body: string }> => {
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt <= RS_MAX_RETRIES; attempt++) {
+      try {
+        const res = await (impit.fetch(url, options as any) as unknown as Promise<Response>);
+        const body = await res.text();
+        if (RS_OVERLOAD.has(res.status) && attempt < RS_MAX_RETRIES) {
+          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
+          log("WARN", `${tag} ⏳ ${label} → HTTP ${res.status} (surcharge) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        return { res, body };
+      } catch (e) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        const isProxyDead = /ProxyTunnelError|CONNECT|tunnel/i.test(msg);
+        if (!isProxyDead && attempt < RS_MAX_RETRIES) {
+          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
+          log("WARN", `${tag} ⏳ ${label} → erreur réseau (${msg.slice(0, 50)}) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw lastErr ?? new Error(`${label}: retries épuisés`);
+  };
+
   // Cookie jar : cf_clearance + cookies existants (sauf PHPSESSID qu'on veut frais)
   const jar: Record<string, string> = {};
   for (const c of session.allCookies) {
@@ -674,10 +742,11 @@ export async function refreshSessionAndScan(
   // ── 1. GET widget → token ───────────────────────────────────────────────────
   let token = "";
   try {
-    const r = await (impit.fetch(targetUrl, {
+    const r0 = await fetchRetry(targetUrl, {
       headers: { "User-Agent": UA, "Cookie": buildCookieStr(jar) },
-    } as any) as unknown as Promise<Response>);
-    const body = await r.text();
+    }, "① GET widget");
+    const r = r0.res;
+    const body = r0.body;
     Object.assign(jar, extractCookies(r.headers as any));
     const isCf = r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000));
     if (isCf) {
@@ -686,8 +755,10 @@ export async function refreshSessionAndScan(
     }
     token = body.match(/name="token"\s+value="([^"]+)"/i)?.[1] ?? "";
     if (!token) {
-      log("WARN", `${tag} ① GET widget → token absent (HTTP ${r.status}, ${body.length}B)`);
-      return { status: "error", errorMessage: `Token absent (HTTP ${r.status}, ${body.length}B)`, monthTraces: [] };
+      // Token absent après retries = page 504/erreur (surcharge serveur) → proxy_error
+      // (rotation IP + réinit) au lieu de error qui ferait boucler à vide sur la même IP.
+      log("WARN", `${tag} ① GET widget → token absent (HTTP ${r.status}, ${body.length}B) → proxy_error`);
+      return { status: "proxy_error", errorMessage: `Token absent (HTTP ${r.status}, ${body.length}B)`, monthTraces: [] };
     }
     log("INFO", `${tag} ① token ✅`);
   } catch (e) {
@@ -700,7 +771,7 @@ export async function refreshSessionAndScan(
   let srvsrc = baseHost;
   let version = "4";
   try {
-    const r = await (impit.fetch(targetUrl, {
+    const rp = await fetchRetry(targetUrl, {
       method: "POST",
       headers: {
         "User-Agent": UA,
@@ -710,14 +781,16 @@ export async function refreshSessionAndScan(
         "Origin": baseHost,
       },
       body: `token=${encodeURIComponent(token)}`,
-    } as any) as unknown as Promise<Response>);
-    const body = await r.text();
+    }, "② POST token");
+    const r = rp.res;
+    const body = rp.body;
     Object.assign(jar, extractCookies(r.headers as any));
     srvsrc = body.match(/srvsrc:\s*'([^']+)'/)?.[1] ?? baseHost;
     version = body.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
     if (!jar.PHPSESSID) {
-      log("WARN", `${tag} ② POST → PHPSESSID absent`);
-      return { status: "error", errorMessage: "PHPSESSID absent après POST", monthTraces: [] };
+      // PHPSESSID absent = POST 504/erreur (surcharge) → proxy_error (rotation) au lieu de error.
+      log("WARN", `${tag} ② POST → PHPSESSID absent → proxy_error`);
+      return { status: "proxy_error", errorMessage: "PHPSESSID absent après POST", monthTraces: [] };
     }
     log("INFO", `${tag} ② PHPSESSID=${jar.PHPSESSID.slice(0, 8)}…`);
   } catch (e) {
@@ -749,21 +822,37 @@ export async function refreshSessionAndScan(
     return { status: "error", errorMessage: "buildDynamicSession échoué", monthTraces: [] };
   }
 
-  // 3. GET /main/
+  // 3. GET /main/ — avec retry sur 504/erreur réseau ET réponse tronquée.
+  // IMPORTANT : un /main/ complet fait ~120-128kB. Une réponse de 0-50kB (ex. 6kB
+  // observé sous charge) est une page TRONQUÉE = widget PHP à moitié initialisé →
+  // getservices/ échoue derrière (0B). Le seuil 1000B était trop bas et laissait passer
+  // ces sessions cassées. On exige MAIN_MIN_BYTES (50kB) pour valider la session.
+  const MAIN_MIN_BYTES = Math.max(1000, Number(process.env.SPAIN_MAIN_MIN_BYTES ?? "50000") || 50000);
   const mainUrl = makeDirectUrl(ds, "main/");
   const mainHeaders = makeDirectHeaders(ds);
   try {
-    const r = await (ds.impit.fetch(mainUrl, { headers: mainHeaders } as any) as unknown as Promise<Response>);
-    const body = await r.text();
-    // Merge Set-Cookie (PHPSESSID peut être renouvelé)
-    const newCookies = extractCookies(r.headers as any);
-    Object.assign(ds.jar, newCookies);
-    if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
-    if (body.length < 1000) {
-      log("WARN", `${tag} ③ /main/ → ${body.length}B (trop court) → proxy_error`);
-      return { status: "proxy_error", errorMessage: `/main/ ${body.length}B`, monthTraces: [] };
+    let mainBody = "";
+    let mainOk = false;
+    for (let attempt = 0; attempt <= RS_MAX_RETRIES; attempt++) {
+      const rm = await fetchRetry(mainUrl, { headers: mainHeaders }, "③ GET /main/");
+      mainBody = rm.body;
+      // Merge Set-Cookie (PHPSESSID peut être renouvelé)
+      const newCookies = extractCookies(rm.res.headers as any);
+      Object.assign(ds.jar, newCookies);
+      if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
+      if (mainBody.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
+      // Réponse tronquée (0B ou 6kB = surcharge PHP) → retry sur la même IP
+      if (attempt < RS_MAX_RETRIES) {
+        const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
+        log("WARN", `${tag} ⏳ ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué, surcharge PHP) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
+        await new Promise((r) => setTimeout(r, backoff));
+      }
     }
-    log("INFO", `${tag} ③ /main/ → ${Math.round(body.length / 1024)}kB ✅`);
+    if (!mainOk) {
+      log("WARN", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué après retries) → proxy_error`);
+      return { status: "proxy_error", errorMessage: `/main/ ${mainBody.length}B tronqué`, monthTraces: [] };
+    }
+    log("INFO", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB ✅`);
   } catch (e) {
     log("WARN", `${tag} ③ /main/ → erreur: ${e}`);
     return { status: "proxy_error", errorMessage: `/main/: ${e}`, monthTraces: [] };
@@ -785,8 +874,11 @@ export async function refreshSessionAndScan(
     serviceName: (s.name ?? "").replace(/<[^>]*>/g, "").trim(),
   }));
   if (services.length === 0) {
-    log("WARN", `${tag} ⑤ getservices/ → 0 services (${JSON.stringify(svcPayload ?? "").length}B)`);
-    return { status: "error", errorMessage: "getservices/ 0 services", monthTraces: [] };
+    // getservices/ → 0B/0 services = payload vide après retries callDirect. Ce n'est PAS
+    // une erreur fatale : c'est le signe d'un proxy mort ou d'une surcharge serveur.
+    // → proxy_error (rotation IP + réinit session) au lieu de error (qui tuerait le worker).
+    log("WARN", `${tag} ⑤ getservices/ → 0 services (${JSON.stringify(svcPayload ?? "").length}B) → proxy_error (rotation)`);
+    return { status: "proxy_error", errorMessage: "getservices/ 0 services (proxy mort/surcharge)", monthTraces: [] };
   }
   const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
   log("INFO", `${tag} ⑤ svc=${services.length} → "${bestSvc.serviceName.slice(0, 25)}" (${bestSvc.serviceId})`);
@@ -1008,8 +1100,26 @@ export async function runDossierWorker(
   // Les cycles suivants n'appellent QUE datetime/ — même comportement que le test dynamique A-à-Z.
   log("INFO", `${tag} 🔧 PHP init one-shot (getwidgetconfigurations/ + getservices/ + getagendas/)…`);
   let phpState = await initPhpState(session, config, tag);
+  // getservices/ 0B au démarrage = proxy mort ou surcharge, PAS une erreur fatale.
+  // On tente jusqu'à 2 rotations IP + réinit avant d'abandonner (au lieu de tuer le worker
+  // immédiatement comme ce matin où KAKA/Mr Nkumu sont morts en 0min sur getservices/ 0B).
+  {
+    let initRetries = 0;
+    const MAX_INIT_ROTATIONS = 2;
+    while (!phpState && initRetries < MAX_INIT_ROTATIONS) {
+      initRetries++;
+      log("WARN", `${tag} ⚠️ initPhpState échoué (getservices/ 0B — proxy mort/surcharge) — rotation IP ${initRetries}/${MAX_INIT_ROTATIONS}`);
+      const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "main-0b-rotation");
+      if (!newProxy) {
+        log("WARN", `${tag} ❌ Rotation impossible — pool épuisé`);
+        break;
+      }
+      proxyUrl = newProxy;
+      phpState = await initPhpState(session, config, tag);
+    }
+  }
   if (!phpState) {
-    workerResult = { dossierId: config.id, status: "error", errorMessage: "initPhpState: aucun service découvert (getservices/ 0B?)" };
+    workerResult = { dossierId: config.id, status: "error", errorMessage: "initPhpState: aucun service découvert après rotations (getservices/ 0B?)" };
     return workerResult;
   }
 
@@ -1058,10 +1168,6 @@ export async function runDossierWorker(
   // le bug du fallback WORKER_WINDOW_MS quand l'init dépasse HH:WINDOW_END_MIN.
   const windowEnd = windowEndEarly;
   let cycleCount = 0;
-
-  // ── V2 : état adaptatif du scan ─────────────────────────────────────────────
-  /** true si des slots ont été détectés dans cette fenêtre horaire */
-  let slotsDetectedThisWindow = false;
 
   if (windowEnd <= Date.now()) {
     log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} expirée après init — exit`);
@@ -1283,8 +1389,6 @@ export async function runDossierWorker(
             `${tag} Cycle ${cycleCount}: ${scan.slots.length} créneau(x) hors fenêtre — next`,
           );
         } else {
-          // V2 : marquer la détection SEULEMENT quand il y a des slots éligibles (dans la fenêtre de dates)
-          slotsDetectedThisWindow = true;
 
           // P4 — Distribution déterministe des créneaux.
           // Chaque dossier a un index fixe (0-based) → premier choix garanti différent.
@@ -1692,11 +1796,25 @@ export async function runDossierWorker(
       log("WARN", `${tag} Cycle ${cycleCount} exception: ${err}`);
     }
 
-    // Attendre jusqu'au prochain cycle (start-to-start) — V2 adaptatif
-    const adaptiveInterval = getAdaptiveScanInterval(slotsDetectedThisWindow, holdingBookingSlot);
-    const elapsed = Date.now() - cycleStart;
-    const wait = Math.max(0, adaptiveInterval - elapsed);
-    if (Date.now() + wait < windowEnd) {
+    // Attendre jusqu'au prochain cycle — V2 adaptatif + SYNCHRONISATION SUR GRILLE ABSOLUE.
+    //
+    // PROBLÈME : chaque worker démarre à un instant différent (CF solve + init PHP de durée
+    // variable) et sa boucle start-to-start ancrée sur son propre cycleStart perpétue ce
+    // décalage indéfiniment. Résultat : les workers "parallèles" scannent à des moments
+    // décalés de plusieurs secondes → celui qui tombe pile au bon moment voit le créneau
+    // seul, les autres le voient 2-20s plus tard.
+    //
+    // FIX : ancrer le prochain cycle sur une GRILLE ABSOLUE (Date.now() % interval) plutôt
+    // que sur cycleStart privé. Tous les workers se calent alors sur les MÊMES fronts
+    // d'horloge (ex. chaque seconde pile en hyperfast) quel que soit leur instant de départ.
+    // → scans quasi simultanés, tous voient le créneau au même cycle.
+    const adaptiveInterval = getAdaptiveScanInterval(holdingBookingSlot);
+    const nowMs = Date.now();
+    // Temps jusqu'au prochain front de grille. Si on est pile sur un front (reste 0),
+    // on attend un interval complet pour ne pas boucler à vide.
+    const msToNextGrid = adaptiveInterval - (nowMs % adaptiveInterval);
+    const wait = msToNextGrid === 0 ? adaptiveInterval : msToNextGrid;
+    if (nowMs + wait < windowEnd) {
       await sleep(wait);
     }
   }

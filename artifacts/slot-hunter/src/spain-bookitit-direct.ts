@@ -174,8 +174,8 @@ const RETRYABLE_HTTP_CODES = new Set([502, 503, 504]);
  * Configurable via SPAIN_BOOKITIT_MAX_RETRIES (défaut 4 = 5 tentatives).
  */
 const CALL_DIRECT_MAX_RETRIES = ((): number => {
-  const v = Number(process.env.SPAIN_BOOKITIT_MAX_RETRIES ?? "4");
-  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 4);
+  const v = Number(process.env.SPAIN_BOOKITIT_MAX_RETRIES ?? "2");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 2);
 })();
 /** Backoff de base entre retries (ms). Plafonné à CALL_DIRECT_RETRY_MAX_MS. */
 const CALL_DIRECT_RETRY_BASE_MS = 400;

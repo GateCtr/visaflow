@@ -1750,6 +1750,50 @@ export async function initWorkerSession(
   const impit = new Impit({ browser: "chrome", proxyUrl: stickyProxyUrl, timeout: 120_000 } as any);
   const jar: Record<string, string> = {};
 
+  /**
+   * fetch avec retry sur 502/503/504 ET erreur réseau (corrupt message, TLS, timeout).
+   * Pendant le pic de publication, le serveur crache des 504 et des "corrupt message"
+   * pendant plusieurs secondes sur GET widget / POST token / GET /main/. Sans retry,
+   * l'init échoue → blacklist IP + rotation (gaspille temps et IPs pendant la fenêtre).
+   * Avec retry, on traverse la surcharge sur la MÊME IP (dont le CF est déjà résolu).
+   * Configurable via SPAIN_INIT_MAX_RETRIES (défaut 4 = 5 tentatives), backoff plafonné.
+   */
+  const INIT_MAX_RETRIES = Math.max(1, Number(process.env.SPAIN_INIT_MAX_RETRIES ?? "2") || 2);
+  const INIT_OVERLOAD_CODES = new Set([502, 503, 504]);
+  const fetchInitRetry = async (
+    url: string,
+    options: Record<string, unknown>,
+    label: string,
+  ): Promise<{ res: Response; body: string } | null> => {
+    for (let attempt = 0; attempt <= INIT_MAX_RETRIES; attempt++) {
+      try {
+        const res = await (impit.fetch(url, options as any) as unknown as Promise<Response>);
+        const body = await res.text();
+        // 502/503/504 = surcharge serveur → retry si tentatives restantes
+        if (INIT_OVERLOAD_CODES.has(res.status) && attempt < INIT_MAX_RETRIES) {
+          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
+          console.warn(`[spain-soax] 🔧   ⏳ ${label} → HTTP ${res.status} (surcharge) — retry ${attempt + 1}/${INIT_MAX_RETRIES} dans ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        return { res, body };
+      } catch (e) {
+        // Erreur réseau (corrupt message, TLS, timeout) → retry si tentatives restantes.
+        // Ne PAS retry les ProxyTunnelError (CONNECT cassé = proxy mort) — laisser remonter.
+        const msg = e instanceof Error ? e.message : String(e);
+        const isProxyDead = /ProxyTunnelError|CONNECT|tunnel/i.test(msg);
+        if (!isProxyDead && attempt < INIT_MAX_RETRIES) {
+          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
+          console.warn(`[spain-soax] 🔧   ⏳ ${label} → erreur réseau (${msg.slice(0, 60)}) — retry ${attempt + 1}/${INIT_MAX_RETRIES} dans ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        throw e; // proxy mort ou retries épuisés → laisser le catch appelant gérer
+      }
+    }
+    return null;
+  };
+
   // ── Étape 1 : Probe GET widget (UA + Accept seulement — identique à l'ancien système) ──
   let challengeHtml: string | undefined;
   try {
@@ -1803,15 +1847,15 @@ export async function initWorkerSession(
   let token: string | undefined;
 
   const attemptGetToken = async (): Promise<{ token: string | undefined; status: number; bytes: number }> => {
-    const rGet = await (impit.fetch(targetUrl, {
+    const r = await fetchInitRetry(targetUrl, {
       headers: { "User-Agent": WORKER_UA, "Cookie": buildCookieStr(jar) },
-    } as any) as unknown as Promise<Response>);
-    const bodyGet = await rGet.text();
-    Object.assign(jar, extractCookies(rGet.headers as any));
+    }, "GET widget (token)");
+    if (!r) return { token: undefined, status: 0, bytes: 0 };
+    Object.assign(jar, extractCookies(r.res.headers as any));
     return {
-      token: bodyGet.match(/name="token"\s+value="([^"]+)"/i)?.[1],
-      status: rGet.status,
-      bytes: bodyGet.length,
+      token: r.body.match(/name="token"\s+value="([^"]+)"/i)?.[1],
+      status: r.res.status,
+      bytes: r.body.length,
     };
   };
 
@@ -1858,7 +1902,7 @@ export async function initWorkerSession(
   let srvsrc = baseHost;
   let version = "4";
   try {
-    const rPost = await (impit.fetch(targetUrl, {
+    const rp = await fetchInitRetry(targetUrl, {
       method: "POST",
       headers: {
         "User-Agent": WORKER_UA,
@@ -1868,12 +1912,16 @@ export async function initWorkerSession(
         "Origin": baseHost,
       },
       body: `token=${encodeURIComponent(token)}`,
-    } as any) as unknown as Promise<Response>);
-    const bodyPost = await rPost.text();
-    Object.assign(jar, extractCookies(rPost.headers as any));
+    }, "POST token");
+    if (!rp) {
+      console.warn(`[spain-soax] 🔧   ❌ POST token → null après retries`);
+      return null;
+    }
+    const bodyPost = rp.body;
+    Object.assign(jar, extractCookies(rp.res.headers as any));
     srvsrc  = bodyPost.match(/srvsrc:\s*'([^']+)'/)?.[1]  ?? baseHost;
     version = bodyPost.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
-    console.log(`[spain-soax] 🔧   ✅ POST token → HTTP ${rPost.status} | srvsrc=${srvsrc} | v=${version} | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
+    console.log(`[spain-soax] 🔧   ✅ POST token → HTTP ${rp.res.status} | srvsrc=${srvsrc} | v=${version} | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
   } catch (e) {
     console.warn(`[spain-soax] 🔧   ❌ POST token échoué: ${e}`);
     return null;
@@ -1900,21 +1948,37 @@ export async function initWorkerSession(
 
   let prefetchedMainHtml = "";
   try {
-    const rMain = await (impit.fetch(makeUrl("main/"), {
-      headers: {
-        "User-Agent": WORKER_UA,
-        "Accept": "text/javascript, application/javascript, */*; q=0.01",
-        "X-Requested-With": "XMLHttpRequest",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Dest": "empty",
-        "Referer": targetUrl,
-        "Cookie": buildCookieStr(jar),
-      },
-    } as any) as unknown as Promise<Response>);
-    prefetchedMainHtml = await rMain.text();
-    if (prefetchedMainHtml.length < 1000) {
-      console.warn(`[spain-soax] 🔧   ❌ /main/ trop court: ${prefetchedMainHtml.length}B`);
+    // Retry /main/ sur 504/erreur réseau ET sur réponse tronquée.
+    // Un /main/ complet fait ~120-128kB. Une réponse de 0-50kB (ex. 6kB sous charge) est
+    // une page TRONQUÉE = widget PHP à moitié initialisé → getservices/ échoue derrière.
+    // Seuil 1000B trop bas → on exige MAIN_MIN_BYTES (50kB) pour valider la session.
+    const MAIN_MIN_BYTES = Math.max(1000, Number(process.env.SPAIN_MAIN_MIN_BYTES ?? "50000") || 50000);
+    let mainOk = false;
+    for (let attempt = 0; attempt <= INIT_MAX_RETRIES; attempt++) {
+      const rm = await fetchInitRetry(makeUrl("main/"), {
+        headers: {
+          "User-Agent": WORKER_UA,
+          "Accept": "text/javascript, application/javascript, */*; q=0.01",
+          "X-Requested-With": "XMLHttpRequest",
+          "Sec-Fetch-Site": "same-origin",
+          "Sec-Fetch-Mode": "cors",
+          "Sec-Fetch-Dest": "empty",
+          "Referer": targetUrl,
+          "Cookie": buildCookieStr(jar),
+        },
+      }, "GET /main/");
+      if (!rm) break;
+      prefetchedMainHtml = rm.body;
+      if (prefetchedMainHtml.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
+      // Réponse tronquée (0B ou 6kB = surcharge PHP) → retry
+      if (attempt < INIT_MAX_RETRIES) {
+        const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
+        console.warn(`[spain-soax] 🔧   ⏳ /main/ tronqué: ${Math.round(prefetchedMainHtml.length / 1024)}kB (surcharge PHP) — retry ${attempt + 1}/${INIT_MAX_RETRIES} dans ${backoff}ms`);
+        await new Promise((r) => setTimeout(r, backoff));
+      }
+    }
+    if (!mainOk) {
+      console.warn(`[spain-soax] 🔧   ❌ /main/ tronqué après retries: ${Math.round(prefetchedMainHtml.length / 1024)}kB`);
       return null;
     }
     console.log(`[spain-soax] 🔧   ✅ /main/ → ${prefetchedMainHtml.length}B — session prête!`);
