@@ -380,36 +380,41 @@ export async function solveSpainCloudflare(
   const t0 = Date.now();
   console.log(`[spain-soax] 🚀 Début solve CF — ${targetUrl}`);
 
-  // Vérifier le solde CapSolver — retry 2× sur erreurs transientes (rate-limit, hiccup API)
   const apiKey = capsolverApiKey.trim();
-  let balOk = false;
-  for (let balAttempt = 0; balAttempt < 3; balAttempt++) {
-    if (balAttempt > 0) await new Promise((r) => setTimeout(r, 2_000 * balAttempt));
-    try {
-      const balRes = await fetch(`${CAPSOLVER_BASE}/getBalance`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientKey: apiKey }),
-        signal: AbortSignal.timeout(10_000),
-      });
-      const balData = (await balRes.json()) as { errorId: number; errorCode?: string; errorDescription?: string; balance?: number };
-      if (balData.errorId !== 0) {
-        console.warn(`[spain-soax] ⚠️ CapSolver getBalance errorId=${balData.errorId} code=${balData.errorCode ?? "?"} desc="${balData.errorDescription ?? ""}" (tentative ${balAttempt + 1}/3)`);
-        if (balAttempt === 2) return { success: false, error: `CapSolver getBalance error: ${balData.errorCode ?? balData.errorId}`, durationMs: Date.now() - t0 };
-        continue;
+
+  // ── getBalance : appel DÉSACTIVÉ du chemin critique du solve ────────────────
+  // Historique : on appelait GET getBalance AVANT chaque createTask (retry 3× avec
+  // backoff 2s/4s) et on BLOQUAIT le solve tant qu'il n'avait pas réussi. Sous charge
+  // (essaim de workers armant en parallèle en preflight), cet appel :
+  //   1. doublait le nombre de requêtes CapSolver → déclenchait ERROR_RATE_LIMIT,
+  //   2. ajoutait jusqu'à 6s de backoff par solve juste pour journaliser un solde,
+  //   3. était contre-productif : le getBalance rate-limité faisait échouer le solve
+  //      alors même que createTask aurait réussi.
+  // Or un solde épuisé se manifeste de toute façon par une erreur explicite sur
+  // createTask/getTaskResult. Le check de solde n'a donc AUCUNE valeur fonctionnelle
+  // dans le chemin critique. On le retire (Requirement perf : minimiser les requêtes
+  // réseau + marge de temps avant huntStartMin).
+  //
+  // Diagnostic optionnel : CAPSOLVER_LOG_BALANCE=1 réactive UNIQUEMENT un log de solde
+  // non bloquant (fire-and-forget, aucun retry, n'interrompt jamais le solve).
+  if (process.env.CAPSOLVER_LOG_BALANCE === "1") {
+    void (async (): Promise<void> => {
+      try {
+        const balRes = await fetch(`${CAPSOLVER_BASE}/getBalance`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientKey: apiKey }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        const balData = (await balRes.json()) as { errorId: number; balance?: number };
+        if (balData.errorId === 0) {
+          console.log(`[spain-soax] 💰 Balance CapSolver: $${balData.balance?.toFixed(3)}`);
+        }
+      } catch {
+        // Diagnostic best-effort — jamais bloquant.
       }
-      if ((balData.balance ?? 0) <= 0) {
-        return { success: false, error: `CapSolver balance insuffisant: $${balData.balance ?? 0}`, durationMs: Date.now() - t0 };
-      }
-      console.log(`[spain-soax] 💰 Balance CapSolver: $${balData.balance?.toFixed(3)}`);
-      balOk = true;
-      break;
-    } catch (err) {
-      console.warn(`[spain-soax] ⚠️ CapSolver getBalance fetch error (tentative ${balAttempt + 1}/3): ${err}`);
-      if (balAttempt === 2) return { success: false, error: `Balance check failed: ${err}`, durationMs: Date.now() - t0 };
-    }
+    })();
   }
-  if (!balOk) return { success: false, error: "Balance check: toutes les tentatives échouées", durationMs: Date.now() - t0 };
 
   // Préparer le proxy au format CapSolver
   const proxyForCapsolver = proxyUrlToCapsolverFormat(soaxProxyUrl);

@@ -41,6 +41,10 @@ import { getActiveJobs, type HunterJob } from "./convexClient.js";
 import { runDossierWorker, type SpainDossierConfig, type WorkerResult } from "./spain-dossier-worker.js";
 import { initWorkerSession } from "./spain-soax-solver.js";
 import { log } from "./scheduler-utils.js";
+// spain-synchronized-scan (task 11.1) : preflight + pool de réserve partagé.
+import { loadGridConfig, type GridConfig, type WorkerRuntimeState } from "./spain/spain-grid-config.js";
+import { createReservePool, type ReservePoolManager } from "./spain/spain-reserve-pool.js";
+import { createPreflightController, type PreflightController } from "./spain/spain-preflight-controller.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -107,6 +111,17 @@ interface RunningWorker {
    * fin de fenêtre → nouveau cooldown de 60 min → worker jamais lancé ce cycle.
    */
   isCooldownPlaceholder?: boolean;
+  /**
+   * spain-synchronized-scan (task 11.1) : miroir léger de l'état runtime du worker
+   * (state + phase) pour la supervision de récupération côté orchestrateur.
+   *
+   * NOTE : le `WorkerRuntimeState` réel (session, phpState, transitions) vit DANS le
+   * worker (`spain-dossier-worker.ts`, task 10.1) ; cette copie n'est qu'un miroir
+   * observable servant à exclure les workers `RECOVERING` du calcul de cadence
+   * commune (Requirement 3.4). Optionnel → n'altère jamais l'API existante ni le
+   * comportement des placeholders de cooldown.
+   */
+  runtimeState?: WorkerRuntimeState;
 }
 
 // ─── Entrée publique ──────────────────────────────────────────────────────────
@@ -185,6 +200,29 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
   // ── Map des workers actifs ───────────────────────────────────────────────────
   const workers = new Map<string, RunningWorker>();
 
+  // ── spain-synchronized-scan (task 11.1) : grille + pool de réserve + preflight ──
+  // La grille valide la config de fenêtre (ordre strict windowStartMin < huntStartMin
+  // < lateStartMin < windowEndMin ; sinon défauts 5/13/17/25 réappliqués + erreur
+  // journalisée par loadGridConfig). Requirements 12.5, 12.6.
+  const gridConfig: GridConfig = loadGridConfig();
+  // Pool de réserve PARTAGÉ : pré-solvé en preflight (warmUp), emprunté par les
+  // workers pour un swap ~0 s en cas de proxy mort (injecté dans runDossierWorker).
+  // targetSize dérive de SPAIN_RESERVE_POOL_SIZE côté pool (borné [1,100], défaut 4).
+  const reservePool: ReservePoolManager = createReservePool({
+    targetSize: readReservePoolSize(),
+  });
+  // Clé CapSolver : secret via env uniquement (jamais journalisée). Requirement 13.3.
+  const capsolverKey = resolveCapsolverKey();
+  // Contrôleur preflight instancié plus tard (portalUrl dépend des dossiers) — cf.
+  // ensurePreflightController(). Requirement 6.1.
+  let preflight: PreflightController | undefined;
+  /**
+   * Garde d'exécution unique du preflight par fenêtre horaire. On mémorise le début
+   * de fenêtre (epoch ms tronqué à l'heure) déjà traité pour ne PAS relancer
+   * armAll → warmUp → verifyAndRepair à chaque itération de la boucle.
+   */
+  let preflightDoneForWindowKey: number | null = null;
+
   // ── Boucle principale ─────────────────────────────────────────────────────────
   let iteration = 0;
   try {
@@ -223,6 +261,32 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           // Pas d'annulation forcée : le worker sort naturellement à la fin de sa fenêtre
         }
       }
+
+      // 3.5 spain-synchronized-scan (task 11.1) : phase preflight (armement +
+      //     pré-solve du pool de réserve + vérification anticipée). S'exécute une
+      //     seule fois par fenêtre horaire, uniquement pendant `isPreflightWindow`.
+      //     Requirements 6.1, 12.5, 12.6.
+      await runPreflightIfDue({
+        dossiers,
+        reservePool,
+        gridConfig,
+        capsolverKey,
+        getController: (portalUrl) => {
+          if (preflight === undefined) {
+            preflight = createPreflightController({
+              config: gridConfig,
+              reservePool,
+              capsolverKey,
+              portalUrl,
+            });
+          }
+          return preflight;
+        },
+        isDoneForWindow: (key) => preflightDoneForWindowKey === key,
+        markDoneForWindow: (key) => {
+          preflightDoneForWindowKey = key;
+        },
+      });
 
       // 4. Démarrer un worker pour chaque dossier sans worker en cours
       // ── V2 : check sommeil post-détection (DÉSACTIVÉ — annulations arrivent à tout moment) ──
@@ -266,22 +330,29 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         // Arrêter le keep-alive Decodo — le worker prend le relai sur ce proxy
         stopKeepAlive(config.id);
 
-        const promise = runDossierWorker({
-          ...config,
-          activeDossierCount: dossiers.length,
-          dossierIndex: dossiers
-            .sort((a, b) => {
-              // Dossiers avec spainPriorityIndex en premier (triés par index croissant)
-              // Dossiers sans index après, triés par ID alphabétique
-              const aIdx = (a as { spainPriorityIndex?: number }).spainPriorityIndex;
-              const bIdx = (b as { spainPriorityIndex?: number }).spainPriorityIndex;
-              if (aIdx != null && bIdx != null) return aIdx - bIdx;
-              if (aIdx != null) return -1;
-              if (bIdx != null) return 1;
-              return a.id.localeCompare(b.id);
-            })
-            .findIndex((d) => d.id === config.id),
-        }).then((result) => {
+        // spain-synchronized-scan (task 11.1) : injecter le pool de réserve PARTAGÉ
+        // comme 2ᵉ argument de runDossierWorker (signature : runDossierWorker(config,
+        // reservePool?)). Les workers empruntent ainsi la même réserve pour la
+        // récupération (swap ~0 s en cas de proxy mort) — Requirement 3.4 / 5.2.
+        const promise = runDossierWorker(
+          {
+            ...config,
+            activeDossierCount: dossiers.length,
+            dossierIndex: dossiers
+              .sort((a, b) => {
+                // Dossiers avec spainPriorityIndex en premier (triés par index croissant)
+                // Dossiers sans index après, triés par ID alphabétique
+                const aIdx = (a as { spainPriorityIndex?: number }).spainPriorityIndex;
+                const bIdx = (b as { spainPriorityIndex?: number }).spainPriorityIndex;
+                if (aIdx != null && bIdx != null) return aIdx - bIdx;
+                if (aIdx != null) return -1;
+                if (bIdx != null) return 1;
+                return a.id.localeCompare(b.id);
+              })
+              .findIndex((d) => d.id === config.id),
+          },
+          reservePool,
+        ).then((result) => {
           return result;
         }).catch((err) => {
           log("WARN", `[SPAIN-ORCH] Worker ${config.applicantName} exception non gérée: ${err}`);
@@ -292,11 +363,26 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           };
         });
 
+        // Miroir léger de l'état runtime pour la supervision (task 11.1). Le rt réel
+        // vit dans le worker ; ici on initialise un état ARMED observable. La session
+        // armée en preflight (si disponible) est reprise pour tracer l'exit IP.
+        const armedMirror = preflight?.getArmedStates().get(config.id);
+        const runtimeState: WorkerRuntimeState = {
+          dossierId: config.id,
+          state: "ARMED",
+          gridSeed: armedMirror?.gridSeed ?? 0,
+          session: armedMirror?.session,
+          proxyUrl: armedMirror?.proxyUrl ?? "",
+          slotEverSeen: false,
+          lastScanAtMs: 0,
+        };
+
         workers.set(config.id, {
           promise,
           config,
           startedAt: Date.now(),
           cooldownUntil: 0,
+          runtimeState,
         });
         }
       } // end dossier launch block
@@ -307,9 +393,13 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           ([id, w]) =>
             `${w.config.applicantName}(${Math.round((Date.now() - w.startedAt) / 60_000)}min)`,
         );
+        // spain-synchronized-scan (task 11.1) : nombre de workers sur la cadence de
+        // grille commune (exclut les workers RECOVERING — Requirement 3.4).
+        const cadenceCount = countCadenceWorkers(workers);
         log(
           "INFO",
-          `[SPAIN-ORCH] Itération #${iteration} — workers actifs: ${active.length > 0 ? active.join(", ") : "aucun"} | dossiers Convex: ${dossiers.length}`,
+          `[SPAIN-ORCH] Itération #${iteration} — workers actifs: ${active.length > 0 ? active.join(", ") : "aucun"} | ` +
+            `cadence commune: ${cadenceCount} | dossiers Convex: ${dossiers.length}`,
         );
       }
 
@@ -549,6 +639,149 @@ function isInScanWindow(): boolean {
   const now = new Date();
   const minInHour = now.getMinutes() + now.getSeconds() / 60;
   return minInHour >= WINDOW_START_MIN && minInHour < WINDOW_START_MIN + WINDOW_DURATION_MIN;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// spain-synchronized-scan (task 11.1) — Preflight + pool de réserve + supervision
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Lit la taille cible du pool de réserve depuis `SPAIN_RESERVE_POOL_SIZE`
+ * (borné [1, 100], défaut 4). Le bornage/validation final est refait dans
+ * `createReservePool` ; on fournit ici une valeur de départ raisonnable.
+ * Requirement 11.7.
+ */
+function readReservePoolSize(): number {
+  const raw = process.env.SPAIN_RESERVE_POOL_SIZE;
+  const parsed = Number(raw ?? "");
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return 4;
+  return Math.max(1, Math.min(100, parsed));
+}
+
+/**
+ * Résout la clé CapSolver depuis l'environnement UNIQUEMENT (jamais en dur, jamais
+ * journalisée). Requirements 13.3, 13.4. Retourne une chaîne vide si absente ;
+ * `armOne`/`warmUp` isolent alors l'échec en nommant la variable sans révéler la
+ * valeur.
+ */
+function resolveCapsolverKey(): string {
+  return process.env.CAPSOLVER_API_KEY ?? process.env.NONECAP_API_KEY ?? "";
+}
+
+/**
+ * Sélectionne une URL de portail représentative pour le warmUp/preflight du pool de
+ * réserve (qui nécessitent un unique portalUrl).
+ *
+ * CHOIX documenté : on prend le portail du PREMIER dossier (ordre Convex). Le
+ * cf_clearance étant lié à l'exit IP (pas au portail Bookitit, qui partage la même
+ * protection Cloudflare pour toutes les consulats Espagne), une réserve pré-solvée
+ * sur ce portail est réutilisable pour les autres dossiers Espagne.
+ *
+ * LIMITATION : si les dossiers ciblent des portails Cloudflare hétérogènes, la
+ * réserve pré-solvée pourrait ne pas être directement valide pour un portail
+ * différent. Dans ce cas, le worker re-solvera au besoin (chemin de récupération).
+ * On journalise le portail retenu (tronqué) sans exposer de secret.
+ */
+function pickRepresentativePortalUrl(dossiers: SpainDossierConfig[]): string | undefined {
+  for (const d of dossiers) {
+    const url = (d.portalUrl ?? "").split("#")[0];
+    if (url && url.trim() !== "") return url;
+  }
+  return undefined;
+}
+
+/** Dépendances de l'exécution preflight (injectées depuis la boucle principale). */
+interface PreflightRunDeps {
+  dossiers: SpainDossierConfig[];
+  reservePool: ReservePoolManager;
+  gridConfig: GridConfig;
+  capsolverKey: string;
+  /** Fabrique paresseuse du contrôleur (portalUrl connu seulement au runtime). */
+  getController: (portalUrl: string) => PreflightController;
+  isDoneForWindow: (windowKey: number) => boolean;
+  markDoneForWindow: (windowKey: number) => void;
+}
+
+/**
+ * Exécute la séquence preflight `armAll → warmUp → verifyAndRepair` UNE SEULE FOIS
+ * par fenêtre horaire, uniquement lorsque l'heure courante est dans la fenêtre
+ * preflight (`[windowStartMin, huntStartMin[`, fuseau Europe/Madrid).
+ *
+ * S'abstient totalement si aucun dossier ou si aucun portail exploitable
+ * (Requirement 12.5/12.6 : pas de scan/travail hors fenêtre ou sur config invalide).
+ * Tous les appels réseau sont enveloppés dans un `try/catch` `[SPAIN-ORCH]` ; les
+ * secrets restent en env.
+ */
+async function runPreflightIfDue(deps: PreflightRunDeps): Promise<void> {
+  const { dossiers, reservePool, capsolverKey } = deps;
+  const nowMs = Date.now();
+
+  // Portail représentatif requis pour instancier le contrôleur + warmUp.
+  const portalUrl = pickRepresentativePortalUrl(dossiers);
+  if (dossiers.length === 0 || portalUrl === undefined) {
+    return; // rien à pré-armer — abstention.
+  }
+
+  const controller = deps.getController(portalUrl);
+
+  // Hors fenêtre preflight → ne rien faire (Requirement 6.1 / 12.5).
+  if (!controller.isPreflightWindow(nowMs)) {
+    return;
+  }
+
+  // Clé de fenêtre = début de l'heure courante (ms epoch). Une seule exécution par
+  // fenêtre horaire, même si la boucle itère plusieurs fois pendant le preflight.
+  const windowKey = Math.floor(nowMs / 3_600_000);
+  if (deps.isDoneForWindow(windowKey)) {
+    return;
+  }
+  deps.markDoneForWindow(windowKey);
+
+  log(
+    "INFO",
+    `[SPAIN-ORCH] 🛫 Preflight — fenêtre HH:${String(deps.gridConfig.windowStartMin).padStart(2, "0")}` +
+      ` → HH:${String(deps.gridConfig.huntStartMin).padStart(2, "0")} | ${dossiers.length} dossier(s) | ` +
+      `portail ${portalUrl.slice(-36)}`,
+  );
+
+  try {
+    await controller.armAll(dossiers);
+    await reservePool.warmUp(capsolverKey, portalUrl);
+    await controller.verifyAndRepair(Date.now());
+
+    const unready = controller.getUnreadyDossiers();
+    log(
+      "INFO",
+      `[SPAIN-ORCH] 🛫 Preflight terminé — réserves prêtes: ${reservePool.size()}/${reservePool.targetSize}` +
+        `${unready.size > 0 ? ` | dossiers non prêts: ${unready.size}` : ""}`,
+    );
+  } catch (err) {
+    // Un échec preflight ne doit jamais interrompre l'orchestrateur : les workers
+    // re-solveront au démarrage si nécessaire. On journalise sans exposer de secret.
+    log(
+      "WARN",
+      `[SPAIN-ORCH] 🛫 Preflight échoué (non fatal): ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * Compte les workers activement synchronisés sur la cadence de grille commune, en
+ * EXCLUANT tout worker en état `RECOVERING` (Requirement 3.4 : la dérive ≤ 50 ms
+ * s'évalue sur les workers non en récupération ; un worker qui répare ne perturbe
+ * pas et n'est pas compté dans la cadence commune).
+ *
+ * Fonction de supervision/observabilité — le calcul de cadence lui-même est réalisé
+ * par la grille dans chaque worker (task 10.1).
+ */
+function countCadenceWorkers(workers: Map<string, RunningWorker>): number {
+  let count = 0;
+  for (const w of workers.values()) {
+    if (w.isCooldownPlaceholder) continue;
+    if (w.runtimeState?.state === "RECOVERING") continue;
+    count++;
+  }
+  return count;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

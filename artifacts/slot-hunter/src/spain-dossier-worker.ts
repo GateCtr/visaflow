@@ -66,6 +66,7 @@ import {
   tryAcquireBookingSlot,
   releaseBookingSlot,
   MAX_CONCURRENT_BOOKERS,
+  type SlotSnapEntry,
 } from "./spain-redis-persistence.js";
 import {
   reportSlotFound,
@@ -78,6 +79,13 @@ import {
   type SlotDiscoveryEvent,
 } from "./convexClient.js";
 import { log } from "./scheduler-utils.js";
+// ── spain-synchronized-scan (task 10.1) : grille d'horloge murale + machine à états ──
+import { createGridResolver, type GridResolver } from "./spain/spain-wallclock-grid.js";
+import { loadGridConfig } from "./spain/spain-grid-config.js";
+import type { WorkerRuntimeState, FailureKind } from "./spain/spain-grid-config.js";
+import { createRuntimeState, classify, transition } from "./spain/spain-worker-state-machine.js";
+import { enterRecoveryAsync, type RecoveryDeps } from "./spain/spain-worker-recovery.js";
+import { createReservePool, type ReservePoolManager } from "./spain/spain-reserve-pool.js";
 
 // ─── Sticky session helper ────────────────────────────────────────────────────
 
@@ -287,6 +295,210 @@ const SEMAPHORE_BYPASS_SLOT_THRESHOLD = ((): number => {
 })();
 
 /**
+ * ── spain-synchronized-scan (task 10.2) : seuil de bypass du mode RACE ──────────
+ *
+ * Seuil de capacité libre (somme des freeslots) au-delà duquel le mode RACE
+ * (détection découplée du booking, Req 9.5) contourne le sémaphore de concurrence
+ * de booking (`tryAcquireBookingSlot` / `MAX_CONCURRENT_BOOKERS`) : tous les workers
+ * actifs foncent booker en parallèle à partir d'un snapshot partagé.
+ *
+ * Relation avec SEMAPHORE_BYPASS_SLOT_THRESHOLD : les deux seuils gouvernent le même
+ * sémaphore de booking mais depuis deux points de décision distincts. Le seuil
+ * historique (`SPAIN_SEMAPHORE_BYPASS_SLOTS`) décide du bypass à partir des créneaux
+ * `eligible` du scan courant ; le seuil RACE (`SPAIN_RACE_BYPASS_THRESHOLD`) décide du
+ * bypass à partir de la capacité libre CONSOMMÉE VIA LE SNAPSHOT daté (< 60 s). Le mode
+ * RACE utilise exclusivement RACE_BYPASS_THRESHOLD ; on ne réécrit pas le chemin
+ * sémaphore existant, on l'aligne sur la décision de `attemptBookingRace`.
+ *
+ * Contraintes (Req 9.5) : entier borné à [1, 10000], défaut 5.
+ * Configurable via SPAIN_RACE_BYPASS_THRESHOLD.
+ */
+export const RACE_BYPASS_THRESHOLD = ((): number => {
+  const raw = Number(process.env.SPAIN_RACE_BYPASS_THRESHOLD);
+  if (!Number.isFinite(raw)) return 5;
+  const rounded = Math.round(raw);
+  return Math.min(10000, Math.max(1, rounded));
+})();
+
+/**
+ * Fenêtre de fraîcheur d'un snapshot de créneaux pour le mode RACE (Req 9.3 / 9.4).
+ * Un snapshot dont l'horodatage de détection est daté de 60 s ou plus est considéré
+ * expiré : on s'abstient de booker à partir de lui.
+ */
+export const RACE_SNAPSHOT_FRESHNESS_MS = 60_000;
+
+/**
+ * ── spain-synchronized-scan (task 10.2) : décision de booking en mode RACE ──────
+ *
+ * Snapshot de créneaux consommé par un worker pour décider s'il fonce booker sans
+ * attendre son propre cycle de détection (Req 9.3). Faute d'API de lecture Redis
+ * dédiée (aucun `getSlotSnapshot`/`readSnapshot` n'existe dans
+ * spain-redis-persistence.ts), le worker consomme le snapshot issu de SON PROPRE scan
+ * courant : `detectedAtMs` = instant de détection du scan. La fraîcheur (< 60 s) et le
+ * bypass par seuil sont ainsi garantis au niveau du worker détecteur. La diffusion
+ * inter-workers reste assurée par `publishSlotSnapshot` (Redis) côté détecteur.
+ */
+export interface RaceSnapshot {
+  agendaId: string;
+  serviceId: string;
+  slots: WorkerSlot[];
+  /** Horodatage de détection (ms epoch) — base de la fraîcheur < 60 s. */
+  detectedAtMs: number;
+}
+
+/**
+ * Décision de booking produite par `attemptBookingRace` : indique si le worker doit
+ * contourner le sémaphore de booking (Req 9.5), si le snapshot était expiré (Req 9.4),
+ * et rappelle la capacité libre totale consommée pour la traçabilité.
+ */
+export interface RaceBookingDecision {
+  /** true ⟹ contourner tryAcquireBookingSlot/MAX_CONCURRENT_BOOKERS. */
+  bypassSemaphore: boolean;
+  /** true ⟹ snapshot daté de ≥ 60 s : aucune tentative de booking depuis ce snapshot. */
+  expired: boolean;
+  /** Somme des capacités libres (freeslots) des créneaux du snapshot. */
+  totalFreeCapacity: number;
+}
+
+/**
+ * Mode RACE — décide, à partir d'un snapshot daté, si un worker doit booker et s'il
+ * peut contourner le sémaphore de concurrence de booking.
+ *
+ * Requirements couverts : 9.3 (snapshot < 60 s ⟹ booking), 9.4 (snapshot ≥ 60 s ⟹
+ * ignoré/expiré), 9.5 (somme capacités libres ≥ seuil ⟹ bypass sémaphore).
+ *
+ * Cette fonction NE réalise PAS le booking : elle gate uniquement la DÉCISION de
+ * contourner ou non le sémaphore. La mécanique de booking (getsigninfields/ → signin/)
+ * reste inchangée dans la boucle appelante.
+ *
+ * @param rt        état runtime du worker (lecture seule ici ; `slotEverSeen` déjà positionné).
+ * @param snapshot  snapshot de créneaux daté à consommer.
+ * @param nowMs     instant courant (ms epoch) — injecté pour testabilité.
+ * @param tag       préfixe de log du worker.
+ */
+export function attemptBookingRace(
+  rt: WorkerRuntimeState,
+  snapshot: RaceSnapshot,
+  nowMs: number,
+  tag: string,
+): RaceBookingDecision {
+  const ageMs = nowMs - snapshot.detectedAtMs;
+  const totalFreeCapacity = snapshot.slots.reduce(
+    (sum, s) => sum + Math.max(0, s.freeslots),
+    0,
+  );
+
+  // Req 9.4 — snapshot périmé : ignorer et signaler expiré (pas de booking depuis lui).
+  if (ageMs >= RACE_SNAPSHOT_FRESHNESS_MS) {
+    log(
+      "INFO",
+      `${tag} 🏁 RACE snapshot expiré (${Math.round(ageMs / 1000)}s ≥ 60s) — pas de booking depuis ce snapshot`,
+    );
+    return { bypassSemaphore: false, expired: true, totalFreeCapacity };
+  }
+
+  // Req 9.5 — capacité libre suffisante ⟹ tous les workers bookent en parallèle,
+  // sémaphore contourné (aucune collision : chaque worker vise une place distincte).
+  const bypassSemaphore = totalFreeCapacity >= RACE_BYPASS_THRESHOLD;
+  log(
+    "INFO",
+    `${tag} 🏁 RACE snapshot frais (${Math.round(ageMs / 1000)}s) — ${totalFreeCapacity} places` +
+      (bypassSemaphore
+        ? ` ≥ ${RACE_BYPASS_THRESHOLD} → bypass sémaphore (booking parallèle)`
+        : ` < ${RACE_BYPASS_THRESHOLD} → respect du sémaphore`),
+  );
+  return { bypassSemaphore, expired: false, totalFreeCapacity };
+}
+
+/**
+ * ── spain-synchronized-scan (task 10.2) : setter monotone de `slotEverSeen` ─────
+ *
+ * Positionne `rt.slotEverSeen = true` DÈS QU'un créneau du scan présente une capacité
+ * libre (`freeslots > 0`), et JAMAIS l'inverse. Une fois `true`, le drapeau reste `true`
+ * (Req 8.5 / 9.1). Retourne `true` si le drapeau vient de basculer (transition
+ * false → true), `false` sinon — utile pour ne journaliser qu'au premier basculement.
+ *
+ * Garantie de monotonie : cette fonction n'écrit jamais `false` dans `rt.slotEverSeen`.
+ *
+ * @param rt     état runtime du worker (muté en place).
+ * @param slots  créneaux observés lors du scan courant.
+ */
+export function markSlotSeen(
+  rt: WorkerRuntimeState,
+  slots: ReadonlyArray<{ freeslots: number }>,
+): boolean {
+  if (rt.slotEverSeen) return false; // déjà vu — jamais remis à false (monotonie).
+  const hasFreeCapacity = slots.some((s) => s.freeslots > 0);
+  if (hasFreeCapacity) {
+    rt.slotEverSeen = true;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * ── spain-synchronized-scan (task 10.1) : borne de fenêtre horaire ──────────────
+ *
+ * Indique si la fenêtre de scan est encore ouverte à `nowMs` : `true` ssi
+ * `nowMs < windowEnd`. Utilisé comme garde avant tout appel réseau de scan
+ * (Req 12.1 / 12.3) : aucun scan ne doit démarrer quand `Date.now() >= windowEnd`.
+ */
+export function isWindowOpen(nowMs: number, windowEnd: number): boolean {
+  return nowMs < windowEnd;
+}
+
+/**
+ * ── spain-synchronized-scan (task 10.1) : plafonnement du réveil sur la fenêtre ──
+ *
+ * Indique si un réveil planifié à `wakeAtMs` doit être honoré : `true` ssi
+ * `wakeAtMs < windowEnd`. Si `false`, l'appelant NE dort PAS (la fenêtre serait
+ * fermée au réveil) et sort de la boucle sans planifier de scan hors fenêtre
+ * (Req 12.3). Contrat identique au site inline `if (wakeAtMs < windowEnd)`.
+ */
+export function shouldScheduleWake(wakeAtMs: number, windowEnd: number): boolean {
+  return wakeAtMs < windowEnd;
+}
+
+/**
+ * Publie un snapshot de créneaux avec retry (Req 9.2 / 9.6).
+ *
+ * Réutilise `publishSlotSnapshot` (Redis). En cas d'échec, réessaie jusqu'à 3 fois
+ * avec un backoff exponentiel de base 2000 ms (2000, 4000, 8000). L'échec après
+ * épuisement des tentatives est journalisé SANS jamais toucher à `rt.slotEverSeen`
+ * (monotonie préservée, Req 9.6). Ne lance jamais vers l'appelant.
+ */
+export async function publishSlotSnapshotWithRetry(
+  agendaId: string,
+  serviceId: string,
+  slots: SlotSnapEntry[],
+  tag: string,
+): Promise<boolean> {
+  const MAX_ATTEMPTS = 3;
+  const BASE_BACKOFF_MS = 2_000;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      await publishSlotSnapshot(agendaId, serviceId, slots);
+      return true;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      log(
+        "WARN",
+        `${tag} ⚠️ publishSlotSnapshot échec (tentative ${attempt + 1}/${MAX_ATTEMPTS}): ${msg}`,
+      );
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await sleep(BASE_BACKOFF_MS * 2 ** attempt);
+      }
+    }
+  }
+  // Req 9.6 — échec de publication signalé ; slotEverSeen conservé (jamais remis à false).
+  log(
+    "ERROR",
+    `${tag} ❌ publishSlotSnapshot échoué après ${MAX_ATTEMPTS} tentatives — slotEverSeen conservé`,
+  );
+  return false;
+}
+
+/**
  * Pre-publication proxy refresh : à la minute PREPUB_REFRESH_MINUTE de chaque heure,
  * chaque worker force une rotation de proxy frais + re-solve CF.
  * Objectif : arriver à la fenêtre de publication (min 13-14) avec un proxy tout neuf.
@@ -330,7 +542,7 @@ interface WorkerSlot {
   freeslots: number;
 }
 
-interface WorkerScanResult {
+export interface WorkerScanResult {
   status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error" | "session_dead" | "cf_expired";
   slots?: WorkerSlot[];
   mainHtml?: string;
@@ -928,6 +1140,11 @@ export async function refreshSessionAndScan(
  */
 export async function runDossierWorker(
   config: SpainDossierConfig,
+  // spain-synchronized-scan (task 10.1) : pool de réserve partagé injecté par
+  // l'orchestrateur (task 11.1). Optionnel + en fin de signature pour préserver la
+  // rétro-compatibilité ; à défaut, un pool local minimal est créé pour alimenter
+  // les RecoveryDeps sans casser le comportement existant.
+  reservePool?: ReservePoolManager,
 ): Promise<WorkerResult> {
   const tag = `[WORKER:${config.applicantName.slice(0, 18)}]`;
   log("INFO", `${tag} ▶ Démarrage worker autonome — portalUrl: ${config.portalUrl.slice(-40)}`);
@@ -1178,9 +1395,65 @@ export async function runDossierWorker(
   // ── Tracking pre-publication proxy refresh (1x par heure) ─────────────────
   let lastPrepubRefreshHour = -1;
 
+  // ── spain-synchronized-scan (task 10.1) : grille d'horloge murale + état runtime ──
+  // La grille remplace le sleep relatif de fin de boucle par un alignement sur des
+  // fronts d'horloge absolus (barrière commune sans coordination centrale) + jitter
+  // par worker. `rt` porte l'état de la machine à états (ARMED/SCANNING/RECOVERING),
+  // le seed de jitter dérivé du dossierId, et les drapeaux de diagnostic (slotEverSeen,
+  // lastScanAtMs). Voir design.md §« Boucle de scan synchronisée » et §« Example Usage ».
+  const grid: GridResolver = createGridResolver(loadGridConfig());
+  const rt: WorkerRuntimeState = createRuntimeState({
+    dossierId: config.id,
+    proxyUrl,
+    session,
+    phpState: phpState ?? undefined,
+  });
+  // Pool de réserve : partagé si injecté par l'orchestrateur (task 11.1), sinon local
+  // minimal. Sert de dépendance à `enterRecoveryAsync` (swap ~0 s en cas de proxy mort).
+  const effectiveReservePool: ReservePoolManager =
+    reservePool ?? createReservePool({ targetSize: 4 });
+  // Dépendances de récupération asynchrone non bloquante (design §Récupération).
+  const recoveryDeps: RecoveryDeps = {
+    reservePool: effectiveReservePool,
+    capsolverKey,
+    portalUrl: portalUrlNoFrag,
+    config,
+    tag,
+  };
+  // Dernier délai de réveil calculé — conservé si `msUntilNextTick` renvoie le
+  // sentinelle d'erreur (-1), afin de ne jamais replanifier sur une valeur invalide
+  // (contrat MS_UNTIL_NEXT_TICK_ERROR, Requirements 1.7 / 2.5).
+  let lastGridWaitMs = grid.effectiveTickMs("hunt", false);
+
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
+
+    // ── spain-synchronized-scan (task 10.1) : phase + tick effectif de la grille ──
+    // La phase (preflight/hunt/late) dérive de l'horloge murale Europe/Madrid ; le tick
+    // effectif applique le ralentissement tardif conditionnel (jamais si slotEverSeen).
+    const now = Date.now();
+    const phase = grid.currentPhase(now);
+    const tick = grid.effectiveTickMs(phase, rt.slotEverSeen);
+
+    // ── État RECOVERING : ne PAS scanner, dormir jusqu'au prochain front ──────────
+    // La récupération tourne en tâche de fond (enterRecoveryAsync) et rebascule le
+    // worker en ARMED au succès (transition(rt, "recovered")). Ici on se contente
+    // d'attendre le prochain front sans lancer d'appel réseau (aucun scan).
+    if (rt.state === "RECOVERING") {
+      const rwait = grid.msUntilNextTick(now, tick, rt.gridSeed);
+      const wait = rwait < 0 ? lastGridWaitMs : rwait;
+      if (rwait >= 0) lastGridWaitMs = rwait;
+      log("INFO", `${tag} 🛠️ RECOVERING — attente ${wait}ms jusqu'au prochain front (dossier=${rt.dossierId})`);
+      if (shouldScheduleWake(now + wait, windowEnd)) {
+        await sleep(wait);
+      }
+      continue; // ne scanne pas tant que la récupération n'a pas rétabli une session
+    }
+
+    // Entrée en phase de scan : marquer SCANNING + horodater le scan (diagnostic dérive).
+    rt.state = "SCANNING";
+    rt.lastScanAtMs = now;
 
     // ── Per-cycle solver trace : par défaut = réutilisation du CF existant (pas de re-solve) ──
     // Sera mis à jour si cf_expired déclenche un re-solve dans ce cycle.
@@ -1227,8 +1500,32 @@ export async function runDossierWorker(
         `${tag} 🔍 Cycle ${cycleCount} | fenêtre -${winRemain}min | proxy: ${maskProxy(proxyUrl)}`,
       );
 
+      // Garde de fenêtre (Requirement 12.1/12.3) : si la fenêtre s'est fermée pendant
+      // cette itération (pre-pub refresh, backoff…), ne lancer AUCUN appel réseau.
+      if (!isWindowOpen(Date.now(), windowEnd)) {
+        log("INFO", `${tag} ⏰ Fenêtre fermée pendant l'itération — aucun scan lancé`);
+        break;
+      }
+
       const scan = await refreshSessionAndScan(session, config, tag);
       log("INFO", `${tag} 📊 Cycle ${cycleCount} scan=${scan.status} | cfClearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
+
+      // ── spain-synchronized-scan (task 10.1) : tri strict + pilotage machine à états ──
+      // On classe le résultat pour piloter rt.state et la planification de grille.
+      // `found` est un SUCCÈS traité dans la branche `scan.status === "found"` plus bas ;
+      // il ne doit JAMAIS transiter par classify (qui ne gère que les échecs).
+      // Les échecs de l'ensemble fermé (proxy_dead/http_5xx/session_dead/cf_expired) sont
+      // ci-dessous gérés par les handlers inline EXISTANTS (recovery synchrone + continue)
+      // qui restent la source de vérité du booking. Pour éviter toute DOUBLE-récupération,
+      // on NE relance PAS enterRecoveryAsync sur ces branches synchrones ; on met simplement
+      // rt.state à RECOVERING au besoin. `enterRecoveryAsync` reste câblé (recoveryDeps) et
+      // devient la voie primaire quand l'orchestrateur (task 11.1) fournira le pool partagé.
+      // Frontière documentée : le chemin async fire-and-forget est réservé aux cas où le
+      // handler inline ne prend pas déjà la main (voir bloc `enterRecoveryAsync` plus bas).
+      // `found` (succès) est court-circuité → classify n'est appelé que sur les non-found.
+      // Pour un scan `found`, `kind` reste undefined : il n'est lu que dans les branches
+      // d'échec (`not_found`, `error`/`ajax_unavailable`), toutes gardées par scan.status.
+      const kind: FailureKind | undefined = scan.status === "found" ? undefined : classify(scan);
 
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
@@ -1236,6 +1533,12 @@ export async function runDossierWorker(
       }
 
       if (scan.status === "proxy_error") {
+        // Échec de l'ensemble fermé (classify → proxy_dead) → état RECOVERING.
+        // NB : la récupération est faite EN LIGNE (synchrone) par le handler existant
+        // ci-dessous, qui reste la source de vérité éprouvée. On NE double-récupère PAS
+        // via enterRecoveryAsync ici pour éviter deux rotations concurrentes ; on met
+        // seulement rt.state à jour pour la grille/observabilité (task 10.1).
+        rt.state = "RECOVERING";
         // Proxy CONNECT cassé — toutes les requêtes datetime/ ont échoué en réseau.
         // Déclencher une rotation IP et réinitialiser la session PHP.
         log("WARN", `${tag} 🔄 proxy_error — rotation IP + réinit session`);
@@ -1254,12 +1557,18 @@ export async function runDossierWorker(
           return workerResult;
         }
         updatePhpTrace();
+        // Récupération synchrone réussie → resynchroniser rt et revenir ARMED.
+        rt.proxyUrl = proxyUrl;
+        rt.session = session;
+        rt.phpState = phpState;
+        transition(rt, "recovered");
         continue; // Repartir immédiatement sur le nouveau proxy
       }
 
       if (scan.status === "cf_expired") {
         // CF clearance expiré — le GET widget a retourné un challenge 403.
         // Re-solve via CapSolver avec le même proxy (exit IP inchangée).
+        rt.state = "RECOVERING"; // classify → cf_expired (ensemble fermé) ; recovery inline
         log("WARN", `${tag} 🔄 cf_expired — re-solve CF (proxy conservé) | cycle=${cycleCount} | clearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}`);
         const reSolveT0 = Date.now();
         const freshResult = await initWorkerSession(proxyUrl, portalUrlNoFrag, capsolverKey);
@@ -1272,6 +1581,9 @@ export async function runDossierWorker(
         session = freshResult.session;
         // Mettre à jour la trace solver pour ce cycle (vrai re-solve, pas du cache)
         workerTrace.solver = { reused: false, ms: Date.now() - reSolveT0 };
+        // Récupération synchrone réussie → resynchroniser rt et revenir ARMED.
+        rt.session = session;
+        transition(rt, "recovered");
         log("INFO", `${tag} ✅ CF re-résolu (${workerTrace.solver.ms}ms) — reprise du scan`);
         continue;
       }
@@ -1279,6 +1591,7 @@ export async function runDossierWorker(
       if (scan.status === "session_dead") {
         // Session PHP morte (agendaId présent mais datetime/ retourne 0B sur tous les mois).
         // Le proxy est sain — pas de rotation IP. Réinit PHPSESSID uniquement.
+        rt.state = "RECOVERING"; // classify → session_dead (ensemble fermé) ; recovery inline
         log("WARN", `${tag} 🔄 session_dead — réinit PHPSESSID (proxy conservé)`);
         phpState = await initPhpState(session, config, tag);
         if (!phpState) {
@@ -1287,10 +1600,15 @@ export async function runDossierWorker(
           return workerResult;
         }
         updatePhpTrace();
+        // Récupération synchrone réussie → resynchroniser rt et revenir ARMED.
+        rt.phpState = phpState;
+        transition(rt, "recovered");
         continue; // Repartir avec le même proxy, nouveau PHPSESSID
       }
 
       if (scan.status === "not_found") {
+        // agenda_empty = signal NORMAL (pas une erreur) → le worker reste ARMED.
+        if (kind === "agenda_empty") transition(rt, "agenda_empty");
         log("INFO", `${tag} ⏸ Cycle ${cycleCount}: aucun créneau — next`);
 
         // V2 (DÉSACTIVÉ) : le sommeil post-détection empêchait de capter les annulations.
@@ -1328,13 +1646,28 @@ export async function runDossierWorker(
           (s) => isSlotInDateWindow(s.date, config, tag) && s.freeslots > 0,
         );
 
-        // Publier le snapshot pour les workers parallèles — TOUS les slots (pas seulement éligibles)
-        // pour que Redis connaisse la capacité réelle de chaque créneau sur tous les mois.
-        publishSlotSnapshot(
+        // ── spain-synchronized-scan (task 10.1) : monotonie de slotEverSeen ─────────
+        // Dès qu'un créneau avec capacité libre (freeslots > 0) est vu, on positionne
+        // slotEverSeen = true (jamais remis à false). Ce drapeau bloque le ralentissement
+        // tardif (effectiveTickMs reste huntTickMs). Le RACE complet est traité en 10.2 ;
+        // ici on garantit uniquement la monotonie du drapeau.
+        if (markSlotSeen(rt, scan.slots)) {
+          log("INFO", `${tag} 👁️ slotEverSeen=true (créneau avec capacité libre détecté)`);
+        }
+
+        // ── spain-synchronized-scan (task 10.2) : publication du snapshot (Req 9.2/9.6) ──
+        // Publier le snapshot pour les workers parallèles — TOUS les slots (pas seulement
+        // éligibles) pour que Redis connaisse la capacité réelle de chaque créneau sur tous
+        // les mois. Retry 3× (backoff 2000 ms ×2) ; un échec de publication est signalé
+        // sans jamais toucher rt.slotEverSeen (monotonie préservée, Req 9.6).
+        // Fire-and-forget : ne bloque pas la détection (≤ 500 ms de latence côté flag).
+        const raceDetectedAtMs = Date.now();
+        void publishSlotSnapshotWithRetry(
           scan.agendaId ?? "",
           scan.serviceId ?? "",
           scan.slots.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
-        ).catch(() => {});
+          tag,
+        );
 
         // ── Reporting Convex APRÈS filtre — "found" seulement si créneaux éligibles ──
         // IMPORTANT : ne pas passer "found" si tous les créneaux sont hors-fenêtre,
@@ -1453,7 +1786,21 @@ export async function runDossierWorker(
           // Un créneau peut offrir plusieurs places (ex. 14 créneaux × 2 places = 28 places).
           // La capacité réelle bookable est la somme des freeslots de tous les créneaux éligibles.
           const totalFreeCapacity = eligible.reduce((sum, s) => sum + Math.max(0, s.freeslots), 0);
-          const enoughSlotsForAll = totalFreeCapacity >= SEMAPHORE_BYPASS_SLOT_THRESHOLD;
+
+          // ── spain-synchronized-scan (task 10.2) : décision RACE (Req 9.3/9.4/9.5) ──
+          // Consommer le snapshot daté (issu du scan courant, cf. RaceSnapshot) : s'il est
+          // frais (< 60 s) ET que la capacité libre ≥ RACE_BYPASS_THRESHOLD, on contourne
+          // le sémaphore. On combine avec le seuil historique (SEMAPHORE_BYPASS_SLOT_THRESHOLD)
+          // pour ne jamais REDUIRE le bypass déjà accordé par le chemin existant.
+          const raceSnapshot: RaceSnapshot = {
+            agendaId: scan.agendaId ?? "",
+            serviceId: scan.serviceId ?? "",
+            slots: eligible,
+            detectedAtMs: raceDetectedAtMs,
+          };
+          const raceDecision = attemptBookingRace(rt, raceSnapshot, Date.now(), tag);
+          const enoughSlotsForAll =
+            raceDecision.bypassSemaphore || totalFreeCapacity >= SEMAPHORE_BYPASS_SLOT_THRESHOLD;
           if (enoughSlotsForAll) {
             if (!holdingBookingSlot) {
               log(
@@ -1787,6 +2134,28 @@ export async function runDossierWorker(
         }
       }
 
+      // ── spain-synchronized-scan (task 10.1) : échecs SANS handler inline ────────
+      // Les statuts `error` / `ajax_unavailable` ne sont PAS pris en charge par un
+      // handler synchrone dédié plus haut. Pour ces cas, la voie primaire est la
+      // récupération ASYNCHRONE non bloquante : classify(scan) donne http_5xx ou
+      // proxy_dead, on passe RECOVERING et on détache enterRecoveryAsync (fire-and-forget).
+      // Le worker n'attend PAS la fin de la réparation : la boucle dort jusqu'au prochain
+      // front, et enterRecoveryAsync rebascule rt en ARMED au succès (transition "recovered").
+      // Aucune double-récupération ici : ces branches n'ont pas de handler inline concurrent.
+      // NB : à ce point rt.state === "SCANNING" (les branches proxy_error/cf_expired/
+      // session_dead font toutes continue/return avant d'arriver ici). Ces statuts n'ont
+      // donc pas de handler inline concurrent → récupération asynchrone primaire.
+      if (scan.status === "error" || scan.status === "ajax_unavailable") {
+        // Ici scan.status ≠ "found" ⟹ kind est défini ; fallback proxy_dead par sûreté.
+        const recoveryKind: FailureKind = kind ?? classify(scan);
+        log(
+          "WARN",
+          `${tag} 🛠️ ${scan.status} (classify=${recoveryKind}) — récupération asynchrone non bloquante`,
+        );
+        rt.state = "RECOVERING";
+        enterRecoveryAsync(rt, recoveryKind, recoveryDeps);
+      }
+
       // Heartbeat de scan OK / not_found
       sendHeartbeat({
         applicationId: config.applicationId,
@@ -1796,7 +2165,7 @@ export async function runDossierWorker(
       log("WARN", `${tag} Cycle ${cycleCount} exception: ${err}`);
     }
 
-    // Attendre jusqu'au prochain cycle — V2 adaptatif + SYNCHRONISATION SUR GRILLE ABSOLUE.
+    // ── spain-synchronized-scan (task 10.1) : SYNC SUR GRILLE D'HORLOGE MURALE ────
     //
     // PROBLÈME : chaque worker démarre à un instant différent (CF solve + init PHP de durée
     // variable) et sa boucle start-to-start ancrée sur son propre cycleStart perpétue ce
@@ -1804,17 +2173,27 @@ export async function runDossierWorker(
     // décalés de plusieurs secondes → celui qui tombe pile au bon moment voit le créneau
     // seul, les autres le voient 2-20s plus tard.
     //
-    // FIX : ancrer le prochain cycle sur une GRILLE ABSOLUE (Date.now() % interval) plutôt
-    // que sur cycleStart privé. Tous les workers se calent alors sur les MÊMES fronts
-    // d'horloge (ex. chaque seconde pile en hyperfast) quel que soit leur instant de départ.
-    // → scans quasi simultanés, tous voient le créneau au même cycle.
-    const adaptiveInterval = getAdaptiveScanInterval(holdingBookingSlot);
+    // FIX (task 10.1) : dormir jusqu'au prochain front de grille ABSOLU via
+    // grid.msUntilNextTick(now, tick, gridSeed). Le front de base ceil(now/tick)*tick est
+    // commun à TOUS les workers (barrière commune) ; seul un jitter déterministe ±jitterPct
+    // par worker les sépare (indétectabilité sans casser l'alignement). Remplace l'ancien
+    // calcul adaptiveInterval - (now % adaptiveInterval).
     const nowMs = Date.now();
-    // Temps jusqu'au prochain front de grille. Si on est pile sur un front (reste 0),
-    // on attend un interval complet pour ne pas boucler à vide.
-    const msToNextGrid = adaptiveInterval - (nowMs % adaptiveInterval);
-    const wait = msToNextGrid === 0 ? adaptiveInterval : msToNextGrid;
-    if (nowMs + wait < windowEnd) {
+    const nextWait = grid.msUntilNextTick(nowMs, tick, rt.gridSeed);
+    // Sentinelle d'erreur (-1) → conserver le dernier délai valide (Req 1.7 / 2.5).
+    const wait = nextWait < 0 ? lastGridWaitMs : nextWait;
+    if (nextWait >= 0) lastGridWaitMs = nextWait;
+
+    // État de réveil observable (worker id + front visé). rt.lastScanAtMs est posé en
+    // début de cycle SCANNING (diagnostic de dérive).
+    const wakeAtMs = nowMs + wait;
+    log(
+      "INFO",
+      `${tag} ⏱️ [spain-worker] ${rt.dossierId} wake front reached — phase=${phase} tick=${tick}ms wait=${wait}ms wakeAt=${new Date(wakeAtMs).toISOString()}`,
+    );
+
+    // Plafonner : ne planifier aucun réveil au-delà de windowEnd (aucun scan hors fenêtre).
+    if (shouldScheduleWake(wakeAtMs, windowEnd)) {
       await sleep(wait);
     }
   }

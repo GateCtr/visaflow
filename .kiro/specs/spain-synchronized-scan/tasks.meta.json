@@ -1,0 +1,507 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Créer le module de types et de config `src/spain/spain-grid-config.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156164620
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156179511
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156343790
+      }
+    ],
+    "2.1 Implémenter `createGridResolver` dans `src/spain/spain-wallclock-grid.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156164762
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156350647
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156523147
+      }
+    ],
+    "3.1 Implémenter `classify` dans `src/spain/spain-worker-state-machine.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156164842
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156352149
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156524012
+      }
+    ],
+    "4. Checkpoint — socle pur vérifié": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156164928
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156553962
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156591513
+      }
+    ],
+    "5.1 Implémenter `transition` et helpers d'état dans `src/spain/spain-worker-state-machine.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165006
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156608064
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156852355
+      }
+    ],
+    "6.1 Implémenter `createReservePool` dans `src/spain/spain-reserve-pool.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165088
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156609105
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156853085
+      }
+    ],
+    "7.1 Implémenter `enterRecoveryAsync` dans `src/spain/spain-worker-recovery.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165183
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156861471
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157120637
+      }
+    ],
+    "8.1 Implémenter `createPreflightController` dans `src/spain/spain-preflight-controller.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165289
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156862462
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157121820
+      }
+    ],
+    "9. Checkpoint — composants unitaires vérifiés": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165385
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157129490
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157215526
+      }
+    ],
+    "10.1 Remplacer le sleep relatif par la grille dans `src/spain-dossier-worker.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165462
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157224863
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157921212
+      }
+    ],
+    "10.2 Câbler le mode RACE (détection découplée du booking)": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165546
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157930546
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788158342116
+      }
+    ],
+    "11.1 Câbler preflight + pool de réserve dans `src/spain-worker-orchestrator.ts`": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165657
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157931583
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788158343065
+      }
+    ],
+    "13.1 Vérifier la compilation TypeScript stricte sur les fichiers touchés": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156165779
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788158351398
+      },
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788158407158
+      }
+    ],
+    "1. Types partagés et chargement de configuration de grille": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156343905
+      }
+    ],
+    "2. WallClockGrid — fonctions pures de grille": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156523231
+      }
+    ],
+    "3. Classifier — tri strict des échecs": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156524092
+      }
+    ],
+    "5. WorkerStateMachine — transitions d'état": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156852508
+      }
+    ],
+    "6. ReservePoolManager — pool de sessions de réserve": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788156853220
+      }
+    ],
+    "7. Récupération asynchrone non bloquante": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157120760
+      }
+    ],
+    "8. PreflightController — armement et vérification anticipée": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788157121926
+      }
+    ],
+    "10. Intégration dans la boucle de scan du worker": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788158342219
+      }
+    ],
+    "11. Intégration dans l'orchestrateur": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788158343232
+      }
+    ],
+    "13. Validation finale": [
+      {
+        "executionId": "358aac7a-56f4-4263-99c9-c4688bcd241d",
+        "chatSessionId": "sess_494613dd-70db-4041-bae5-f4a2a8b71af7",
+        "timestamp": 1788158407284
+      }
+    ],
+    "1.2 Tests unitaires + property-based pour `loadGridConfig` et `hashSeed`": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450261
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158464955
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158893834
+      }
+    ],
+    "2.2 Property test — alignement de grille et jitter borné": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450406
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158902092
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788159286461
+      }
+    ],
+    "2.3 Property test — phases et ralentissement tardif conditionnel": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450535
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158903525
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788159287531
+      }
+    ],
+    "2.4 Tests unitaires — cas d'erreur et invariance sur entrées invalides": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450642
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158904486
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788159288506
+      }
+    ],
+    "3.2 Property + unit tests pour `classify`": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450718
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158905365
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788159289642
+      }
+    ],
+    "5.2 Tests unitaires — matrice état × événement": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450797
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788159297334
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160268234
+      }
+    ],
+    "6.2 Tests unitaires — pool avec solver/pool mockés": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450880
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788159298167
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160269249
+      }
+    ],
+    "7.2 Property + unit tests pour la récupération": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158450983
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160277052
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160573313
+      }
+    ],
+    "8.2 Tests unitaires — preflight avec deps mockées": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158451063
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160277786
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160573919
+      }
+    ],
+    "10.3 Property + unit tests pour la boucle worker et le mode RACE": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158451147
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160581411
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788161218457
+      }
+    ],
+    "11.2 Test d'intégration — recovery non bloquant": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158451237
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788160582143
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788161219474
+      }
+    ],
+    "12.1 Harnais orchestrateur avec workers mockés + `SPAIN_BYPASS_WINDOW`": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788158451393
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788161226781
+      },
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788161693710
+      }
+    ],
+    "12. Tests d'intégration end-to-end (harnais orchestrateur)": [
+      {
+        "executionId": "99b459d4-e6b1-4a4b-9936-0e06db0b2584",
+        "chatSessionId": "sess_670fd6df-483b-445d-a384-df8166a4201a",
+        "timestamp": 1788161693863
+      }
+    ]
+  }
+}
