@@ -170,7 +170,6 @@ export default function ApplicationDetailPage() {
               visaType={app.visaType}
               servicePackage={servicePackage}
               docs={docs as any}
-              pricing={pricing}
               isEngagementPaid={isEngagementPaid}
             />
           )}
@@ -278,23 +277,28 @@ function TabOverview({
 /* ══════════════════════════════════════════════════════════════════════════════
    TAB: Documents
    ══════════════════════════════════════════════════════════════════════════════ */
-function TabDocuments({ appId, destination, visaType, servicePackage, docs, pricing, isEngagementPaid }: any) {
-  if (!pricing || !isEngagementPaid) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-        <FileText className="w-8 h-8 mb-2 opacity-50" />
-        <p className="text-sm font-medium">Documents disponibles après validation du paiement</p>
-      </div>
-    );
-  }
+function TabDocuments({ appId, destination, visaType, servicePackage, docs, isEngagementPaid }: any) {
+  // ADMIN : les documents uploadés par le client doivent TOUJOURS être visibles,
+  // indépendamment du statut de paiement — l'admin doit pouvoir vérifier/traiter le
+  // dossier avant même la validation du paiement d'engagement. (Le gating "après
+  // paiement" ne concerne que la vue CLIENT.) DocumentVault ne dépend ni de `pricing`
+  // ni du paiement. On affiche donc toujours le coffre-fort côté admin.
   return (
-    <DocumentVault
-      appId={appId}
-      destination={destination}
-      visaType={visaType}
-      servicePackage={servicePackage}
-      docs={docs}
-    />
+    <>
+      {!isEngagementPaid && (
+        <div className="flex items-center gap-2.5 px-3 py-2.5 mb-4 bg-amber-50/60 border border-amber-200/50 rounded-lg text-[12px] text-amber-700">
+          <FileText className="w-3.5 h-3.5 shrink-0" />
+          <span>Paiement d'engagement non validé — documents affichés pour vérification admin.</span>
+        </div>
+      )}
+      <DocumentVault
+        appId={appId}
+        destination={destination}
+        visaType={visaType}
+        servicePackage={servicePackage}
+        docs={docs}
+      />
+    </>
   );
 }
 
