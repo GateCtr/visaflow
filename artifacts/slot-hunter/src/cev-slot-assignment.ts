@@ -136,6 +136,24 @@ export function resolveCevDeadline(
   return undefined;
 }
 
+/**
+ * Indique si AU MOINS un créneau tombe dans la fenêtre (≤ deadline).
+ * Sert à décider si un dossier vaut la peine d'être réveillé pour ces créneaux :
+ * inutile de consommer un clic pour un dossier dont tous les créneaux sont hors deadline.
+ *
+ * @param slots     créneaux détectés (date "YYYY-MM-DD")
+ * @param maxDate   deadline MAX "YYYY-MM-DD" (résolue : par AppId > globale). undefined = aucune limite.
+ * @returns true si au moins un créneau est bookable (≤ deadline), ou si aucune deadline.
+ */
+export function hasSlotWithinDeadline(
+  slots: ReadonlyArray<{ date: string }>,
+  maxDate?: string,
+): boolean {
+  if (slots.length === 0) return false;
+  if (!maxDate || !/^\d{4}-\d{2}-\d{2}$/.test(maxDate)) return true; // aucune limite → tout convient
+  return slots.some(s => s.date <= maxDate);
+}
+
 // ─── Fallback hash (si accountIndex non fourni) ──────────────────────────────
 
 function hashFallback(accountId: string, totalAccounts: number): number {

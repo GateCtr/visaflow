@@ -73,7 +73,7 @@ import {
   releaseCevIp,
   type SerializablePoolState,
 } from "../cev-redis-persistence.js";
-import { buildCevSlotAssignment, parseCevDossierDeadlines, resolveCevDeadline, type CevSlotCandidate } from "../cev-slot-assignment.js";
+import { buildCevSlotAssignment, parseCevDossierDeadlines, resolveCevDeadline, hasSlotWithinDeadline, type CevSlotCandidate } from "../cev-slot-assignment.js";
 import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
 import { createLogger } from "../logger.js";
 import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
@@ -1863,8 +1863,18 @@ async function handleSlotFoundMulti(
     logFn.info(`  🎯 BOOKING IMMÉDIAT — ${detectingDossier.vowintRef} (session existante, pas de discovery)...`);
 
     // Liste des créneaux à tenter, dans l'ordre alloué à CE compte.
-    // Fallback : si pas de créneau inline (HTML absent) → une passe sans cible (bookCevViaHttp choisit).
-    const candidates: Array<CevSlotCandidate | null> = orderedSlots.length > 0 ? orderedSlots : [null];
+    // Deux cas où orderedSlots est vide :
+    //   A. HTML absent (inlineSlots vide) → une passe sans cible [null] (bookCevViaHttp re-scanne/choisit).
+    //   B. HTML présent MAIS tous les créneaux hors deadline du détecteur → NE PAS faire tenter
+    //      le détecteur ([] ). Même avec un seul slot, on préfère relayer immédiatement vers un
+    //      dossier du pool qui respecte la deadline (bloc de réveil ci-dessous) plutôt que de
+    //      gaspiller un clic sur un booking voué à NO_SLOT_BEFORE_DEADLINE.
+    const detectorBlockedByOwnDeadline = orderedSlots.length === 0 && inlineSlots.length > 0;
+    const candidates: Array<CevSlotCandidate | null> =
+      orderedSlots.length > 0 ? orderedSlots : (detectorBlockedByOwnDeadline ? [] : [null]);
+    if (detectorBlockedByOwnDeadline) {
+      logFn.info(`  ⛔ ${detectingDossier.vowintRef} : tous les créneaux hors deadline (${detectorDeadline ?? "?"}) → pas de tentative détecteur, relais direct aux dossiers éligibles`);
+    }
 
     for (const candidate of candidates) {
       // ── Claim atomique NON BLOQUANT (sauf mode RACE) ────────────────────────
@@ -1932,12 +1942,38 @@ async function handleSlotFoundMulti(
   // Les "autres" sont tous les éligibles sauf le détecteur (qu'il soit éligible ou non,
   // sa place dans la liste parallèle ne le concerne pas — il a déjà booké ou est hors pool).
   const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
-  // ── Booking multi-dossier : booker les AUTRES dossiers du pool sur les places
-  //    restantes (comportement historique — vider tout le pool). On réveille au plus
-  //    min(remainingFree, otherRefs.length) dossiers.
+
+  // ── Filtrer les AUTRES dossiers sur leur DEADLINE ───────────────────────────
+  // Un dossier n'est réveillé que si AU MOINS un créneau détecté tombe dans SA
+  // fenêtre (deadline par AppId > globale > aucune). Évite de consommer un clic
+  // pour un dossier dont tous les créneaux sont hors deadline.
+  const otherRefsWithinDeadline = otherRefs.filter(ref =>
+    hasSlotWithinDeadline(inlineSlots, resolveCevDeadline(ref, dossierDeadlines ?? new Map(), globalDeadline)),
+  );
+
+  // Cas clé : le détecteur a vu des créneaux mais N'A PAS pu booker à cause de SA
+  // deadline (orderedSlots vide). On passe alors le relais IMMÉDIATEMENT aux dossiers
+  // du pool dont la deadline accepte ces créneaux — sans attendre leur tour de round-robin.
+  const detectorBlockedByDeadline =
+    !detectingBookingResult?.success && inlineSlots.length > 0 && orderedSlots.length === 0;
+  if (detectorBlockedByDeadline && otherRefsWithinDeadline.length > 0) {
+    logFn.info(
+      `  🔁 ${detectingDossier.vowintRef} bloqué par sa deadline (${detectorDeadline ?? "?"}) mais ` +
+      `${otherRefsWithinDeadline.length} dossier(s) du pool éligible(s) à ces créneaux → réveil immédiat: [${otherRefsWithinDeadline.join(", ")}]`,
+    );
+    botLog({ applicationId, step: "cev_deadline_relay_wake", status: "ok", data: {
+      detector: detectingDossier.vowintRef, detectorDeadline, eligibleByDeadline: otherRefsWithinDeadline,
+      slotCount: inlineSlots.length,
+    } });
+  }
+
+  // ── Booking multi-dossier : booker les AUTRES dossiers ÉLIGIBLES PAR DEADLINE sur
+  //    les places restantes. On réveille au plus min(remainingFree, éligibles).
   //    Fallback d'urgence (détecteur hors pool + totalFree≤1) : pas de réveil (le seul
   //    créneau est pris, ouvrir une 2e session risque un "multiple session" CEV).
-  const dossiersToWake = detectorMustBookAsFallback ? 0 : Math.min(remainingFree, otherRefs.length);
+  const dossiersToWake = detectorMustBookAsFallback
+    ? 0
+    : Math.min(remainingFree, otherRefsWithinDeadline.length);
   skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
@@ -1958,18 +1994,32 @@ async function handleSlotFoundMulti(
     // NOTE : on ne transfère PAS la session du détecteur aux eligibles. La session CEV
     // est liée au dossier qui a appelé selectDossier — un autre dossier ne peut pas la
     // réutiliser ; il doit refaire le flux complet (login → captcha → selectDossier).
-    const selectedRefs = otherRefs.slice(0, dossiersToWake);
-    logFn.info(`  🚀 remainingFree=${remainingFree} — lancement ${selectedRefs.length} dossier(s) secondaire(s) [${selectedRefs.join(", ")}]...`);
+    const selectedRefs = otherRefsWithinDeadline.slice(0, dossiersToWake);
+    logFn.info(`  🚀 remainingFree=${remainingFree} — lancement ${selectedRefs.length} dossier(s) secondaire(s) éligible(s) par deadline [${selectedRefs.join(", ")}]...`);
 
-    const bookingTasks = selectedRefs.map((vowintRef) =>
-      bookDossierIsolated(
+    const bookingTasks = selectedRefs.map((vowintRef) => {
+      const refDeadline = resolveCevDeadline(vowintRef, dossierDeadlines ?? new Map(), globalDeadline);
+      // Slot unique + relais deadline : cibler EXACTEMENT le créneau le plus proche
+      // dans la deadline de CE dossier, pour aller vite (pas de re-choix aléatoire).
+      // Multi-slots : laisser bookDossierIsolated re-scanner et choisir (targetSlot undefined)
+      // pour que chaque dossier réveillé prenne un créneau distinct via sa propre allocation.
+      let targetForRef: { date: string; time: string } | undefined;
+      if (detectorBlockedByDeadline) {
+        const ordered = buildCevSlotAssignment(
+          `${applicationId}:${vowintRef}`,
+          inlineSlots.map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
+          groupSize ?? 1, totalAccounts, accountIndex, refDeadline,
+        );
+        if (ordered.length > 0) targetForRef = { date: ordered[0].date, time: ordered[0].time };
+      }
+      return bookDossierIsolated(
         vowintEmail, vowintPassword,
         vowintRef, applicationId,
         groupSize, undefined, logger,
-        undefined, // pas de targetSlot pour les dossiers réveillés (re-scan complet)
-        resolveCevDeadline(vowintRef, dossierDeadlines ?? new Map(), globalDeadline),
-      ).then(result => ({ vowintRef, ...result }))
-    );
+        targetForRef,
+        refDeadline,
+      ).then(result => ({ vowintRef, ...result }));
+    });
 
     const results = await Promise.allSettled(bookingTasks);
 
