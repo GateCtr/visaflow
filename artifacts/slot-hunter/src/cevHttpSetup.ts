@@ -13,7 +13,8 @@
  *
  * Optimisation : les cookies VOWINT sont persistés en mémoire entre les checks.
  * On ne re-login que si la session VOWINT a expiré (401/302 vers login).
- * Seul le GetEAppointmentUrl compte comme "clic" (limite 5/heure).
+ * Seul le GetEAppointmentUrl compte comme "clic" (limite 20/heure, blocage 20 min).
+ * 1 clic = 1 scan = 1 verdict serveur de disponibilité (SelectSlot / NoAvailability).
  *
  * Coût : 1 hCaptcha (~$0.003) par check, ZERO Playwright
  */
@@ -806,7 +807,7 @@ export async function setupCevSessionHttp(
 
     // ══════════════════════════════════════════════════════════════════════════
     // ÉTAPE 2 : GET /Common/GetEAppointmentUrl → URL d'intégration CEV
-    //           (= 1 clic VOWINT comptabilisé, limite 5/heure)
+    //           (= 1 clic VOWINT comptabilisé, limite 20/heure → blocage 20 min)
     // ══════════════════════════════════════════════════════════════════════════
 
     // Délai "lecture de liste" : un utilisateur réel prend 1-4 secondes pour
@@ -844,10 +845,12 @@ export async function setupCevSessionHttp(
         const eText = await eRes.text();
 
         // ── Détection rate-limit VOWINT dans la réponse GetEAppointmentUrl ──
-        // Quand les 5 clics/heure sont épuisés, VOWINT peut retourner :
+        // Quand les 20 clics/heure sont épuisés (blocage 20 min), VOWINT peut retourner :
         //   - Un HTML/texte contenant des messages d'erreur au lieu de l'URL
         //   - Un JSON avec un champ erreur type "ErrorTooManyAttempts"
+        // Serveur : "plus de 20 fois dans l'heure" (ancien message: "5 fois").
         const rateLimitPatterns = [
+          /20\s*fois/i, /20\s*times/i,
           /5\s*fois/i, /5\s*times/i, /bloqu[ée]\s*pendant/i, /blocked\s*for/i,
           /too\s*many\s*attempts/i, /ErrorTooManyAttempts/i, /rate.?limit/i,
           /maximum.*tentatives/i, /maximum.*attempts/i,

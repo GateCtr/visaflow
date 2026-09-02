@@ -1,14 +1,14 @@
 // ─── CEV Stealth Loop v2 — Pool d'IPs rotatif + couverture 24/7 ─────────────
 //
-// Stratégie : rotation d'IPs iProyal pour contourner la limite 5 clics/heure.
+// Stratégie : rotation d'IPs iProyal pour contourner la limite 20 clics/heure.
 // Chaque IP a son propre compteur de clics. Quand une IP atteint sa limite,
 // on passe automatiquement à la suivante — ZERO downtime.
 //
 // Architecture :
 //   - Pool de N IPs résidentielles iProyal (sticky sessions 60 min)
-//   - Chaque IP peut faire 4 clics/heure (marge sécurité vs limite de 5)
+//   - Chaque IP peut faire 18 clics/heure (marge sécurité vs limite de 20)
 //   - Rotation automatique quand rate-limit détecté sur une IP
-//   - Couverture 24/7 : avec 5 IPs → 20 checks/heure, 10 IPs → 40 checks/heure
+//   - Couverture 24/7 : avec 5 IPs → 90 checks/heure, 10 IPs → 180 checks/heure
 //   - Coût : ~$0.003/check (hCaptcha) + ~$0.01/check (proxy résidentiel)
 //
 // Config Convex (bot-config) :
@@ -49,8 +49,8 @@ import {
 /** Nombre d'IPs dans le pool (configurable via bot-config) */
 let POOL_SIZE = 8;
 
-/** Max clics par IP par heure (4 = marge sécurité vs limite serveur de 5) */
-const MAX_CLICKS_PER_IP_PER_HOUR = 4;
+/** Max clics par IP par heure (18 = marge sécurité vs limite serveur de 20) */
+const MAX_CLICKS_PER_IP_PER_HOUR = 18;
 
 /** Délai entre chaque check dans un cycle (ms) */
 let INTER_CHECK_DELAY_MS = 20_000; // 20 secondes
@@ -66,7 +66,7 @@ const CYCLE_PAUSE_MAX_MS = 15_000; // 15 secondes
 const INITIAL_DELAY_MS = 5_000;
 
 /** Cooldown d'une IP rate-limitée (ms) — elle reviendra disponible après */
-const IP_COOLDOWN_MS = 65 * 60_000; // 65 min (marge sur les 60 min du serveur)
+const IP_COOLDOWN_MS = 22 * 60_000; // 22 min (marge sur le blocage serveur de 20 min)
 
 // ─── IP Pool Manager ────────────────────────────────────────────────────────
 
