@@ -4155,6 +4155,158 @@ const guides: Guide[] = [
       whatsappMessage: "URGENT — Bonjour Joventy, je pars dans moins de 3 semaines depuis Kinshasa. Je n'ai pas encore de créneau de rendez-vous visa. Pouvez-vous évaluer la faisabilité et activer la surveillance en urgence ? Destination : [votre destination]",
     },
   },
+
+  {
+    slug: "rendez-vous-visa-espagne-kinshasa-72h-creneau-rapide",
+    title: "Rendez-vous visa Espagne à Kinshasa : comment en obtenir un rapidement quand il n'y a « aucun créneau » (2026)",
+    metaTitle: "Rendez-vous Visa Espagne Kinshasa 2026 — Aucun créneau ? Comment en obtenir un rapidement | Joventy",
+    metaDescription:
+      "Rendez-vous visa Espagne à Kinshasa impossible à trouver sur citaconsular.es ? Découvrez pourquoi les créneaux partent en secondes, comment éviter les arnaques d'intermédiaires, et comment Joventy sécurise une date rapidement (souvent 24-72h).",
+    publishedDate: "2026-09-03",
+    updatedDate: "2026-09-03",
+    readingTime: 9,
+    category: "Visa Schengen",
+    coverEmoji: "🇪🇸",
+    intro:
+      "Prendre un rendez-vous visa Espagne à Kinshasa est devenu un vrai casse-tête : « aucun rendez-vous disponible », c'est le message que voit la plupart des demandeurs en se connectant à citaconsular.es. Les créneaux existent pourtant — mais ils sont publiés par vagues courtes et partent en quelques secondes, souvent la nuit ou tôt le matin. Résultat : des semaines à rafraîchir la page sans succès, la tentation de passer par un intermédiaire douteux qui « vend » des rendez-vous (une pratique à risque), alors que la date de voyage approche. Ce guide explique comment prendre rendez-vous visa Espagne depuis Kinshasa, pourquoi les créneaux sont si rares, à quel moment ils se libèrent, les erreurs qui font perdre une place, comment éviter les arnaques, et comment Joventy sécurise une date par un suivi automatisé officiel — dans la plupart des cas en 24 à 72 heures après activation du dossier.",
+    sections: [
+      {
+        heading: "Pourquoi il n'y a « jamais » de rendez-vous visa Espagne à Kinshasa",
+        body:
+          "Contrairement à la France ou la Belgique, l'Espagne ne passe pas par le CEV : la réservation se fait sur le portail citaconsular.es (moteur Bookitit) après une inscription par email à l'ambassade. Le portail affiche presque toujours « aucun créneau », non pas parce qu'il n'y en a pas, mais parce que la demande dépasse largement l'offre et que les places publiées disparaissent quasi instantanément. Plusieurs facteurs se combinent :",
+        list: [
+          "Les créneaux sont publiés par petites vagues, à intervalles irréguliers, souvent en dehors des heures de bureau",
+          "Une place libérée (annulation, désistement) reste visible quelques secondes seulement avant d'être reprise",
+          "Le portail est protégé par un système anti-robot (Cloudflare) qui ralentit les rafraîchissements manuels",
+          "La forte demande à Kinshasa fait qu'un créneau du matin peut être pris avant même que vous ayez rechargé la page",
+          "Beaucoup de demandeurs ne savent pas que l'inscription par email est un préalable obligatoire, ce qui allonge encore les délais",
+        ],
+      },
+      {
+        heading: "À quel moment les créneaux Espagne se libèrent-ils réellement ?",
+        body:
+          "Décrocher une date tient surtout à la réactivité : il faut être présent à la seconde exacte où une place apparaît. Certaines tendances augmentent les chances, mais aucune n'est garantie :",
+        list: [
+          "Tôt le matin (avant l'ouverture de l'ambassade) : traitement des annulations de la veille",
+          "En soirée : quelques désistements réapparaissent après les mises à jour de fin de journée",
+          "Autour des jours de publication de nouvelles vagues (dates variables, non annoncées)",
+          "Après une annulation d'un autre demandeur (possible jusqu'à 3 jours avant la date, dans la limite de 5 annulations/an)",
+          "Le problème : ces fenêtres durent quelques secondes — impossible à saisir en rafraîchissant à la main plusieurs fois par jour",
+        ],
+      },
+      {
+        heading: "Les erreurs qui font perdre un rendez-vous Espagne (à éviter)",
+        body:
+          "Beaucoup de demandeurs ratent un créneau non pas par malchance, mais à cause d'erreurs évitables dans la procédure. Les plus fréquentes :",
+        list: [
+          "Ne pas avoir fait l'inscription par email au préalable (emb.kinshasa.citasvis@maec.es, objet : RENDEZ-VOUS VISA EST) — sans les identifiants, impossible de réserver",
+          "Renvoyer l'email d'inscription avant 14 jours : cela peut ajouter jusqu'à 2 mois de délai",
+          "Se connecter trop lentement au moment où un créneau apparaît — la place part avant la confirmation",
+          "Réserver une date hors de la fenêtre autorisée (moins de 15 jours ou plus de 6 mois avant le départ) → dossier refusé",
+          "Attendre le dernier moment : lancer la démarche 2 à 3 mois avant le voyage laisse une marge pour capter un créneau",
+        ],
+      },
+      {
+        heading: "Attention aux arnaques : « acheter » un rendez-vous visa Espagne",
+        body:
+          "Face à la difficulté, beaucoup de demandeurs cherchent à acheter un rendez-vous auprès d'un intermédiaire. C'est risqué et souvent contre-productif :",
+        list: [
+          "Un rendez-vous citaconsular.es est nominatif : il est lié à votre passeport et vos identifiants — un créneau « revendu » sur un autre profil ne vous sert à rien",
+          "Payer d'avance un « vendeur de rendez-vous » sans garantie ni traçabilité expose à la perte pure et simple de l'argent",
+          "Certains intermédiaires utilisent vos données sensibles (passeport, photos) sans cadre clair",
+          "La seule approche fiable : un accompagnement transparent qui agit sur VOTRE dossier et VOS identifiants officiels, avec paiement au résultat",
+          "Joventy ne revend pas de rendez-vous : le service surveille le portail pour votre profil et réserve à votre nom, la prime de succès n'étant due qu'à l'obtention effective du visa",
+        ],
+      },
+      {
+        heading: "Comment Joventy obtient un rendez-vous Espagne rapidement (souvent 24-72h)",
+        body:
+          "Joventy ne « connaît » pas de porte dérobée : la clé est une surveillance continue et automatisée du portail, capable de détecter et réserver un créneau à la seconde où il apparaît — 24h/24, y compris la nuit et le week-end. Concrètement :",
+        list: [
+          "Surveillance permanente de citaconsular.es pour votre profil, sans interruption",
+          "Détection instantanée d'une place libérée et réservation immédiate à votre nom",
+          "Gestion de l'inscription par email à l'ambassade et suivi des identifiants",
+          "Alerte WhatsApp dès qu'une date est sécurisée, avec l'heure et les instructions pour le jour J",
+          "Dans la majorité des cas, un créneau est obtenu dans les 24 à 72 heures suivant l'activation du dossier (variable selon les publications de l'ambassade — non garanti contractuellement)",
+        ],
+      },
+      {
+        heading: "Ce qu'il faut préparer pour ne pas perdre le créneau obtenu",
+        body:
+          "Une fois la date sécurisée, le dossier doit être irréprochable pour le jour du dépôt à l'ambassade (Boulevard Colonel Tshatshi n°37, Gombe). Préparez en amont :",
+        list: [
+          "Passeport valide 6 mois après la date de retour + photocopies des pages avec tampons",
+          "Formulaire Schengen rempli en capitales et signé, 2 photos biométriques (fond blanc)",
+          "Réservation de vol aller-retour et preuve d'hébergement (hôtel ou attestation d'accueil)",
+          "Assurance voyage Schengen (couverture minimum 30 000 €) pour toute la durée du séjour",
+          "Relevés bancaires des 3 derniers mois avec solde cohérent + justificatifs professionnels",
+          "Pour les mineurs : acte de naissance, autorisation parentale, passeports des parents",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Pourquoi n'y a-t-il jamais de rendez-vous disponible sur citaconsular.es à Kinshasa ?",
+        a: "Les créneaux existent mais sont publiés par vagues courtes et partent en quelques secondes. La demande à Kinshasa dépasse largement l'offre, et le portail est protégé par un système anti-robot qui ralentit les rafraîchissements manuels. C'est pourquoi une surveillance automatisée continue est bien plus efficace qu'un rafraîchissement à la main.",
+      },
+      {
+        q: "Peut-on vraiment obtenir un rendez-vous visa Espagne en 72h depuis Kinshasa ?",
+        a: "Dans la majorité des cas, Joventy sécurise un créneau dans les 24 à 72 heures suivant l'activation du dossier, grâce à une surveillance 24h/24 de citaconsular.es. Ce délai dépend des publications de l'ambassade et n'est pas garanti contractuellement, mais c'est le scénario le plus fréquent observé.",
+      },
+      {
+        q: "Faut-il faire l'inscription par email avant de pouvoir réserver ?",
+        a: "Oui, c'est obligatoire. Il faut d'abord envoyer un email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) avec vos données et pièces jointes. L'ambassade renvoie ensuite les identifiants du portail. Joventy s'occupe de cette étape pour vous.",
+      },
+      {
+        q: "Combien de temps à l'avance dois-je demander mon rendez-vous Espagne ?",
+        a: "La demande doit être déposée au minimum 15 jours et au maximum 6 mois avant le départ. Le conseil : lancer la démarche 2 à 3 mois avant le voyage pour laisser le temps de capter un créneau, qui reste la partie la plus incertaine.",
+      },
+      {
+        q: "Combien coûte le service de rendez-vous Espagne chez Joventy ?",
+        a: "Pour la capture du rendez-vous (créneau citaconsular.es), le tarif est de 350 USD, payables UNIQUEMENT après résultat — aucun paiement d'avance. Si vous souhaitez en plus la préparation et la vérification complète du dossier (formulaire, documents, relevés), une offre dossier complet est disponible séparément à 500 USD. Les frais officiels consulaires se paient directement à l'ambassade le jour du rendez-vous.",
+      },
+      {
+        q: "Peut-on acheter un rendez-vous visa Espagne à Kinshasa ?",
+        a: "C'est fortement déconseillé. Un rendez-vous citaconsular.es est nominatif (lié à votre passeport et vos identifiants) : un créneau « revendu » n'est pas transférable. Payer d'avance un intermédiaire sans garantie expose à la perte de l'argent et de vos données. La seule approche fiable est un accompagnement transparent qui agit sur votre propre dossier, avec paiement au résultat. Joventy ne revend pas de rendez-vous : il surveille le portail pour votre profil et réserve à votre nom.",
+      },
+      {
+        q: "Un visa Espagne permet-il de voyager en France ou en Belgique ?",
+        a: "Oui. Un visa Schengen délivré par l'Espagne autorise la circulation dans les 27 pays de l'espace Schengen (France, Belgique, Allemagne, Italie, etc.) pendant 90 jours sur une période de 180 jours.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
+      "documents-visa-schengen-kinshasa",
+    ],
+    relatedDestination: "visa-espagne-kinshasa",
+    auditCtaAfterSection: 2,
+    internalLinks: [
+      {
+        href: "/visa-espagne-kinshasa",
+        label: "Visa Espagne depuis Kinshasa",
+        description: "Tarifs, types de visa et étapes prises en charge par Joventy.",
+      },
+      {
+        href: "/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+        label: "Procédure officielle rendez-vous Espagne",
+        description: "Email d'inscription + réservation citaconsular.es, étape par étape.",
+      },
+      {
+        href: "/guides/documents-visa-schengen-kinshasa",
+        label: "Documents visa Schengen",
+        description: "La liste complète des pièces à préparer avant le rendez-vous.",
+      },
+    ],
+    conversion: {
+      heading: "Fatigué de rafraîchir citaconsular.es sans succès ?",
+      body: "Joventy surveille le portail 24h/24 et réserve un créneau à la seconde où il apparaît — dans la plupart des cas en 24 à 72h. Vous ne payez que si le rendez-vous est obtenu : 350 USD, payables APRÈS résultat. Aucun paiement d'avance pour la capture du créneau. (Un dossier complet — préparation et vérification de toutes les pièces — reste disponible séparément.)",
+      primaryLabel: "Obtenir mon rendez-vous Espagne — 350 USD payable au résultat",
+      primaryHref: "/register",
+      whatsappLabel: "Obtenir mon rendez-vous Espagne — WhatsApp",
+      whatsappMessage: "Bonjour Joventy, je cherche un rendez-vous visa Espagne depuis Kinshasa (citaconsular.es) le plus vite possible. Je suis intéressé(e) par l'offre créneau à 350 USD payable après résultat. Pouvez-vous surveiller le portail et réserver un créneau pour moi ?",
+    },
+  },
 ];
 export function getAllGuides(): Guide[] {
   return guides;
