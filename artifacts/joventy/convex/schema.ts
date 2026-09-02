@@ -100,6 +100,9 @@ const hunterConfig = v.object({
   cevDossierExclude: v.optional(v.string()),
   // Dossiers qui tentent le booking quand un créneau est détecté (vide = tous les dossiers du pool)
   cevBookingTargetPool: v.optional(v.string()),
+  // Dates limites MAX par dossier : CSV "VOWINT6085888=2026-10-15,VOWINT6085889=2026-11-30"
+  // Un créneau après la deadline du dossier n'est pas booké. Fallback: slotDateDeadline (globale).
+  cevDossierDeadlines: v.optional(v.string()),
   // Activer/désactiver proxy pour ce compte (hérite de la config globale si null)
   cevUseProxy: v.optional(v.boolean()),
   // Intervalle de scan personnalisé (secondes, défaut: 225 = 3min45)

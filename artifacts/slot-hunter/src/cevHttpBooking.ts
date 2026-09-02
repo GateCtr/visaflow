@@ -792,6 +792,11 @@ export async function bookCevViaHttp(
    * créneaux distincts. Si le créneau ciblé a disparu du HTML → NO_TARGET_SLOT (cascade).
    */
   targetSlot?: { date: string; time: string },
+  /**
+   * Date limite MAX "YYYY-MM-DD" (incluse). Les créneaux APRÈS cette date sont écartés
+   * avant sélection. Si tous les créneaux sont après → NO_SLOT_BEFORE_DEADLINE (pas de booking).
+   */
+  maxDate?: string,
 ): Promise<HttpBookingResult> {
   // UA cohérent avec la session setup : priorité siphoned.userAgent > sessionUa > randomUserAgent()
   // Un UA différent entre setup et booking = red flag WAF dans les logs post-booking.
@@ -1028,6 +1033,23 @@ export async function bookCevViaHttp(
         return { success: false, error: 'NO_TARGET_SLOT' };
       }
       availableSlots = [matched];
+    }
+
+    // ── Filtre date limite MAX (deadline par AppId ou globale) ──
+    // Écarter les créneaux APRÈS la deadline. Comparaison ISO "YYYY-MM-DD" (lexicographique).
+    // Si tous les créneaux sont après → on ne booke rien (le dossier continue de scanner).
+    if (maxDate && /^\d{4}-\d{2}-\d{2}$/.test(maxDate)) {
+      const beforeCount = availableSlots.length;
+      availableSlots = availableSlots.filter(s => s.date <= maxDate);
+      if (availableSlots.length === 0) {
+        botLog({
+          applicationId: clientId,
+          step: 'cev_http_no_slot_before_deadline',
+          status: 'ok',
+          data: { maxDate, slotsAfterDeadline: beforeCount },
+        });
+        return { success: false, error: 'NO_SLOT_BEFORE_DEADLINE' };
+      }
     }
 
     const minFree = groupSize && groupSize > 1 ? groupSize : 3;

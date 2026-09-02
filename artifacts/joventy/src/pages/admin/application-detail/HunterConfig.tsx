@@ -45,6 +45,7 @@ interface HunterConfigData {
   cevDossierPool?: string;
   cevDossierExclude?: string;
   cevBookingTargetPool?: string;
+  cevDossierDeadlines?: string;
   cevUseProxy?: boolean;
   cevScanIntervalSec?: number;
   // Group booking
@@ -104,6 +105,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [cevDossierPool, setCevDossierPool] = useState("");
   const [cevDossierExclude, setCevDossierExclude] = useState("");
   const [cevBookingTargetPool, setCevBookingTargetPool] = useState("");
+  const [cevDossierDeadlines, setCevDossierDeadlines] = useState("");
   const [cevUseProxy, setCevUseProxy] = useState(false);
   const [cevScanIntervalSec, setCevScanIntervalSec] = useState("225");
   // Group booking
@@ -153,6 +155,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setCevDossierPool(hc.cevDossierPool ?? "");
       setCevDossierExclude(hc.cevDossierExclude ?? "");
       setCevBookingTargetPool(hc.cevBookingTargetPool ?? "");
+      setCevDossierDeadlines(hc.cevDossierDeadlines ?? "");
       setCevUseProxy(hc.cevUseProxy ?? false);
       setCevScanIntervalSec(String(hc.cevScanIntervalSec ?? 225));
       // Group booking
@@ -192,6 +195,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         // CEV Dossier Loop v3 - Multi-comptes
         cevDossierPool: cevDossierPool || undefined, cevDossierExclude: cevDossierExclude || undefined,
         cevBookingTargetPool: cevBookingTargetPool || undefined,
+        cevDossierDeadlines: cevDossierDeadlines || undefined,
         cevUseProxy: cevUseProxy,
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
         // Group booking
@@ -402,6 +406,23 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
                 ) : (
                   <p className="text-[10px] text-slate-500 mt-1">
                     Vide = tous les dossiers du pool concourent (chacun avec session isolée)
+                  </p>
+                )}
+              </Field>
+              <Field label="Dates limites par dossier (optionnel)">
+                <Input
+                  value={cevDossierDeadlines}
+                  onChange={(e) => setCevDossierDeadlines(e.target.value)}
+                  placeholder="VOWINT1=2026-10-15,VOWINT2=2026-11-30 — ne booke pas après cette date"
+                  className="h-9 bg-white text-sm font-mono"
+                />
+                {cevDossierDeadlines ? (
+                  <p className="text-[10px] text-indigo-700 mt-1">
+                    {cevDossierDeadlines.split(",").filter((p) => /^\s*VOWINT\w+\s*=\s*\d{4}-\d{2}-\d{2}\s*$/i.test(p)).length} dossier(s) avec date limite MAX — un créneau après la date n'est pas booké (fallback : date limite globale)
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Vide = date limite globale (Date limite créneau) appliquée, sinon aucune limite
                   </p>
                 )}
               </Field>

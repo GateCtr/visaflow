@@ -73,7 +73,7 @@ import {
   releaseCevIp,
   type SerializablePoolState,
 } from "../cev-redis-persistence.js";
-import { buildCevSlotAssignment, type CevSlotCandidate } from "../cev-slot-assignment.js";
+import { buildCevSlotAssignment, parseCevDossierDeadlines, resolveCevDeadline, type CevSlotCandidate } from "../cev-slot-assignment.js";
 import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
 import { createLogger } from "../logger.js";
 import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
@@ -1588,6 +1588,8 @@ async function bookDossierIsolated(
   logger?: ReturnType<typeof createLogger>,
   /** Créneau ciblé (date, heure) alloué à ce compte — booking de CE créneau exact. */
   targetSlot?: { date: string; time: string },
+  /** Date limite MAX "YYYY-MM-DD" — créneaux après cette date écartés (pas de booking). */
+  maxDate?: string,
 ): Promise<{
   success: boolean;
   confirmationCode?: string;
@@ -1616,6 +1618,7 @@ async function bookDossierIsolated(
         existingSession.selectSlotCookies,
         groupSize,
         targetSlot,
+        maxDate,
       );
       if (res.success) {
         logFn.info(`  [${vowintRef}] ✅ BOOKING RÉUSSI (session existante)! code=${res.confirmationCode}`);
@@ -1670,6 +1673,7 @@ async function bookDossierIsolated(
       session.selectSlotCookies,
       groupSize,
       targetSlot,
+      maxDate,
     );
     if (res.success) {
       logFn.info(`  [${vowintRef}] ✅ BOOKING RÉUSSI (re-login)! code=${res.confirmationCode}`);
@@ -1710,6 +1714,10 @@ async function handleSlotFoundMulti(
   accountIndex: number = 0,
   /** Nombre total de comptes CEV actifs — base du décalage cyclique d'allocation. */
   totalAccounts: number = 1,
+  /** Map { VOWINTREF → "YYYY-MM-DD" } des dates limites MAX par dossier (cevDossierDeadlines). */
+  dossierDeadlines?: Map<string, string>,
+  /** Date limite MAX globale "YYYY-MM-DD" (slotDateDeadline) — fallback si pas de deadline par AppId. */
+  globalDeadline?: string,
 ): Promise<void> {
   const logFn = logger ?? {
     info:  (m: string) => log("INFO",  m),
@@ -1795,18 +1803,30 @@ async function handleSlotFoundMulti(
   // rafler le seul créneau pendant qu'on coordonne.
   const distinctSlotCount = inlineSlots.length;
   const raceMode = distinctSlotCount > 0 && distinctSlotCount <= CEV_RACE_MODE_SLOT_THRESHOLD;
+  // Date limite MAX du dossier détecteur : par AppId si définie, sinon globale, sinon aucune.
+  const detectorDeadline = resolveCevDeadline(
+    detectingDossier.vowintRef,
+    dossierDeadlines ?? new Map(),
+    globalDeadline,
+  );
   const orderedSlots: CevSlotCandidate[] = buildCevSlotAssignment(
     String(applicationId),
     inlineSlots.map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
     groupSize ?? 1,
     totalAccounts,
     accountIndex,
+    detectorDeadline,
   );
   if (orderedSlots.length > 0) {
     logFn.info(
       `  🎯 Allocation compte #${accountIndex}/${totalAccounts - 1} : ${orderedSlots.length} créneau(x) ordonnés` +
+      (detectorDeadline ? ` (deadline ${detectorDeadline})` : ``) +
       (raceMode ? ` — MODE RACE (${distinctSlotCount} ≤ ${CEV_RACE_MODE_SLOT_THRESHOLD}, pas de claim)` : ` — 1er visé: ${orderedSlots[0].date} ${orderedSlots[0].time}`),
     );
+  } else if (inlineSlots.length > 0 && detectorDeadline) {
+    // Des créneaux existent mais tous APRÈS la deadline → ne rien booker (continuer à scanner).
+    logFn.info(`  ⏳ ${detectingDossier.vowintRef} : ${inlineSlots.length} créneau(x) mais tous après la deadline ${detectorDeadline} — aucun booking, scan continue`);
+    botLog({ applicationId, step: "cev_all_slots_after_deadline", status: "ok", data: { vowintRef: detectingDossier.vowintRef, deadline: detectorDeadline, slotCount: inlineSlots.length } });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1873,6 +1893,7 @@ async function handleSlotFoundMulti(
           },
           logger,
           candidate ? { date: candidate.date, time: candidate.time } : undefined,
+          detectorDeadline,
         );
       } catch (err) {
         logFn.error(`  💥 ${detectingDossier.vowintRef} → Booking crash: ${err}`);
@@ -1945,6 +1966,8 @@ async function handleSlotFoundMulti(
         vowintEmail, vowintPassword,
         vowintRef, applicationId,
         groupSize, undefined, logger,
+        undefined, // pas de targetSlot pour les dossiers réveillés (re-scan complet)
+        resolveCevDeadline(vowintRef, dossierDeadlines ?? new Map(), globalDeadline),
       ).then(result => ({ vowintRef, ...result }))
     );
 
@@ -2108,6 +2131,13 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
   logger.info(`  • Index compte: ${accountIndex}/${totalAccounts - 1} (allocation créneaux déterministe)`);
   // Seed déterministe pour le jitter de grille (même valeur à chaque redémarrage).
   const gridSeed = gridSeedFromAccount(String(accountId));
+  // Dates limites MAX : par AppId (cevDossierDeadlines CSV) + globale (slotDateDeadline).
+  // Résolution au moment du booking : par AppId > globale > aucune limite.
+  const dossierDeadlines = parseCevDossierDeadlines(hunterConfig.cevDossierDeadlines);
+  const globalDeadline: string | undefined = hunterConfig.slotDateDeadline;
+  if (dossierDeadlines.size > 0 || globalDeadline) {
+    logger.info(`  • Dates limites: ${dossierDeadlines.size} par dossier${globalDeadline ? `, globale=${globalDeadline}` : ""}`);
+  }
   
   // Récupérer les credentials VOWINT depuis hunterConfig
   let vowintEmail = hunterConfig.embassyUsername;
@@ -2411,6 +2441,8 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
           hunterConfig.cevBookingTargetPool,
           accountIndex,
           totalAccounts,
+          dossierDeadlines,
+          globalDeadline,
         );
       } catch (err) {
         logger.error(`  🌊 Booking rafale échoué sur ${w.cand.vowintRef}: ${err}`);
@@ -2653,6 +2685,8 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
             hunterConfig.cevBookingTargetPool, // CSV ou undefined
             accountIndex,
             totalAccounts,
+            dossierDeadlines,
+            globalDeadline,
           );
           break;
         case "rate_limited":

@@ -80,6 +80,8 @@ export interface HunterJob {
     cevDossierExclude?: string;
     cevBookingTargetPool?: string;
     cevCompletedDossiers?: string;
+    /** Dates limites MAX par dossier : CSV "VOWINT6085888=2026-10-15,VOWINT6085889=2026-11-30". */
+    cevDossierDeadlines?: string;
     cevUseProxy?: boolean;
     cevScanIntervalSec?: number;
     // Group booking — min places libres requises par créneau
