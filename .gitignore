@@ -65,3 +65,14 @@ attached_assets/Pasted-*.txt
 
 # Redis dump
 dump.rdb
+
+# Captures brutes de bundles portail (HTML/JS des sites cibles) — peuvent contenir
+# des tokens tiers (ex: Mapbox) déclenchant GitHub Push Protection. On versionne
+# uniquement l'analyse reverse-engineered (.md), pas la capture brute.
+artifacts/slot-hunter/bundle-analysis/france-bundle/
+artifacts/slot-hunter/bundle-analysis/france-bundle.js
+
+# Logs de debug locaux du hunter
+artifacts/slot-hunter/*.log
+artifacts/slot-hunter/src/chronologie.txt
+artifacts/slot-hunter/src/dianos.txt

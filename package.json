@@ -11,9 +11,13 @@
   },
   "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "impit"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "impit"
+    ]
   },
   "devDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "4.59.0",
     "convex": "^1.21.2",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2"

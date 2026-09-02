@@ -1,0 +1,839 @@
+{
+  "pbtResults": {
+    "2.4 Écrire le test property-based du masquage": {
+      "status": "passed",
+      "lastRunTimestamp": 1788183810048
+    },
+    "2.7 Écrire le test property-based de validation défensive": {
+      "status": "passed",
+      "lastRunTimestamp": 1788181376493
+    },
+    "5.2 Écrire le test property-based du placement du token": {
+      "status": "passed",
+      "lastRunTimestamp": 1788181569068
+    }
+  },
+  "executionHistory": {
+    "1.1 Créer `src/france/france-types.ts`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178311904
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178329571
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178598971
+      }
+    ],
+    "1.2 Créer `src/france/france-config.ts`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178311987
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178612994
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178741095
+      }
+    ],
+    "2.1 Écrire les helpers purs de calcul réseau": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312126
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178773293
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179138871
+      }
+    ],
+    "2.5 Implémenter `createFranceHttpClient` et `fetchWithRetry`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312231
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179148041
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179380700
+      }
+    ],
+    "2.6 Implémenter les validateurs de DTO défensifs": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312317
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178780614
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179139765
+      }
+    ],
+    "3. Checkpoint - Types, config et client HTTP": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312386
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179390685
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179423586
+      }
+    ],
+    "4.1 Écrire les helpers purs de handshake": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312481
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179432524
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179845957
+      }
+    ],
+    "4.3 Implémenter `performHandshake` et `resolveTeam`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312570
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179859340
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180323971
+      }
+    ],
+    "5.1 Implémenter `solveFranceTurnstile`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312651
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179433546
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179846854
+      }
+    ],
+    "6.1 Écrire les fonctions pures de TTL": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312728
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179436354
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179848255
+      }
+    ],
+    "6.3 Implémenter `openSession` et la mise à jour du csrf": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312802
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179860750
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180325410
+      }
+    ],
+    "7. Checkpoint - Handshake, Turnstile et session": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312879
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180338440
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180377201
+      }
+    ],
+    "8.1 Écrire les fonctions pures de scan": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178312953
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179436494
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179849256
+      }
+    ],
+    "8.5 Implémenter `getInterval`, `getExcludeDays` et le polling": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313021
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179861711
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180326451
+      }
+    ],
+    "9. Checkpoint - Scanner": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313166
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180338637
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180378006
+      }
+    ],
+    "10.1 Écrire les fonctions pures de booking": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313247
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179436837
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179849966
+      }
+    ],
+    "10.4 Implémenter `runBookingFlow`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313334
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179862676
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180327374
+      }
+    ],
+    "11. Checkpoint - Booking": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313416
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180340054
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180378849
+      }
+    ],
+    "12.1 Implémenter `runFranceJob`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313494
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180388345
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180721635
+      }
+    ],
+    "12.2 Câbler le dispatcher `src/index.ts`": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313568
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180722457
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180838922
+      }
+    ],
+    "13. Vérification finale": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178313649
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180848219
+      },
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180902641
+      }
+    ],
+    "1. Poser les fondations : types partagés et configuration": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788178741180
+      }
+    ],
+    "2. Implémenter le client HTTP bas niveau (`france-http.ts`)": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179380803
+      }
+    ],
+    "5. Implémenter le wrapper Turnstile (`france-turnstile.ts`)": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788179846950
+      }
+    ],
+    "4. Implémenter le handshake et la résolution consulat (`france-handshake.ts`)": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180324117
+      }
+    ],
+    "6. Implémenter la session et le TTL (`france-session.ts`)": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180325532
+      }
+    ],
+    "8. Implémenter le scanner (`france-scanner.ts`)": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180326727
+      }
+    ],
+    "10. Implémenter le booking (`france-booking.ts`)": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180327566
+      }
+    ],
+    "12. Orchestrer et câbler au dispatcher (`france-hunter.ts`)": [
+      {
+        "executionId": "7cfab99e-ba57-4700-b908-b7aaf87fd572",
+        "chatSessionId": "sess_bba15143-3f69-4c1e-a99d-bac5c3dc43a0",
+        "timestamp": 1788180839058
+      }
+    ],
+    "1.3 Écrire les tests unitaires de config": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180975592
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180994046
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181160220
+      }
+    ],
+    "2.2 Écrire le test property-based du backoff": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180975745
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181168379
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181398344
+      }
+    ],
+    "2.3 Écrire les tests property-based des headers": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180975838
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181168808
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181399341
+      }
+    ],
+    "2.4 Écrire le test property-based du masquage": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180975913
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181170215
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181400228
+      }
+    ],
+    "2.7 Écrire le test property-based de validation défensive": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180975996
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181170954
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181400964
+      }
+    ],
+    "4.2 Écrire les tests property-based du parse handshake": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976078
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181409356
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181630192
+      }
+    ],
+    "4.4 Écrire le test property-based de validation teamId": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976158
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181898543
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183135602
+      }
+    ],
+    "4.5 Écrire les tests d'intégration handshake/résolution (mocks)": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976245
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181899587
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788182323777
+      }
+    ],
+    "5.2 Écrire le test property-based du placement du token": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976329
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181410783
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181631611
+      }
+    ],
+    "5.3 Écrire le test property-based des tokens distincts": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976411
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181411699
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181633370
+      }
+    ],
+    "6.2 Écrire les tests property-based du TTL": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976499
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181412648
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181629243
+      }
+    ],
+    "6.4 Écrire le test property-based du sessionId et du csrf": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976595
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181900416
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788182323092
+      }
+    ],
+    "6.5 Écrire les tests d'intégration session (mocks)": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976738
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181901833
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788182325118
+      }
+    ],
+    "8.2 Écrire les tests property-based de fenêtre et jours scannables": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180976895
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181413638
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181632622
+      }
+    ],
+    "8.3 Écrire les tests property-based des slots et de la séparation id/nom": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977009
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181641799
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181889657
+      }
+    ],
+    "8.4 Écrire les tests property-based de détection de publication": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977125
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181642748
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181888618
+      }
+    ],
+    "8.6 Écrire le test property-based de résilience et de jitter": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977240
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181902584
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788182325891
+      }
+    ],
+    "8.7 Écrire les tests d'intégration scanner (mocks)": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977358
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788182335909
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183139596
+      }
+    ],
+    "10.2 Écrire les tests property-based du contact et du motif": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977474
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181643695
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181887684
+      }
+    ],
+    "10.3 Écrire les tests property-based du slotValue et des reservations": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977595
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181644971
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788181886747
+      }
+    ],
+    "10.5 Écrire le test property-based de l'ordre des étapes": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977729
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788182337035
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183137655
+      }
+    ],
+    "10.6 Écrire les tests d'intégration booking (mocks)": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977852
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788182338023
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183136692
+      }
+    ],
+    "12.3 Écrire les tests property-based d'anti-détection et d'isolation": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180977977
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183148111
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183645975
+      }
+    ],
+    "12.4 Écrire les tests d'intégration d'orchestration + dispatcher (mocks)": [
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788180978088
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183149083
+      },
+      {
+        "executionId": "999f1709-1d0d-4201-82a2-1dcc30bf6f39",
+        "chatSessionId": "sess_3aaae396-fc9c-41ce-9b12-70aad333cacd",
+        "timestamp": 1788183645106
+      }
+    ]
+  }
+}

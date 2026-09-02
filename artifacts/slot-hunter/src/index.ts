@@ -20,6 +20,7 @@ import { getActiveJobs, sendHeartbeat, getPendingBotTest, type HunterJob, loadCe
 import { runHunterSession, runBotTestSession, type SessionResult } from "./navigator.js";
 import { runCevCheck } from "./cevBooking.js";
 import { setCevDiscoveredConfig } from "./cevHttpBooking.js";
+import { runFranceJob } from "./france/france-hunter.js";
 import { proxyPool } from "./browser.js";
 import { detectPublicIp } from "./proxyPool.js";
 import { autoWhitelistIp } from "./ip-whitelist.js";
@@ -875,6 +876,8 @@ async function main(): Promise<void> {
         // SPAIN_HTTP_MODE=1 (spainWatcherActive filtre ces dossiers en amont).
         log("WARN", `[${due.applicantName}] ⚠️ Dossier Espagne dans le scheduler séquentiel — devrait être géré par Spain Worker Orchestrator (SPAIN_HTTP_MODE=1 ?)`);
         result = "error";
+      } else if (due.destination === "france") {
+        result = await runFranceJob(due);
       } else {
         result = await runHunterSession(due);
       }

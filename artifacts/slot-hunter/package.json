@@ -50,7 +50,8 @@
     "test:anticaptcha": "tsx test-anticaptcha-soax.ts",
     "test:cev:anticaptcha": "tsx test-cev-anticaptcha-proxyless.ts",
     "diag:2captcha-browser": "tsx scripts/diag-2captcha-browser.ts",
-    "diag:2captcha-browser:status": "tsx scripts/diag-2captcha-browser.ts --status-only"
+    "diag:2captcha-browser:status": "tsx scripts/diag-2captcha-browser.ts --status-only",
+    "france:diag": "tsx scripts/france-live-diagnostic.ts"
   },
   "dependencies": {
     "@messagebird/sdk": "^0.42.1",
