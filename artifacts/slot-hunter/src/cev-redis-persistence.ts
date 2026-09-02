@@ -5,7 +5,7 @@
  *   Le CevDossierPool (currentIndex, clickTimestamps) et le vowintSessionCache (cookies login)
  *   sont perdus à chaque redémarrage. Conséquences :
  *   - currentIndex repart à 0 → le bot re-scanne un dossier déjà rate-limité côté serveur
- *   - clickTimestamps vides → le bot dépasse les 20 clics/h → rate-limit immédiat (blocage 20 min)
+ *   - clickTimestamps vides → le bot dépasse les 5 clics/h → rate-limit immédiat
  *   - vowintSessionCache vide → re-login inutile → gaspille le budget login
  *
  *   Avec Redis :

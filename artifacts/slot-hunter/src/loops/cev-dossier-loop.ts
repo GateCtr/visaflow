@@ -757,9 +757,9 @@ async function captureFullSessionForAccount(
 // ── One-Shot (Predator) ────────────────────────────────────────────────────
 // Stratégie : 1 réveil par intervalle → 1 clic par dossier → fermeture → sleep
 // Session VOWINT réutilisée si encore valide (cache 4h dans cevHttpSetup)
-// NB : le vrai garde-fou est le quota MAX_CLICKS_PER_HOUR (18/dossier) ; l'intervalle
-// ne fait qu'espacer les scans. À 60s de boucle, un dossier atteint 18 clics/h
-// puis est skippé jusqu'à libération d'un créneau dans la fenêtre glissante.
+// NB : le quota MAX_CLICKS_PER_HOUR (4/dossier) est le garde-fou dur ; l'intervalle
+// (cev-schedule) espace les scans. Pour que l'intervalle soit respecte sans etre coupe
+// par le quota, il faut assez de formulaires : N >= 720 / intervalSec (5/h/formulaire).
 const DEFAULT_INTERVAL_SEC = 60; // 60s par défaut (configurable via cevScanIntervalSec)
 
 // ── Synchronisation sur grille d'horloge murale (porté de spain-wallclock-grid) ──
@@ -803,7 +803,15 @@ function gridSeedFromAccount(accountId: string): number {
 
 /**
  * Délai (ms) jusqu'au prochain front de grille absolu, jitter déterministe inclus.
- * Fonction pure — `nowMs` injecté. Réplique exacte de spain-wallclock-grid.msUntilNextTick.
+ * Fonction pure — `nowMs` injecté.
+ *
+ * IMPORTANT (fix intervalle) : la grille aligne les comptes sur un front commun
+ * (`multiple de tick`), MAIS garantit aussi un espacement MINIMUM d'un `tick` complet
+ * entre deux scans du même compte. Sans ce plancher, `ceil(now/tick)*tick` peut tomber
+ * juste après `now` (ex. sleep de 3s) → l'intervalle de cev-schedule (90s/180s) n'était
+ * pas respecté et le quota serveur (5/h) sautait. On vise donc le premier front
+ * >= `now + tick` : l'alignement d'horloge est préservé (fronts = multiples de tick,
+ * communs à tous les comptes) et le délai du schedule est toujours honoré.
  *
  * @param nowMs      horloge murale (ms epoch)
  * @param tick       intervalle de grille (ms), borné à [1000, 3600000]
@@ -811,12 +819,15 @@ function gridSeedFromAccount(accountId: string): number {
  */
 function cevMsUntilNextTick(nowMs: number, tick: number, workerSeed: number): number {
   const effTick = Math.min(GRID_TICK_CEIL_MS, Math.max(GRID_TICK_FLOOR_MS, Math.round(tick)));
-  const nextFront = Math.ceil(nowMs / effTick) * effTick;
+  // Plancher : le prochain scan doit être au moins un tick complet après maintenant
+  // (le dernier scan vient d'avoir lieu). On aligne ensuite sur le front de grille.
+  const minNext = nowMs + effTick;
+  const nextFront = Math.ceil(minNext / effTick) * effTick;
   const jitterMax = Math.floor(CEV_GRID_JITTER_PCT * effTick);
   const seedInt = Math.abs(Math.trunc(workerSeed));
   const jitter = jitterMax > 0 ? (seedInt % (2 * jitterMax + 1)) - jitterMax : 0;
   let target = nextFront + jitter;
-  if (target <= nowMs) target = nextFront + effTick + jitter;
+  if (target <= minNext) target = nextFront + effTick + jitter;
   return Math.max(0, Math.round(target - nowMs));
 }
 const CLICK_WINDOW_MS = 60 * 60 * 1000;
@@ -829,12 +840,13 @@ const CLICK_WINDOW_MS = 60 * 60 * 1000;
 // quitter la page tue la session. Chaque vérification coûte donc obligatoirement
 // un cycle complet : login VOWINT → clic → captcha → Integration/VOW.
 //
-// Le serveur limite ces clics à 20/heure/dossier (au-delà → blocage 20 min) ;
-// on s'arrête à 18 pour garder une marge de 2 (un rate-limit VOWINT bloque le
-// dossier 20 min, bien plus long qu'un simple skip). Le compteur est consulté
-// AVANT chaque tentative : un dossier déjà à 18 est conservé tel quel, aucun
-// clic n'est émis, on passe au suivant.
-const MAX_CLICKS_PER_HOUR = 18;
+// Le serveur limite ces clics à 5/heure/dossier (confirme en prod : blocage a 5) ;
+// on s'arrete a 4 pour garder une marge (un rate-limit VOWINT bloque le dossier
+// bien plus longtemps qu'un simple skip). Le compteur est consulte AVANT chaque
+// tentative : un dossier deja a 4 est conserve tel quel, aucun clic n'est emis,
+// on passe au suivant. Pour respecter l'intervalle de cev-schedule sans etre coupe
+// par ce quota, dupliquer les formulaires : N >= 720 / intervalSec (5/h/formulaire).
+const MAX_CLICKS_PER_HOUR = 4;
 
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
 
@@ -1899,26 +1911,16 @@ async function handleSlotFoundMulti(
   // Les "autres" sont tous les éligibles sauf le détecteur (qu'il soit éligible ou non,
   // sa place dans la liste parallèle ne le concerne pas — il a déjà booké ou est hors pool).
   const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
-  // ── Duplicatas d'une MÊME personne : premier booking = personne servie = STOP ──
-  // Le pool CEV regroupe les formulaires (AppId) d'une même personne, utilisés
-  // uniquement pour cumuler du budget de clics. Dès que le détecteur décroche un
-  // RDV, la personne est servie : on ne réveille JAMAIS les autres formulaires
-  // (éviter un 2e RDV pour la même personne → blocage compte si >5 RDV).
-  // Le réveil multi ne sert donc qu'en fallback : le détecteur a ÉCHOUÉ mais il
-  // reste des places → un autre formulaire peut tenter de sauver le créneau.
-  //
-  // Si le détecteur a booké en fallback d'urgence (hors pool + totalFree≤1), on ne
-  // tente pas non plus : le seul créneau est pris, et ouvrir une 2e session VOWINT
-  // pendant que la session détecteur est encore ouverte risque un "multiple session".
-  const dossiersToWake = (detectingBookingResult?.success || detectorMustBookAsFallback)
-    ? 0
-    : Math.min(remainingFree, otherRefs.length);
+  // ── Booking multi-dossier : booker les AUTRES dossiers du pool sur les places
+  //    restantes (comportement historique — vider tout le pool). On réveille au plus
+  //    min(remainingFree, otherRefs.length) dossiers.
+  //    Fallback d'urgence (détecteur hors pool + totalFree≤1) : pas de réveil (le seul
+  //    créneau est pris, ouvrir une 2e session risque un "multiple session" CEV).
+  const dossiersToWake = detectorMustBookAsFallback ? 0 : Math.min(remainingFree, otherRefs.length);
   skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
-    if (detectingBookingResult?.success) {
-      logFn.info(`  🏁 ${detectingDossier.vowintRef} booké — personne servie, aucun autre formulaire réveillé (duplicatas même personne)`);
-    } else if (detectorMustBookAsFallback) {
+    if (detectorMustBookAsFallback) {
       logFn.info(`  🏁 Fallback urgence (détecteur hors pool, seul créneau) — pas de multi-dossier (risque double session)`);
     } else if (detectingBookingResult?.success && remainingFree <= 0) {
       logFn.info(`  🏁 Booking réussi pour ${detectingDossier.vowintRef} — aucune place restante (free=${totalFree})`);

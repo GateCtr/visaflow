@@ -366,7 +366,7 @@ export async function consumeOtpCode(payload: {
 }
 
 /**
- * Enregistre un clic sur le bouton RDV CEV (pour tracking du rate limit 18 clics/heure).
+ * Enregistre un clic sur le bouton RDV CEV (pour tracking du rate limit 4 clics/heure).
  * Fire-and-forget — ne bloque pas le chemin critique.
  */
 export function recordCevClick(payload: {

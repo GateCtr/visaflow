@@ -11,8 +11,8 @@ const CEV_BASE = 'https://appointment.cloud.diplomatie.be';
 const VOWINT_BASE = 'https://visaonweb.diplomatie.be';
 
 // Nombre max de clics "Prendre rendez-vous" par heure (limite CEV)
-// Serveur CEV : 20 clics/h par AppId → blocage 20 min. On garde 2 de marge → 18.
-const MAX_CLICKS_PER_HOUR = 18; // limite serveur 20/h, marge de 2
+// Serveur CEV : 5 clics/h par AppId (confirme en prod : blocage a 5). Marge de 1 -> 4.
+const MAX_CLICKS_PER_HOUR = 4; // limite serveur 5/h, marge de 1
 const CLICK_WINDOW_MS = 60 * 60 * 1000;
 
 // Intervalle de poll quand session CEV est active (sans recliquer)
@@ -288,10 +288,11 @@ async function establishCevSession(
 
     if (!rdvBtn) {
       // Vérifier si c'est la limite de clics/heure (message VOWINT visible sur la page)
-      // Serveur : "plus de 20 fois dans l'heure" → blocage 20 min (ancien message: "5 fois")
+      // Serveur : "plus de 5 fois dans l'heure" (limite reelle confirmee en prod).
+      // On garde aussi "20 fois" par securite au cas ou un autre seuil apparaisse.
       const pageText = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
-      const isRateLimited = pageText.includes('20 fois') || pageText.includes('20 times') ||
-        pageText.includes('5 fois') || pageText.includes('5 times') ||
+      const isRateLimited = pageText.includes('5 fois') || pageText.includes('5 times') ||
+        pageText.includes('20 fois') || pageText.includes('20 times') ||
         pageText.includes('bloqué pendant') || pageText.includes('blocked for');
 
       const allNgClicks = await page.$$eval('[ng-click]', (els: any[]) =>
@@ -299,7 +300,7 @@ async function establishCevSession(
       ).catch(() => []);
 
       if (isRateLimited) {
-        console.warn(`[CEV] ⏳ Limite clics/heure atteinte (20/h serveur, blocage 20 min) — pas un échec de login`);
+        console.warn(`[CEV] ⏳ Limite 5 clics/heure atteinte — pas un échec de login`);
         botLog({ applicationId: config.clientId, step: 'cev_rdv_rate_limited', status: 'warn', data: { pageText: pageText.slice(0, 300) } });
         // Retourner null avec un marqueur spécial pour que le caller ne compte pas ça comme login_fail
         return null;
@@ -1421,8 +1422,8 @@ export async function cevPollingLoop(
 
 // ─── Adaptateur single-shot pour le main loop du bot ───────────────────────
 // Effectue un seul cycle VOWINT + hCaptcha pour le job Schengen donné.
-// La limite de 20 clics/heure (serveur, marge 2 → 18) est gérée côté main loop
-// via un intervalle minimum de ~200s (3600s / 18) entre chaque clic par AppId.
+// La limite de 5 clics/heure (serveur, marge 1 → 4) est gérée côté main loop
+// via un intervalle minimum de ~900s (3600s / 4) entre chaque clic par AppId.
 const CEV_HCAPTCHA_SITEKEY = '5f64399c-14a8-415e-ad1a-7ebccdc4943a';
 
 export type SchengenSessionResult = 'slot_found' | 'not_found' | 'rate_limited' | 'error';
@@ -1436,7 +1437,7 @@ export async function runCevCheck(job: HunterJob): Promise<SchengenSessionResult
     return 'error';
   }
 
-  // Vérifier la limite de clics: max 18 clics/heure par application (serveur: 20/h, marge 2)
+  // Vérifier la limite de clics: max 4 clics/heure par application (serveur: 5/h, marge 1)
   const now = Date.now();
   const WINDOW_MS = 60 * 60 * 1000;
   const windowStart = hc.cevClickWindowStart ?? 0;

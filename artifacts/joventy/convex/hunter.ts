@@ -423,21 +423,16 @@ export const markSlotFoundByHunter = internalMutation({
         (existing.cevDossierExclude ?? "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean),
       );
       const activePoolRefs = poolRefs.filter(ref => !excludeRefs.has(ref));
+      allCompleted = activePoolRefs.every(ref => completedSet.has(ref));
 
-      // ── Clôture au PREMIER booking ───────────────────────────────────────
-      // Le pool CEV regroupe les formulaires (AppId) d'une MÊME personne : ce sont
-      // des canaux de clic redondants pour cumuler du budget (2 × 18 clics/h), pas
-      // des cibles de booking distinctes. Dès qu'UN formulaire décroche un RDV, la
-      // personne est servie → on clôture tout le pool et on arrête de scanner les
-      // autres formulaires (éviter un RDV en double + le blocage compte si >5 RDV).
-      allCompleted = true;
-
-      // Enregistrer le booking dans cevCompletedDossiers + désactiver le scan.
+      // ── Booking multi-dossier : ne clôturer QUE si tous les dossiers du pool
+      //    sont bookés (comportement historique). Tant qu'il en reste, le scan
+      //    continue pour les autres dossiers du pool.
       await ctx.db.patch(args.applicationId, {
         hunterConfig: {
           ...existing,
-          isActive: false,
-          lastResult: "all_slots_captured",
+          isActive: allCompleted ? false : existing.isActive,
+          lastResult: allCompleted ? "all_slots_captured" : "slot_captured_partial",
           lastCheckAt: Date.now(),
           checkCount: (existing.checkCount ?? 0) + 1,
           cevCompletedDossiers: newCompletedCsv,
@@ -446,17 +441,19 @@ export const markSlotFoundByHunter = internalMutation({
       });
 
       // Log + stocker les détails du booking dans les logs de l'application
-      const skippedRefs = activePoolRefs.filter(ref => !completedSet.has(ref));
-      const logMsg = skippedRefs.length > 0
-        ? `✅ Dossier ${bookedRef} booké le ${args.date} à ${args.time} (code: ${args.confirmationCode ?? "—"}) — personne servie, arrêt du scan. Formulaires non scannés (même personne): ${skippedRefs.join(", ")}.`
-        : `✅ Dossier ${bookedRef} booké le ${args.date} à ${args.time} (code: ${args.confirmationCode ?? "—"}) — arrêt du scan.`;
+      const remainingCount = activePoolRefs.filter(ref => !completedSet.has(ref)).length;
+      const logMsg = allCompleted
+        ? `✅ Tous les dossiers du pool bookés (${completedSet.size}/${activePoolRefs.length}) — arrêt du scan. Dernier: ${bookedRef} le ${args.date} à ${args.time}.`
+        : `✅ Dossier ${bookedRef} booké le ${args.date} à ${args.time} (code: ${args.confirmationCode ?? "—"}). ${completedSet.size}/${activePoolRefs.length} complété(s), ${remainingCount} restant(s) — scan continue.`;
       const existingLogs = (app as { logs?: Array<{ msg: string; time: number; author: string }> }).logs ?? [];
       await ctx.db.patch(args.applicationId, {
         logs: [...existingLogs, { msg: logMsg, time: Date.now(), author: "Joventy Hunter" }],
       });
 
-      // Premier booking → clôture + paiement (coreMarkSlotFound).
-      await coreMarkSlotFound(ctx, { ...args, logAuthor: "Joventy Hunter" });
+      // Clôture + paiement UNIQUEMENT quand tous les dossiers sont bookés.
+      if (allCompleted) {
+        await coreMarkSlotFound(ctx, { ...args, logAuthor: "Joventy Hunter" });
+      }
 
       return args.applicationId;
     }
