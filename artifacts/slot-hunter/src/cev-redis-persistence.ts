@@ -5,7 +5,7 @@
  *   Le CevDossierPool (currentIndex, clickTimestamps) et le vowintSessionCache (cookies login)
  *   sont perdus à chaque redémarrage. Conséquences :
  *   - currentIndex repart à 0 → le bot re-scanne un dossier déjà rate-limité côté serveur
- *   - clickTimestamps vides → le bot dépasse les 5 clics/h → rate-limit immédiat
+ *   - clickTimestamps vides → le bot dépasse les 20 clics/h → rate-limit immédiat (blocage 20 min)
  *   - vowintSessionCache vide → re-login inutile → gaspille le budget login
  *
  *   Avec Redis :
@@ -348,6 +348,216 @@ export async function releaseCevScanLock(dossierId: string): Promise<void> {
   try {
     const key = `${REDIS_CEV_SCAN_LOCK_PREFIX}${dossierId}`;
     await redisClient.del(key);
+  } catch { /* ignore */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SLOT CLAIM ATOMIQUE PAR CRÉNEAU (coordination inter-comptes / inter-instances)
+//
+// Problème : plusieurs comptes CEV scannent en parallèle. À l'instant de publication,
+// ils voient les mêmes créneaux (souvent 1 place par jour). Sans coordination, ils
+// visent tous le PREMIER créneau → collision → un seul gagne, les autres gaspillent
+// leur clic ("rendez-vous déjà atteint" / "multiple session").
+//
+// Solution (calquée sur Spain tryClaimWorkerSlot) : un claim atomique NON BLOQUANT
+// par couple (date, heure). Redis sérialise les commandes, donc même si N comptes
+// appellent au même instant T, un seul crée la clé et gagne ; les autres reçoivent 0
+// et passent IMMÉDIATEMENT au créneau suivant (cascade fallback, aucune attente).
+//
+// La clé est globale (date:time), tous comptes confondus → répartit naturellement
+// les comptes sur des jours/créneaux distincts.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_CEV_SLOT_CLAIM_PREFIX = "visaflow:cev-slot-claim:";
+/** TTL court — les créneaux CEV se réservent en quelques secondes. */
+const REDIS_CEV_SLOT_CLAIM_TTL_SEC = 90;
+
+/**
+ * Tentative atomique de réservation d'une place dans un créneau (date, heure).
+ *
+ * Script Lua : GET → créer (si absent) ou vérifier capacité restante → SET.
+ * Valeur JSON : { free: N, booked: M, claimedBy: { accountId: 1 } }
+ *
+ * NON BLOQUANT : retourne true si ce compte a pu réserver, false sinon (créneau plein).
+ * Idempotent : un compte qui a déjà claim ce créneau reçoit true sans double comptage.
+ * Mode dégradé (Redis absent ou erreur) : retourne true (on laisse tenter — pas de blocage).
+ *
+ * @param date      Date du créneau (ex: "2026-09-15")
+ * @param time      Heure du créneau (ex: "10:15")
+ * @param accountId Identifiant du compte réservant (application CEV)
+ * @param freeSlots Places libres connues pour ce créneau (souvent 1)
+ * @returns true si la réservation est accordée, false si le créneau est déjà plein.
+ */
+export async function tryClaimCevSlot(
+  date: string,
+  time: string,
+  accountId: string,
+  freeSlots: number,
+): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // dégradé → laisser tenter
+
+  const key = `${REDIS_CEV_SLOT_CLAIM_PREFIX}${date}:${time}`;
+  const lua = `
+    local key     = KEYS[1]
+    local account = ARGV[1]
+    local free    = tonumber(ARGV[2])
+    local ttl     = tonumber(ARGV[3])
+    local raw     = redis.call("GET", key)
+    if raw == false then
+      local val = cjson.encode({free=free, booked=1, claimedBy={[account]=1}})
+      redis.call("SET", key, val, "EX", ttl)
+      return 1
+    end
+    local data = cjson.decode(raw)
+    if data.claimedBy and data.claimedBy[account] ~= nil then return 1 end
+    if (data.booked or 0) + 1 <= (data.free or free) then
+      data.booked = (data.booked or 0) + 1
+      if not data.claimedBy then data.claimedBy = {} end
+      data.claimedBy[account] = 1
+      redis.call("SET", key, cjson.encode(data), "EX", ttl)
+      return 1
+    end
+    return 0
+  `;
+  try {
+    const result = await (redisClient as unknown as {
+      eval: (script: string, opts: { keys: string[]; arguments: string[] }) => Promise<unknown>;
+    }).eval(lua, {
+      keys: [key],
+      arguments: [accountId, String(Math.max(1, freeSlots)), String(REDIS_CEV_SLOT_CLAIM_TTL_SEC)],
+    });
+    return result === 1;
+  } catch (e) {
+    console.warn(`[cev-redis] tryClaimCevSlot: ${e instanceof Error ? e.message : e}`);
+    return true; // dégradé
+  }
+}
+
+/**
+ * Libère la réservation d'un compte sur un créneau (date, heure) de façon atomique.
+ *
+ * Appelé quand un booking échoue APRÈS un claim réussi, pour qu'un autre compte
+ * puisse tenter ce créneau. Ne supprime que la réservation du compte appelant ;
+ * la clé n'est détruite que s'il ne reste plus aucun claim.
+ *
+ * @param date      Date du créneau
+ * @param time      Heure du créneau
+ * @param accountId Identifiant du compte dont on libère la réservation
+ */
+export async function releaseCevSlot(
+  date: string,
+  time: string,
+  accountId: string,
+): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  const key = `${REDIS_CEV_SLOT_CLAIM_PREFIX}${date}:${time}`;
+  const lua = `
+    local key     = KEYS[1]
+    local account = ARGV[1]
+    local ttl     = tonumber(ARGV[2])
+    local raw     = redis.call("GET", key)
+    if raw == false then return 0 end
+    local data = cjson.decode(raw)
+    if not data.claimedBy or data.claimedBy[account] == nil then return 0 end
+    data.booked = math.max(0, (data.booked or 0) - 1)
+    data.claimedBy[account] = nil
+    local remaining = 0
+    for _ in pairs(data.claimedBy) do remaining = remaining + 1 end
+    if remaining == 0 then
+      redis.call("DEL", key)
+    else
+      redis.call("SET", key, cjson.encode(data), "EX", ttl)
+    end
+    return 1
+  `;
+  try {
+    await (redisClient as unknown as {
+      eval: (script: string, opts: { keys: string[]; arguments: string[] }) => Promise<unknown>;
+    }).eval(lua, {
+      keys: [key],
+      arguments: [accountId, String(REDIS_CEV_SLOT_CLAIM_TTL_SEC)],
+    });
+  } catch { /* ignore */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RÉSERVATION D'IP PROXY PAR COMPTE (isolation IP inter-comptes, façon Spain)
+//
+// Problème : sans réservation, deux comptes peuvent tomber sur la même IP Decodo
+// (hash collision ou #comptes > #IP) → même exit IP → association de comptes
+// détectable côté serveur. Spain résout ça avec un SET NX sur host:port.
+//
+// Clé normalisée sur host:port (ignore le sticky session id dans le username) :
+// un compte qui passe une URL base et un autre une URL sticky du même port
+// physique génèrent la MÊME clé → une seule réservation par IP physique.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_CEV_IP_RESERVE_PREFIX = "visaflow:cev-ip-reserved:";
+const REDIS_CEV_IP_RESERVE_TTL_SEC = 30 * 60; // 30 min — durée d'une fenêtre compte
+
+/** Normalise une URL proxy en clé de réservation stable "prefix:host:port". */
+function cevProxyToReserveKey(proxyUrl: string): string {
+  try {
+    const u = new URL(proxyUrl);
+    return `${REDIS_CEV_IP_RESERVE_PREFIX}${u.hostname}:${u.port}`;
+  } catch {
+    return `${REDIS_CEV_IP_RESERVE_PREFIX}${proxyUrl.slice(-40).replace(/[^a-zA-Z0-9:._-]/g, "_")}`;
+  }
+}
+
+/**
+ * Réserve une IP proxy pour un compte (SET NX : échoue si déjà réservée par un autre).
+ * Retourne true si la réservation a réussi (ou en mode dégradé sans Redis).
+ */
+export async function reserveCevIp(proxyUrl: string, accountId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return true; // dégradé → laisser passer
+  const key = cevProxyToReserveKey(proxyUrl);
+  try {
+    const res = await redisClient.set(key, accountId, { NX: true, EX: REDIS_CEV_IP_RESERVE_TTL_SEC });
+    if (res === "OK") return true;
+    // Déjà réservée : true seulement si c'est CE compte (idempotent / renouvellement).
+    const owner = await redisClient.get(key);
+    if (owner === accountId) {
+      await redisClient.expire(key, REDIS_CEV_IP_RESERVE_TTL_SEC); // renouveler le TTL
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.warn(`[cev-redis] reserveCevIp: ${e instanceof Error ? e.message : e}`);
+    return true; // dégradé
+  }
+}
+
+/** Vérifie si une IP est déjà réservée par un AUTRE compte. */
+export async function isCevIpReservedByOther(proxyUrl: string, accountId: string): Promise<boolean> {
+  if (!redisReady || !redisClient) return false;
+  const key = cevProxyToReserveKey(proxyUrl);
+  try {
+    const val = await redisClient.get(key);
+    return val !== null && val !== accountId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Libère la réservation IP d'un compte avec vérification d'appartenance (Lua atomique).
+ * Seul le compte qui détient la réservation peut la libérer.
+ */
+export async function releaseCevIp(proxyUrl: string, accountId: string): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  const key = cevProxyToReserveKey(proxyUrl);
+  const lua = `
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      redis.call("DEL", KEYS[1])
+      return 1
+    end
+    return 0
+  `;
+  try {
+    await (redisClient as unknown as {
+      eval: (script: string, opts: { keys: string[]; arguments: string[] }) => Promise<unknown>;
+    }).eval(lua, { keys: [key], arguments: [accountId] });
   } catch { /* ignore */ }
 }
 

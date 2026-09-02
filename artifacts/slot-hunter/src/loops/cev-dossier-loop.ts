@@ -67,13 +67,18 @@ import {
   restorePoolStateFromRedis,
   acquireCevScanLock,
   releaseCevScanLock,
+  tryClaimCevSlot,
+  releaseCevSlot,
+  reserveCevIp,
+  releaseCevIp,
   type SerializablePoolState,
 } from "../cev-redis-persistence.js";
+import { buildCevSlotAssignment, type CevSlotCandidate } from "../cev-slot-assignment.js";
 import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPause } from "../daily-stats.js";
 import { createLogger } from "../logger.js";
 import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
 import { solveHcaptchaWithProxy, parseProxyForAnticaptcha } from "../cev-hcaptcha.js";
-import { getCevDecodoUrlForAccount, hasCevDecodoProxy, getCevDecodoPoolSize } from "../cev-decodo-pool.js";
+import { getCevDecodoUrlForAccount, getCevDecodoUrlForIndex, hasCevDecodoProxy, getCevDecodoPoolSize } from "../cev-decodo-pool.js";
 import { getCevScheduleDecision } from "../cev-schedule.js";
 
 // ─── Constantes stealth Puppeteer ─────────────────────────────────────────────
@@ -750,9 +755,70 @@ async function captureFullSessionForAccount(
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 // ── One-Shot (Predator) ────────────────────────────────────────────────────
-// Stratégie : 1 réveil toutes les 2 min → 1 clic par dossier → fermeture → sleep
+// Stratégie : 1 réveil par intervalle → 1 clic par dossier → fermeture → sleep
 // Session VOWINT réutilisée si encore valide (cache 4h dans cevHttpSetup)
-const DEFAULT_INTERVAL_SEC = 60; // 2 min par défaut (configurable via cevScanIntervalSec)
+// NB : le vrai garde-fou est le quota MAX_CLICKS_PER_HOUR (18/dossier) ; l'intervalle
+// ne fait qu'espacer les scans. À 60s de boucle, un dossier atteint 18 clics/h
+// puis est skippé jusqu'à libération d'un créneau dans la fenêtre glissante.
+const DEFAULT_INTERVAL_SEC = 60; // 60s par défaut (configurable via cevScanIntervalSec)
+
+// ── Synchronisation sur grille d'horloge murale (porté de spain-wallclock-grid) ──
+//
+// Objectif : tous les comptes CEV détectent les créneaux dans la MÊME fenêtre de
+// tick. Au lieu d'un sleep relatif (qui dérive), chaque compte dort jusqu'au
+// prochain front absolu `ceil(now/tick)*tick` — l'horloge devient une barrière
+// commune sans coordination centrale. Un jitter déterministe par compte casse le
+// pattern régulier sans casser l'alignement.
+const GRID_TICK_FLOOR_MS = 1_000;
+const GRID_TICK_CEIL_MS = 3_600_000;
+
+/** Pourcentage de jitter appliqué au front de grille (fraction du tick), borné [0, 0.5]. */
+const CEV_GRID_JITTER_PCT = ((): number => {
+  const v = Number(process.env.CEV_GRID_JITTER_PCT ?? "0.15");
+  if (!Number.isFinite(v)) return 0.15;
+  return Math.min(0.5, Math.max(0, v));
+})();
+
+/**
+ * Seuil du mode RACE : quand le nombre de créneaux distincts détectés est ≤ ce seuil,
+ * on SKIP le claim Redis et tous les comptes foncent (le serveur CEV arbitre).
+ * Évite qu'un compte attende poliment pendant qu'un concurrent rafle le seul créneau.
+ * Configurable via CEV_RACE_MODE_SLOT_THRESHOLD, défaut 5, borné [1, 10000].
+ */
+const CEV_RACE_MODE_SLOT_THRESHOLD = ((): number => {
+  const v = Number(process.env.CEV_RACE_MODE_SLOT_THRESHOLD ?? "5");
+  if (!Number.isFinite(v)) return 5;
+  return Math.min(10000, Math.max(1, Math.round(v)));
+})();
+
+/** Seed déterministe (FNV-1a) dérivé de l'accountId — jitter reproductible par compte. */
+function gridSeedFromAccount(accountId: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < accountId.length; i++) {
+    h ^= accountId.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Délai (ms) jusqu'au prochain front de grille absolu, jitter déterministe inclus.
+ * Fonction pure — `nowMs` injecté. Réplique exacte de spain-wallclock-grid.msUntilNextTick.
+ *
+ * @param nowMs      horloge murale (ms epoch)
+ * @param tick       intervalle de grille (ms), borné à [1000, 3600000]
+ * @param workerSeed seed déterministe du compte (gridSeedFromAccount)
+ */
+function cevMsUntilNextTick(nowMs: number, tick: number, workerSeed: number): number {
+  const effTick = Math.min(GRID_TICK_CEIL_MS, Math.max(GRID_TICK_FLOOR_MS, Math.round(tick)));
+  const nextFront = Math.ceil(nowMs / effTick) * effTick;
+  const jitterMax = Math.floor(CEV_GRID_JITTER_PCT * effTick);
+  const seedInt = Math.abs(Math.trunc(workerSeed));
+  const jitter = jitterMax > 0 ? (seedInt % (2 * jitterMax + 1)) - jitterMax : 0;
+  let target = nextFront + jitter;
+  if (target <= nowMs) target = nextFront + effTick + jitter;
+  return Math.max(0, Math.round(target - nowMs));
+}
 const CLICK_WINDOW_MS = 60 * 60 * 1000;
 
 // ── Quota de clics « Prendre rendez-vous » — contrainte serveur CEV ─────────
@@ -763,11 +829,12 @@ const CLICK_WINDOW_MS = 60 * 60 * 1000;
 // quitter la page tue la session. Chaque vérification coûte donc obligatoirement
 // un cycle complet : login VOWINT → clic → captcha → Integration/VOW.
 //
-// Le serveur limite ces clics à 5/heure/dossier ; on s'arrête à 4 pour garder
-// une marge (un rate-limit VOWINT bloque le dossier bien plus longtemps qu'un
-// simple skip). Le compteur est consulté AVANT chaque tentative : un dossier
-// déjà à 4 est conservé tel quel, aucun clic n'est émis, on passe au suivant.
-const MAX_CLICKS_PER_HOUR = 4;
+// Le serveur limite ces clics à 20/heure/dossier (au-delà → blocage 20 min) ;
+// on s'arrête à 18 pour garder une marge de 2 (un rate-limit VOWINT bloque le
+// dossier 20 min, bien plus long qu'un simple skip). Le compteur est consulté
+// AVANT chaque tentative : un dossier déjà à 18 est conservé tel quel, aucun
+// clic n'est émis, on passe au suivant.
+const MAX_CLICKS_PER_HOUR = 18;
 
 // ─── Dossier Slot (état de chaque dossier) ──────────────────────────────────
 
@@ -1507,6 +1574,8 @@ async function bookDossierIsolated(
     selectSlotCookies?: string;
   },
   logger?: ReturnType<typeof createLogger>,
+  /** Créneau ciblé (date, heure) alloué à ce compte — booking de CE créneau exact. */
+  targetSlot?: { date: string; time: string },
 ): Promise<{
   success: boolean;
   confirmationCode?: string;
@@ -1534,6 +1603,7 @@ async function bookDossierIsolated(
         existingSession.selectSlotUrl,
         existingSession.selectSlotCookies,
         groupSize,
+        targetSlot,
       );
       if (res.success) {
         logFn.info(`  [${vowintRef}] ✅ BOOKING RÉUSSI (session existante)! code=${res.confirmationCode}`);
@@ -1587,6 +1657,7 @@ async function bookDossierIsolated(
       session.selectSlotUrl,
       session.selectSlotCookies,
       groupSize,
+      targetSlot,
     );
     if (res.success) {
       logFn.info(`  [${vowintRef}] ✅ BOOKING RÉUSSI (re-login)! code=${res.confirmationCode}`);
@@ -1623,6 +1694,10 @@ async function handleSlotFoundMulti(
   existingSelectSlotCookies?: string,
   /** CSV de VOWINT refs (cev_booking_target_pool). Vide = tous les dossiers du pool. */
   bookingTargetPoolStr?: string,
+  /** Index stable de ce compte (0-based) — pilote l'allocation déterministe des créneaux. */
+  accountIndex: number = 0,
+  /** Nombre total de comptes CEV actifs — base du décalage cyclique d'allocation. */
+  totalAccounts: number = 1,
 ): Promise<void> {
   const logFn = logger ?? {
     info:  (m: string) => log("INFO",  m),
@@ -1677,8 +1752,9 @@ async function handleSlotFoundMulti(
   // ── Analyser les slots IMMÉDIATEMENT depuis le HTML pré-capturé ─────────
   // CRITIQUE : ne pas perdre la session sur des opérations inutiles.
   // CEV invalide la session dès qu'on fait autre chose que soumettre le form SelectSlot.
+  let inlineSlots: Array<{ date: string; time: string; free?: number }> = [];
   if (existingSelectSlotHtml && existingSelectSlotHtml.length > 500) {
-    const inlineSlots = extractInlineSlotsFromHtml(existingSelectSlotHtml);
+    inlineSlots = extractInlineSlotsFromHtml(existingSelectSlotHtml);
     totalFree = inlineSlots.reduce((sum, s) => sum + (s.free ?? 1), 0);
     logFn.info(`  📊 Slots inline détectés: ${inlineSlots.length} créneau(x), totalFree=${totalFree}`);
     botLog({
@@ -1697,6 +1773,28 @@ async function handleSlotFoundMulti(
     // Pas de HTML pré-capturé — on suppose free limité, booker immédiatement
     totalFree = 1;
     logFn.info(`  ⚠️ Pas de HTML pré-capturé — booking immédiat (hypothèse free=1)`);
+  }
+
+  // ── Coordination inter-comptes : allocation déterministe + mode RACE ────────
+  // Chaque compte reçoit une liste de créneaux ORDONNÉE par son accountIndex
+  // (buildCevSlotAssignment) → les comptes visent des créneaux DISTINCTS, dans le
+  // même ordre stable, sans se marcher dessus. Sous le seuil RACE, on contourne le
+  // claim et on fonce (le serveur CEV arbitre) pour ne pas laisser un concurrent
+  // rafler le seul créneau pendant qu'on coordonne.
+  const distinctSlotCount = inlineSlots.length;
+  const raceMode = distinctSlotCount > 0 && distinctSlotCount <= CEV_RACE_MODE_SLOT_THRESHOLD;
+  const orderedSlots: CevSlotCandidate[] = buildCevSlotAssignment(
+    String(applicationId),
+    inlineSlots.map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
+    groupSize ?? 1,
+    totalAccounts,
+    accountIndex,
+  );
+  if (orderedSlots.length > 0) {
+    logFn.info(
+      `  🎯 Allocation compte #${accountIndex}/${totalAccounts - 1} : ${orderedSlots.length} créneau(x) ordonnés` +
+      (raceMode ? ` — MODE RACE (${distinctSlotCount} ≤ ${CEV_RACE_MODE_SLOT_THRESHOLD}, pas de claim)` : ` — 1er visé: ${orderedSlots[0].date} ${orderedSlots[0].time}`),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1731,22 +1829,45 @@ async function handleSlotFoundMulti(
 
   if ((detectorIsEligible || detectorMustBookAsFallback) && existingSessionCookie && existingIntegrationUrl) {
     logFn.info(`  🎯 BOOKING IMMÉDIAT — ${detectingDossier.vowintRef} (session existante, pas de discovery)...`);
-    try {
-      detectingBookingResult = await bookDossierIsolated(
-        vowintEmail, vowintPassword,
-        detectingDossier.vowintRef, applicationId,
-        groupSize,
-        {
-          sessionCookie: existingSessionCookie,
-          integrationUrl: existingIntegrationUrl,
-          selectSlotHtml: existingSelectSlotHtml,
-          selectSlotUrl: existingSelectSlotUrl,
-          selectSlotCookies: existingSelectSlotCookies,
-        },
-        logger,
-      );
 
-      if (detectingBookingResult.success) {
+    // Liste des créneaux à tenter, dans l'ordre alloué à CE compte.
+    // Fallback : si pas de créneau inline (HTML absent) → une passe sans cible (bookCevViaHttp choisit).
+    const candidates: Array<CevSlotCandidate | null> = orderedSlots.length > 0 ? orderedSlots : [null];
+
+    for (const candidate of candidates) {
+      // ── Claim atomique NON BLOQUANT (sauf mode RACE) ────────────────────────
+      // Si le créneau est déjà pris par un autre compte → on passe IMMÉDIATEMENT
+      // au suivant (aucune attente). En mode RACE, pas de claim : tous foncent.
+      if (candidate && !raceMode) {
+        const claimed = await tryClaimCevSlot(candidate.date, candidate.time, String(applicationId), candidate.free);
+        if (!claimed) {
+          logFn.info(`  ⏭️ ${candidate.date} ${candidate.time} déjà claim par un autre compte → créneau suivant`);
+          continue;
+        }
+        logFn.info(`  🔒 Claim OK ${candidate.date} ${candidate.time} → booking...`);
+      }
+
+      try {
+        detectingBookingResult = await bookDossierIsolated(
+          vowintEmail, vowintPassword,
+          detectingDossier.vowintRef, applicationId,
+          groupSize,
+          {
+            sessionCookie: existingSessionCookie,
+            integrationUrl: existingIntegrationUrl,
+            selectSlotHtml: existingSelectSlotHtml,
+            selectSlotUrl: existingSelectSlotUrl,
+            selectSlotCookies: existingSelectSlotCookies,
+          },
+          logger,
+          candidate ? { date: candidate.date, time: candidate.time } : undefined,
+        );
+      } catch (err) {
+        logFn.error(`  💥 ${detectingDossier.vowintRef} → Booking crash: ${err}`);
+        detectingBookingResult = null;
+      }
+
+      if (detectingBookingResult?.success) {
         logFn.info(`  ✅ ${detectingDossier.vowintRef} → BOOKING RÉUSSI! code=${detectingBookingResult.confirmationCode} date=${detectingBookingResult.bookedDate}`);
         _succeededRefs.add(detectingDossier.vowintRef);
         await reportSlotFound({
@@ -1757,12 +1878,16 @@ async function handleSlotFoundMulti(
           confirmationCode: detectingBookingResult.confirmationCode,
           bookedDossierRef: detectingDossier.vowintRef,
         });
-        botLog({ applicationId, step: "cev_multi_booking_success", status: "ok", data: { vowintRef: detectingDossier.vowintRef, confirmationCode: detectingBookingResult.confirmationCode, strategy: "immediate" } });
-      } else {
-        logFn.warn(`  ⚠️ ${detectingDossier.vowintRef} → Booking session existante échoué: ${detectingBookingResult.error}`);
+        botLog({ applicationId, step: "cev_multi_booking_success", status: "ok", data: { vowintRef: detectingDossier.vowintRef, confirmationCode: detectingBookingResult.confirmationCode, strategy: raceMode ? "race" : "claim", slot: candidate ? `${candidate.date} ${candidate.time}` : "auto" } });
+        break; // booké → stop la cascade
       }
-    } catch (err) {
-      logFn.error(`  💥 ${detectingDossier.vowintRef} → Booking crash: ${err}`);
+
+      // Échec sur ce créneau → libérer le claim pour qu'un autre compte puisse le tenter,
+      // puis cascade vers le créneau suivant (aucune attente).
+      if (candidate && !raceMode) {
+        await releaseCevSlot(candidate.date, candidate.time, String(applicationId));
+      }
+      logFn.warn(`  ⚠️ ${detectingDossier.vowintRef} → échec sur ${candidate ? `${candidate.date} ${candidate.time}` : "auto"}: ${detectingBookingResult?.error ?? "?"} → créneau suivant`);
     }
   }
 
@@ -1774,15 +1899,26 @@ async function handleSlotFoundMulti(
   // Les "autres" sont tous les éligibles sauf le détecteur (qu'il soit éligible ou non,
   // sa place dans la liste parallèle ne le concerne pas — il a déjà booké ou est hors pool).
   const otherRefs = eligibleRefs.filter(ref => ref !== detectingDossier.vowintRef);
-  // Ne réveiller que min(remainingFree, otherRefs.length) dossiers — pas plus que de places disponibles.
-  // Si le détecteur a booké en fallback d'urgence (hors pool + totalFree≤1), on ne tente PAS
-  // de réveiller des eligibles : le seul créneau est pris, et ouvrir une 2e session VOWINT
-  // pendant que la session détecteur est encore ouverte risque un "multiple session" CEV.
-  const dossiersToWake = detectorMustBookAsFallback ? 0 : Math.min(remainingFree, otherRefs.length);
+  // ── Duplicatas d'une MÊME personne : premier booking = personne servie = STOP ──
+  // Le pool CEV regroupe les formulaires (AppId) d'une même personne, utilisés
+  // uniquement pour cumuler du budget de clics. Dès que le détecteur décroche un
+  // RDV, la personne est servie : on ne réveille JAMAIS les autres formulaires
+  // (éviter un 2e RDV pour la même personne → blocage compte si >5 RDV).
+  // Le réveil multi ne sert donc qu'en fallback : le détecteur a ÉCHOUÉ mais il
+  // reste des places → un autre formulaire peut tenter de sauver le créneau.
+  //
+  // Si le détecteur a booké en fallback d'urgence (hors pool + totalFree≤1), on ne
+  // tente pas non plus : le seul créneau est pris, et ouvrir une 2e session VOWINT
+  // pendant que la session détecteur est encore ouverte risque un "multiple session".
+  const dossiersToWake = (detectingBookingResult?.success || detectorMustBookAsFallback)
+    ? 0
+    : Math.min(remainingFree, otherRefs.length);
   skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
-    if (detectorMustBookAsFallback) {
+    if (detectingBookingResult?.success) {
+      logFn.info(`  🏁 ${detectingDossier.vowintRef} booké — personne servie, aucun autre formulaire réveillé (duplicatas même personne)`);
+    } else if (detectorMustBookAsFallback) {
       logFn.info(`  🏁 Fallback urgence (détecteur hors pool, seul créneau) — pas de multi-dossier (risque double session)`);
     } else if (detectingBookingResult?.success && remainingFree <= 0) {
       logFn.info(`  🏁 Booking réussi pour ${detectingDossier.vowintRef} — aucune place restante (free=${totalFree})`);
@@ -1944,9 +2080,17 @@ export async function startCevDossierLoop(): Promise<void> {
     logger.info(`    Proxy: ${job.hunterConfig.cevUseProxy ? 'activé' : 'désactivé'}`);
   });
 
-  // Lancer une loop par compte (application)
-  const loopPromises = cevJobs.map((job: any) => 
-    runAccountLoop(job)
+  // ── Index de compte déterministe (accountIndex) ────────────────────────────
+  // Tri stable des comptes par id → chaque compte reçoit un index 0-based fixe.
+  // Cet index pilote l'allocation déterministe des créneaux (buildCevSlotAssignment) :
+  // compte[0] vise le créneau[0], compte[1] le créneau[1], etc. → répartition sans
+  // collision entre nos propres comptes tant que #créneaux ≥ #comptes.
+  const sortedJobs = [...cevJobs].sort((a: any, b: any) => String(a.id).localeCompare(String(b.id)));
+  const totalAccounts = sortedJobs.length;
+
+  // Lancer une loop par compte (application), avec son index stable
+  const loopPromises = sortedJobs.map((job: any, accountIndex: number) =>
+    runAccountLoop(job, accountIndex, totalAccounts)
   );
 
   await Promise.all(loopPromises);
@@ -1954,11 +2098,14 @@ export async function startCevDossierLoop(): Promise<void> {
 
 // ─── Loop par compte (application) ────────────────────────────────────────────
 
-async function runAccountLoop(job: any): Promise<void> {
+async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts: number = 1): Promise<void> {
   const accountId = job.id;
   const applicantName = job.applicantName;
   const hunterConfig = job.hunterConfig;
   const logger = createLogger(`CEV-Account:${applicantName}`);
+  logger.info(`  • Index compte: ${accountIndex}/${totalAccounts - 1} (allocation créneaux déterministe)`);
+  // Seed déterministe pour le jitter de grille (même valeur à chaque redémarrage).
+  const gridSeed = gridSeedFromAccount(String(accountId));
   
   // Récupérer les credentials VOWINT depuis hunterConfig
   let vowintEmail = hunterConfig.embassyUsername;
@@ -2058,6 +2205,8 @@ async function runAccountLoop(job: any): Promise<void> {
    * Pour SOAX / iProyal : null → comportement historique via process.env.
    */
   let accountProxyUrl: string | undefined;
+  /** URL base Decodo réservée en Redis pour ce compte — libérée à l'arrêt du loop. */
+  let reservedDecodoBaseUrl: string | undefined;
 
   logger.info(`Config:`);
   logger.info(`  • Dossiers: ${localPool.size}`);
@@ -2068,8 +2217,33 @@ async function runAccountLoop(job: any): Promise<void> {
     // ─── Configure proxy (priorité: Decodo CSV > SOAX > iProyal) ─────────────
     if (hasCevDecodoProxy()) {
       const poolSize = getCevDecodoPoolSize();
-      logger.info(`  • Proxy: Decodo CSV pool (${poolSize} IP(s)) — 1 IP fixe par compte`);
-      const decodoBaseUrl = getCevDecodoUrlForAccount(accountId);
+      logger.info(`  • Proxy: Decodo CSV pool (${poolSize} IP(s)) — 1 IP DISTINCTE par compte (index + réservation Redis)`);
+
+      // ── Assignation par accountIndex + réservation Redis (façon Spain) ──────
+      // On tente d'abord l'IP d'index = accountIndex (0,1,2… → zéro collision entre
+      // comptes tant que #comptes ≤ #IP), puis on avance jusqu'à trouver une IP non
+      // réservée par un AUTRE compte (SET NX). Garantit une exit IP distincte par
+      // compte → pas d'association de comptes côté serveur.
+      let decodoBaseUrl: string | undefined;
+      for (let offset = 0; offset < poolSize; offset++) {
+        const candidate = getCevDecodoUrlForIndex(accountIndex + offset);
+        if (!candidate) break;
+        const reserved = await reserveCevIp(candidate, String(accountId));
+        if (reserved) {
+          decodoBaseUrl = candidate;
+          reservedDecodoBaseUrl = candidate; // pour libération au shutdown
+          if (offset > 0) {
+            logger.info(`  • IP index=${accountIndex} déjà réservée → décalage +${offset} (IP distincte garantie)`);
+          }
+          break;
+        }
+      }
+      if (!decodoBaseUrl) {
+        // Toutes les IP réservées par d'autres comptes (#comptes > #IP) → fallback
+        // sur l'assignation par hash (comportement historique) plutôt que pas de proxy.
+        logger.warn(`  ⚠️ Toutes les IP Decodo réservées (${poolSize} IP < comptes actifs) — fallback hash accountId`);
+        decodoBaseUrl = getCevDecodoUrlForAccount(accountId);
+      }
       if (decodoBaseUrl) {
         // CRITICAL: wrapper avec sessid sticky par compte pour garantir toujours la même IP.
         // Sans sessid, Decodo assigne une IP aléatoire à chaque connexion →
@@ -2233,6 +2407,8 @@ async function runAccountLoop(job: any): Promise<void> {
           hunterConfig.groupSize,
           r.selectSlotCookies,
           hunterConfig.cevBookingTargetPool,
+          accountIndex,
+          totalAccounts,
         );
       } catch (err) {
         logger.error(`  🌊 Booking rafale échoué sur ${w.cand.vowintRef}: ${err}`);
@@ -2283,6 +2459,11 @@ async function runAccountLoop(job: any): Promise<void> {
       // ─── Vérifier si le job est toujours actif toutes les 5 scans ───
       // ET recharger les credentials (ils peuvent avoir changé dans Convex)
       if (state.scanCount % 5 === 0) {
+        // Renouveler la réservation d'IP Redis (TTL 30 min) tant que ce compte tourne,
+        // pour qu'un autre compte ne récupère pas l'IP après expiration du TTL.
+        if (reservedDecodoBaseUrl) {
+          await reserveCevIp(reservedDecodoBaseUrl, String(accountId)).catch(() => {});
+        }
         const latestJobs = await getActiveJobs();
         const latestJob = latestJobs.find((j: any) => j.id === accountId);
         if (!latestJob) {
@@ -2468,6 +2649,8 @@ async function runAccountLoop(job: any): Promise<void> {
             hunterConfig.groupSize,
             result.selectSlotCookies,
             hunterConfig.cevBookingTargetPool, // CSV ou undefined
+            accountIndex,
+            totalAccounts,
           );
           break;
         case "rate_limited":
@@ -2728,13 +2911,15 @@ async function runAccountLoop(job: any): Promise<void> {
 
       // ─── One-Shot: pause adaptative (schedule) avec jitter log-normal (anti-shadow-ban) ──
       // Utilise l'intervalle du schedule (haute/moyenne/basse densité) au lieu du fixe.
+      // ─── Grille d'horloge murale synchronisée (tous comptes alignés sur le même front) ──
+      // On dort jusqu'au prochain front absolu `ceil(now/tick)*tick` au lieu d'un sleep
+      // relatif : tous les comptes détectent dans la MÊME fenêtre de tick → ils voient la
+      // même publication à l'instant T, puis se répartissent les créneaux (allocation
+      // déterministe + claim). Le jitter déterministe par compte casse la régularité.
       const effectiveIntervalMs = scheduleDecision.intervalMs || intervalMs;
-      const jitterSign = Math.random() < 0.5 ? 1 : -1;
-      const jitterAbs = logNormalJitter(20_000, 0.35); // centré ~20s d'écart
-      const jitter = jitterSign * Math.min(jitterAbs, effectiveIntervalMs * 0.3);
-      const finalSleepMs = Math.max(60_000, effectiveIntervalMs + jitter);
+      const finalSleepMs = cevMsUntilNextTick(Date.now(), effectiveIntervalMs, gridSeed);
       nextScanAllowedAt = Date.now() + finalSleepMs;
-      logger.info(`Pause One-Shot: ${Math.round(finalSleepMs / 1000)}s (band: ${scheduleDecision.bandLabel}, jitter: ${Math.round(jitter / 1000)}s)`);
+      logger.info(`Grille: prochain front dans ${Math.round(finalSleepMs / 1000)}s (tick: ${Math.round(effectiveIntervalMs / 1000)}s, band: ${scheduleDecision.bandLabel}, jitterPct: ${CEV_GRID_JITTER_PCT})`);
 
     } catch (loopErr) {
       logger.error(`Erreur loop: ${loopErr}`);
@@ -2745,6 +2930,12 @@ async function runAccountLoop(job: any): Promise<void> {
       nextScanAllowedAt = Math.max(nextScanAllowedAt, Date.now() + safetyPauseMs);
       logger.info(`Erreur détectée. Prochain scan planifié au plus tôt dans ${Math.round((nextScanAllowedAt - Date.now()) / 1000)}s.`);
     }
+  }
+
+  // Libérer la réservation d'IP Redis pour que le créneau IP redevienne disponible
+  // à un autre compte (ou à ce compte au prochain démarrage).
+  if (reservedDecodoBaseUrl) {
+    await releaseCevIp(reservedDecodoBaseUrl, String(accountId)).catch(() => {});
   }
 
   logger.info( "═══ CEV Dossier Loop v3 arrêté ═══");

@@ -158,3 +158,20 @@ export function getCevDecodoUrlForAccount(accountId: string): string | undefined
   }
   return url;
 }
+
+/**
+ * Retourne l'URL Decodo à un index donné (modulo taille du pool).
+ *
+ * Utilisé pour l'assignation par accountIndex (sans collision entre comptes tant
+ * que #comptes ≤ #IP) combinée à la réservation Redis : le loop tente accountIndex,
+ * puis accountIndex+1, +2… jusqu'à trouver une IP non réservée par un autre compte.
+ *
+ * @param idx - Index (sera pris modulo la taille du pool)
+ * @returns URL proxy ou undefined si pool vide
+ */
+export function getCevDecodoUrlForIndex(idx: number): string | undefined {
+  const pool = getPool();
+  if (pool.length === 0) return undefined;
+  const realIdx = ((idx % pool.length) + pool.length) % pool.length;
+  return pool[realIdx];
+}

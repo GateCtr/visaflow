@@ -785,6 +785,13 @@ export async function bookCevViaHttp(
    * Si > 1 → ne sélectionner que les créneaux avec free ≥ groupSize.
    */
   groupSize?: number,
+  /**
+   * Créneau ciblé (date, heure) alloué à ce compte par la coordination inter-comptes
+   * (allocation déterministe + claim Redis). Quand fourni, le booking vise EXACTEMENT
+   * ce créneau au lieu de choisir le "meilleur" → les comptes se répartissent sur des
+   * créneaux distincts. Si le créneau ciblé a disparu du HTML → NO_TARGET_SLOT (cascade).
+   */
+  targetSlot?: { date: string; time: string },
 ): Promise<HttpBookingResult> {
   // UA cohérent avec la session setup : priorité siphoned.userAgent > sessionUa > randomUserAgent()
   // Un UA différent entre setup et booking = red flag WAF dans les logs post-booking.
@@ -1004,6 +1011,25 @@ export async function bookCevViaHttp(
     // Trier par free décroissant — préférer les créneaux avec le plus de places libres.
     // groupSize > 1 : ne sélectionner que les créneaux avec free ≥ groupSize.
     // groupSize ≤ 1 ou absent : préférer ≥ 3 places (comportement historique), fallback au max dispo.
+    // ── Créneau ciblé par la coordination inter-comptes (allocation + claim) ──
+    // Si un targetSlot est fourni, on ne booke QUE ce créneau (date+heure exacts).
+    // Les comptes visent ainsi des créneaux distincts au lieu du "meilleur" commun.
+    if (targetSlot) {
+      const matched = availableSlots.find(
+        s => s.date === targetSlot.date && s.time === targetSlot.time,
+      );
+      if (!matched) {
+        botLog({
+          applicationId: clientId,
+          step: 'cev_http_target_slot_gone',
+          status: 'warn',
+          data: { targetSlot, availableCount: availableSlots.length },
+        });
+        return { success: false, error: 'NO_TARGET_SLOT' };
+      }
+      availableSlots = [matched];
+    }
+
     const minFree = groupSize && groupSize > 1 ? groupSize : 3;
     availableSlots.sort((a, b) => (b.free ?? 1) - (a.free ?? 1));
     const slotsWithMinFree = availableSlots.filter(s => (s.free ?? 1) >= minFree);
