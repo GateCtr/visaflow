@@ -16,7 +16,7 @@
  */
 
 import { Impit } from "impit";
-import { setCevDecodoRotationCountFn } from "./cev-decodo-pool.js";
+import { setCevDecodoRotationCountFn, rotateToNextCleanCevDecodo } from "./cev-decodo-pool.js";
 
 const IPROYAL_PROXY_URL = process.env.IPROYAL_PROXY_URL;
 const DECODO_PROXY_URL_CEV = process.env.DECODO_PROXY_URL;
@@ -797,6 +797,21 @@ export function makeCevDecodoStickyUrl(
 }
 
 /**
+ * Rotation Decodo "façon Spain" pour cevImpitFetch : blackliste l'IP morte, prend la
+ * PROCHAINE IP PROPRE du pool (saut des blacklistées), et lui applique un sticky frais.
+ * Retourne l'URL sticky prête à l'emploi, ou undefined si pas de proxy Decodo dispo.
+ *
+ * @param currentUrl URL Decodo actuelle (sticky) qui a échoué
+ * @param reason     motif de blacklist (log)
+ */
+function rotateCevDecodoToCleanIp(currentUrl: string, reason: string): string | undefined {
+  const nextBase = rotateToNextCleanCevDecodo(currentUrl, reason);
+  if (!nextBase) return undefined;
+  // Appliquer un sticky sessid frais sur la nouvelle IP de base.
+  return makeCevDecodoStickyUrl(nextBase, DECODO_STICKY_LIFETIME_MIN, `cev-rotate-${Date.now().toString(36)}`);
+}
+
+/**
  * Force la rotation du proxy Decodo pour un identifiant CEV donné.
  */
 export function rotateCevDecodoSession(identifier: string): void {
@@ -1280,12 +1295,23 @@ export async function cevImpitFetch(
       }
 
       if (res.status === 422) {
-        // 422 = proxy CONNECT tunnel rejeté — basculer en mode DIRECT durablement
-        console.error(`${logPrefix} ❌ Proxy 422 (CONNECT tunnel rejected) — Proxy utilisé: ${currentProxy?.replace(/:([^:@]+)@/, ":***@")}`);
-        console.error(`${logPrefix} ❌ BASCULEMENT MODE DIRECT`);
+        // 422 = proxy CONNECT tunnel rejeté (port Decodo mort/saturé).
+        // Stratégie (alignée Spain) : ROTATION IP D'ABORD, mode direct en DERNIER recours.
+        lastError = new Error(`PROXY_422_TUNNEL`);
+        if (attempt < PROXY_MAX_RETRIES && currentProxy && /decodo/i.test(currentProxy)) {
+          const rotated = rotateCevDecodoToCleanIp(currentProxy, "422 tunnel rejected");
+          if (rotated) {
+            console.warn(`${logPrefix} ⚠️ Proxy 422 (tunnel) — IP blacklistée + rotation vers IP propre (retry #${attempt + 2})`);
+            currentProxy = rotated;
+            resetCevImpitInstances();
+            await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
+            continue;
+          }
+        }
+        // Retries épuisés (ou proxy non-Decodo) → FALLBACK mode direct durable.
+        console.error(`${logPrefix} ❌ Proxy 422 persistant après rotations — FALLBACK MODE DIRECT`);
         _cevDirectModeUntil = Date.now() + CEV_DIRECT_MODE_DURATION_MS;
-        console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min`);
-        // Exécuter immédiatement en direct (pas de retry proxy)
+        console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min (fallback)`);
         try {
           return await getDirectImpit().fetch(url, options as any) as unknown as Response;
         } catch (directErr) {
@@ -1300,8 +1326,16 @@ export async function cevImpitFetch(
         lastError = new Error(`ERROR_${res.status}`);
         if (attempt < PROXY_MAX_RETRIES) {
           if (res.status === 502) {
-            // 502 = erreur gateway proxy → rotation IP uniquement pour SOAX (pas Decodo explicite)
-            if (!explicitProxyUrl && (currentProxy?.includes("soax") || currentProxy?.includes("sessionid"))) {
+            // 502 = erreur gateway proxy → rotation IP.
+            if (currentProxy && /decodo/i.test(currentProxy)) {
+              // Decodo : blacklist IP morte + rotation vers la prochaine IP propre du pool.
+              const rotated = rotateCevDecodoToCleanIp(currentProxy, "HTTP 502 gateway");
+              if (rotated) {
+                currentProxy = rotated;
+                resetCevImpitInstances();
+                console.log(`${logPrefix} 🔄 Rotation IP Decodo (blacklist + prochaine propre) pour retry #${attempt + 2} (HTTP 502)`);
+              }
+            } else if (!explicitProxyUrl && (currentProxy?.includes("soax") || currentProxy?.includes("sessionid"))) {
               rotateCevSoaxSession("cev-retry");
               const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
               process.env.IPROYAL_PROXY_URL = newProxyUrl;
@@ -1327,12 +1361,23 @@ export async function cevImpitFetch(
       const isConnRefused = msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET") || msg.includes("EPIPE");
       const is422Tunnel = msg.includes("422") || msg.includes("CONNECT tunnel");
 
-      // 422 proxy error in exception form → basculer en direct immédiatement
+      // 422 / tunnel error en exception → ROTATION IP D'ABORD (Decodo), direct en dernier recours.
       if (is422Tunnel) {
-        console.error(`${logPrefix} ❌ Proxy 422 tunnel error (exception) — Proxy utilisé: ${currentProxy?.replace(/:([^:@]+)@/, ":***@")}`);
-        console.error(`${logPrefix} ❌ BASCULEMENT MODE DIRECT`);
+        lastError = err instanceof Error ? err : new Error(msg);
+        if (attempt < PROXY_MAX_RETRIES && currentProxy && /decodo/i.test(currentProxy)) {
+          const rotated = rotateCevDecodoToCleanIp(currentProxy, "tunnel error (exception)");
+          if (rotated) {
+            currentProxy = rotated;
+            resetCevImpitInstances();
+            console.warn(`${logPrefix} ⚠️ Proxy tunnel error (exception) — IP blacklistée + rotation vers IP propre (retry #${attempt + 2})`);
+            await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS));
+            continue;
+          }
+        }
+        // Retries épuisés (ou non-Decodo) → FALLBACK mode direct durable.
+        console.error(`${logPrefix} ❌ Proxy tunnel error persistant après rotations — FALLBACK MODE DIRECT`);
         _cevDirectModeUntil = Date.now() + CEV_DIRECT_MODE_DURATION_MS;
-        console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min`);
+        console.warn(`${logPrefix} 🔀 Mode DIRECT activé pour ${Math.round(CEV_DIRECT_MODE_DURATION_MS / 60_000)} min (fallback)`);
         try {
           return await getDirectImpit().fetch(url, options as any) as unknown as Response;
         } catch (directErr) {
@@ -1345,8 +1390,15 @@ export async function cevImpitFetch(
           `${logPrefix} ⚠️ Proxy ${isTimeout ? "TIMEOUT" : "error"} (attempt ${attempt + 1}/${PROXY_MAX_RETRIES + 1}): ${msg.slice(0, 80)}`
         );
         lastError = err instanceof Error ? err : new Error(msg);
-        // ── Rotation IP SOAX entre les retries (pas sur proxy Decodo explicite) ──
-        if (!explicitProxyUrl && (currentProxy?.includes("soax") || currentProxy?.includes("sessionid"))) {
+        // ── Rotation IP entre les retries (Decodo: blacklist + prochaine propre, sinon SOAX) ──
+        if (currentProxy && /decodo/i.test(currentProxy)) {
+          const rotated = rotateCevDecodoToCleanIp(currentProxy, isTimeout ? "timeout" : "proxy error");
+          if (rotated) {
+            currentProxy = rotated;
+            resetCevImpitInstances();
+            console.log(`${logPrefix} 🔄 Rotation IP Decodo (blacklist + prochaine propre) pour retry #${attempt + 2}`);
+          }
+        } else if (!explicitProxyUrl && (currentProxy?.includes("soax") || currentProxy?.includes("sessionid"))) {
           rotateCevSoaxSession("cev-retry");
           const newProxyUrl = makeCevProxyStickyUrl("soax", undefined, "cev-retry");
           process.env.IPROYAL_PROXY_URL = newProxyUrl;

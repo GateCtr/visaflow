@@ -561,6 +561,61 @@ export async function releaseCevIp(proxyUrl: string, accountId: string): Promise
   } catch { /* ignore */ }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLACKLIST DECODO — persistance Redis (porté de spain-decodo-pool + spain-redis)
+//
+// La blacklist des IP Decodo mortes (422/502/tunnel) est mémorisée en mémoire dans
+// cev-decodo-pool.ts avec un TTL. Sans persistance, un redémarrage repart avec une
+// blacklist vide → on retape les ports morts. On persiste donc la map en Redis, et on
+// la restaure au démarrage (en filtrant les TTL expirés), comme Spain.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const REDIS_CEV_DECODO_BLACKLIST_KEY = "visaflow:cev-decodo-blacklist";
+const REDIS_CEV_DECODO_BLACKLIST_TTL_SEC = 2 * 60 * 60; // 2h (couvre le TTL blacklist 30 min + marge)
+
+/**
+ * Persiste la blacklist Decodo CEV en Redis (fire-and-forget).
+ * @param blacklistedIps Map base-URL → timestamp du flagging (ms).
+ */
+export function syncCevDecodoBlacklistToRedis(blacklistedIps: Map<string, number>): void {
+  if (!redisReady || !redisClient) return;
+  const payload = JSON.stringify({
+    blacklistedIps: Object.fromEntries(blacklistedIps),
+    savedAt: Date.now(),
+  });
+  redisClient
+    .set(REDIS_CEV_DECODO_BLACKLIST_KEY, payload, { EX: REDIS_CEV_DECODO_BLACKLIST_TTL_SEC })
+    .catch((err: Error) => console.warn(`[cev-redis] Blacklist Decodo sync échouée: ${err.message}`));
+}
+
+/**
+ * Restaure la blacklist Decodo CEV depuis Redis, en filtrant les entrées dont le
+ * TTL blacklist est expiré. Retourne une Map (vide si rien/Redis absent).
+ * @param blacklistTtlMs TTL blacklist en ms (pour purger les entrées expirées).
+ */
+export async function restoreCevDecodoBlacklistFromRedis(blacklistTtlMs: number): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (!redisReady || !redisClient) return result;
+  try {
+    const data = await redisClient.get(REDIS_CEV_DECODO_BLACKLIST_KEY);
+    if (!data) return result;
+    const parsed = JSON.parse(data) as { blacklistedIps?: Record<string, number> };
+    const now = Date.now();
+    let restored = 0;
+    for (const [ip, ts] of Object.entries(parsed.blacklistedIps ?? {})) {
+      if (now - Number(ts) <= blacklistTtlMs) {
+        result.set(ip, Number(ts));
+        restored++;
+      }
+    }
+    if (restored > 0) console.log(`[cev-redis] ✅ Blacklist Decodo restaurée (${restored} IP actives)`);
+    return result;
+  } catch (e) {
+    console.warn(`[cev-redis] Blacklist Decodo restore échouée: ${e instanceof Error ? e.message : e}`);
+    return result;
+  }
+}
+
 /**
  * Déconnecte Redis proprement (shutdown).
  */

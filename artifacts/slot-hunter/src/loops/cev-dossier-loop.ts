@@ -78,7 +78,7 @@ import { recordScan, recordSlotFound, recordRateLimit, recordRelogin, recordPaus
 import { createLogger } from "../logger.js";
 import { cevSessionManager, fullSessionToSiphoned, type FullCevSession } from "../cev-session-manager.js";
 import { solveHcaptchaWithProxy, parseProxyForAnticaptcha } from "../cev-hcaptcha.js";
-import { getCevDecodoUrlForAccount, getCevDecodoUrlForIndex, hasCevDecodoProxy, getCevDecodoPoolSize } from "../cev-decodo-pool.js";
+import { getCevDecodoUrlForAccount, getCevDecodoUrlForIndex, hasCevDecodoProxy, getCevDecodoPoolSize, restoreCevDecodoBlacklist } from "../cev-decodo-pool.js";
 import { getCevScheduleDecision } from "../cev-schedule.js";
 
 // ─── Constantes stealth Puppeteer ─────────────────────────────────────────────
@@ -2282,6 +2282,8 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
   
   // ─── Redis: restaurer l'état du pool ────────────────────────────────────────
   await initCevRedis();
+  // Restaurer la blacklist Decodo (IP mortes) depuis Redis — survit aux redémarrages.
+  await restoreCevDecodoBlacklist();
   const savedPoolState = await restorePoolStateFromRedis(redisKey, false); // freshStart=false pour préserver les clics
   let savedScanCount = 0;
   if (savedPoolState) {

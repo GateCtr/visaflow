@@ -13,6 +13,7 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { syncCevDecodoBlacklistToRedis, restoreCevDecodoBlacklistFromRedis } from "./cev-redis-persistence.js";
 
 // ─── Parsing CSV ─────────────────────────────────────────────────────────────
 
@@ -97,9 +98,98 @@ function getPool(): string[] {
   return _cachedPool;
 }
 
+// ─── Blacklist des IP mortes (porté de spain-decodo-pool) ───────────────────────
+//
+// Une IP qui échoue (422/502/tunnel) est blacklistée avec un TTL. Pendant ce TTL,
+// getCevDecodoUrlForAccount / getCevDecodoUrlForIndex la SAUTENT et prennent la
+// prochaine IP propre du pool → on ne retombe jamais sur un port mort. Aligné Spain.
+
+/** IPs blacklistées : base-URL (sans sticky) → timestamp du flagging (ms). */
+const _cevBlacklistedIps = new Map<string, number>();
+
+/** TTL blacklist (ms) — configurable via CEV_DECODO_BLACKLIST_TTL_MIN, défaut 30 min. */
+function getCevBlacklistTtlMs(): number {
+  return (parseInt(process.env.CEV_DECODO_BLACKLIST_TTL_MIN || "30", 10) || 30) * 60_000;
+}
+
+/**
+ * Normalise une URL proxy Decodo en retirant le suffixe sticky du username
+ * (-sessid-XXXX-sesstime-NN) → clé de blacklist stable par IP physique (host:port + user base).
+ */
+function baseProxyUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const user = decodeURIComponent(u.username)
+      .replace(/-sessid-[^-]*/g, "")
+      .replace(/-sesstime-[^-]*/g, "")
+      .replace(/-+$/, "");
+    u.username = encodeURIComponent(user);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+/** Vérifie si une URL Decodo est actuellement blacklistée (TTL expirés auto-purgés). */
+export function isCevDecodoBlacklisted(url: string): boolean {
+  const base = baseProxyUrl(url);
+  const ts = _cevBlacklistedIps.get(base);
+  if (ts === undefined) return false;
+  if (Date.now() - ts > getCevBlacklistTtlMs()) {
+    _cevBlacklistedIps.delete(base);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Blackliste une IP Decodo pour la durée du TTL (elle sera sautée par les sélecteurs).
+ * @param url    URL proxy (sticky ou base) ayant échoué
+ * @param reason motif (log)
+ */
+export function flagCevDecodoIp(url: string | undefined, reason: string): void {
+  if (!url) return;
+  const pool = getPool();
+  if (pool.length <= 1) return; // inutile si pool d'une seule IP
+  const base = baseProxyUrl(url);
+  _cevBlacklistedIps.set(base, Date.now());
+  const ttlMin = Math.round(getCevBlacklistTtlMs() / 60_000);
+  const masked = base.replace(/:([^:@]+)@/, ":***@");
+  const activeCount = [..._cevBlacklistedIps.values()].filter(ts => Date.now() - ts <= getCevBlacklistTtlMs()).length;
+  console.warn(`[cev-decodo] 🚫 IP blacklistée (${reason}, TTL ${ttlMin}min, ${activeCount}/${pool.length}) — ${masked.slice(0, 60)}`);
+  // Persister la blacklist en Redis (survit aux redémarrages) — fire-and-forget.
+  syncCevDecodoBlacklistToRedis(_cevBlacklistedIps);
+}
+
+/**
+ * Restaure la blacklist Decodo depuis Redis au démarrage (filtre les TTL expirés).
+ * Idempotent. À appeler après initCevRedis().
+ */
+export async function restoreCevDecodoBlacklist(): Promise<void> {
+  try {
+    const restored = await restoreCevDecodoBlacklistFromRedis(getCevBlacklistTtlMs());
+    for (const [base, ts] of restored) _cevBlacklistedIps.set(base, ts);
+  } catch { /* non-bloquant */ }
+}
+
+/**
+ * À partir de startIdx, trouve le premier index d'IP NON blacklistée.
+ * Retourne startIdx si toutes sont blacklistées (fallback round-robin complet).
+ */
+function findNextValidCevIndex(startIdx: number, pool: string[]): { idx: number; allBlacklisted: boolean; skipped: number } {
+  let idx = ((startIdx % pool.length) + pool.length) % pool.length;
+  let skipped = 0;
+  while (isCevDecodoBlacklisted(pool[idx]) && skipped < pool.length) {
+    idx = (idx + 1) % pool.length;
+    skipped++;
+  }
+  return { idx, allBlacklisted: skipped >= pool.length, skipped };
+}
+
 /** Force le rechargement du pool (si le fichier a changé). */
 export function reloadCevDecodoPool(): void {
   _cachedPool = undefined;
+  _cevBlacklistedIps.clear();
 }
 
 // ─── Rotation count — injecté depuis cev-shared-impit pour éviter import circulaire ──
@@ -147,14 +237,19 @@ export function getCevDecodoUrlForAccount(accountId: string): string | undefined
   // Import dynamique évité — le Map est accessible directement depuis cev-shared-impit
   // via la fonction exportée getCevDecodoRotationCount.
   const rotationCount = _getCevDecodoRotationCount(key);
-  const idx = (baseIdx + rotationCount) % pool.length;
+  const rawIdx = (baseIdx + rotationCount) % pool.length;
+
+  // Sauter les IP blacklistées (mortes) → prendre la prochaine propre du pool.
+  const { idx, allBlacklisted, skipped } = findNextValidCevIndex(rawIdx, pool);
 
   const url = pool[idx];
   const masked = url.replace(/:([^:@]+)@/, ":***@");
-  if (rotationCount > 0) {
-    console.log(`[cev-decodo] 🔒 Compte ${key.slice(0, 16)}… → IP [${idx + 1}/${pool.length}] (rotation #${rotationCount}) ${masked.slice(0, 70)}`);
+  const skipMsg = skipped > 0 ? ` (${skipped} IP blacklistée(s) sautée(s))` : "";
+  const rotMsg = rotationCount > 0 ? ` (rotation #${rotationCount})` : "";
+  if (allBlacklisted) {
+    console.warn(`[cev-decodo] ⚠️ Compte ${key.slice(0, 16)}… — TOUTES les IP blacklistées → fallback IP [${idx + 1}/${pool.length}] ${masked.slice(0, 60)}`);
   } else {
-    console.log(`[cev-decodo] 🔒 Compte ${key.slice(0, 16)}… → IP [${idx + 1}/${pool.length}] ${masked.slice(0, 70)}`);
+    console.log(`[cev-decodo] 🔒 Compte ${key.slice(0, 16)}… → IP [${idx + 1}/${pool.length}]${rotMsg}${skipMsg} ${masked.slice(0, 70)}`);
   }
   return url;
 }
@@ -174,4 +269,39 @@ export function getCevDecodoUrlForIndex(idx: number): string | undefined {
   if (pool.length === 0) return undefined;
   const realIdx = ((idx % pool.length) + pool.length) % pool.length;
   return pool[realIdx];
+}
+
+/**
+ * Rotation "façon Spain" : blackliste l'IP courante (morte) et retourne la PROCHAINE
+ * IP PROPRE du pool (non blacklistée), en repartant juste après l'IP courante.
+ *
+ * Contrairement à une simple régénération de sessid (qui peut retomber sur le même
+ * port mort), cette rotation SAUTE les IP blacklistées et avance dans le pool CSV.
+ * Utilisé par cevImpitFetch sur 422/502/tunnel error.
+ *
+ * @param currentUrl URL Decodo actuelle (sticky ou base) qui a échoué
+ * @param reason     motif de blacklist (log)
+ * @returns nouvelle URL de base d'une IP propre, ou undefined si pool vide/toutes mortes
+ */
+export function rotateToNextCleanCevDecodo(currentUrl: string | undefined, reason: string): string | undefined {
+  const pool = getPool();
+  if (pool.length === 0) return undefined;
+  if (currentUrl) flagCevDecodoIp(currentUrl, reason);
+  if (pool.length === 1) {
+    // Pool d'une seule IP : pas d'alternative, on ne peut que retenter la même.
+    return pool[0];
+  }
+  // Trouver l'index de l'IP courante (par base-URL), repartir juste après.
+  const curBase = currentUrl ? baseProxyUrl(currentUrl) : "";
+  let curIdx = pool.findIndex(u => baseProxyUrl(u) === curBase);
+  if (curIdx < 0) curIdx = 0;
+  const { idx, allBlacklisted, skipped } = findNextValidCevIndex((curIdx + 1) % pool.length, pool);
+  const url = pool[idx];
+  const masked = url.replace(/:([^:@]+)@/, ":***@");
+  if (allBlacklisted) {
+    console.warn(`[cev-decodo] ⚠️ Rotation: toutes les IP blacklistées — fallback IP [${idx + 1}/${pool.length}] ${masked.slice(0, 60)}`);
+  } else {
+    console.log(`[cev-decodo] 🔄 Rotation IP → [${idx + 1}/${pool.length}]${skipped ? ` (${skipped} sautée(s))` : ""} ${masked.slice(0, 60)}`);
+  }
+  return url;
 }
