@@ -193,9 +193,11 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         blindBookingEnabled: blindBooking, slotPriorityDates: priorityDates || undefined,
         maxMonthsToScan: maxMonths ? Number(maxMonths) : undefined, nightModeEnabled: nightMode, preferredProxy: preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
-        cevDossierPool: cevDossierPool || undefined, cevDossierExclude: cevDossierExclude || undefined,
-        cevBookingTargetPool: cevBookingTargetPool || undefined,
-        cevDossierDeadlines: cevDossierDeadlines || undefined,
+        // On envoie la valeur BRUTE (chaîne vide incluse) et NON `|| undefined` :
+        // sinon vider le champ = undefined = "ne pas toucher" côté mutation → impossible de vider.
+        cevDossierPool: cevDossierPool.trim(), cevDossierExclude: cevDossierExclude.trim(),
+        cevBookingTargetPool: cevBookingTargetPool.trim(),
+        cevDossierDeadlines: cevDossierDeadlines.trim(),
         cevUseProxy: cevUseProxy,
         cevScanIntervalSec: cevScanIntervalSec ? Number(cevScanIntervalSec) : undefined,
         // Group booking

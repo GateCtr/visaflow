@@ -154,10 +154,13 @@ export const setHunterConfig = mutation({
         nightModeEnabled: args.nightModeEnabled ?? existing?.nightModeEnabled ?? undefined,
         preferredProxy: args.preferredProxy || existing?.preferredProxy || undefined,
         // CEV Dossier Loop v3 - Multi-comptes
-        cevDossierPool: args.cevDossierPool || existing?.cevDossierPool || undefined,
-        cevDossierExclude: args.cevDossierExclude || existing?.cevDossierExclude || undefined,
-        cevBookingTargetPool: args.cevBookingTargetPool || existing?.cevBookingTargetPool || undefined,
-        cevDossierDeadlines: args.cevDossierDeadlines || (existing as any)?.cevDossierDeadlines || undefined,
+        // NB : `??` (pas `||`) pour distinguer undefined ("champ non fourni" → garder l'existant)
+        // de "" ("l'utilisateur a vidé le champ" → effacer). Une chaîne vide est normalisée en
+        // undefined pour le stockage. Sans ça, vider "Dossiers à ignorer" ne prenait jamais effet.
+        cevDossierPool: (args.cevDossierPool ?? existing?.cevDossierPool)?.trim() || undefined,
+        cevDossierExclude: (args.cevDossierExclude ?? existing?.cevDossierExclude)?.trim() || undefined,
+        cevBookingTargetPool: (args.cevBookingTargetPool ?? existing?.cevBookingTargetPool)?.trim() || undefined,
+        cevDossierDeadlines: (args.cevDossierDeadlines ?? (existing as any)?.cevDossierDeadlines)?.trim() || undefined,
         cevUseProxy: args.cevUseProxy ?? existing?.cevUseProxy ?? undefined,
         cevScanIntervalSec: args.cevScanIntervalSec ?? existing?.cevScanIntervalSec ?? undefined,
         // Group booking — min places libres requises par créneau
