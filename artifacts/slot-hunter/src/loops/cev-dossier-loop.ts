@@ -1977,7 +1977,19 @@ async function handleSlotFoundMulti(
   skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
-    if (detectorMustBookAsFallback) {
+    if (detectorBlockedByDeadline && otherRefsWithinDeadline.length === 0) {
+      // Diagnostic explicite du cas "détecteur bloqué deadline mais personne à réveiller".
+      const otherDeadlines = otherRefs.map(ref => `${ref}=${resolveCevDeadline(ref, dossierDeadlines ?? new Map(), globalDeadline) ?? "aucune"}`);
+      const reason = otherRefs.length === 0
+        ? `pool à 1 seul dossier (aucun autre à réveiller)`
+        : `les ${otherRefs.length} autre(s) dossier(s) ont aussi une deadline incompatible avec les créneaux détectés`;
+      logFn.info(`  🏁 ${detectingDossier.vowintRef} bloqué par deadline (${detectorDeadline ?? "?"}) — AUCUN relais possible : ${reason}. Créneaux: [${inlineSlots.slice(0, 5).map(s => s.date).join(", ")}]${otherRefs.length ? ` | deadlines autres: [${otherDeadlines.join(", ")}]` : ""}`);
+      botLog({ applicationId, step: "cev_deadline_no_eligible_relay", status: "warn", data: {
+        detector: detectingDossier.vowintRef, detectorDeadline,
+        slots: inlineSlots.slice(0, 10).map(s => s.date),
+        otherRefs, otherDeadlines,
+      } });
+    } else if (detectorMustBookAsFallback) {
       logFn.info(`  🏁 Fallback urgence (détecteur hors pool, seul créneau) — pas de multi-dossier (risque double session)`);
     } else if (detectingBookingResult?.success && remainingFree <= 0) {
       logFn.info(`  🏁 Booking réussi pour ${detectingDossier.vowintRef} — aucune place restante (free=${totalFree})`);
