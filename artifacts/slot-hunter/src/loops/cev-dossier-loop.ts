@@ -772,10 +772,18 @@ const DEFAULT_INTERVAL_SEC = 60; // 60s par défaut (configurable via cevScanInt
 const GRID_TICK_FLOOR_MS = 1_000;
 const GRID_TICK_CEIL_MS = 3_600_000;
 
-/** Pourcentage de jitter appliqué au front de grille (fraction du tick), borné [0, 0.5]. */
+/**
+ * Pourcentage de jitter appliqué au front de grille (fraction du tick), borné [0, 0.5].
+ * Défaut faible (0.02 = ±3.6s à tick 180s) : les comptes tournent sur des IP + sessions
+ * + AppId DISTINCTS, donc pas de justification anti-détection INTER-comptes. On veut au
+ * contraire qu'ils frappent dans la MÊME fenêtre de vague (± quelques secondes) pour
+ * capter la même publication et se répartir les créneaux. Le micro-jitter évite seulement
+ * un pic à la milliseconde exacte si beaucoup de comptes. Mettre 0 pour synchro maximale.
+ * Configurable via CEV_GRID_JITTER_PCT.
+ */
 const CEV_GRID_JITTER_PCT = ((): number => {
-  const v = Number(process.env.CEV_GRID_JITTER_PCT ?? "0.15");
-  if (!Number.isFinite(v)) return 0.15;
+  const v = Number(process.env.CEV_GRID_JITTER_PCT ?? "0.02");
+  if (!Number.isFinite(v)) return 0.02;
   return Math.min(0.5, Math.max(0, v));
 })();
 
@@ -805,13 +813,20 @@ function gridSeedFromAccount(accountId: string): number {
  * Délai (ms) jusqu'au prochain front de grille absolu, jitter déterministe inclus.
  * Fonction pure — `nowMs` injecté.
  *
- * IMPORTANT (fix intervalle) : la grille aligne les comptes sur un front commun
- * (`multiple de tick`), MAIS garantit aussi un espacement MINIMUM d'un `tick` complet
- * entre deux scans du même compte. Sans ce plancher, `ceil(now/tick)*tick` peut tomber
- * juste après `now` (ex. sleep de 3s) → l'intervalle de cev-schedule (90s/180s) n'était
- * pas respecté et le quota serveur (5/h) sautait. On vise donc le premier front
- * >= `now + tick` : l'alignement d'horloge est préservé (fronts = multiples de tick,
- * communs à tous les comptes) et le délai du schedule est toujours honoré.
+ * ALIGNEMENT ABSOLU (fix 2026-09-03) : tous les comptes visent le MÊME front de grille
+ * absolu `ceil(now/tick)*tick`, indépendant de leur dernier scan → ils frappent ensemble.
+ *
+ * Le front absolu est calculé sur `now` (PAS `now + tick`). Ainsi, deux comptes dont les
+ * horloges sont proches (à quelques secondes près) résolvent le MÊME front → alignement
+ * préservé. Un plancher `now + tick` (version précédente) cassait ça : chaque compte
+ * ajoutait son propre tick à son propre `now`, les poussant sur des fronts différents
+ * → écart d'un tick entier entre comptes. C'était le bug de l'écart d'une minute.
+ *
+ * Respect de l'intervalle : le front absolu est naturellement à `[0, tick)` de `now`.
+ * Si le front est TROP proche (< MIN_LEAD_MS, ex. `now` juste avant un front → sleep de
+ * quelques secondes), on décale au front SUIVANT — mais cette décision, prise sur le
+ * front absolu commun, est identique pour tous les comptes proches → ils restent alignés.
+ * Le jitter déterministe (±jitterPct·tick) casse la régularité sans casser l'alignement.
  *
  * @param nowMs      horloge murale (ms epoch)
  * @param tick       intervalle de grille (ms), borné à [1000, 3600000]
@@ -819,15 +834,16 @@ function gridSeedFromAccount(accountId: string): number {
  */
 function cevMsUntilNextTick(nowMs: number, tick: number, workerSeed: number): number {
   const effTick = Math.min(GRID_TICK_CEIL_MS, Math.max(GRID_TICK_FLOOR_MS, Math.round(tick)));
-  // Plancher : le prochain scan doit être au moins un tick complet après maintenant
-  // (le dernier scan vient d'avoir lieu). On aligne ensuite sur le front de grille.
-  const minNext = nowMs + effTick;
-  const nextFront = Math.ceil(minNext / effTick) * effTick;
+  // Front absolu commun à tous les comptes (barrière de synchronisation).
+  let nextFront = Math.ceil(nowMs / effTick) * effTick;
+  // Si le front est trop proche (sleep quasi nul), viser le front suivant — décision
+  // basée sur le front ABSOLU, donc identique pour tous les comptes proches (reste aligné).
+  const MIN_LEAD_MS = Math.min(5_000, Math.floor(effTick / 2));
+  if (nextFront - nowMs < MIN_LEAD_MS) nextFront += effTick;
   const jitterMax = Math.floor(CEV_GRID_JITTER_PCT * effTick);
   const seedInt = Math.abs(Math.trunc(workerSeed));
   const jitter = jitterMax > 0 ? (seedInt % (2 * jitterMax + 1)) - jitterMax : 0;
-  let target = nextFront + jitter;
-  if (target <= minNext) target = nextFront + effTick + jitter;
+  const target = nextFront + jitter;
   return Math.max(0, Math.round(target - nowMs));
 }
 const CLICK_WINDOW_MS = 60 * 60 * 1000;
