@@ -417,7 +417,16 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           waitForAnyWorker(workers),
         ]);
       } else {
-        await sleep(POLL_INTERVAL_MS);
+        // Aucun worker actif. Si on est hors fenêtre, dormir EXACTEMENT jusqu'à
+        // l'ouverture (HH:WINDOW_START_MIN) au lieu d'un multiple aveugle de
+        // POLL_INTERVAL_MS (120 s) — sinon le lancement des workers pouvait être
+        // décalé jusqu'à ~2 min après l'ouverture, perdant le temps de préparation
+        // avant le pic. Borné par POLL_INTERVAL_MS pour continuer à re-poller Convex
+        // quand la fenêtre est encore loin (capter les nouveaux dossiers).
+        const sleepMs = isInScanWindow()
+          ? POLL_INTERVAL_MS
+          : Math.max(1_000, Math.min(POLL_INTERVAL_MS, msUntilNextWindowStart()));
+        await sleep(sleepMs);
       }
 
       // 7. Second harvest après sleep (pour récupérer les résultats)
