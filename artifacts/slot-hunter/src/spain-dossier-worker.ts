@@ -502,10 +502,10 @@ export async function publishSlotSnapshotWithRetry(
  * Pre-publication proxy refresh : à la minute PREPUB_REFRESH_MINUTE de chaque heure,
  * chaque worker prend une IP fraîche du pool + re-solve CF, pour arriver au pic (HH:13)
  * sur une base neuve. Coexiste avec le keep-alive inter-fenêtre (qui garde les sessions
- * chaudes entre les fenêtres → pas de solve massif à HH:05). Valeur 11 → refresh à HH:11,
- * prêt pour HH:13.
+ * chaudes → pas de solve massif à l'ouverture de fenêtre). Valeur 10 → refresh à HH:10,
+ * le solve (~3min max) fini avant HH:13 → aucun solve/init en cours pendant le pic.
  */
-const PREPUB_REFRESH_MINUTE = 11;
+const PREPUB_REFRESH_MINUTE = 10;
 
 /**
  * Fin de la fenêtre pre-pub = début de la chasse (HH:HUNT_START_MIN). Le refresh

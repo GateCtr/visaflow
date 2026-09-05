@@ -46,7 +46,7 @@ export interface GridConfig {
   lateTickMs: number;
   /** Amplitude max du jitter en fraction du tick (SPAIN_GRID_JITTER_PCT, défaut 0.02). */
   jitterPct: number;
-  /** Minute de début de fenêtre (SPAIN_WINDOW_START_MIN, défaut 5). */
+  /** Minute de début de fenêtre (SPAIN_WINDOW_START_MIN, défaut 3). */
   windowStartMin: number;
   /** Minute de début de la phase chasse (SPAIN_HUNT_START_MIN, défaut 13). */
   huntStartMin: number;
@@ -109,7 +109,10 @@ const DEFAULT_LATE_TICK_MS = 60_000;
 // aucune raison anti-détection de les désynchroniser entre eux ; on veut au contraire qu'ils
 // frappent quasi ensemble sur le même front de grille. Jitter quasi nul = synchronisation.
 const DEFAULT_JITTER_PCT = 0.02;
-const DEFAULT_WINDOW_START_MIN = 5;
+// windowStartMin = 3 : la phase preflight démarre à HH:03 (au lieu de HH:05) pour donner
+// 10 min de préparation (armement + pre-pub HH:10) avant la chasse HH:13. Aligné sur
+// WINDOW_START_MIN de l'orchestrateur.
+const DEFAULT_WINDOW_START_MIN = 3;
 const DEFAULT_HUNT_START_MIN = 13;
 const DEFAULT_LATE_START_MIN = 17;
 const DEFAULT_WINDOW_END_MIN = 25;

@@ -71,16 +71,17 @@ const LOCK_RENEWAL_MS = 30_000;
 
 /**
  * Fenêtre de publication des créneaux Bookitit.
- * Le portail publie généralement entre la 5ème et la 25ème minute de chaque heure.
- * On se réveille à WINDOW_START_MIN (défaut: 4) pour être prêt, et on laisse le
+ * Le portail publie généralement vers la 13ème-14ème minute de chaque heure.
+ * On se réveille à WINDOW_START_MIN (défaut: 3) pour avoir 10 min de préparation
+ * (keep-alive chaud + pre-pub HH:10) avant le pic HH:13, et on laisse le
  * worker tourner pendant WORKER_WINDOW_MS (25 min dans spain-dossier-worker.ts).
  * Hors fenêtre → l'orchestrateur ne lance pas de nouveau worker.
  *
  * Override via env : SPAIN_WINDOW_START_MIN (0-59)
  */
 const WINDOW_START_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "5");
-  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 5));
+  const v = Number(process.env.SPAIN_WINDOW_START_MIN ?? "3");
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 3));
 })();
 
 /**
@@ -90,8 +91,11 @@ const WINDOW_START_MIN = ((): number => {
  * Override via env : SPAIN_WINDOW_DURATION_MIN
  */
 const WINDOW_DURATION_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "20");
-  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 20);
+  // Défaut 22 : fenêtre HH:03 → HH:25 (3+22). Démarrer à HH:03 (au lieu de HH:05) donne
+  // 10 min de préparation avant le pic HH:13 (keep-alive chaud + pre-pub HH:10), pour
+  // qu'à HH:13 aucun solve/init ne soit en cours. Fin HH:25 alignée sur windowEndMin.
+  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "22");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 22);
 })();
 
 // ─── État interne ─────────────────────────────────────────────────────────────
