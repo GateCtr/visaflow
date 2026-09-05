@@ -1407,12 +1407,24 @@ export const MAX_CONCURRENT_BOOKERS = 5;
  * Lua atomique : INCR → si > MAX → DECR + return 0 ; sinon return 1.
  * Le TTL est renouvelé à chaque INCR pour éviter l'expiration pendant un booking actif.
  *
+ * @param maxBookers  Plafond dynamique du nombre de bookers simultanés. Doit valoir
+ *                    `min(MAX_CONCURRENT_BOOKERS, nombre de PLACES réelles)` : sur un
+ *                    créneau UNIQUE (1 place), le plafond est 1 → un seul worker tente,
+ *                    les autres restent en scan. Cela évite que plusieurs workers frappent
+ *                    la MÊME place et provoquent une collision `signin/ → 0B` côté serveur
+ *                    (chaque booker perdant fait aussi échouer le gagnant). Défaut :
+ *                    MAX_CONCURRENT_BOOKERS (comportement historique).
  * @returns true si la place est acquise (ce worker peut faire signin/ + summary/)
  *          false si le sémaphore est plein (ce worker doit rester en scan rapide)
  *          En mode dégradé (Redis absent) → true (pas de coordination)
  */
-export async function tryAcquireBookingSlot(dossierId: string): Promise<boolean> {
+export async function tryAcquireBookingSlot(
+  dossierId: string,
+  maxBookers: number = MAX_CONCURRENT_BOOKERS,
+): Promise<boolean> {
   if (!redisReady || !redisClient) return true; // dégradé → pas de coordination
+  // Plafond effectif : jamais > MAX_CONCURRENT_BOOKERS, jamais < 1.
+  const effectiveMax = Math.max(1, Math.min(MAX_CONCURRENT_BOOKERS, Math.round(maxBookers)));
 
   const lua = `
     local key = KEYS[1]
@@ -1433,12 +1445,12 @@ export async function tryAcquireBookingSlot(dossierId: string): Promise<boolean>
   try {
     const result = await (redisClient as any).eval(lua, {
       keys: [REDIS_BOOKING_ARMED_KEY],
-      arguments: [String(MAX_CONCURRENT_BOOKERS), String(REDIS_BOOKING_ARMED_TTL_SEC)],
+      arguments: [String(effectiveMax), String(REDIS_BOOKING_ARMED_TTL_SEC)],
     });
     if (result === 1) {
-      console.log(`[spain-redis] 🎯 Booking slot acquis — ${dossierId.slice(0, 8)}…`);
+      console.log(`[spain-redis] 🎯 Booking slot acquis (${effectiveMax} max) — ${dossierId.slice(0, 8)}…`);
     } else {
-      console.log(`[spain-redis] ⏳ Booking slot FULL (${MAX_CONCURRENT_BOOKERS} max) — ${dossierId.slice(0, 8)}… reste en scan rapide`);
+      console.log(`[spain-redis] ⏳ Booking slot FULL (${effectiveMax} max) — ${dossierId.slice(0, 8)}… reste en scan rapide`);
     }
     return result === 1;
   } catch (err) {

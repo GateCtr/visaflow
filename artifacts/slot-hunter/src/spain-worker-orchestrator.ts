@@ -327,9 +327,6 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           `[SPAIN-ORCH] 🚀 Lancement worker — ${config.applicantName} (${config.portalUrl.slice(-36)})`,
         );
 
-        // Arrêter le keep-alive Decodo — le worker prend le relai sur ce proxy
-        stopKeepAlive(config.id);
-
         // spain-synchronized-scan (task 11.1) : injecter le pool de réserve PARTAGÉ
         // comme 2ᵉ argument de runDossierWorker (signature : runDossierWorker(config,
         // reservePool?)). Les workers empruntent ainsi la même réserve pour la
@@ -421,7 +418,6 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
     }
   } finally {
     clearInterval(lockRenewalTimer);
-    stopAllKeepAlives();
     if (lockHeld) {
       await releaseSpainScannerLock().catch(() => {});
     }
@@ -490,14 +486,11 @@ async function harvestFinishedWorkers(
           `[SPAIN-ORCH] 💤 ${w.config.applicantName} fenêtre terminée — prochain scan dans ` +
           `${Math.round(cooldownMs / 60_000)}min (prochaine fenêtre HH:${nextWakeMin})`,
         );
-        // Démarrer le keep-alive Decodo pour maintenir l'exit IP pendant la pause
-        // Récupérer le stickyId et baseProxy depuis Redis (sauvegardés par le worker dans finally)
-        getLastStickyForDossier(id).then(async (stickyId) => {
-          if (!stickyId) return;
-          const baseProxy = await getLastProxyForDossier(id);
-          if (!baseProxy) return;
-          startKeepAlive(id, baseProxy, stickyId, w.config.portalUrl);
-        }).catch(() => {});
+        // Pas de keep-alive/pre-warm hors fenêtre : maintenir une session sticky Decodo
+        // pendant la pause est inutile (la clearance CF et l'exit IP sessionduration-60
+        // expirent avant la prochaine fenêtre) et coûteux (solve CapSolver + IP grillée
+        // hors fenêtre). Le worker resolve CF à froid dès HH:WINDOW_START_MIN — la marge
+        // avant la détection (~HH:13-14) suffit largement à un solve (~15-17s).
         break;
       }
       case "error":
@@ -785,184 +778,13 @@ function countCadenceWorkers(workers: Map<string, RunningWorker>): number {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// DECODO KEEP-ALIVE — Maintient les sessions sticky actives entre les fenêtres
+// (Keep-alive / pre-warm inter-fenêtre SUPPRIMÉ)
+//
+// Maintenir une session sticky Decodo « chaude » entre les fenêtres était inutile :
+// la clearance CF et l'exit IP (sessionduration-60) expirent avant la fenêtre
+// suivante, et le ping déclenchait un solve CapSolver + une rotation d'IP hors
+// fenêtre — coût sec sans gain. Chaque worker resolve désormais CF à froid dès
+// HH:WINDOW_START_MIN ; la marge avant la détection (~HH:13-14) absorbe le solve.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Intervalle entre les pings keep-alive (ms).
- * Decodo sessionduration-60 a un idle timeout ~10-15min sur les résidentiels.
- * 12 min entre pings garantit qu'on reste sous le seuil d'inactivité.
- */
-const KEEPALIVE_INTERVAL_MS = 12 * 60_000; // 12 min
-
-/** Map dossierId → intervalId pour annuler les keep-alive au redémarrage du worker */
-const activeKeepAlives = new Map<string, ReturnType<typeof setInterval>>();
-
-/**
- * Injecte un sticky session ID dans l'URL proxy Decodo (copie simplifiée de addStickySession).
- */
-function addStickyToUrl(baseUrl: string, sid: string): string {
-  try {
-    const u = new URL(baseUrl);
-    const user = decodeURIComponent(u.username);
-    const stickyUser = user.includes("-session-")
-      ? user.replace(/-session-[^-]+/, `-session-${sid}`)
-      : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${sid}$2`);
-    u.username = encodeURIComponent(stickyUser);
-    return u.toString();
-  } catch { return baseUrl; }
-}
-
-/**
- * Démarre un keep-alive périodique pour un dossier en pause inter-fenêtre.
- * Envoie un HEAD request à httpbin via le même proxy+sticky pour maintenir
- * la session Decodo active (même exit IP) → cf_clearance valide au prochain démarrage.
- *
- * Si le ping échoue (timeout/proxy mort) :
- *   1. Blackliste le port actuel
- *   2. Invalide stickyId + cf_clearance en Redis
- *   3. Prend un nouveau port (rotation)
- *   4. Solve CF sur le nouveau port → sauvegarde en Redis
- *   5. Met à jour lastProxy/lastSticky → le worker démarre à 0s
- */
-function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, portalUrl: string): void {
-  // Annuler un éventuel keep-alive précédent
-  stopKeepAlive(dossierId);
-
-  let currentBaseProxy = baseProxy;
-  let currentStickyId = stickyId;
-  let currentStickyUrl = addStickyToUrl(baseProxy, stickyId);
-  let preWarmInProgress = false;
-
-  const masked = () => currentStickyUrl.replace(/:([^:@/]+)@/, ":***@").slice(0, 50);
-
-  log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive démarré — ${dossierId.slice(0, 8)}… via ${masked()}… (toutes les ${KEEPALIVE_INTERVAL_MS / 60_000}min)`);
-
-  const ping = async (): Promise<void> => {
-    if (preWarmInProgress) return; // éviter le chevauchement ping + pre-warm
-
-    try {
-      const { Impit } = await import("impit");
-      const impit = new Impit({ browser: "chrome", proxyUrl: currentStickyUrl, timeout: 10_000 } as any);
-
-      // Ping le PORTAIL avec cf_clearance (pas httpbin) pour vérifier que la clearance est encore valide.
-      // Si le portail retourne un CF challenge (403 ou HTML challenge) → pre-warm immédiat.
-      const { loadWorkerCfClearance } = await import("./spain-redis-persistence.js");
-      const cfClearance = await loadWorkerCfClearance(currentStickyUrl);
-      const cookieStr = cfClearance ? `cf_clearance=${cfClearance}` : "";
-      const targetUrl = portalUrl.split("#")[0];
-
-      const r = await (impit.fetch(targetUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0",
-          "Cookie": cookieStr,
-        },
-      } as any) as unknown as Promise<Response>);
-
-      const body = await r.text();
-      const isCf = r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000));
-
-      if (isCf) {
-        // CF challenge → clearance morte → pre-warm
-        log("WARN", `[SPAIN-ORCH] 🏓 Keep-alive CF INVALID (HTTP ${r.status}) — ${dossierId.slice(0, 8)}… → pre-warm`);
-        throw new Error("CF challenge on portal ping");
-      }
-
-      log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive OK (portal ${r.status}, ${body.length}B) — ${dossierId.slice(0, 8)}… cf_clearance valide`);
-    } catch (err) {
-      // ── PING FAIL — pre-warm : blacklister + rotation + solve CF ────────────
-      log("WARN", `[SPAIN-ORCH] 🏓 Keep-alive FAIL — ${dossierId.slice(0, 8)}…: ${err instanceof Error ? err.message : err}`);
-      preWarmInProgress = true;
-
-      try {
-        // 1. Blacklister le port actuel
-        flagDecodoIp(currentBaseProxy, "keepalive-timeout");
-        log("INFO", `[SPAIN-ORCH] 🏓 Port blacklisté: ${currentBaseProxy.slice(-20)}`);
-
-        // 2. Invalider stickyId + cf_clearance en Redis
-        await deleteLastStickyForDossier(dossierId);
-        deleteWorkerCfClearance(currentStickyUrl);
-
-        // 3. Prendre un nouveau port
-        const newBaseProxy = rotateDecodoUrl();
-        if (!newBaseProxy) {
-          log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm impossible — pool Decodo épuisé`);
-          return;
-        }
-
-        // 4. Solve CF sur le nouveau port
-        const newStickyId = Math.random().toString(36).slice(2, 10);
-        const newStickyUrl = addStickyToUrl(newBaseProxy, newStickyId);
-        const capsolverKey = process.env.CAPSOLVER_API_KEY ?? process.env.NONECAP_API_KEY ?? "";
-
-        if (!capsolverKey) {
-          log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm impossible — CAPSOLVER_API_KEY absent`);
-          return;
-        }
-
-        log("INFO", `[SPAIN-ORCH] 🏓 Pre-warm CF — ${dossierId.slice(0, 8)}… nouveau port: ${newBaseProxy.slice(-20)} sid=${newStickyId}`);
-        const targetUrl = portalUrl.split("#")[0];
-        const result = await initWorkerSession(newStickyUrl, targetUrl, capsolverKey);
-
-        if (result) {
-          // 5. Sauvegarder en Redis pour que le worker démarre à 0s
-          const cfExpiresAt = Date.now() + (115 * 60_000);
-          saveWorkerCfClearance(newStickyUrl, result.session.cfClearance, cfExpiresAt);
-          await saveLastStickyForDossier(dossierId, newStickyId);
-          await saveLastProxyForDossier(dossierId, newBaseProxy);
-
-          // Mettre à jour le keep-alive pour le nouveau port
-          currentBaseProxy = newBaseProxy;
-          currentStickyId = newStickyId;
-          currentStickyUrl = newStickyUrl;
-
-          log("INFO", `[SPAIN-ORCH] 🏓 ✅ Pre-warm réussi — ${dossierId.slice(0, 8)}… cf_clearance prêt sur ${newBaseProxy.slice(-20)}`);
-        } else {
-          // Solve échoué aussi sur le nouveau port → on laisse le worker solve au démarrage
-          log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm CF échoué — ${dossierId.slice(0, 8)}… (worker solvera au démarrage)`);
-          // Sauver quand même le nouveau port/sticky (le worker solve dessus)
-          await saveLastStickyForDossier(dossierId, newStickyId);
-          await saveLastProxyForDossier(dossierId, newBaseProxy);
-          currentBaseProxy = newBaseProxy;
-          currentStickyId = newStickyId;
-          currentStickyUrl = newStickyUrl;
-        }
-      } catch (preWarmErr) {
-        log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm exception: ${preWarmErr instanceof Error ? preWarmErr.message : preWarmErr}`);
-      } finally {
-        preWarmInProgress = false;
-      }
-    }
-  };
-
-  // Premier ping décalé de 30s
-  setTimeout(() => { ping().catch(() => {}); }, 30_000);
-
-  const intervalId = setInterval(() => { ping().catch(() => {}); }, KEEPALIVE_INTERVAL_MS);
-  activeKeepAlives.set(dossierId, intervalId);
-}
-
-/**
- * Arrête le keep-alive pour un dossier (appelé quand le worker redémarre).
- */
-function stopKeepAlive(dossierId: string): void {
-  const existing = activeKeepAlives.get(dossierId);
-  if (existing) {
-    clearInterval(existing);
-    activeKeepAlives.delete(dossierId);
-    log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive arrêté — ${dossierId.slice(0, 8)}…`);
-  }
-}
-
-/**
- * Arrête tous les keep-alive actifs (cleanup à l'arrêt de l'orchestrateur).
- */
-function stopAllKeepAlives(): void {
-  for (const [id, interval] of activeKeepAlives) {
-    clearInterval(interval);
-  }
-  if (activeKeepAlives.size > 0) {
-    log("INFO", `[SPAIN-ORCH] 🏓 ${activeKeepAlives.size} keep-alive(s) arrêté(s)`);
-  }
-  activeKeepAlives.clear();
-}
+// (fonctions startKeepAlive / stopKeepAlive / stopAllKeepAlives supprimées)

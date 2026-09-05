@@ -793,6 +793,21 @@ export async function scanDatetimeDirect(
       consecutiveEmpty++;
     }
 
+    // ── FAST-PATH BOOKING (on fonce) ────────────────────────────────────────
+    // Dès qu'un créneau RÉELLEMENT bookable pour ce dossier est vu (dans sa fenêtre
+    // de dates ET freeslots > 0 — même critère que le filtre `eligible` côté worker),
+    // on court-circuite la boucle multi-mois et on retourne immédiatement. Scanner
+    // le(s) mois suivant(s) ferait perdre un aller-retour réseau (~2-3 s) pendant
+    // lequel un concurrent peut rafler l'unique place. Les mois suivants ne servent
+    // qu'à trouver PLUS de créneaux ; si on en tient déjà un bookable, on fonce.
+    const hasBookableSlot = slots.some(
+      (s) => s.freeslots > 0 && isSlotInDateWindow(s.date, config, tag),
+    );
+    if (hasBookableSlot) {
+      log("INFO", `${tag}   ⚡ Fast-path : créneau bookable détecté (${monthLabel}) — booking immédiat sans scanner les mois suivants`);
+      break;
+    }
+
     monthOffset++;
 
     // Stop condition identique au test dynamic (section 4 l.288-304).
@@ -1810,7 +1825,11 @@ export async function runDossierWorker(
             }
             holdingBookingSlot = true; // marque le worker comme armé sans consommer le sémaphore
           } else if (!holdingBookingSlot) {
-            const acquired = await tryAcquireBookingSlot(config.id);
+            // Plafond dynamique = nombre de PLACES réelles. Sur créneau unique
+            // (totalFreeCapacity=1) → un SEUL worker acquiert le sémaphore et tente
+            // signin/ ; les autres restent en scan et re-tentent au cycle suivant si
+            // la place existe encore. Évite la collision « N workers sur 1 place → 0B ».
+            const acquired = await tryAcquireBookingSlot(config.id, totalFreeCapacity);
             if (!acquired) {
               log("INFO", `${tag} ⏳ Sémaphore plein — scan rapide (pas de booking ce cycle)`);
               // Ne pas entrer dans la boucle de booking — scan rapide au prochain cycle
@@ -1823,20 +1842,31 @@ export async function runDossierWorker(
 
           if (holdingBookingSlot) {
           for (const candidate of bookingCandidates) {
-            // ── Redis atomic claim (désactivé en mode race) ──────────────────────
-            if (!raceMode) {
-              const ok = await tryClaimSlot(
-                candidate.date,
-                candidate.time,
-                candidate.agendaId ?? "",
-                config.id,
-                groupSize,
-                candidate.freeslots,
-              );
-              if (!ok) {
-                log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà pris (Redis), prochain créneau…`);
-                continue;
-              }
+            // ── Redis atomic claim (anti-collision) — ACTIF aussi en mode RACE ────
+            // Le claim SETNX par créneau (date+time+agenda, capacité = freeslots)
+            // garantit qu'AUCUN de nos dossiers ne frappe signin/ sur le MÊME créneau
+            // qu'un autre. C'est le seul rempart fiable contre la collision « N workers
+            // sur 1 place → 0B pour tous » observée en prod : le serveur Bookitit rejette
+            // les signin/ concurrents sur une place unique au lieu d'en accepter un.
+            //
+            // On le laissait désactivé en RACE en pariant sur « le serveur arbitre le
+            // gagnant » — les logs prod ont montré l'inverse (0B synchrone pour tous).
+            // Avec le claim actif : en multi-slot, chaque dossier réserve un créneau
+            // DIFFÉRENT (distribution P4) → bookings parallèles sans collision ; sur 1
+            // place, un seul claim réussit → un seul signin/. Capacité freeslots>1 gérée
+            // par le Lua (plusieurs dossiers peuvent partager un créneau à ≥2 places).
+            // Redis absent → tryClaimSlot renvoie true (dégradé, on laisse tenter).
+            const ok = await tryClaimSlot(
+              candidate.date,
+              candidate.time,
+              candidate.agendaId ?? "",
+              config.id,
+              groupSize,
+              candidate.freeslots,
+            );
+            if (!ok) {
+              log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà réservé par un autre de nos dossiers (Redis) — prochain créneau…`);
+              continue;
             }
 
             const slot = candidate;
@@ -2034,10 +2064,10 @@ export async function runDossierWorker(
               return workerResult;
             }
 
-            // Booking échoué → libérer le claim Redis de CE dossier immédiatement.
-            if (!raceMode) {
-              releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
-            }
+            // Booking échoué → libérer le claim Redis de CE dossier immédiatement,
+            // pour qu'un autre dossier (ou ce dossier au prochain cycle) puisse re-tenter
+            // le créneau si la place existe encore. Actif aussi en RACE (le claim l'est).
+            releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
 
             // ── Erreur credentials permanente → sortie immédiate ──────────────────
             const isCredentialError = bookResult.status === "signin_failed"
