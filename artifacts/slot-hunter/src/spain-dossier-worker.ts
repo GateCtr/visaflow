@@ -515,13 +515,11 @@ export async function publishSlotSnapshotWithRetry(
 const PREPUB_REFRESH_MINUTE = 10;
 
 /**
- * Garde-fou anti-débordement : on n'entame JAMAIS un refresh pre-pub s'il reste moins
- * de PREPUB_SOLVE_SAFETY_MS avant le début de la chasse (HH:huntStartMin). Un solve
- * qui déborderait sur le pic est pire que pas de refresh — dans ce cas on garde l'IP
- * actuelle (déjà chaude, CF valide 115 min). Couvre le cas où un worker « rate » la
- * minute 10 (tick long en warm-up) et n'atteint la condition qu'à HH:12:xx.
+ * Fin de la fenêtre pre-pub = début de la chasse (HH:HUNT_START_MIN). Le refresh
+ * pre-pub n'est déclenché que dans [PREPUB_REFRESH_MINUTE, HUNT_START_MIN[.
+ * Pas de garde-fou de sécurité : un solve dure ~3 min max et la fenêtre HH:10→HH:13
+ * offre 3 min, donc un refresh démarré à HH:10 finit toujours avant le pic.
  */
-const PREPUB_SOLVE_SAFETY_MS = 90_000; // 90 s (solve ~20 s + marge)
 const HUNT_START_MIN = ((): number => {
   const v = Number(process.env.SPAIN_HUNT_START_MIN ?? "13");
   return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 13));
@@ -1503,24 +1501,17 @@ export async function runDossierWorker(
     try {
       // ── Pre-publication proxy refresh ─────────────────────────────────────────
       // À la minute PREPUB_REFRESH_MINUTE (=10), prendre OBLIGATOIREMENT une IP fraîche
-      // + re-solve CF pour arriver au pic (HH:13) sur une base neuve. Le solve fini avant
-      // HH:13. Garde-fou : si on est déjà trop près du pic (rate de la minute 10), on
-      // n'entame PAS le solve pour ne jamais déborder sur la publication.
+      // + re-solve CF pour arriver au pic (HH:13) sur une base neuve. Le solve (~3 min max)
+      // démarré à HH:10 finit toujours avant HH:13 → aucun solve pendant la publication.
       const nowDate = new Date();
       const currentMinute = nowDate.getUTCMinutes();
       const currentHour = nowDate.getUTCHours();
-      // ms jusqu'au début de la chasse (HH:HUNT_START_MIN) dans l'heure courante.
-      const msUntilHunt = ((HUNT_START_MIN - currentMinute) * 60 - nowDate.getUTCSeconds()) * 1000;
-      const safeToSolve = msUntilHunt >= PREPUB_SOLVE_SAFETY_MS;
       if (
         currentMinute >= PREPUB_REFRESH_MINUTE &&
         currentMinute < HUNT_START_MIN &&
         currentHour !== lastPrepubRefreshHour
       ) {
         lastPrepubRefreshHour = currentHour;
-        if (!safeToSolve) {
-          log("WARN", `${tag} ⏭️ Pre-pub refresh SKIP (min ${currentMinute}, ${Math.round(msUntilHunt / 1000)}s avant chasse < ${PREPUB_SOLVE_SAFETY_MS / 1000}s) — IP actuelle conservée (solve déborderait sur le pic)`);
-        } else {
         log("INFO", `${tag} 🔄 Pre-pub refresh (min ${currentMinute}) — IP fraîche + solve avant publication`);
         const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "main-0b-rotation");
         if (newProxy) {
@@ -1535,7 +1526,6 @@ export async function runDossierWorker(
         } else {
           log("WARN", `${tag} ⚠️ Pre-pub refresh: rotation impossible — proxy actuel conservé`);
         }
-        } // fin else safeToSolve
       }
 
       // ── Header de cycle — visible pour chaque dossier en cours de scan ─────────
@@ -2138,6 +2128,17 @@ export async function runDossierWorker(
               } else {
                 log("INFO", `${tag} ⏭️ P1: Créneau ${slot.date} ${slot.time} pris par un humain — fallback au prochain candidat`);
               }
+              // Remonter l'échec à la page Bookings (avant, ce cas n'était jamais reporté).
+              reportBookingLog({
+                applicationId: config.applicationId,
+                dossierId: config.id,
+                applicantName: config.applicantName,
+                date: slot.date,
+                time: slot.time,
+                status: "failed",
+                reason: "Créneau pris par un autre (hora ya seleccionada)",
+                serviceName: scan.serviceName,
+              }).catch(() => {});
               await sleep(300); // micro-délai pour ne pas spammer
               continue; // → prochain candidat dans sortedEligible
             }
@@ -2153,6 +2154,17 @@ export async function runDossierWorker(
               && (bookResult.errorMessage ?? "").includes("0B");
             if (isSlotGoneOrOverload) {
               log("INFO", `${tag} ⏭️ signin/ 0B (slot déjà pris ou surcharge) — skip au prochain slot`);
+              // Remonter l'échec 0B à la page Bookings (avant, ce cas n'était jamais reporté).
+              reportBookingLog({
+                applicationId: config.applicationId,
+                dossierId: config.id,
+                applicantName: config.applicantName,
+                date: slot.date,
+                time: slot.time,
+                status: "failed",
+                reason: "signin/ → 0B (créneau déjà pris ou serveur surchargé)",
+                serviceName: scan.serviceName,
+              }).catch(() => {});
               await sleep(200);
               continue;
             }
