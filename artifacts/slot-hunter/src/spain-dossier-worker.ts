@@ -500,25 +500,16 @@ export async function publishSlotSnapshotWithRetry(
 
 /**
  * Pre-publication proxy refresh : à la minute PREPUB_REFRESH_MINUTE de chaque heure,
- * chaque worker prend OBLIGATOIREMENT une IP fraîche du pool + re-solve CF.
- *
- * Objectif : arriver à la fenêtre de publication (HH:13) sur une base 100% neuve
- * (IP qui n'a fait aucune requête au portail → risque minimal d'être déjà marquée).
- *
- * Timing = 10 (pas 11) : le solve CF dure ~20 s. Démarré à HH:10:00, il finit vers
- * HH:10:20-10:30 — largement AVANT HH:13. À HH:11/12/13, toutes les IP sont fraîches
- * et chaudes → ZÉRO solve pendant le pic (c'était la cause des créneaux ratés).
- *
- * Le pool Decodo compte ~9999 IP espagnoles (decodo-proxies.csv) → 3 workers × 1 IP/h
- * = coût négligeable, aucun risque d'épuisement.
+ * chaque worker prend une IP fraîche du pool + re-solve CF, pour arriver au pic (HH:13)
+ * sur une base neuve. Coexiste avec le keep-alive inter-fenêtre (qui garde les sessions
+ * chaudes entre les fenêtres → pas de solve massif à HH:05). Valeur 11 → refresh à HH:11,
+ * prêt pour HH:13.
  */
-const PREPUB_REFRESH_MINUTE = 10;
+const PREPUB_REFRESH_MINUTE = 11;
 
 /**
  * Fin de la fenêtre pre-pub = début de la chasse (HH:HUNT_START_MIN). Le refresh
  * pre-pub n'est déclenché que dans [PREPUB_REFRESH_MINUTE, HUNT_START_MIN[.
- * Pas de garde-fou de sécurité : un solve dure ~3 min max et la fenêtre HH:10→HH:13
- * offre 3 min, donc un refresh démarré à HH:10 finit toujours avant le pic.
  */
 const HUNT_START_MIN = ((): number => {
   const v = Number(process.env.SPAIN_HUNT_START_MIN ?? "13");
