@@ -812,21 +812,6 @@ export async function scanDatetimeDirect(
       consecutiveEmpty++;
     }
 
-    // ── FAST-PATH BOOKING (on fonce) ────────────────────────────────────────
-    // Dès qu'un créneau RÉELLEMENT bookable pour ce dossier est vu (dans sa fenêtre
-    // de dates ET freeslots > 0 — même critère que le filtre `eligible` côté worker),
-    // on court-circuite la boucle multi-mois et on retourne immédiatement. Scanner
-    // le(s) mois suivant(s) ferait perdre un aller-retour réseau (~2-3 s) pendant
-    // lequel un concurrent peut rafler l'unique place. Les mois suivants ne servent
-    // qu'à trouver PLUS de créneaux ; si on en tient déjà un bookable, on fonce.
-    const hasBookableSlot = slots.some(
-      (s) => s.freeslots > 0 && isSlotInDateWindow(s.date, config, tag),
-    );
-    if (hasBookableSlot) {
-      log("INFO", `${tag}   ⚡ Fast-path : créneau bookable détecté (${monthLabel}) — booking immédiat sans scanner les mois suivants`);
-      break;
-    }
-
     monthOffset++;
 
     // Stop condition identique au test dynamic (section 4 l.288-304).
