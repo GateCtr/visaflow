@@ -500,11 +500,32 @@ export async function publishSlotSnapshotWithRetry(
 
 /**
  * Pre-publication proxy refresh : à la minute PREPUB_REFRESH_MINUTE de chaque heure,
- * chaque worker force une rotation de proxy frais + re-solve CF.
- * Objectif : arriver à la fenêtre de publication (min 13-14) avec un proxy tout neuf.
- * Valeur 11 → refresh à XX:11, prêt pour XX:13.
+ * chaque worker prend OBLIGATOIREMENT une IP fraîche du pool + re-solve CF.
+ *
+ * Objectif : arriver à la fenêtre de publication (HH:13) sur une base 100% neuve
+ * (IP qui n'a fait aucune requête au portail → risque minimal d'être déjà marquée).
+ *
+ * Timing = 10 (pas 11) : le solve CF dure ~20 s. Démarré à HH:10:00, il finit vers
+ * HH:10:20-10:30 — largement AVANT HH:13. À HH:11/12/13, toutes les IP sont fraîches
+ * et chaudes → ZÉRO solve pendant le pic (c'était la cause des créneaux ratés).
+ *
+ * Le pool Decodo compte ~9999 IP espagnoles (decodo-proxies.csv) → 3 workers × 1 IP/h
+ * = coût négligeable, aucun risque d'épuisement.
  */
-const PREPUB_REFRESH_MINUTE = 11;
+const PREPUB_REFRESH_MINUTE = 10;
+
+/**
+ * Garde-fou anti-débordement : on n'entame JAMAIS un refresh pre-pub s'il reste moins
+ * de PREPUB_SOLVE_SAFETY_MS avant le début de la chasse (HH:huntStartMin). Un solve
+ * qui déborderait sur le pic est pire que pas de refresh — dans ce cas on garde l'IP
+ * actuelle (déjà chaude, CF valide 115 min). Couvre le cas où un worker « rate » la
+ * minute 10 (tick long en warm-up) et n'atteint la condition qu'à HH:12:xx.
+ */
+const PREPUB_SOLVE_SAFETY_MS = 90_000; // 90 s (solve ~20 s + marge)
+const HUNT_START_MIN = ((): number => {
+  const v = Number(process.env.SPAIN_HUNT_START_MIN ?? "13");
+  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 13));
+})();
 
 // ─── Détection erreur proxy ────────────────────────────────────────────────────
 
@@ -1481,18 +1502,26 @@ export async function runDossierWorker(
 
     try {
       // ── Pre-publication proxy refresh ─────────────────────────────────────────
-      // À la minute PREPUB_REFRESH_MINUTE, forcer une rotation de proxy frais pour
-      // arriver à la publication (min 13-14) avec une IP neuve et CF résolu.
+      // À la minute PREPUB_REFRESH_MINUTE (=10), prendre OBLIGATOIREMENT une IP fraîche
+      // + re-solve CF pour arriver au pic (HH:13) sur une base neuve. Le solve fini avant
+      // HH:13. Garde-fou : si on est déjà trop près du pic (rate de la minute 10), on
+      // n'entame PAS le solve pour ne jamais déborder sur la publication.
       const nowDate = new Date();
       const currentMinute = nowDate.getUTCMinutes();
       const currentHour = nowDate.getUTCHours();
+      // ms jusqu'au début de la chasse (HH:HUNT_START_MIN) dans l'heure courante.
+      const msUntilHunt = ((HUNT_START_MIN - currentMinute) * 60 - nowDate.getUTCSeconds()) * 1000;
+      const safeToSolve = msUntilHunt >= PREPUB_SOLVE_SAFETY_MS;
       if (
         currentMinute >= PREPUB_REFRESH_MINUTE &&
-        currentMinute < PREPUB_REFRESH_MINUTE + 1 &&
+        currentMinute < HUNT_START_MIN &&
         currentHour !== lastPrepubRefreshHour
       ) {
         lastPrepubRefreshHour = currentHour;
-        log("INFO", `${tag} 🔄 Pre-pub refresh (min ${currentMinute}) — rotation proxy frais avant publication`);
+        if (!safeToSolve) {
+          log("WARN", `${tag} ⏭️ Pre-pub refresh SKIP (min ${currentMinute}, ${Math.round(msUntilHunt / 1000)}s avant chasse < ${PREPUB_SOLVE_SAFETY_MS / 1000}s) — IP actuelle conservée (solve déborderait sur le pic)`);
+        } else {
+        log("INFO", `${tag} 🔄 Pre-pub refresh (min ${currentMinute}) — IP fraîche + solve avant publication`);
         const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "main-0b-rotation");
         if (newProxy) {
           proxyUrl = newProxy;
@@ -1506,6 +1535,7 @@ export async function runDossierWorker(
         } else {
           log("WARN", `${tag} ⚠️ Pre-pub refresh: rotation impossible — proxy actuel conservé`);
         }
+        } // fin else safeToSolve
       }
 
       // ── Header de cycle — visible pour chaque dossier en cours de scan ─────────
