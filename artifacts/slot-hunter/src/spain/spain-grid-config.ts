@@ -40,11 +40,11 @@ export type FailureKind =
 
 /** Configuration de la grille d'horloge murale, adossée aux variables d'environnement. */
 export interface GridConfig {
-  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 10000). */
+  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 6000). */
   huntTickMs: number;
   /** Tick de la phase tardive en ms (SPAIN_LATE_TICK_MS, défaut 60000). */
   lateTickMs: number;
-  /** Amplitude max du jitter en fraction du tick (SPAIN_GRID_JITTER_PCT, défaut 0.2). */
+  /** Amplitude max du jitter en fraction du tick (SPAIN_GRID_JITTER_PCT, défaut 0.02). */
   jitterPct: number;
   /** Minute de début de fenêtre (SPAIN_WINDOW_START_MIN, défaut 5). */
   windowStartMin: number;
@@ -98,18 +98,17 @@ const MINUTE_MIN = 0;
 const MINUTE_MAX = 59;
 
 /** Valeurs par défaut (Requirements 11.2, 11.3, 11.4, 11.6, 11.9). */
-// huntTickMs = 10 s. En phase chasse, le cf_clearance est DÉJÀ en cache (armé au
-// preflight, TTL ~30 min) → un cycle de scan nominal (main → getservices → getagendas
-// → datetime, imposé par le portail à chaque scan, SANS re-solve CF) dure ~4-5 s.
-// 10 s ≈ 2× le scan nominal : assez large pour absorber un scan lent occasionnel (~7 s)
-// sans déborder le front suivant, et assez serré pour scanner fréquemment pendant la
-// courte fenêtre de publication. NB : une mesure brute peut afficher un p95 ~10 s, mais
-// elle est gonflée par les cycles de RÉCUPÉRATION (re-solve CF ~20 s sur cf_expired) et
-// les proxies dégradés — non représentatifs du régime chasse à CF caché. Override via
-// SPAIN_HUNT_TICK_MS. Le ralentissement tardif conditionnel utilise lateTickMs.
-const DEFAULT_HUNT_TICK_MS = 10_000;
+// huntTickMs = 6 s. Mesures prod réelles : un cycle de scan nominal (main → getservices
+// → getagendas → datetime, CF déjà en cache donc cf↩0.0s) dure ~2.6–3.4 s. 6 s laisse
+// ~3 s de marge (absorbe un scan lent occasionnel) tout en scannant 2× plus souvent que
+// l'ancien 10 s → on voit un créneau publié jusqu'à 6 s plus tôt = avance décisive sur un
+// concurrent externe. 6 divise 60 → fronts alignés pile sur :00,06,12,18,24,30,36,42,48,54.
+const DEFAULT_HUNT_TICK_MS = 6_000;
 const DEFAULT_LATE_TICK_MS = 60_000;
-const DEFAULT_JITTER_PCT = 0.2;
+// jitterPct = 0.02 (±120 ms à 6 s). Chaque worker a une IP/session/PHPSESSID distincts →
+// aucune raison anti-détection de les désynchroniser entre eux ; on veut au contraire qu'ils
+// frappent quasi ensemble sur le même front de grille. Jitter quasi nul = synchronisation.
+const DEFAULT_JITTER_PCT = 0.02;
 const DEFAULT_WINDOW_START_MIN = 5;
 const DEFAULT_HUNT_START_MIN = 13;
 const DEFAULT_LATE_START_MIN = 17;
