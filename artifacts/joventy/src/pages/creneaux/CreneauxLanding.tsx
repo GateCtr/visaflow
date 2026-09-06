@@ -36,13 +36,6 @@ function buildSchemas(data: CreneauxSEO) {
       url: SITE,
       telephone: "+243840808122",
       address: { "@type": "PostalAddress", addressLocality: "Kinshasa", addressCountry: "CD" },
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: "4.9",
-        bestRating: "5",
-        worstRating: "1",
-        reviewCount: "127",
-      },
     },
     areaServed: { "@type": "Place", name: "Kinshasa, République Démocratique du Congo" },
     offers: {
@@ -146,6 +139,7 @@ export function CreneauxLanding({ data }: Props) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-5xl font-black text-white">350 <span className="text-3xl">$</span></p>
+                <p className="text-white/70 text-xs mt-1">Formule normale · formule express : 500 $</p>
                 <p className="text-green-300 font-bold text-sm mt-1">Payés UNIQUEMENT après obtention du créneau</p>
               </div>
               <div className="text-right">

@@ -38,6 +38,7 @@ import CreneauxFranceLongSejour from "@/pages/creneaux/CreneauxFranceLongSejour"
 import CreneauxBelgiqueLongSejour from "@/pages/creneaux/CreneauxBelgiqueLongSejour";
 import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
+import MethodologieSources from "@/pages/MethodologieSources";
 
 import MentionsLegales from "@/pages/legal/MentionsLegales";
 import Confidentialite from "@/pages/legal/Confidentialite";
@@ -197,6 +198,7 @@ function Router() {
       <Route path="/prix" component={Prix} />
       <Route path="/audit-diagnostic" component={AuditDiagnostic} />
       <Route path="/a-propos" component={APropos} />
+      <Route path="/methodologie-sources" component={MethodologieSources} />
 
       <Route path="/mentions-legales" component={MentionsLegales} />
       <Route path="/confidentialite" component={Confidentialite} />

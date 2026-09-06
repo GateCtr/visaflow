@@ -262,16 +262,16 @@ const PACKAGES = [
     key: "dossier_only",
     icon: ClipboardList,
     label: "Accompagnement Partiel",
-    tagline: "200 $ engagement · 400 $ prime à l'obtention",
-    price: "200 $",
-    priceDetail: "200 $ maintenant · 400 $ prime payée uniquement à l'obtention du visa",
-    desc: "Vous fournissez votre passeport et vos propres documents justificatifs. Joventy complète les pièces manquantes, puis gère la vérification, le profil et la capture du créneau. Prime payée uniquement à l'obtention du visa.",
+    tagline: "Forfait de 600 $",
+    price: "600 $",
+    priceDetail: "Forfait d'accompagnement partiel",
+    desc: "Vous fournissez votre passeport et vos propres documents justificatifs. Joventy complète les pièces manquantes, puis gère la vérification, le profil et la capture du créneau.",
     highlight: false,
     features: [
       "Vous fournissez passeport + vos justificatifs, Joventy complète ce qui manque",
       "Profil consulaire et capture du créneau inclus",
       "Disponible pour toutes les destinations",
-      "Prime de succès due uniquement à l'obtention du visa",
+      "Forfait transparent de 600 $",
     ],
   },
 ];
@@ -504,7 +504,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Combien coûte le service Joventy ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire uniquement : 350 $ — payés UNIQUEMENT après obtention, aucun acompte. (2) Accompagnement Complet (dossier + créneau + obtention du visa) : 500 $ d'engagement + 1 000 $ prime de succès = 1 500 $ au total, toutes destinations. (3) Accompagnement Partiel (vous fournissez votre passeport et vos propres justificatifs, Joventy complète les pièces manquantes + profil + créneau) : 200 $ d'engagement + 400 $ prime de succès = 600 $ au total. Les frais gouvernementaux sont payés directement au gouvernement par le client." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire normal : 350 $ payés uniquement après obtention, aucun acompte ; une formule express est à 500 $. (2) Accompagnement complet : 500 $ d'engagement + 1 000 $ de prime de succès, soit 1 500 $ au total. (3) Accompagnement partiel : forfait de 600 $. Les frais gouvernementaux sont payés directement aux organismes concernés." }
             },
             {
               "@type": "Question",
@@ -599,7 +599,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Joventy peut-il préparer mon dossier visa sans trouver le créneau ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose un service « Accompagnement Partiel » pour les clients qui apportent déjà leurs propres pièces justificatives. Vous fournissez votre passeport et vos documents ; Joventy complète les pièces manquantes, gère la vérification, le profil consulaire et la capture du créneau. Tarif : 200 USD d'engagement + 400 USD prime de succès payée uniquement à l'obtention du visa." }
+               "acceptedAnswer": { "@type": "Answer", "text": "Oui. Joventy propose un service « Accompagnement Partiel » pour les clients qui apportent déjà leurs propres pièces justificatives. Vous fournissez votre passeport et vos documents ; Joventy complète les pièces manquantes, gère la vérification, le profil consulaire et la capture du créneau. Tarif : forfait de 600 USD." }
             }
           ]
         })}</script>
@@ -618,37 +618,6 @@ export default function Landing() {
             { "@type": "HowToStep", "position": 5, "name": "Paiement de la prime de succès", "text": "Une fois le créneau confirmé, vous payez la prime de succès (1 000 $) via Mobile Money." },
             { "@type": "HowToStep", "position": 6, "name": "Préparation à l'entretien consulaire", "text": "Joventy vous fournit un guide de préparation personnalisé pour l'entretien B1/B2 : questions probables, documents à apporter, conseils de présentation." },
             { "@type": "HowToStep", "position": 7, "name": "Se rendre à l'entretien", "text": "Présentez-vous à l'ambassade américaine à la date et l'heure indiquées. Si le visa est accordé, vous le recevez dans votre passeport sous 3 à 5 jours ouvrables." }
-          ]
-        })}</script>
-        <script type="application/ld+json">{JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "LocalBusiness",
-          "name": "Joventy",
-          "description": "Agence d'assistance visa premium à Kinshasa. Formulaires, créneaux consulaires, e-Visas pour USA, Canada, Schengen, UK, Dubaï, Turquie, Inde, Maroc et Égypte. Paiement M-Pesa. Prime de succès uniquement.",
-          "url": "https://joventy.cd",
-          "telephone": "+243 840 808 122",
-          "email": "contact@joventy.cd",
-          "address": {
-            "@type": "PostalAddress",
-            "addressLocality": "Kinshasa",
-            "addressCountry": "CD"
-          },
-          "areaServed": {
-            "@type": "Place",
-            "name": "Kinshasa, République Démocratique du Congo"
-          },
-          "priceRange": "350$-1500$",
-          "currenciesAccepted": "USD",
-          "paymentAccepted": "M-Pesa, Airtel Money, Orange Money",
-          "aggregateRating": {
-            "@type": "AggregateRating",
-            "ratingValue": "4.9",
-            "bestRating": "5",
-            "worstRating": "1",
-            "reviewCount": "127"
-          },
-          "sameAs": [
-            "https://twitter.com/JoventyCD"
           ]
         })}</script>
       </Helmet>

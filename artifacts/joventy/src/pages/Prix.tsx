@@ -57,57 +57,30 @@ const NOT_INCLUDES = [
 export default function Prix() {
   const pricingSchema = {
     "@context": "https://schema.org",
-    "@type": "Product",
+    "@type": "Service",
     "name": "Assistance Visa Joventy — Kinshasa, RDC",
     "description": "Service d'assistance visa premium depuis Kinshasa. Formulaires, créneaux consulaires, e-Visas. Paiement au résultat via M-Pesa.",
-    "brand": { "@type": "Brand", "name": "Joventy" },
-    "offers": {
-      "@type": "AggregateOffer",
-      "priceCurrency": "USD",
-      "lowPrice": "350",
-      "highPrice": "1500",
-      "offerCount": DESTINATIONS.length.toString(),
+    "provider": { "@id": "https://joventy.cd/#organization" },
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Formules d'assistance visa Joventy",
+      "itemListElement": [
+        { "@type": "Offer", "name": "Créneau normal", "priceCurrency": "USD", "price": "350" },
+        { "@type": "Offer", "name": "Créneau express", "priceCurrency": "USD", "price": "500" },
+        { "@type": "Offer", "name": "Accompagnement partiel", "priceCurrency": "USD", "price": "600" },
+        { "@type": "Offer", "name": "Accompagnement complet", "priceCurrency": "USD", "price": "1500" },
+      ],
     },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.9",
-      "bestRating": "5",
-      "worstRating": "1",
-      "reviewCount": "127",
-    },
-    "review": [
-      {
-        "@type": "Review",
-        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
-        "author": { "@type": "Person", "name": "Christophe M." },
-        "reviewBody": "J'avais essayé d'avoir un créneau à l'ambassade américaine pendant 4 mois sans succès. Joventy a trouvé une date en moins de 3 semaines. Incroyable.",
-        "datePublished": "2025-11-15",
-      },
-      {
-        "@type": "Review",
-        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
-        "author": { "@type": "Person", "name": "Nathalie K." },
-        "reviewBody": "Processus ultra simple. J'ai uploadé mes documents le lundi, mon e-Visa était prêt le mercredi. Paiement M-Pesa sans complication.",
-        "datePublished": "2025-12-03",
-      },
-      {
-        "@type": "Review",
-        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
-        "author": { "@type": "Person", "name": "Patrick B." },
-        "reviewBody": "Le suivi en temps réel dans l'application est rassurant. Mon conseiller répondait dans la journée. Je recommande vivement.",
-        "datePublished": "2026-01-22",
-      },
-    ],
   };
 
   return (
     <PublicLayout solidNav>
       <Helmet>
         <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
-        <meta name="description" content="Tarifs Joventy 2026 depuis Kinshasa : créneau consulaire 350$ (après résultat), accompagnement complet 1 500$ (500+1 000$), accompagnement partiel 600$ (200+400$). Toutes destinations. Paiement M-Pesa." />
+        <meta name="description" content="Tarifs Joventy depuis Kinshasa : créneau consulaire 350$ après résultat, accompagnement complet 1 500$ (500$ + 1 000$), accompagnement partiel 600$. Paiement Mobile Money." />
         <link rel="canonical" href="https://joventy.cd/prix" />
         <meta property="og:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta property="og:description" content="Créneau 350$ (après résultat) · Accompagnement Complet 1 500$ · Accompagnement Partiel 600$ (200+400$). Toutes destinations. Paiement M-Pesa." />
+        <meta property="og:description" content="Créneau 350$ après résultat · Accompagnement complet 1 500$ · Accompagnement partiel 600$. Toutes destinations. Paiement Mobile Money." />
         <meta property="og:url" content="https://joventy.cd/prix" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
@@ -115,7 +88,7 @@ export default function Prix() {
         <meta property="og:site_name" content="Joventy" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta name="twitter:description" content="Créneau 350$ (après résultat) · Accompagnement Complet 1 500$ · Accompagnement Partiel 600$ (200+400$). Toutes destinations. Paiement M-Pesa." />
+        <meta name="twitter:description" content="Créneau 350$ après résultat · Accompagnement complet 1 500$ · Accompagnement partiel 600$. Toutes destinations. Paiement Mobile Money." />
         <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
@@ -139,7 +112,8 @@ export default function Prix() {
 
       {/* 3 FORMULES */}
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-        <h2 className="text-2xl font-bold text-primary text-center mb-8">Nos formules — toutes destinations</h2>
+          <h2 className="text-2xl font-bold text-primary text-center mb-2">Nos formules — toutes destinations</h2>
+          <p className="mb-8 text-center text-sm text-muted-foreground">Créneau normal : 350 $ · Créneau express : 500 $ · Les conditions applicables sont présentées lors de la demande.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Créneau */}
           <div className="bg-white border-2 border-secondary rounded-2xl p-6 shadow-sm flex flex-col">
@@ -183,8 +157,8 @@ export default function Prix() {
             <div className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">
               Accompagnement partiel
             </div>
-            <p className="text-4xl font-extrabold text-primary mb-1">200 $</p>
-            <p className="text-sm text-muted-foreground mb-4">200 $ engagement · 400 $ prime de succès payée uniquement à l'obtention du visa · Total 600 $</p>
+            <p className="text-4xl font-extrabold text-primary mb-1">600 $</p>
+            <p className="text-sm text-muted-foreground mb-4">Forfait d'accompagnement partiel</p>
             <p className="text-sm text-muted-foreground mb-4">Vous fournissez votre passeport et vos propres documents justificatifs. Joventy complète uniquement les pièces manquantes, puis gère la vérification, le profil consulaire et la capture du créneau.</p>
             <ul className="space-y-1.5 text-xs text-slate-600 mb-6 flex-1">
               <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Vous apportez passeport + vos justificatifs, Joventy complète les manquantes</li>

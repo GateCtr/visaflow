@@ -56,6 +56,25 @@ for (const page of CRENEAUX_PAGES) {
   count++;
 }
 
+const staticRoutes = [
+  "/guides",
+  "/ambassades",
+  "/prix",
+  "/a-propos",
+  "/methodologie-sources",
+  "/mentions-legales",
+  "/confidentialite",
+  "/conditions",
+  "/remboursement",
+];
+
+for (const route of staticRoutes) {
+  const slug = route === "/" ? "index" : route.slice(1);
+  write(path.join(DIST, `${slug}.html`), injectSeoMeta(template, route));
+  console.log(`  ✓ ${route}`);
+  count++;
+}
+
 console.log(`\n🚀 Pre-rendered ${count} pages into dist/public`);
 
 const SITE = "https://joventy.cd";
@@ -72,6 +91,7 @@ const staticEntries: SitemapEntry[] = [
   { loc: `${SITE}/alerte-espagne`, changefreq: "weekly", priority: "0.85" },
   { loc: `${SITE}/alerte-schengen`, changefreq: "weekly", priority: "0.85" },
   { loc: `${SITE}/a-propos`, changefreq: "monthly", priority: "0.7" },
+  { loc: `${SITE}/methodologie-sources`, changefreq: "monthly", priority: "0.7" },
   { loc: `${SITE}/mentions-legales`, changefreq: "yearly", priority: "0.3" },
   { loc: `${SITE}/confidentialite`, changefreq: "yearly", priority: "0.3" },
   { loc: `${SITE}/conditions`, changefreq: "yearly", priority: "0.3" },

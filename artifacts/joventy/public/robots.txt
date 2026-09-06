@@ -15,16 +15,40 @@ Disallow: /register
 # OpenAI (ChatGPT)
 User-agent: GPTBot
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /sso-callback
+Disallow: /continue
+Disallow: /login
+Disallow: /register
 
 User-agent: OAI-SearchBot
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /sso-callback
+Disallow: /continue
+Disallow: /login
+Disallow: /register
 
 User-agent: ChatGPT-User
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /sso-callback
+Disallow: /continue
+Disallow: /login
+Disallow: /register
 
 # Anthropic (Claude)
 User-agent: ClaudeBot
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /sso-callback
+Disallow: /continue
+Disallow: /login
+Disallow: /register
 
 User-agent: anthropic-ai
 Allow: /
@@ -35,6 +59,12 @@ Allow: /
 
 User-agent: Google-Extended
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /sso-callback
+Disallow: /continue
+Disallow: /login
+Disallow: /register
 
 User-agent: GoogleOther
 Allow: /
@@ -49,6 +79,12 @@ Allow: /
 # Perplexity
 User-agent: PerplexityBot
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /sso-callback
+Disallow: /continue
+Disallow: /login
+Disallow: /register
 
 # Apple (Siri, Apple Intelligence, Spotlight)
 User-agent: Applebot

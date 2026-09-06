@@ -101,6 +101,7 @@ export default function DestinationPage() {
     "@id": `https://joventy.cd/${dest.slug}`,
     "provider": {
       "@type": "Organization",
+      "@id": "https://joventy.cd/#organization",
       "name": "Joventy",
       "url": "https://joventy.cd",
       "telephone": "+243 840 808 122",
@@ -108,13 +109,6 @@ export default function DestinationPage() {
         "@type": "PostalAddress",
         "addressLocality": "Kinshasa",
         "addressCountry": "CD",
-      },
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "4.9",
-        "bestRating": "5",
-        "worstRating": "1",
-        "reviewCount": "127",
       },
     },
     "areaServed": {

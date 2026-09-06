@@ -4,6 +4,7 @@ import { Clock, ChevronRight, ArrowRight, BookOpen, MessageCircle, ExternalLink 
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { getGuideBySlug, getRelatedGuides } from "@/data/guides-seo";
+import { EMBASSIES_SEO } from "@/data/embassies-seo";
 import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
 import { ShieldCheck } from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -40,7 +41,11 @@ export default function GuidePage() {
 
   const relatedGuides = getRelatedGuides(guide.relatedSlugs);
   const isSpainGuide = guide.relatedDestination === "visa-espagne-kinshasa";
-  const isCevGuide = guide.slug.includes("cev");
+  const isCevGuide = guide.slug.includes("cev") ||
+    guide.category === "Visa Schengen" ||
+    guide.relatedDestination === "visa-schengen-kinshasa" ||
+    guide.relatedDestination === "visa-belgique-long-sejour-kinshasa";
+  const destinationOffice = EMBASSIES_SEO.find((embassy) => embassy.destinationSlug === guide.relatedDestination);
   const officialLinks = [
     ...(isSpainGuide
       ? [{
@@ -50,51 +55,27 @@ export default function GuidePage() {
         }]
       : []),
     ...(isCevGuide
+      ? [
+          {
+            label: "CEV Kinshasa — site officiel",
+            href: "https://www.cev-kin.eu",
+            description: "Vérifier les pays représentés, le type de séjour et les instructions de dépôt en vigueur.",
+          },
+          {
+            label: "Visa On Web — portail officiel belge",
+            href: "https://visaonweb.diplomatie.be/",
+            description: "Créer ou ouvrir votre demande officielle Visa On Web avant la réservation et le dépôt au CEV.",
+          },
+        ]
+      : []),
+    ...(!isSpainGuide && !isCevGuide && destinationOffice?.website
       ? [{
-          label: "Visa On Web — portail officiel belge",
-          href: "https://visaonweb.diplomatie.be/",
-          description: "Créer ou ouvrir votre demande officielle Visa On Web avant la réservation et le dépôt au CEV.",
+          label: `${destinationOffice.officialName} — site officiel`,
+          href: destinationOffice.website,
+          description: "Consulter les instructions, conditions et éventuelles mises à jour publiées par l'autorité compétente.",
         }]
       : []),
   ];
-
-  const articleSchema = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: guide.title,
-    description: guide.metaDescription,
-    datePublished: guide.publishedDate,
-    dateModified: guide.updatedDate,
-    author: { "@type": "Organization", name: "Joventy", url: "https://joventy.cd" },
-    publisher: {
-      "@type": "Organization",
-      name: "Joventy",
-      logo: { "@type": "ImageObject", url: "https://joventy.cd/logo.png" },
-    },
-    mainEntityOfPage: { "@type": "WebPage", "@id": `https://joventy.cd/guides/${guide.slug}` },
-  };
-
-  const faqSchema = guide.faq.length > 0
-    ? {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        mainEntity: guide.faq.map(({ q, a }) => ({
-          "@type": "Question",
-          name: q,
-          acceptedAnswer: { "@type": "Answer", text: a },
-        })),
-      }
-    : null;
-
-  const breadcrumbSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
-      { "@type": "ListItem", position: 2, name: "Guides", item: "https://joventy.cd/guides" },
-      { "@type": "ListItem", position: 3, name: guide.title, item: `https://joventy.cd/guides/${guide.slug}` },
-    ],
-  };
 
   return (
     <PublicLayout solidNav>
@@ -111,12 +92,9 @@ export default function GuidePage() {
         <meta property="og:site_name" content="Joventy" />
         <meta property="article:published_time" content={guide.publishedDate} />
         <meta property="article:modified_time" content={guide.updatedDate} />
-        <script type="application/ld+json">{JSON.stringify(articleSchema)}</script>
-        {faqSchema && <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>}
-        <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
       </Helmet>
 
-      <div className="max-w-3xl mx-auto px-4 py-10">
+      <article className="max-w-3xl mx-auto px-4 py-10">
 
         {/* Breadcrumb */}
         <nav aria-label="Fil d'Ariane" className="flex items-center gap-1.5 text-sm text-slate-400 mb-6">
@@ -137,7 +115,7 @@ export default function GuidePage() {
               <Clock className="w-4 h-4" /> {guide.readingTime} min de lecture
             </span>
             <span className="text-sm text-slate-400">
-              Mis à jour le {new Date(guide.updatedDate).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+              Mis à jour le <time dateTime={guide.updatedDate}>{new Date(guide.updatedDate).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</time>
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-serif font-bold text-primary leading-snug mb-4">
@@ -145,6 +123,9 @@ export default function GuidePage() {
           </h1>
           <p className="text-slate-600 text-base leading-relaxed border-l-4 border-primary/30 pl-4 bg-primary/5 py-3 rounded-r-lg">
             {guide.intro}
+          </p>
+          <p className="mt-4 text-sm text-slate-500">
+            Par <span className="font-semibold text-slate-700">Équipe éditoriale Joventy</span> · Les règles sont vérifiées à partir de sources officielles disponibles et peuvent évoluer.
           </p>
         </header>
 
@@ -293,15 +274,15 @@ export default function GuidePage() {
           </section>
         )}
 
-        {officialLinks.length > 0 && (
-          <section className="my-10 rounded-2xl border border-amber-200 bg-amber-50/70 p-6">
-            <div className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Ressources officielles</p>
-              <h2 className="mt-1 text-lg font-bold text-primary">Accéder au portail de votre démarche</h2>
-              <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                Utilisez uniquement ces adresses officielles pour vous connecter ou prendre rendez-vous.
-              </p>
-            </div>
+        <section className="my-10 rounded-2xl border border-amber-200 bg-amber-50/70 p-6">
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Provenance</p>
+            <h2 className="mt-1 text-lg font-bold text-primary">Sources officielles et vérification</h2>
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">
+              Ce guide distingue les informations publiées par les autorités de nos conseils pratiques. Vérifiez toujours la source officielle avant de déposer, car les règles et disponibilités peuvent changer.
+            </p>
+          </div>
+          {officialLinks.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {officialLinks.map((link) => (
                 <a
@@ -319,8 +300,12 @@ export default function GuidePage() {
                 </a>
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <p className="text-sm leading-relaxed text-slate-600">
+              Consultez le portail officiel de la destination concernée avant toute démarche ; aucun lien n’est affiché ici lorsqu’il n’est pas identifié dans nos données.
+            </p>
+          )}
+        </section>
 
         {/* Related destination */}
         {guide.relatedDestination && (
@@ -358,7 +343,7 @@ export default function GuidePage() {
             </div>
           </section>
         )}
-      </div>
+      </article>
 
       {/* WhatsApp floating */}
       <a

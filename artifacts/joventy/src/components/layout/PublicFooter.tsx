@@ -157,6 +157,7 @@ export function PublicFooter() {
             <div className="mt-6 space-y-1.5 text-sm text-white/50">
               <Link href="/prix" className="block hover:text-white transition-colors">Tarifs</Link>
               <Link href="/a-propos" className="block hover:text-white transition-colors">À propos</Link>
+              <Link href="/methodologie-sources" className="block hover:text-white transition-colors">Méthodologie & sources</Link>
             </div>
           </div>
         </div>
