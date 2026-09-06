@@ -90,6 +90,14 @@ function classifyReferrerSource(referrer: string | undefined): string {
     return "Direct";
   }
   if (!host || host.includes("joventy")) return "Direct";
+  if (host === "chatgpt.com" || host === "chat.openai.com") return "IA — ChatGPT";
+  if (host === "perplexity.ai") return "IA — Perplexity";
+  if (host === "gemini.google.com" || host === "bard.google.com") return "IA — Gemini";
+  if (host === "copilot.microsoft.com") return "IA — Microsoft Copilot";
+  if (host === "claude.ai") return "IA — Claude";
+  if (host === "you.com") return "IA — You.com";
+  if (host === "poe.com") return "IA — Poe";
+  if (host === "mistral.ai" || host === "chat.mistral.ai") return "IA — Mistral";
   if (host.includes("google")) return "Google";
   if (host.includes("bing")) return "Bing";
   if (host.includes("yahoo")) return "Yahoo";

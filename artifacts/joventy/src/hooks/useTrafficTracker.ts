@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
+import { classifyAiReferrer, trackEvent } from "@/lib/analytics";
 
 function getSessionId(): string {
   try {
@@ -36,6 +37,7 @@ export function useTrafficTracker() {
   const sessionId = useRef(getSessionId());
   const referrer = useRef(getInitialReferrer());
   const lastPath = useRef<string | null>(null);
+  const aiReferralTracked = useRef(false);
 
   useEffect(() => {
     if (lastPath.current === location) return;
@@ -47,6 +49,17 @@ export function useTrafficTracker() {
       referrer: referrer.current || undefined,
     }).catch(() => {});
     updatePresence({ sessionId: sessionId.current, path: location }).catch(() => {});
+
+    if (!aiReferralTracked.current) {
+      const assistant = classifyAiReferrer(referrer.current);
+      if (assistant) {
+        aiReferralTracked.current = true;
+        trackEvent("ai_referral_detected", {
+          assistant,
+          landing_path: location,
+        });
+      }
+    }
   }, [location, recordPageView, updatePresence]);
 
   useEffect(() => {
