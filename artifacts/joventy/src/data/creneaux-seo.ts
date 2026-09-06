@@ -10,6 +10,7 @@ export interface CreneauxSEO {
   accroche: string;
   urgency: string;
   stats: { n: string; label: string }[];
+  highlights?: string[];
   steps: { icon: string; title: string; desc: string }[];
   included: string[];
   faqs: { q: string; a: string }[];
@@ -17,6 +18,49 @@ export interface CreneauxSEO {
 }
 
 export const CRENEAUX_PAGES: CreneauxSEO[] = [
+  {
+    slug: "creneaux-visa-france-long-sejour-kinshasa",
+    flagCode: "fr",
+    destinationKey: "france_long_stay",
+    emoji: "🇫🇷",
+    name: "France long séjour",
+    title: "Créneau visa France long séjour Kinshasa 2026 — France-Visas | Joventy",
+    metaDescription: "Rendez-vous visa France long séjour depuis Kinshasa : étapes France-Visas et Ambassade de France. Service créneau à 350 USD, payé après obtention, sans acompte.",
+    h1: "Créneau visa France long séjour depuis Kinshasa — France-Visas",
+    accroche: "Pour un séjour en France de plus de 90 jours, préparez d'abord la demande correspondant à votre situation sur France-Visas. Les rendez-vous et le dépôt relèvent de l'Ambassade de France à Kinshasa, selon ses instructions. Joventy peut suivre la disponibilité et vous assister dans la démarche de rendez-vous ; nous n'avons aucun accès privilégié et ne pouvons pas promettre une date.",
+    urgency: "Les disponibilités dépendent des ouvertures officielles et de votre catégorie de visa ; anticipez votre demande.",
+    stats: [
+      { n: "350 $", label: "payés après confirmation du créneau obtenu" },
+      { n: "0 $", label: "d'acompte pour cette destination hors Espagne" },
+      { n: "France-Visas", label: "à compléter avant de suivre les instructions de dépôt" },
+      { n: "Ambassade", label: "autorité compétente pour le long séjour à Kinshasa" },
+    ],
+    highlights: [
+      "Aucun acompte requis",
+      "Paiement Mobile Money accepté",
+      "Suivi du canal officiel applicable",
+      "Notification après confirmation",
+    ],
+    steps: [
+      { icon: "📝", title: "Préparez votre parcours France-Visas", desc: "Identifiez votre catégorie (études, famille, travail ou autre long séjour), complétez les informations demandées et rassemblez les pièces de la checklist." },
+      { icon: "🔎", title: "Demandez le suivi du rendez-vous", desc: "Créez votre demande « Créneau uniquement — France long séjour ». Sans acompte, Joventy suit le canal officiel indiqué pour votre catégorie ; aucune date n'est garantie." },
+      { icon: "✅", title: "Créneau confirmé → paiement de 350 $", desc: "Quand un rendez-vous est effectivement confirmé selon le parcours officiel, vous recevez les informations disponibles et réglez les 350 USD par Mobile Money." },
+    ],
+    included: [
+      "Vérification de la cohérence entre la catégorie France-Visas et la demande de rendez-vous",
+      "Suivi du canal officiel de rendez-vous applicable à votre long séjour",
+      "Transmission des informations de rendez-vous lorsqu'il est confirmé",
+      "Accès à l'espace client pour le suivi de la demande",
+      "Support administratif ; ni décision consulaire ni accès privilégié",
+    ],
+    faqs: [
+      { q: "Le service créneau France long séjour coûte-t-il 350 USD ?", a: "Oui. Le service de rendez-vous seul est facturé 350 USD après l'obtention effective d'un créneau confirmé. Pour cette destination hors Espagne, aucun acompte n'est demandé." },
+      { q: "Le visa France long séjour passe-t-il par le CEV ?", a: "Non. Le CEV concerne le court séjour Schengen lorsqu'il est compétent. Un long séjour français se prépare avec France-Visas puis relève de l'Ambassade de France à Kinshasa." },
+      { q: "Joventy peut-il garantir une date ou un visa ?", a: "Non. Les dates dépendent des ouvertures officielles et la décision de visa appartient exclusivement à l'ambassade. Joventy ne dispose pas d'accès privilégié." },
+      { q: "Campus France est-il nécessaire pour un visa étudiant ?", a: "Pour certains projets d'études, une procédure Campus France peut être requise avant la demande de visa. Vérifiez votre situation sur Campus France et France-Visas." },
+    ],
+    relatedDestSlug: "visa-france-long-sejour-kinshasa",
+  },
   {
     slug: "creneaux-visa-allemagne-kinshasa",
     flagCode: "de",

@@ -20,11 +20,12 @@ function FlagImg({ code, size = 32, className = "" }: { code: string; size?: num
 const DESTINATIONS = [
   { code: "us", name: "Visa USA", types: "B1/B2, F1, K1, H1B", delay: "Variable (créneaux)", href: "/visa-usa-kinshasa", alert: "⚠️ Services suspendus à Kinshasa (Ebola)", note: null },
   { code: "ca", name: "Visa Canada", types: "Visiteur, Études, Travail", delay: "2-8 semaines", href: "/visa-canada-kinshasa", alert: "⚠️ Suspendus pour RDC (27 mai — 28 août 2026)", note: null },
-  { code: "eu", name: "Visa Schengen", types: "Tourisme, Études, Long séjour, Visa D", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null, note: null },
+  { code: "eu", name: "Visa Schengen", types: "Court séjour : tourisme, affaires, études courtes", delay: "15-30 jours ouvrables", href: "/visa-schengen-kinshasa", alert: null, note: null },
   { code: "gb", name: "Visa Royaume-Uni", types: "Standard Visitor, Student, Work", delay: "3-6 semaines", href: "/visa-royaume-uni-kinshasa", alert: null, note: null },
   { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null, note: null },
   { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null, note: null },
-  { code: "de", name: "Visa Allemagne", types: "National Études / Travail, Regroupement familial, Chancenkarte", delay: "Variable (RK-Termin)", href: "/visa-schengen-kinshasa", alert: null, note: null },
+  { code: "fr", name: "Visa France long séjour", types: "Études, famille, travail (+90 jours)", delay: "Variable (France-Visas / ambassade)", href: "/visa-france-long-sejour-kinshasa", alert: null, note: null },
+  { code: "de", name: "Visa Allemagne", types: "Visa national type D : études, travail, famille", delay: "Variable (RK-Termin)", href: "/visa-allemagne-kinshasa", alert: null, note: null },
   { code: "ae", name: "Visa Dubaï (EAU)", types: "Touriste 30j/60j, Affaires, Résidence", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null, note: null },
   { code: "tr", name: "Visa Turquie", types: "E-Visa en ligne, Visa Sticker (ambassade), Transit", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null, note: null },
   { code: "al", name: "Visa Albanie", types: "E-Visa en ligne, Visa touristique", delay: "2-5 jours ouvrables", href: "/visa-albanie-kinshasa", alert: null, note: "ℹ️ E-Visa disponible en ligne. Titulaires d'un visa Schengen/USA/UK valide peuvent entrer sans visa." },
@@ -213,6 +214,7 @@ export default function Prix() {
               { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", label: "Créneau Schengen — CEV Belgique", sub: "France, Belgique, Pays-Bas, Italie…" },
               { href: "/creneaux-visa-usa-kinshasa", flag: "us", label: "Créneau Visa USA", sub: "B1/B2 Tourisme · F1 Études" },
               { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", label: "Créneau Long Séjour Allemagne", sub: "Études, travail, regroupement familial" },
+              { href: "/creneaux-visa-france-long-sejour-kinshasa", flag: "fr", label: "Créneau France long séjour", sub: "France-Visas · études, famille, travail" },
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <div className="group flex items-center gap-3 bg-white border border-green-200 hover:border-secondary rounded-xl px-4 py-3 transition-all hover:shadow-sm cursor-pointer">

@@ -155,12 +155,12 @@ export function CreneauxLanding({ data }: Props) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 mb-5">
-              {[
+              {(data.highlights ?? [
                 "Aucun acompte requis",
                 "Paiement M-Pesa accepté",
                 "Surveillance active 24h/24, 7j/7",
                 "Notification WhatsApp immédiate",
-              ].map((item) => (
+              ]).map((item) => (
                 <div key={item} className="flex items-center gap-2 text-white/80 text-xs">
                   <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
                   {item}

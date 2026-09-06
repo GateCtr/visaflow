@@ -34,6 +34,7 @@ import CreneauxAllemagne from "@/pages/creneaux/CreneauxAllemagne";
 import CreneauxEspagne from "@/pages/creneaux/CreneauxEspagne";
 import CreneauxSchengen from "@/pages/creneaux/CreneauxSchengen";
 import CreneauxUSA from "@/pages/creneaux/CreneauxUSA";
+import CreneauxFranceLongSejour from "@/pages/creneaux/CreneauxFranceLongSejour";
 import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
 
@@ -148,6 +149,8 @@ function Router() {
       <Route path="/visa-royaume-uni-kinshasa" component={DestinationPage} />
       <Route path="/visa-schengen-kinshasa" component={DestinationPage} />
       <Route path="/visa-espagne-kinshasa" component={DestinationPage} />
+      <Route path="/visa-france-long-sejour-kinshasa" component={DestinationPage} />
+      <Route path="/visa-allemagne-kinshasa" component={DestinationPage} />
       <Route path="/visa-suisse-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-dubai-kinshasa" component={DestinationPage} />
       <Route path="/visa-turquie-kinshasa" component={DestinationPage} />
@@ -164,6 +167,7 @@ function Router() {
       <Route path="/ambassade-canada-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-royaume-uni-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-schengen-france-kinshasa" component={EmbassyPage} />
+      <Route path="/ambassade-allemagne-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-belgique-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-espagne-kinshasa" component={EmbassyPage} />
       <Route path="/ambassade-suisse-kinshasa" component={EmbassyPage} />
@@ -184,6 +188,7 @@ function Router() {
       <Route path="/creneaux-visa-espagne-kinshasa" component={CreneauxEspagne} />
       <Route path="/creneaux-visa-schengen-belgique-kinshasa" component={CreneauxSchengen} />
       <Route path="/creneaux-visa-usa-kinshasa" component={CreneauxUSA} />
+      <Route path="/creneaux-visa-france-long-sejour-kinshasa" component={CreneauxFranceLongSejour} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />

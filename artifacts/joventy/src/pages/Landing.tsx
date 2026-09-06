@@ -844,7 +844,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ═══ CRÉNEAUX GARANTIS PAR DESTINATION ═══ */}
+      {/* ═══ CRÉNEAUX PAR DESTINATION ═══ */}
       <section className="py-16 bg-gradient-to-br from-green-50 to-emerald-50 border-y border-green-200">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-8">
@@ -861,7 +861,8 @@ export default function Landing() {
               { href: "/creneaux-visa-espagne-kinshasa", emoji: "🇪🇸", name: "Espagne", sub: "Visa Schengen via ambassade d'Espagne" },
               { href: "/creneaux-visa-schengen-belgique-kinshasa", emoji: "🇧🇪", name: "Schengen — CEV", sub: "France, Belgique, Pays-Bas, Italie…" },
               { href: "/creneaux-visa-usa-kinshasa", emoji: "🇺🇸", name: "États-Unis", sub: "B1/B2 Tourisme · F1 Études" },
-              { href: "/creneaux-visa-allemagne-kinshasa", emoji: "🇩🇪", name: "Allemagne", sub: "Études, travail, regroupement familial" },
+              { href: "/creneaux-visa-allemagne-kinshasa", emoji: "🇩🇪", name: "Allemagne type D", sub: "Visa national · RK-Termin" },
+              { href: "/creneaux-visa-france-long-sejour-kinshasa", emoji: "🇫🇷", name: "France long séjour", sub: "France-Visas · ambassade" },
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <div className="group bg-white border border-green-200 hover:border-secondary hover:shadow-md rounded-2xl p-5 flex flex-col items-center text-center transition-all cursor-pointer">
