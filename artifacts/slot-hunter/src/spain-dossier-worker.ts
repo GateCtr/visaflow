@@ -262,6 +262,29 @@ const END_OF_MONTH_THRESHOLD_DAYS = ((): number => {
 })();
 
 const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
+const SPAIN_CANCELLATION_SCAN_TIME_ZONE = "Africa/Kinshasa";
+const CANCELLATION_PUBLICATION_DAYS = new Set(["Wed", "Thu", "Fri", "Sat"]);
+
+/**
+ * Du mercredi au samedi (heure de Kinshasa), une réponse mensuelle contenant
+ * des créneaux déclenche immédiatement le booking. Les mois suivants ne sont
+ * plus interrogés : pendant cette période, les publications sont surtout des
+ * annulations rares sur le premier mois utile et chaque requête ajoute du délai.
+ *
+ * Si le mois courant est vide, cette fonction renvoie false et le scan continue
+ * normalement vers le deuxième mois.
+ */
+export function shouldStopMonthlyScanAfterSlots(
+  now: Date,
+  foundSlotCount: number,
+): boolean {
+  if (foundSlotCount <= 0) return false;
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: SPAIN_CANCELLATION_SCAN_TIME_ZONE,
+    weekday: "short",
+  }).format(now);
+  return CANCELLATION_PUBLICATION_DAYS.has(weekday);
+}
 
 /**
  * Mode Race : quand le nombre total de créneaux distincts détectés dans un cycle
@@ -820,6 +843,13 @@ export async function scanDatetimeDirect(
     if (slots.length > 0) {
       allSlots.push(...slots);
       consecutiveEmpty = 0;
+      if (shouldStopMonthlyScanAfterSlots(now, slots.length)) {
+        log(
+          "INFO",
+          `${tag}   ⚡ Annulations mercredi–samedi : ${slots.length} créneau(x) trouvé(s) dans ${monthLabel} — arrêt multi-mois, booking immédiat`,
+        );
+        break;
+      }
     } else {
       consecutiveEmpty++;
     }

@@ -423,6 +423,43 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
   });
 });
 
+describe("scan annulations mercredi–samedi — arrêt multi-mois", () => {
+  it.each([
+    ["mercredi", "2026-09-09T12:00:00.000Z"],
+    ["jeudi", "2026-09-10T12:00:00.000Z"],
+    ["vendredi", "2026-09-11T12:00:00.000Z"],
+    ["samedi", "2026-09-12T12:00:00.000Z"],
+  ])("arrête après un mois positif le %s", (_label, iso) => {
+    expect(worker.shouldStopMonthlyScanAfterSlots(new Date(iso), 1)).toBe(true);
+    expect(worker.shouldStopMonthlyScanAfterSlots(new Date(iso), 3)).toBe(true);
+  });
+
+  it("continue vers le deuxième mois si le premier est vide", () => {
+    const friday = new Date("2026-09-11T12:00:00.000Z");
+    expect(worker.shouldStopMonthlyScanAfterSlots(friday, 0)).toBe(false);
+  });
+
+  it.each([
+    ["dimanche", "2026-09-13T12:00:00.000Z"],
+    ["lundi", "2026-09-14T12:00:00.000Z"],
+    ["mardi", "2026-09-15T12:00:00.000Z"],
+  ])("conserve le scan multi-mois le %s", (_label, iso) => {
+    expect(worker.shouldStopMonthlyScanAfterSlots(new Date(iso), 2)).toBe(false);
+  });
+
+  it("utilise le jour de Kinshasa autour de minuit UTC", () => {
+    // Mardi 23:30 UTC = mercredi 00:30 à Kinshasa.
+    const kinshasaWednesday = new Date("2026-09-08T23:30:00.000Z");
+    expect(worker.shouldStopMonthlyScanAfterSlots(kinshasaWednesday, 1)).toBe(true);
+  });
+
+  it("fonctionne aussi quand le premier mois utile est le mois suivant en fin de mois", () => {
+    // La règle dépend du premier mois effectivement interrogé, pas de son offset calendrier.
+    const endOfMonthWednesday = new Date("2026-09-30T12:00:00.000Z");
+    expect(worker.shouldStopMonthlyScanAfterSlots(endOfMonthWednesday, 1)).toBe(true);
+  });
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  Unit — publishSlotSnapshotWithRetry : retry 3× backoff exponentiel (Req 9.6)
 //  Validates: Requirements 9.6
