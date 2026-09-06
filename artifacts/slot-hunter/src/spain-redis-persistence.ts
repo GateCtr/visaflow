@@ -1397,6 +1397,7 @@ export async function releaseSentinelRole(portalUrl: string, dossierId: string):
 
 const REDIS_BOOKING_ARMED_KEY = "spain:booking:armed_count";
 const REDIS_BOOKING_ARMED_TTL_SEC = 90; // Auto-reset si crash (personne ne DECR)
+const REDIS_BOOKING_WINNER_TTL_SEC = 24 * 60 * 60;
 
 /** Nombre maximum de workers en booking simultané. Au-delà → scan rapide 2-3s sans booking. */
 export const MAX_CONCURRENT_BOOKERS = 5;
@@ -1484,6 +1485,48 @@ export async function releaseBookingSlot(dossierId: string): Promise<void> {
     console.log(`[spain-redis] ✅ Booking slot libéré — ${dossierId.slice(0, 8)}…`);
   } catch (err) {
     console.warn(`[spain-redis] releaseBookingSlot: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/**
+ * Enregistre le premier booking confirmé pour un créneau, APRÈS arbitrage Bookitit.
+ * Cette clé n'est jamais consultée pour autoriser ou bloquer une tentative : elle sert
+ * uniquement à coordonner et diagnostiquer le gagnant une fois summary/ confirmé.
+ *
+ * @returns true si ce dossier est le premier gagnant enregistré, false si un gagnant
+ *          était déjà présent. Redis indisponible → true (booking jamais invalidé).
+ */
+export async function recordBookingWinner(
+  date: string,
+  time: string,
+  agendaId: string,
+  dossierId: string,
+  locator?: string,
+): Promise<boolean> {
+  if (!redisReady || !redisClient) return true;
+
+  const slotKey = [agendaId, date, time].map((part) => encodeURIComponent(part)).join(":");
+  const key = `spain:booking:winner:${slotKey}`;
+  const value = JSON.stringify({
+    dossierId,
+    locator: locator ?? "",
+    confirmedAt: new Date().toISOString(),
+  });
+
+  try {
+    const result = await redisClient.set(key, value, {
+      NX: true,
+      EX: REDIS_BOOKING_WINNER_TTL_SEC,
+    });
+    if (result === "OK") {
+      console.log(`[spain-redis] 🏆 Gagnant booking enregistré — ${date} ${time} / ${dossierId.slice(0, 8)}…`);
+      return true;
+    }
+    console.log(`[spain-redis] 🏁 Gagnant déjà enregistré — ${date} ${time}`);
+    return false;
+  } catch (err) {
+    console.warn(`[spain-redis] recordBookingWinner: ${err instanceof Error ? err.message : err}`);
+    return true;
   }
 }
 

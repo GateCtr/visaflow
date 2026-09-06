@@ -44,6 +44,7 @@ vi.mock("../spain-slot-coordinator.js", () => ({
   isIpReservedByOther: vi.fn(),
   releaseWorkerIp: vi.fn(),
   publishSlotSnapshot: vi.fn(),
+  recordBookingWinner: vi.fn(),
 }));
 
 import { publishSlotSnapshot } from "../spain-slot-coordinator.js";
@@ -385,6 +386,40 @@ describe("attemptBookingRace — seuil de bypass sémaphore (Req 9.5)", () => {
       ),
       { numRuns: 300 },
     );
+  });
+});
+
+describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
+  it("désactive toute coordination pré-booking en race, mais la conserve hors race", () => {
+    expect(worker.shouldCoordinateBeforeBooking(true)).toBe(false);
+    expect(worker.shouldCoordinateBeforeBooking(false)).toBe(true);
+  });
+
+  it("plusieurs workers peuvent tenter immédiatement le même créneau", () => {
+    const workers = Array.from({ length: 3 }, () => ({
+      canAttempt: !worker.shouldCoordinateBeforeBooking(true),
+    }));
+
+    expect(workers.every((entry) => entry.canAttempt)).toBe(true);
+  });
+
+  it("un gagnant et plusieurs signin/ 0B font passer les perdants au candidat suivant", () => {
+    const outcomes = [
+      { status: "booked" as const, errorMessage: undefined },
+      { status: "signin_failed" as const, errorMessage: "signin/ → 0B" },
+      { status: "signin_failed" as const, errorMessage: "signin/ → 0B" },
+    ];
+
+    expect(outcomes.map((outcome) =>
+      worker.shouldFallbackAfterSignin(outcome.status, outcome.errorMessage),
+    )).toEqual([false, true, true]);
+  });
+
+  it("ne confond pas une erreur de credentials avec une race perdue", () => {
+    expect(worker.shouldFallbackAfterSignin(
+      "signin_failed",
+      "Identifiants incorrects",
+    )).toBe(false);
   });
 });
 

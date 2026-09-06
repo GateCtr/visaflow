@@ -46,6 +46,7 @@ import {
   isIpReservedByOther,
   releaseWorkerIp,
   publishSlotSnapshot,
+  recordBookingWinner,
 } from "./spain-slot-coordinator.js";
 import { buildSlotAssignment } from "./spain-slot-assignment.js";
 import {
@@ -271,6 +272,26 @@ const MAX_DISCOVERY_EVENTS_PER_CYCLE = 60;
  * Quand > seuil : mode normal (Redis claim atomique empêche la collision inter-dossiers).
  */
 const RACE_MODE_SLOT_THRESHOLD = 5;
+
+/**
+ * En publication/race, Bookitit arbitre lui-même les tentatives concurrentes :
+ * aucun sémaphore ni claim Redis ne doit retarder un signin/.
+ * Hors race, les protections Redis historiques restent actives.
+ */
+export function shouldCoordinateBeforeBooking(raceMode: boolean): boolean {
+  return !raceMode;
+}
+
+/**
+ * Un signin/ sans réponse après un getsigninfields/ valide est une race perdue
+ * (ou une surcharge ponctuelle) : le worker doit tenter le candidat suivant.
+ */
+export function shouldFallbackAfterSignin(
+  status: SpainBookingResult["status"],
+  errorMessage?: string,
+): boolean {
+  return status === "signin_failed" && (errorMessage ?? "").includes("0B");
+}
 
 /**
  * Seuil "assez de places" pour BYPASSER le sémaphore de booking.
@@ -1782,7 +1803,7 @@ export async function runDossierWorker(
               })()
             : sortedEligible;
 
-          // ── V2 : Sémaphore de booking — limiter à MAX_CONCURRENT_BOOKERS signin/ simultanés ──
+          // ── V2 : Sémaphore de booking — uniquement HORS mode publication/race ──
           // Si le sémaphore est plein, ce worker reste en scan rapide (2-3s) sans tenter le booking.
           // Il reviendra au prochain cycle et re-checkera armed_count.
           //
@@ -1811,12 +1832,16 @@ export async function runDossierWorker(
           };
           const raceDecision = attemptBookingRace(rt, raceSnapshot, Date.now(), tag);
           const enoughSlotsForAll =
-            raceDecision.bypassSemaphore || totalFreeCapacity >= SEMAPHORE_BYPASS_SLOT_THRESHOLD;
+            raceMode ||
+            raceDecision.bypassSemaphore ||
+            totalFreeCapacity >= SEMAPHORE_BYPASS_SLOT_THRESHOLD;
           if (enoughSlotsForAll) {
             if (!holdingBookingSlot) {
               log(
                 "INFO",
-                `${tag} 🚀 Sémaphore bypassé — ${totalFreeCapacity} places (${eligible.length} créneaux) ≥ ${SEMAPHORE_BYPASS_SLOT_THRESHOLD} (assez pour tous, pas de collision) → booking immédiat`,
+                raceMode
+                  ? `${tag} 🏁 MODE RACE — sémaphore bypassé sans condition → booking immédiat`
+                  : `${tag} 🚀 Sémaphore bypassé — ${totalFreeCapacity} places (${eligible.length} créneaux) ≥ ${SEMAPHORE_BYPASS_SLOT_THRESHOLD} (assez pour tous, pas de collision) → booking immédiat`,
               );
             }
             holdingBookingSlot = true; // marque le worker comme armé sans consommer le sémaphore
@@ -1838,31 +1863,22 @@ export async function runDossierWorker(
 
           if (holdingBookingSlot) {
           for (const candidate of bookingCandidates) {
-            // ── Redis atomic claim (anti-collision) — ACTIF aussi en mode RACE ────
-            // Le claim SETNX par créneau (date+time+agenda, capacité = freeslots)
-            // garantit qu'AUCUN de nos dossiers ne frappe signin/ sur le MÊME créneau
-            // qu'un autre. C'est le seul rempart fiable contre la collision « N workers
-            // sur 1 place → 0B pour tous » observée en prod : le serveur Bookitit rejette
-            // les signin/ concurrents sur une place unique au lieu d'en accepter un.
-            //
-            // On le laissait désactivé en RACE en pariant sur « le serveur arbitre le
-            // gagnant » — les logs prod ont montré l'inverse (0B synchrone pour tous).
-            // Avec le claim actif : en multi-slot, chaque dossier réserve un créneau
-            // DIFFÉRENT (distribution P4) → bookings parallèles sans collision ; sur 1
-            // place, un seul claim réussit → un seul signin/. Capacité freeslots>1 gérée
-            // par le Lua (plusieurs dossiers peuvent partager un créneau à ≥2 places).
-            // Redis absent → tryClaimSlot renvoie true (dégradé, on laisse tenter).
-            const ok = await tryClaimSlot(
-              candidate.date,
-              candidate.time,
-              candidate.agendaId ?? "",
-              config.id,
-              groupSize,
-              candidate.freeslots,
-            );
-            if (!ok) {
-              log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà réservé par un autre de nos dossiers (Redis) — prochain créneau…`);
-              continue;
+            // Hors race seulement : claim atomique anti-collision historique.
+            // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
+            // choisit le gagnant ; les perdants passent immédiatement au suivant.
+            if (shouldCoordinateBeforeBooking(raceMode)) {
+              const ok = await tryClaimSlot(
+                candidate.date,
+                candidate.time,
+                candidate.agendaId ?? "",
+                config.id,
+                groupSize,
+                candidate.freeslots,
+              );
+              if (!ok) {
+                log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà réservé par un autre de nos dossiers (Redis) — prochain créneau…`);
+                continue;
+              }
             }
 
             const slot = candidate;
@@ -2050,6 +2066,15 @@ export async function runDossierWorker(
             });
 
             if (bookResult.status === "booked") {
+              // Coordination APRÈS arbitrage Bookitit : mémoriser le premier gagnant
+              // sans jamais utiliser Redis pour bloquer les tentatives en mode race.
+              await recordBookingWinner(
+                slot.date,
+                slot.time,
+                slot.agendaId ?? "",
+                config.id,
+                bookResult.locator,
+              );
               await reportBookingSuccess(config, bookResult, slot, scan, tag);
               // V2 : libérer le sémaphore de booking (seulement si réellement acquis)
               if (holdingBookingSlot) {
@@ -2060,10 +2085,11 @@ export async function runDossierWorker(
               return workerResult;
             }
 
-            // Booking échoué → libérer le claim Redis de CE dossier immédiatement,
-            // pour qu'un autre dossier (ou ce dossier au prochain cycle) puisse re-tenter
-            // le créneau si la place existe encore. Actif aussi en RACE (le claim l'est).
-            releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
+            // Hors race, libérer le claim pré-booking après échec. En race aucun claim
+            // n'a été créé : Redis ne bloque jamais une tentative avant Bookitit.
+            if (shouldCoordinateBeforeBooking(raceMode)) {
+              releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
+            }
 
             // ── Erreur credentials permanente → sortie immédiate ──────────────────
             const isCredentialError = bookResult.status === "signin_failed"
@@ -2126,8 +2152,10 @@ export async function runDossierWorker(
             // mode RACE sur un slot freeSlots=1). Le 0B peut aussi venir d'une surcharge
             // serveur, mais dans les deux cas il n'y a plus rien à faire sur ce créneau →
             // on passe immédiatement au suivant.
-            const isSlotGoneOrOverload = bookResult.status === "signin_failed"
-              && (bookResult.errorMessage ?? "").includes("0B");
+            const isSlotGoneOrOverload = shouldFallbackAfterSignin(
+              bookResult.status,
+              bookResult.errorMessage,
+            );
             if (isSlotGoneOrOverload) {
               log("INFO", `${tag} ⏭️ signin/ 0B (slot déjà pris ou surcharge) — skip au prochain slot`);
               // Remonter l'échec 0B à la page Bookings (avant, ce cas n'était jamais reporté).

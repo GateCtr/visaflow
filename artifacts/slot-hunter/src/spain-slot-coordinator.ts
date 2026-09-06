@@ -23,4 +23,5 @@ export {
   isIpReservedByOther,
   releaseWorkerIp,
   publishSlotSnapshot,
+  recordBookingWinner,
 } from "./spain-redis-persistence.js";

@@ -7,7 +7,7 @@
  *
  *   L'assignement est DÉTERMINISTE : dossier[i] reçoit le slot[i] comme premier choix.
  *   Pas de hash, pas de hasard — zéro collision entre nos propres dossiers au premier
- *   tryClaimSlot tant que le nombre de slots ≥ nombre de dossiers.
+ *   choix tant que le nombre de slots ≥ nombre de dossiers.
  *
  * STRATÉGIE DE TRI DES SLOTS (avant assignement) :
  *   1. Slots avec free ≥ 2 d'abord (sûrs — peuvent accueillir plusieurs dossiers)
@@ -16,7 +16,8 @@
  *
  * FALLBACK :
  *   Si plus de dossiers que de slots → les derniers dossiers commencent au début
- *   du tableau (wrap-around). Redis les départagera en 1ms via tryClaimSlot.
+ *   du tableau (wrap-around). En publication/race, Bookitit les départage ; hors race,
+ *   le claim Redis historique reste actif.
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
