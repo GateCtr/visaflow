@@ -64,6 +64,9 @@ import {
   saveLastStickyForDossier,
   getLastStickyForDossier,
   deleteLastStickyForDossier,
+  saveWorkerProxyIdentity,
+  getWorkerProxyIdentity,
+  deleteWorkerProxyIdentity,
   tryAcquireBookingSlot,
   releaseBookingSlot,
   MAX_CONCURRENT_BOOKERS,
@@ -1275,9 +1278,19 @@ export async function runDossierWorker(
   // la même exit IP Decodo → cf_clearance Redis encore valide → CapSolver évité.
   // CRITIQUE : le cf_clearance CapSolver est lié à l'exit IP RÉELLE (pas au host:port).
   // Même port Decodo + nouveau stickyId = nouvelle exit IP = clearance invalide → re-solve.
-  const lastStickyId = await getLastStickyForDossier(config.id).catch(() => null);
+  const savedIdentity = await getWorkerProxyIdentity(config.id).catch(() => null);
+  const legacyStickyId = await getLastStickyForDossier(config.id).catch(() => null);
+  const currentBaseProxy = stripStickySession(proxyUrl);
+  const lastStickyId =
+    savedIdentity?.baseProxy === currentBaseProxy
+      ? savedIdentity.stickyId
+      : savedIdentity
+        ? null
+        : legacyStickyId;
   if (lastStickyId) {
     log("INFO", `${tag} ♻️ StickyId précédent récupéré (${lastStickyId}) — même exit IP attendue → CF cache potentiel`);
+  } else if (savedIdentity) {
+    log("WARN", `${tag} ♻️ Identité proxy/sticky incohérente — ancien cache ignoré`);
   }
 
   for (let attempt = 0; attempt < MAX_SESSION_RETRIES; attempt++) {
@@ -1302,6 +1315,7 @@ export async function runDossierWorker(
       proxyUrl = stickyProxy;
       // Mémoriser le stickyId réussi → réutilisable à la prochaine fenêtre (TTL 2h)
       await saveLastStickyForDossier(config.id, stickyId).catch(() => {});
+      await saveWorkerProxyIdentity(config.id, stripStickySession(stickyProxy), stickyId).catch(() => {});
       log("INFO", `${tag} ✅ Session établie — PHPSESSID ✅ | /main/ ${session.prefetchedMainHtml?.length ?? 0}B | cfFromCache=${cfFromCache}`);
       break;
     }
@@ -1317,6 +1331,7 @@ export async function runDossierWorker(
     // différente → CF clearance invalide → re-solve inutile).
     if (attempt === 0 && lastStickyId) {
       await deleteLastStickyForDossier(config.id).catch(() => {});
+      await deleteWorkerProxyIdentity(config.id).catch(() => {});
       log("INFO", `${tag} 🗑️ StickyId invalidé (port blacklisté) — prochain solve sera frais`);
     }
 
@@ -2434,6 +2449,7 @@ async function rotateWorkerIp(
   // Persister le nouveau stickyId → la prochaine fenêtre réutilisera la même exit IP
   // et bénéficiera du cache CF Redis (évite un re-solve CapSolver inutile).
   await saveLastStickyForDossier(config.id, stickyId).catch(() => {});
+  await saveWorkerProxyIdentity(config.id, stripStickySession(stickyNewProxy), stickyId).catch(() => {});
 
   log("INFO", `${tag} ✅ Rotation réussie — PHPSESSID ✅ | /main/ ${newSess.prefetchedMainHtml?.length ?? 0}B`);
   return stickyNewProxy;
@@ -2461,7 +2477,8 @@ async function pickDedicatedProxy(
   // ── Priorité : réutiliser le dernier port de ce dossier ──────────────────────
   // Si le même port est réutilisé, la clé Redis du CF clearance (host:port) est
   // identique → cache hit → CapSolver évité (~20s + balance économisés).
-  const lastProxy = await getLastProxyForDossier(dossierId);
+  const savedIdentity = await getWorkerProxyIdentity(dossierId).catch(() => null);
+  const lastProxy = savedIdentity?.baseProxy ?? await getLastProxyForDossier(dossierId);
   if (lastProxy && !isDecodoIpBlacklisted(lastProxy)) {
     const reservedByOther = await isIpReservedByOther(lastProxy, dossierId);
     if (!reservedByOther) {

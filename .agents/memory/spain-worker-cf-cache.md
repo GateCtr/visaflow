@@ -19,6 +19,19 @@ while workers whose solve completed quickly still scanned in 2–3 seconds.
 **How to apply:** Preparation belongs before the publication front. Never add scheduled
 rotation or solve work inside the active worker loop immediately before HH:13.
 
+The inter-window source of truth must be one atomic per-dossier proxy identity containing
+the base proxy and sticky ID together. Keep-alive, pre-warm, and the next worker must all
+consume that exact pair and use the same worker User-Agent. Publish a new identity only
+after the portal and `/main/` validate successfully.
+
+**Why:** Separate proxy/sticky keys can mix generations, and a different keep-alive UA can
+validate a clearance under a fingerprint the worker does not use. An uncancelled delayed
+keep-alive timer can also start a competing pre-warm after the worker has resumed.
+
+**How to apply:** Cancel both initial and interval keep-alive timers at worker handoff.
+Keep the global preflight pool for recovery reserves only; it must not independently
+re-solve per-dossier sessions that are not transferred to the worker.
+
 ## Root cause of cfCached=false
 `runDossierWorker` was generating `stickyId = Math.random()` on every window start.
 The Redis key for the CF cache (`proxyToWorkerKey`) is stable by host:port — but the

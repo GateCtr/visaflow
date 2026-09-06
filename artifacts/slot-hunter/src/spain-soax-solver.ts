@@ -1704,7 +1704,7 @@ export function createImpitWithProxy(proxyUrl: string): InstanceType<typeof Impi
 }
 
 // ─── UA fixe pour les workers (identique au bloc capsolver-residential) ────────
-const WORKER_UA =
+export const WORKER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
 

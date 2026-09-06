@@ -1065,6 +1065,57 @@ export async function releaseWorkerIp(proxyUrl: string, dossierId: string): Prom
 
 const REDIS_LAST_PROXY_PREFIX  = "visaflow:spain-worker-last-proxy:";
 const REDIS_LAST_PROXY_TTL_SEC = 2 * 3600; // 2h — couvre le gap inter-fenêtres (~40min)
+const REDIS_WORKER_IDENTITY_PREFIX = "visaflow:spain-worker-identity:";
+
+export interface SpainWorkerProxyIdentity {
+  baseProxy: string;
+  stickyId: string;
+  updatedAt: number;
+}
+
+/**
+ * Sauvegarde atomiquement le couple baseProxy + stickyId. Cette clé est la source
+ * de vérité inter-fenêtres : les anciennes clés séparées restent uniquement en
+ * compatibilité avec les données déjà présentes.
+ */
+export async function saveWorkerProxyIdentity(
+  dossierId: string,
+  baseProxy: string,
+  stickyId: string,
+): Promise<void> {
+  if (!redisReady || !redisClient || !baseProxy || !stickyId) return;
+  try {
+    await redisClient.set(
+      REDIS_WORKER_IDENTITY_PREFIX + dossierId,
+      JSON.stringify({ baseProxy, stickyId, updatedAt: Date.now() }),
+      { EX: REDIS_LAST_PROXY_TTL_SEC },
+    );
+  } catch (err: any) {
+    console.warn(`[spain-redis] saveWorkerProxyIdentity échouée: ${err?.message}`);
+  }
+}
+
+export async function getWorkerProxyIdentity(
+  dossierId: string,
+): Promise<SpainWorkerProxyIdentity | null> {
+  if (!redisReady || !redisClient) return null;
+  try {
+    const raw = await redisClient.get(REDIS_WORKER_IDENTITY_PREFIX + dossierId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SpainWorkerProxyIdentity>;
+    if (!parsed.baseProxy || !parsed.stickyId || typeof parsed.updatedAt !== "number") return null;
+    return parsed as SpainWorkerProxyIdentity;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteWorkerProxyIdentity(dossierId: string): Promise<void> {
+  if (!redisReady || !redisClient) return;
+  try {
+    await redisClient.del(REDIS_WORKER_IDENTITY_PREFIX + dossierId);
+  } catch {}
+}
 
 /**
  * Mémorise le proxy (base URL, sans sticky session) utilisé par ce dossier.

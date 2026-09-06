@@ -35,11 +35,14 @@ import {
   saveLastProxyForDossier,
   deleteWorkerCfClearance,
   saveWorkerCfClearance,
+  getWorkerProxyIdentity,
+  saveWorkerProxyIdentity,
+  deleteWorkerProxyIdentity,
 } from "./spain-redis-persistence.js";
 import { initDecodoPool, flagDecodoIp, rotateDecodoUrl } from "./spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "./convexClient.js";
 import { runDossierWorker, type SpainDossierConfig, type WorkerResult } from "./spain-dossier-worker.js";
-import { initWorkerSession } from "./spain-soax-solver.js";
+import { initWorkerSession, WORKER_UA } from "./spain-soax-solver.js";
 import { log } from "./scheduler-utils.js";
 // spain-synchronized-scan (task 11.1) : preflight + pool de réserve partagé.
 import { loadGridConfig, type GridConfig, type WorkerRuntimeState } from "./spain/spain-grid-config.js";
@@ -505,11 +508,15 @@ async function harvestFinishedWorkers(
         );
         // Démarrer le keep-alive Decodo pour maintenir l'exit IP pendant la pause
         // Récupérer le stickyId et baseProxy depuis Redis (sauvegardés par le worker dans finally)
-        getLastStickyForDossier(id).then(async (stickyId) => {
-          if (!stickyId) return;
+        getWorkerProxyIdentity(id).then(async (identity) => {
+          if (identity) {
+            startKeepAlive(id, identity.baseProxy, identity.stickyId, w.config.portalUrl);
+            return;
+          }
+          // Compatibilité avec les sessions sauvegardées avant l'identité atomique.
+          const stickyId = await getLastStickyForDossier(id);
           const baseProxy = await getLastProxyForDossier(id);
-          if (!baseProxy) return;
-          startKeepAlive(id, baseProxy, stickyId, w.config.portalUrl);
+          if (stickyId && baseProxy) startKeepAlive(id, baseProxy, stickyId, w.config.portalUrl);
         }).catch(() => {});
         break;
       }
@@ -758,15 +765,13 @@ async function runPreflightIfDue(deps: PreflightRunDeps): Promise<void> {
   );
 
   try {
-    await controller.armAll(dossiers);
+    // Les sessions per-dossier sont maintenues par leur keep-alive et consommées
+    // directement au prochain lancement. Ne pas les re-solver ici dans un second pool
+    // non transmis aux workers.
     await reservePool.warmUp(capsolverKey, portalUrl);
-    await controller.verifyAndRepair(Date.now());
-
-    const unready = controller.getUnreadyDossiers();
     log(
       "INFO",
-      `[SPAIN-ORCH] 🛫 Preflight terminé — réserves prêtes: ${reservePool.size()}/${reservePool.targetSize}` +
-        `${unready.size > 0 ? ` | dossiers non prêts: ${unready.size}` : ""}`,
+      `[SPAIN-ORCH] 🛫 Preflight terminé — réserves de récupération prêtes: ${reservePool.size()}/${reservePool.targetSize}`,
     );
   } catch (err) {
     // Un échec preflight ne doit jamais interrompre l'orchestrateur : les workers
@@ -808,8 +813,13 @@ function countCadenceWorkers(workers: Map<string, RunningWorker>): number {
  */
 const KEEPALIVE_INTERVAL_MS = 12 * 60_000; // 12 min
 
-/** Map dossierId → intervalId pour annuler les keep-alive au redémarrage du worker */
-const activeKeepAlives = new Map<string, ReturnType<typeof setInterval>>();
+interface KeepAliveTimers {
+  initialTimeout: ReturnType<typeof setTimeout>;
+  interval: ReturnType<typeof setInterval>;
+}
+
+/** Tous les timers doivent être annulés quand le worker reprend le relais. */
+const activeKeepAlives = new Map<string, KeepAliveTimers>();
 
 /**
  * Injecte un sticky session ID dans l'URL proxy Decodo (copie simplifiée de addStickySession).
@@ -867,7 +877,7 @@ function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, 
 
       const r = await (impit.fetch(targetUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/137.0.0.0",
+          "User-Agent": WORKER_UA,
           "Cookie": cookieStr,
         },
       } as any) as unknown as Promise<Response>);
@@ -923,6 +933,7 @@ function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, 
           saveWorkerCfClearance(newStickyUrl, result.session.cfClearance, cfExpiresAt);
           await saveLastStickyForDossier(dossierId, newStickyId);
           await saveLastProxyForDossier(dossierId, newBaseProxy);
+          await saveWorkerProxyIdentity(dossierId, newBaseProxy, newStickyId);
 
           // Mettre à jour le keep-alive pour le nouveau port
           currentBaseProxy = newBaseProxy;
@@ -933,7 +944,9 @@ function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, 
         } else {
           // Solve échoué aussi sur le nouveau port → on laisse le worker solve au démarrage
           log("WARN", `[SPAIN-ORCH] 🏓 Pre-warm CF échoué — ${dossierId.slice(0, 8)}… (worker solvera au démarrage)`);
-          // Sauver quand même le nouveau port/sticky (le worker solve dessus)
+          // Ne jamais publier une identité atomique comme "chaude" sans /main/ valide.
+          await deleteWorkerProxyIdentity(dossierId);
+          // Compatibilité : le worker reprendra ce couple et effectuera lui-même le solve.
           await saveLastStickyForDossier(dossierId, newStickyId);
           await saveLastProxyForDossier(dossierId, newBaseProxy);
           currentBaseProxy = newBaseProxy;
@@ -949,10 +962,9 @@ function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, 
   };
 
   // Premier ping décalé de 30s
-  setTimeout(() => { ping().catch(() => {}); }, 30_000);
-
-  const intervalId = setInterval(() => { ping().catch(() => {}); }, KEEPALIVE_INTERVAL_MS);
-  activeKeepAlives.set(dossierId, intervalId);
+  const initialTimeout = setTimeout(() => { ping().catch(() => {}); }, 30_000);
+  const interval = setInterval(() => { ping().catch(() => {}); }, KEEPALIVE_INTERVAL_MS);
+  activeKeepAlives.set(dossierId, { initialTimeout, interval });
 }
 
 /**
@@ -961,7 +973,8 @@ function startKeepAlive(dossierId: string, baseProxy: string, stickyId: string, 
 function stopKeepAlive(dossierId: string): void {
   const existing = activeKeepAlives.get(dossierId);
   if (existing) {
-    clearInterval(existing);
+    clearTimeout(existing.initialTimeout);
+    clearInterval(existing.interval);
     activeKeepAlives.delete(dossierId);
     log("INFO", `[SPAIN-ORCH] 🏓 Keep-alive arrêté — ${dossierId.slice(0, 8)}…`);
   }
@@ -971,8 +984,9 @@ function stopKeepAlive(dossierId: string): void {
  * Arrête tous les keep-alive actifs (cleanup à l'arrêt de l'orchestrateur).
  */
 function stopAllKeepAlives(): void {
-  for (const [id, interval] of activeKeepAlives) {
-    clearInterval(interval);
+  for (const timers of activeKeepAlives.values()) {
+    clearTimeout(timers.initialTimeout);
+    clearInterval(timers.interval);
   }
   if (activeKeepAlives.size > 0) {
     log("INFO", `[SPAIN-ORCH] 🏓 ${activeKeepAlives.size} keep-alive(s) arrêté(s)`);
