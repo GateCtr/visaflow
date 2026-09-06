@@ -7,6 +7,18 @@ description: Why cfCached=false at every window start, and how the stickyId + ti
 The CF clearance (cf_clearance) is bound to the **real exit IP**, not to the Decodo host:port.
 Even with the same port, a new stickyId → new exit IP → cached clearance is invalid.
 
+Do not force a fresh IP or a new CF solve at HH:10. A healthy worker session established
+at the start of the HH:03–HH:25 window must keep the same base proxy, sticky ID, exit IP,
+clearance, Impit instance, and PHP state through HH:13. Rotate only after a real
+`proxy_error`/`cf_expired` signal.
+
+**Why:** The former per-worker HH:10 refresh ran `rotateWorkerIp` and PHP initialization
+inline. Slow solves crossed HH:13, making some apparent scan cycles exceed 120 seconds
+while workers whose solve completed quickly still scanned in 2–3 seconds.
+
+**How to apply:** Preparation belongs before the publication front. Never add scheduled
+rotation or solve work inside the active worker loop immediately before HH:13.
+
 ## Root cause of cfCached=false
 `runDossierWorker` was generating `stickyId = Math.random()` on every window start.
 The Redis key for the CF cache (`proxyToWorkerKey`) is stable by host:port — but the

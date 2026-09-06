@@ -72,9 +72,9 @@ const LOCK_RENEWAL_MS = 30_000;
 /**
  * Fenêtre de publication des créneaux Bookitit.
  * Le portail publie généralement vers la 13ème-14ème minute de chaque heure.
- * On se réveille à WINDOW_START_MIN (défaut: 3) pour avoir 10 min de préparation
- * (keep-alive chaud + pre-pub HH:10) avant le pic HH:13, et on laisse le
- * worker tourner pendant WORKER_WINDOW_MS (25 min dans spain-dossier-worker.ts).
+ * On se réveille à WINDOW_START_MIN (défaut: 3) pour établir puis conserver
+ * l'IP sticky, la clearance CF et la session PHP avant le pic HH:13. Aucun refresh
+ * forcé ne doit remplacer une session saine juste avant la publication.
  * Hors fenêtre → l'orchestrateur ne lance pas de nouveau worker.
  *
  * Override via env : SPAIN_WINDOW_START_MIN (0-59)
@@ -91,9 +91,9 @@ const WINDOW_START_MIN = ((): number => {
  * Override via env : SPAIN_WINDOW_DURATION_MIN
  */
 const WINDOW_DURATION_MIN = ((): number => {
-  // Défaut 22 : fenêtre HH:03 → HH:25 (3+22). Démarrer à HH:03 (au lieu de HH:05) donne
-  // 10 min de préparation avant le pic HH:13 (keep-alive chaud + pre-pub HH:10), pour
-  // qu'à HH:13 aucun solve/init ne soit en cours. Fin HH:25 alignée sur windowEndMin.
+  // Défaut 22 : fenêtre HH:03 → HH:25 (3+22). Démarrer à HH:03 laisse 10 minutes
+  // pour établir les sessions avant HH:13, puis les conserve tant qu'aucune panne
+  // réelle n'est détectée. Fin HH:25 alignée sur windowEndMin.
   const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "22");
   return Math.max(1, Number.isFinite(v) ? Math.round(v) : 22);
 })();

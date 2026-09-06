@@ -542,24 +542,6 @@ export async function publishSlotSnapshotWithRetry(
   return false;
 }
 
-/**
- * Pre-publication proxy refresh : à la minute PREPUB_REFRESH_MINUTE de chaque heure,
- * chaque worker prend une IP fraîche du pool + re-solve CF, pour arriver au pic (HH:13)
- * sur une base neuve. Coexiste avec le keep-alive inter-fenêtre (qui garde les sessions
- * chaudes → pas de solve massif à l'ouverture de fenêtre). Valeur 10 → refresh à HH:10,
- * le solve (~3min max) fini avant HH:13 → aucun solve/init en cours pendant le pic.
- */
-const PREPUB_REFRESH_MINUTE = 10;
-
-/**
- * Fin de la fenêtre pre-pub = début de la chasse (HH:HUNT_START_MIN). Le refresh
- * pre-pub n'est déclenché que dans [PREPUB_REFRESH_MINUTE, HUNT_START_MIN[.
- */
-const HUNT_START_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_HUNT_START_MIN ?? "13");
-  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 13));
-})();
-
 // ─── Détection erreur proxy ────────────────────────────────────────────────────
 
 /**
@@ -1453,9 +1435,6 @@ export async function runDossierWorker(
     return workerResult;
   }
 
-  // ── Tracking pre-publication proxy refresh (1x par heure) ─────────────────
-  let lastPrepubRefreshHour = -1;
-
   // ── spain-synchronized-scan (task 10.1) : grille d'horloge murale + état runtime ──
   // La grille remplace le sleep relatif de fin de boucle par un alignement sur des
   // fronts d'horloge absolus (barrière commune sans coordination centrale) + jitter
@@ -1526,35 +1505,6 @@ export async function runDossierWorker(
     // if (cycleCount > 1 && await shouldSleepAfterSlots()) { ... }
 
     try {
-      // ── Pre-publication proxy refresh ─────────────────────────────────────────
-      // À la minute PREPUB_REFRESH_MINUTE (=10), prendre OBLIGATOIREMENT une IP fraîche
-      // + re-solve CF pour arriver au pic (HH:13) sur une base neuve. Le solve (~3 min max)
-      // démarré à HH:10 finit toujours avant HH:13 → aucun solve pendant la publication.
-      const nowDate = new Date();
-      const currentMinute = nowDate.getUTCMinutes();
-      const currentHour = nowDate.getUTCHours();
-      if (
-        currentMinute >= PREPUB_REFRESH_MINUTE &&
-        currentMinute < HUNT_START_MIN &&
-        currentHour !== lastPrepubRefreshHour
-      ) {
-        lastPrepubRefreshHour = currentHour;
-        log("INFO", `${tag} 🔄 Pre-pub refresh (min ${currentMinute}) — IP fraîche + solve avant publication`);
-        const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "main-0b-rotation");
-        if (newProxy) {
-          proxyUrl = newProxy;
-          phpState = await initPhpState(session, config, tag);
-          if (phpState) {
-            updatePhpTrace();
-            log("INFO", `${tag} ✅ Pre-pub refresh OK — proxy frais prêt`);
-          } else {
-            log("WARN", `${tag} ⚠️ Pre-pub refresh: PHP reinit échouée, proxy OK quand même`);
-          }
-        } else {
-          log("WARN", `${tag} ⚠️ Pre-pub refresh: rotation impossible — proxy actuel conservé`);
-        }
-      }
-
       // ── Header de cycle — visible pour chaque dossier en cours de scan ─────────
       const winRemain = Math.round((windowEnd - Date.now()) / 60_000);
       log(
