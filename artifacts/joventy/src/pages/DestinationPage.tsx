@@ -66,11 +66,11 @@ export default function DestinationPage() {
         href: "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services",
         description: "Portail citaconsular.es pour rechercher et confirmer un rendez-vous après réception des accès de l'ambassade.",
       }
-    : dest.slug === "visa-schengen-kinshasa"
+    : dest.slug === "visa-schengen-kinshasa" || dest.slug === "visa-belgique-long-sejour-kinshasa"
       ? {
           label: "Visa On Web — portail officiel belge",
           href: "https://visaonweb.diplomatie.be/",
-          description: "Portail officiel à utiliser pour préparer une demande belge avant les étapes de rendez-vous et de dépôt.",
+        description: "Portail officiel à utiliser avec votre compte et email personnels avant les étapes de rendez-vous et de dépôt.",
         }
       : null;
 
@@ -170,7 +170,7 @@ export default function DestinationPage() {
           <div className="flex flex-wrap gap-2 mb-6">
             <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
               <span className="w-1.5 h-1.5 bg-secondary rounded-full flex-shrink-0" />
-              100% en ligne — aucun bureau à visiter
+              Accompagnement à distance depuis Kinshasa
             </span>
             <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0" />
@@ -363,6 +363,20 @@ export default function DestinationPage() {
               {officialPortal.href.replace(/^https?:\/\//, "")}
               <ExternalLink className="w-4 h-4 flex-shrink-0" />
             </a>
+          </section>
+        )}
+
+        {dest.slug === "visa-belgique-long-sejour-kinshasa" && (
+          <section className="bg-slate-50 border border-slate-200 rounded-2xl p-6 sm:p-8">
+            <p className="text-primary font-semibold text-xs uppercase tracking-widest mb-1">Guides par motif</p>
+            <h2 className="text-xl font-bold text-primary mb-4">Préparer un visa D Belgique</h2>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/creneaux-visa-belgique-long-sejour-kinshasa"><Button className="bg-secondary hover:bg-secondary/90 text-white" size="sm">Service créneau type D</Button></Link>
+              <Link href="/guides/visa-belgique-long-sejour-kinshasa-procedure"><Button variant="outline" size="sm">Procédure générale</Button></Link>
+              <Link href="/guides/visa-etudiant-belgique-kinshasa"><Button variant="outline" size="sm">Visa étudiant</Button></Link>
+              <Link href="/guides/regroupement-familial-belgique-kinshasa"><Button variant="outline" size="sm">Regroupement familial</Button></Link>
+              <Link href="/guides/visa-travail-belgique-permis-unique-kinshasa"><Button variant="outline" size="sm">Visa travail</Button></Link>
+            </div>
           </section>
         )}
 

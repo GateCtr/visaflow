@@ -377,6 +377,14 @@ export function CreneauxLanding({ data }: Props) {
                 </p>
               </div>
             </Link>
+            {data.relatedGuideHref && (
+              <Link href={data.relatedGuideHref}>
+                <div className="group border border-border rounded-xl p-4 hover:border-primary/40 hover:bg-muted/50 transition-all cursor-pointer">
+                  <p className="text-xs text-muted-foreground mb-1">Avant le rendez-vous →</p>
+                  <p className="font-bold text-primary text-sm group-hover:underline">Lire la procédure officielle par étape</p>
+                </div>
+              </Link>
+            )}
           </div>
         </div>
       </section>

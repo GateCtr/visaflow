@@ -15,9 +15,43 @@ export interface CreneauxSEO {
   included: string[];
   faqs: { q: string; a: string }[];
   relatedDestSlug: string;
+  relatedGuideHref?: string;
 }
 
 export const CRENEAUX_PAGES: CreneauxSEO[] = [
+  {
+    slug: "creneaux-visa-belgique-long-sejour-kinshasa",
+    flagCode: "be",
+    destinationKey: "visa-belgique-long-sejour-kinshasa",
+    emoji: "🇧🇪",
+    name: "Belgique long séjour type D",
+    title: "Créneau visa Belgique long séjour type D Kinshasa | Joventy",
+    metaDescription: "Service privé de créneau visa Belgique type D à Kinshasa : 350 USD après obtention, sans acompte. Rendez-vous CEV officiel gratuit, sans garantie.",
+    h1: "Créneau visa Belgique long séjour type D depuis Kinshasa",
+    accroche: "Pour un séjour belge de plus de 90 jours, créez d’abord votre compte Visa On Web avec votre email personnel et sélectionnez la bonne catégorie. Le CEV reçoit les longs séjours Belgique et Luxembourg. La prise de rendez-vous officielle CEV est gratuite ; les 350 USD rémunèrent uniquement le service privé Joventy, après obtention, sans acompte, accès privilégié ni garantie de date ou de visa.",
+    urgency: "Les disponibilités officielles et la catégorie applicable varient ; aucun délai ni rendez-vous n’est garanti.",
+    stats: [
+      { n: "350 $", label: "service privé Joventy, après créneau confirmé" },
+      { n: "0 $", label: "d’acompte pour le service créneau" },
+      { n: "0 $", label: "pour la prise de rendez-vous officielle CEV" },
+      { n: "Visa On Web", label: "compte personnel requis avant la démarche" },
+    ],
+    highlights: ["Aucun acompte requis", "Rendez-vous CEV officiel gratuit", "Compte VOW personnel", "Sans accès privilégié ni garantie"],
+    steps: [
+      { icon: "📝", title: "Créez votre demande Visa On Web", desc: "Utilisez votre email personnel et la catégorie de long séjour correcte (études, travail, famille ou autre). Vérifiez la checklist officielle avant toute réservation." },
+      { icon: "🔎", title: "Demandez le service privé de suivi", desc: "Sans acompte, Joventy suit les disponibilités publiques pertinentes et vous assiste dans le parcours. Nous ne sommes pas le CEV et ne promettons aucune date." },
+      { icon: "✅", title: "Créneau confirmé → paiement de 350 $", desc: "Après obtention effective d’un créneau, vous réglez 350 USD pour le service Joventy. Les éventuels frais officiels restent distincts." },
+    ],
+    included: ["Assistance de compréhension du parcours Visa On Web personnel", "Suivi des disponibilités publiques du CEV", "Transmission des informations après confirmation", "Accès à l’espace client", "Service privé, sans décision consulaire ni accès privilégié"],
+    faqs: [
+      { q: "Le rendez-vous CEV pour un visa D belge est-il payant ?", a: "La prise de rendez-vous officielle CEV est gratuite. Les 350 USD concernent seulement le service privé Joventy, après obtention, sans acompte." },
+      { q: "Puis-je utiliser un compte Visa On Web créé par quelqu’un d’autre ?", a: "Utilisez et conservez votre propre compte avec votre email personnel. Vérifiez toutes les données et la catégorie avant de poursuivre." },
+      { q: "Le CEV traite-t-il les longs séjours France ou Allemagne ?", a: "Non. Au CEV, les longs séjours concernent Belgique et Luxembourg. La France et l’Allemagne suivent leurs parcours d’ambassade respectifs." },
+      { q: "Joventy garantit-il une date ou le visa ?", a: "Non. Les disponibilités relèvent du canal officiel et la décision appartient aux autorités belges ou à l’Office des étrangers." },
+    ],
+    relatedDestSlug: "visa-belgique-long-sejour-kinshasa",
+    relatedGuideHref: "/guides/visa-belgique-long-sejour-kinshasa-procedure",
+  },
   {
     slug: "creneaux-visa-france-long-sejour-kinshasa",
     flagCode: "fr",

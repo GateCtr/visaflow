@@ -35,6 +35,7 @@ import CreneauxEspagne from "@/pages/creneaux/CreneauxEspagne";
 import CreneauxSchengen from "@/pages/creneaux/CreneauxSchengen";
 import CreneauxUSA from "@/pages/creneaux/CreneauxUSA";
 import CreneauxFranceLongSejour from "@/pages/creneaux/CreneauxFranceLongSejour";
+import CreneauxBelgiqueLongSejour from "@/pages/creneaux/CreneauxBelgiqueLongSejour";
 import AuditDiagnostic from "@/pages/AuditDiagnostic";
 import APropos from "@/pages/APropos";
 
@@ -150,6 +151,7 @@ function Router() {
       <Route path="/visa-schengen-kinshasa" component={DestinationPage} />
       <Route path="/visa-espagne-kinshasa" component={DestinationPage} />
       <Route path="/visa-france-long-sejour-kinshasa" component={DestinationPage} />
+      <Route path="/visa-belgique-long-sejour-kinshasa" component={DestinationPage} />
       <Route path="/visa-allemagne-kinshasa" component={DestinationPage} />
       <Route path="/visa-suisse-kinshasa" component={DestinationPage} />
       <Route path="/e-visa-dubai-kinshasa" component={DestinationPage} />
@@ -189,6 +191,7 @@ function Router() {
       <Route path="/creneaux-visa-schengen-belgique-kinshasa" component={CreneauxSchengen} />
       <Route path="/creneaux-visa-usa-kinshasa" component={CreneauxUSA} />
       <Route path="/creneaux-visa-france-long-sejour-kinshasa" component={CreneauxFranceLongSejour} />
+      <Route path="/creneaux-visa-belgique-long-sejour-kinshasa" component={CreneauxBelgiqueLongSejour} />
 
       {/* Pricing & About */}
       <Route path="/prix" component={Prix} />

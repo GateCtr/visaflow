@@ -147,7 +147,7 @@ export const EMBASSIES_SEO: EmbassySEO[] = [
     flagCode: "fr",
     country: "France (Espace Schengen)",
     countryShort: "France",
-    destinationSlug: "visa-schengen-kinshasa",
+    destinationSlug: "visa-belgique-long-sejour-kinshasa",
     officialName: "Ambassade de France en République Démocratique du Congo",
     address: "Avenue du Colonel Mondjiba, Gombe, Kinshasa",
     neighborhood: "Gombe",
@@ -202,7 +202,7 @@ export const EMBASSIES_SEO: EmbassySEO[] = [
     mapsQuery: "133 Boulevard du 30 Juin Gombe Kinshasa Ambassade Belgique",
     title: "Ambassade de Belgique à Kinshasa (Visa Schengen) — Adresse & Horaires 2026 | Joventy",
     metaDescription: "Adresse, téléphone et horaires de l'Ambassade de Belgique à Kinshasa. Le CEV qu’elle gère reçoit certains courts séjours et les longs séjours Belgique/Luxembourg.",
-    h1: "Ambassade de Belgique à Kinshasa — Adresse & Informations Visa Schengen",
+    h1: "Ambassade de Belgique à Kinshasa — visas court et long séjour",
     intro: "L'Ambassade de Belgique en République Démocratique du Congo se trouve au 133, Boulevard du 30 Juin, dans la commune de Gombe à Kinshasa, avec un accès public par l'Avenue des Jacarandas. Elle gère le CEV (anciennement Maison Schengen) : celui-ci reçoit les courts séjours des pays représentés et les longs séjours Belgique et Luxembourg. Vérifiez toujours la compétence officielle avant de déposer.",
     practicalInfo: [
       "L'accès au public se fait par l'Avenue des Jacarandas",

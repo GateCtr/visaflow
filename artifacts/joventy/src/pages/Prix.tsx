@@ -25,6 +25,7 @@ const DESTINATIONS = [
   { code: "es", name: "Visa Espagne", types: "Tourisme, Études, Long séjour", delay: "15-30 jours ouvrables", href: "/visa-espagne-kinshasa", alert: null, note: null },
   { code: "ch", name: "Visa Suisse", types: "Tourisme, Études, Long séjour", delay: "15-30 jours ouvrables", href: "/visa-suisse-kinshasa", alert: null, note: null },
   { code: "fr", name: "Visa France long séjour", types: "Études, famille, travail (+90 jours)", delay: "Variable (France-Visas / ambassade)", href: "/visa-france-long-sejour-kinshasa", alert: null, note: null },
+  { code: "be", name: "Visa Belgique long séjour", types: "Type D : études, travail, famille (+90 jours)", delay: "Variable (Visa On Web / CEV / Office des étrangers)", href: "/visa-belgique-long-sejour-kinshasa", alert: null, note: null },
   { code: "de", name: "Visa Allemagne", types: "Visa national type D : études, travail, famille", delay: "Variable (RK-Termin)", href: "/visa-allemagne-kinshasa", alert: null, note: null },
   { code: "ae", name: "Visa Dubaï (EAU)", types: "Touriste 30j/60j, Affaires, Résidence", delay: "48-72h", href: "/e-visa-dubai-kinshasa", alert: null, note: null },
   { code: "tr", name: "Visa Turquie", types: "E-Visa en ligne, Visa Sticker (ambassade), Transit", delay: "24-48h (e-Visa)", href: "/visa-turquie-kinshasa", alert: null, note: null },
@@ -218,6 +219,7 @@ export default function Prix() {
               { href: "/creneaux-visa-usa-kinshasa", flag: "us", label: "Créneau Visa USA", sub: "B1/B2 Tourisme · F1 Études" },
               { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", label: "Créneau Long Séjour Allemagne", sub: "Études, travail, regroupement familial" },
               { href: "/creneaux-visa-france-long-sejour-kinshasa", flag: "fr", label: "Créneau France long séjour", sub: "France-Visas · études, famille, travail" },
+              { href: "/creneaux-visa-belgique-long-sejour-kinshasa", flag: "be", label: "Créneau Belgique long séjour type D", sub: "Visa On Web · CEV · rendez-vous officiel gratuit" },
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <div className="group flex items-center gap-3 bg-white border border-green-200 hover:border-secondary rounded-xl px-4 py-3 transition-all hover:shadow-sm cursor-pointer">
