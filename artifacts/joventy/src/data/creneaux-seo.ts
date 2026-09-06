@@ -215,40 +215,40 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     flagCode: "be",
     destinationKey: "schengen",
     emoji: "🇧🇪",
-    name: "Schengen — CEV Belgique",
-    title: "Créneau Schengen Belgique Kinshasa 2026 — CEV visaonweb.diplomatie.be géré par Joventy | Joventy",
+    name: "Schengen — CEV Kinshasa",
+    title: "Créneau rendez-vous CEV Kinshasa 2026 — Visa Schengen | Joventy",
     metaDescription:
-      "Rendez-vous visa Schengen Belgique depuis Kinshasa 2026 : Joventy crée votre compte Visa On Web, surveille le système CEV et réserve votre créneau. 350 $ payés uniquement après obtention — aucun acompte.",
-    h1: "Créneau Visa Schengen Belgique depuis Kinshasa — CEV géré 24h/24 par Joventy",
+      "Créneau rendez-vous CEV Kinshasa pour visa Schengen : service privé Joventy à 350 USD après obtention, sans acompte. Le rendez-vous officiel est gratuit.",
+    h1: "Créneau rendez-vous CEV Kinshasa pour visa Schengen",
     accroche:
-      "À Kinshasa, les visas Schengen court séjour (France, Belgique, Allemagne, Pays-Bas, Italie, etc.) passent tous par le Centre Européen des Visas (CEV), géré par l'ambassade de Belgique. La prise de créneau se fait via le portail Visa On Web (visaonweb.diplomatie.be). Ces créneaux sont rares et très disputés. Joventy crée votre compte Visa On Web, surveille le système en continu et verrouille votre créneau dès qu'il apparaît.",
+      "Le CEV, géré par l’Ambassade de Belgique (anciennement Maison Schengen), reçoit les demandes de court séjour des pays qu’il représente : il ne concerne donc pas uniquement la Belgique. Créez impérativement votre propre compte Visa On Web avec votre email personnel et vérifiez la compétence sur cev-kin.eu. La prise de rendez-vous officielle est gratuite. Les 350 USD de Joventy rémunèrent exclusivement un service privé de surveillance et d’assistance, après obtention, sans accès privilégié ni garantie de date.",
     urgency:
-      "Les créneaux CEV à Kinshasa durent en moyenne 30 à 90 secondes avant d'être pris — une surveillance manuelle ne suffit pas.",
+      "Le CEV ouvre des possibilités sur une période glissante de cinq semaines ; de nouvelles plages sont ajoutées chaque jour. Une date n’est jamais garantie.",
     stats: [
-      { n: "350 $", label: "payés uniquement après obtention du créneau CEV" },
+      { n: "350 $", label: "service privé Joventy, après obtention du créneau" },
       { n: "0 $", label: "d'acompte — aucun paiement à l'avance" },
-      { n: "27 pays", label: "accessibles avec un seul visa Schengen CEV" },
-      { n: "< 90 sec", label: "durée typique d'un créneau CEV disponible" },
+      { n: "0 $", label: "pour la prise de rendez-vous officielle CEV" },
+      { n: "5 semaines", label: "période glissante annoncée par le CEV" },
     ],
     steps: [
       {
         icon: "📋",
-        title: "Votre dossier est prêt — créez votre demande de créneau",
-        desc: "Sélectionnez 'Créneau uniquement — Schengen CEV' sur la plateforme Joventy. Aucun acompte. Joventy crée votre compte Visa On Web (visaonweb.diplomatie.be) si vous n'en avez pas encore.",
+        title: "Créez vous-même votre dossier Visa On Web",
+        desc: "Utilisez votre email personnel, complétez et imprimez le formulaire, puis utilisez le bouton officiel « Créez un rendez-vous ». Les données ne sont plus modifiables après la réservation et sont contrôlées à l’entrée.",
       },
       {
         icon: "🔍",
-        title: "Notre système surveille le CEV 24h/24",
-        desc: "Le système Joventy scrute en permanence les disponibilités du Centre Européen des Visas de Kinshasa. Dès qu'un créneau de rendez-vous se libère, il est verrouillé immédiatement avec votre numéro de dossier Visa On Web.",
+        title: "Surveillance et assistance privées Joventy",
+        desc: "Sur votre demande, Joventy suit les disponibilités publiques et vous assiste avec votre dossier. Nous n’avons aucun accès au CEV et ne pouvons ni contourner les règles ni promettre une date.",
       },
       {
         icon: "✅",
         title: "Créneau CEV confirmé → vous payez 350 $",
-        desc: "Vous recevez une notification WhatsApp avec la date, l'heure et le numéro de créneau au CEV. C'est à ce moment seulement que vous réglez 350 $ via M-Pesa, Airtel Money ou Orange Money.",
+        desc: "Après confirmation d’un créneau, vous réglez 350 USD pour le service privé Joventy. Le rendez-vous officiel CEV reste gratuit ; les frais de visa éventuels sont distincts et se règlent selon les instructions officielles.",
       },
     ],
     included: [
-      "Création de votre compte Visa On Web (visaonweb.diplomatie.be) si nécessaire",
+      "Assistance pour comprendre le parcours Visa On Web (compte personnel du demandeur)",
       "Surveillance continue du système de rendez-vous du CEV Kinshasa",
       "Capture du premier créneau CEV disponible",
       "Notification WhatsApp immédiate à la confirmation",
@@ -258,7 +258,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     faqs: [
       {
         q: "Qu'est-ce que le CEV (Centre Européen des Visas) à Kinshasa ?",
-        a: "Le CEV (Centre Européen des Visas) est le guichet unique pour les visas Schengen court séjour à Kinshasa. Il est géré par l'ambassade de Belgique et regroupe les demandes pour la France, la Belgique, l'Allemagne, les Pays-Bas, l'Italie et d'autres pays Schengen. La prise de rendez-vous se fait via le portail Visa On Web (visaonweb.diplomatie.be), et le dépôt du dossier se fait physiquement au CEV (Avenue des Huileries, Gombe).",
+        a: "Le CEV (Centre Européen des Visas), anciennement Maison Schengen, est géré par l’Ambassade de Belgique. Il reçoit les visas court séjour des pays qu’il représente. Consultez la page officielle des destinations sur cev-kin.eu avant de commencer : l’Espagne ne passe pas par le CEV.",
       },
       {
         q: "Avec un visa CEV Schengen, dans quels pays puis-je aller ?",
@@ -266,15 +266,15 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         q: "Pourquoi les créneaux CEV à Kinshasa sont-ils si difficiles à obtenir ?",
-        a: "La demande de visas Schengen depuis la RDC est élevée, et le CEV de Kinshasa a une capacité d'accueil limitée. Les créneaux s'ouvrent de façon irrégulière sur Visa On Web et sont réservés en quelques dizaines de secondes. Joventy surveille le système en continu pour vous.",
+        a: "Le CEV annonce environ 1 000 possibilités par semaine, affichées sur une période glissante de cinq semaines, avec de nouvelles plages chaque jour. Si aucune date n’apparaît, les créneaux ouverts sont déjà réservés : réessayez le lendemain.",
       },
       {
         q: "Dois-je avoir un compte Visa On Web avant de déposer ma demande Joventy ?",
-        a: "Non. Si vous n'avez pas encore de compte visaonweb.diplomatie.be, Joventy le crée pour vous dans le cadre du service. Le numéro de dossier VOW est nécessaire pour réserver le créneau CEV.",
+        a: "Créez votre propre compte Visa On Web avec votre email personnel. Les informations du rendez-vous proviennent du formulaire VOW et ne sont plus modifiables après la réservation.",
       },
       {
         q: "Combien coûte le créneau Schengen CEV avec Joventy ?",
-        a: "350 $ au total, payés uniquement après confirmation du créneau CEV. Aucun acompte à l'avance. Paiement via M-Pesa, Airtel Money ou Orange Money.",
+        a: "Le rendez-vous officiel CEV est gratuit. Les 350 USD, sans acompte et dus après obtention, correspondent uniquement au service privé de surveillance et d’assistance Joventy ; ils ne sont pas versés au CEV.",
       },
       {
         q: "L'Espagne passe-t-elle par le CEV à Kinshasa ?",
@@ -282,7 +282,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         q: "Combien de temps faut-il pour obtenir un créneau CEV à Kinshasa ?",
-        a: "Le délai varie selon les périodes. Joventy surveille le système 24h/24 et réserve le premier créneau disponible. Certains dossiers obtiennent un créneau en quelques jours, d'autres en quelques semaines selon la période.",
+        a: "Le CEV ne publie pas de délai individuel garanti. Consultez chaque jour les ouvertures sur la période glissante de cinq semaines ; ne demandez pas un rendez-vous plus de trois mois avant le voyage, car une date après le voyage peut être annulée.",
       },
     ],
     relatedDestSlug: "visa-schengen-kinshasa",

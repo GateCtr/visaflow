@@ -56,6 +56,8 @@ const GUIDES = [
   { label: "⚽ Coupe du Monde 2026", href: "/guides/coupe-du-monde-2026-visa-usa-kinshasa" },
   { label: "Créneau visa USA", href: "/guides/comment-obtenir-creneau-visa-usa-kinshasa" },
   { label: "Documents Schengen", href: "/guides/documents-visa-schengen-kinshasa" },
+  { label: "Rendez-vous CEV Kinshasa", href: "/guides/rendez-vous-cev-kinshasa-visa-schengen" },
+  { label: "Aucun créneau CEV ?", href: "/guides/aucun-creneau-rendez-vous-cev-kinshasa" },
   { label: "RDV Espagne 2026", href: "/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026" },
   { label: "Tous les guides →", href: "/guides" },
 ];

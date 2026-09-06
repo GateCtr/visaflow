@@ -189,8 +189,8 @@ export function CreneauxLanding({ data }: Props) {
       {/* ═══════════════════════════════ STATS STRIP ═══ */}
       <section className="bg-slate-900 py-5 px-4 border-b border-white/10">
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-6 sm:gap-12">
-          {data.stats.map((s) => (
-            <div key={s.n} className="text-center">
+          {data.stats.map((s, index) => (
+            <div key={`${s.n}-${index}`} className="text-center">
               <p className="text-secondary font-black text-2xl">{s.n}</p>
               <p className="text-white/40 text-xs mt-0.5 max-w-[140px]">{s.label}</p>
             </div>

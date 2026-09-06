@@ -155,20 +155,19 @@ const guides: Guide[] = [
     category: "Visa Schengen",
     coverEmoji: "🇪🇺",
     intro:
-      "Obtenir un visa Schengen depuis Kinshasa en 2026 : une règle essentielle que peu de demandeurs connaissent. Ni l'Ambassade de France, ni l'Ambassade d'Allemagne ne reçoivent directement les dossiers des ressortissants congolais pour les visas court séjour. Tout passe par un guichet unique : le Centre Européen des Visas (CEV), géré par l'Ambassade de Belgique à Kinshasa (cev-kin.eu). Ce guide détaille les documents exigés selon l'ambassade de destination (France, Belgique, Allemagne), les spécificités du CEV, et les 10 erreurs qui causent le plus de refus.",
+      "Pour un visa Schengen depuis Kinshasa, commencez par vérifier quel poste est compétent pour votre destination principale. Le Centre Européen des Visas (CEV), géré par l'Ambassade de Belgique, représente actuellement 20 ambassades ou consulats pour le court séjour, mais il ne couvre pas tous les circuits : l'Espagne suit notamment sa propre procédure. Ce guide détaille les documents courants, les spécificités du CEV et les erreurs qui fragilisent un dossier.",
     sections: [
       {
-        heading: "Le CEV — guichet unique pour tous les visas Schengen court séjour depuis Kinshasa",
+        heading: "Le CEV — guichet commun des pays qu'il représente à Kinshasa",
         body:
-          "Le Centre Européen des Visas (CEV) est le seul centre habilité à recevoir les demandes de visa Schengen court séjour des ressortissants congolais à Kinshasa. Il est géré par l'Ambassade de Belgique. Ni TLS Contact, ni VFS Global ne sont utilisés à Kinshasa pour les Congolais. Le CEV représente plusieurs ambassades — France, Belgique, Allemagne, Pays-Bas, et d'autres — pour toutes les demandes de visa court séjour (type C). Point crucial : l'Ambassade de France à Kinshasa et l'Ambassade d'Allemagne à Kinshasa ne reçoivent pas directement les dossiers Schengen des ressortissants congolais ; elles sont compétentes uniquement pour les visas long séjour ou pour les ressortissants d'autres nationalités.",
+          "Le Centre Européen des Visas (CEV) reçoit à Kinshasa les demandes de court séjour destinées aux pays qu'il représente. La liste officielle évolue et doit être vérifiée sur cev-kin.eu avant de créer le dossier. Pour ces destinations, le parcours passe par un compte personnel Visa On Web et les instructions du CEV, et non par VFS Global ou TLScontact. Les visas nationaux de long séjour obéissent à d'autres règles : le CEV ne reçoit que les longs séjours Belgique et Luxembourg.",
         list: [
-          "📍 Site officiel du CEV : www.cev-kin.eu — prise de rendez-vous en ligne obligatoire",
+          "Site officiel du CEV : www.cev-kin.eu — vérifiez la destination et le type de séjour avant toute démarche",
           "📍 Adresse : Avenue du 24 novembre (Pierre Mulele), Kinshasa (Gombe)",
-          "Dépôt possible aussi à Lubumbashi via le Consulat Général de Belgique",
-          "Le CEV décide quelle ambassade est compétente selon votre destination principale",
-          "Délai de rendez-vous : 1 à 4 semaines d'attente selon la période",
-          "Délai de dépôt : entre 15 jours et 6 mois avant la date de départ prévue",
-          "Les frais de service CEV s'ajoutent aux droits de visa de l'ambassade concernée",
+          "Le Consulat général de Belgique à Lubumbashi dessert le Grand Katanga, avec certaines exceptions de destination indiquées par le CEV",
+          "Le pays compétent est en principe celui de la destination principale du séjour",
+          "Le CEV annonce une période glissante de cinq semaines et de nouvelles plages chaque jour, sans garantir de disponibilité individuelle",
+          "La prise de rendez-vous officielle est gratuite ; les droits de visa et autres frais officiels sont distincts",
         ],
       },
       {
@@ -273,7 +272,7 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Quelle ambassade Schengen est la plus facile à obtenir depuis Kinshasa ?",
-        a: "Important à savoir : depuis Kinshasa, tous les visas Schengen court séjour se déposent au même endroit — le CEV (cev-kin.eu), géré par l'Ambassade de Belgique. Il n'y a qu'un seul guichet. Ce qui varie selon l'ambassade de destination, c'est la liste de documents et les critères d'évaluation. Il n'existe pas d'ambassade objectivement 'plus facile' : toutes appliquent le même Code des visas Schengen.",
+        a: "Il n'existe pas d'ambassade objectivement « plus facile ». Le CEV reçoit les demandes des 20 représentations qu'il couvre, mais votre demande doit correspondre à votre destination principale réelle. Vérifiez la liste officielle sur cev-kin.eu ; l'Espagne suit notamment un circuit distinct.",
       },
       {
         q: "Peut-on déposer un dossier Schengen sans avoir les billets définitifs payés ?",
@@ -1050,15 +1049,15 @@ const guides: Guide[] = [
     sections: [
       { heading: "Que change le visa digital ?", body: "Le visa Schengen tel qu'on le connaît (sticker collé dans le passeport) va progressivement disparaître :", list: ["Le sticker physique sera remplacé par un code-barre 2D cryptographiquement sécurisé", "Le visa sera stocké dans une base de données centralisée (EU VAP — Visa Application Platform)", "Plus de risque de falsification ou de vol de sticker", "Vérification instantanée par scan à la frontière", "Transition complète prévue d'ici 2028-2031", "Les visas sticker actuels restent valables pendant la période de transition"] },
       { heading: "La plateforme EU VAP (Visa Application Platform)", body: "L'UE développe une plateforme unique de demande de visa en ligne gérée par eu-LISA :", list: ["Objectif : remplacer les portails nationaux séparés par une interface unique", "Upload de documents en ligne avant le rendez-vous", "Paiement des frais en ligne", "Suivi du dossier en temps réel", "La France, l'Italie et l'Estonie acceptent déjà les soumissions en ligne", "La biométrie reste obligatoire en personne (VFS, TLS ou consulat) pour les premiers demandeurs"] },
-      { heading: "Ce que cela change pour les demandeurs depuis Kinshasa", body: "À court terme (2026), l'impact est encore limité mais positif :", list: ["Le CEV de Kinshasa continue de fonctionner normalement", "Vous pouvez déjà uploader certains documents en ligne avant votre rendez-vous (via VFS Global / TLScontact)", "Le formulaire papier cède progressivement la place au formulaire en ligne", "La biométrie reste en personne — pas de changement sur ce point", "À moyen terme (2027-2028) : vous pourrez potentiellement faire toute votre demande en ligne depuis Kinshasa", "Joventy anticipe cette transition et prépare déjà les dossiers au format digital"] },
+      { heading: "Ce que cela change pour les demandeurs depuis Kinshasa", body: "À court terme, la transition européenne ne remplace pas la procédure locale actuellement publiée par le CEV :", list: ["Le parcours commence toujours par un compte personnel et un formulaire sur Visa On Web", "Le rendez-vous et le dépôt suivent les instructions officielles du CEV, et non celles de VFS Global ou TLScontact", "La biométrie et le dépôt restent en personne lorsque la procédure l'exige", "Les futures étapes numériques entreront en vigueur progressivement selon le calendrier officiel", "Vérifiez cev-kin.eu avant chaque demande, car le déploiement peut évoluer"] },
       { heading: "Calendrier de la transition", body: "Voici les étapes clés de la digitalisation du visa Schengen :", list: ["Octobre 2025 : lancement du système EES (phase pilote)", "Avril 2026 : EES pleinement opérationnel aux 29 frontières", "Avril 2026 : adoption des actes juridiques pour le visa digital", "Juin 2026 : l'Italie lance son portail de visa entièrement digital", "Q4 2026 : lancement de ETIAS pour les voyageurs exemptés de visa (ne concerne pas les Congolais)", "2027-2028 : déploiement progressif du code-barre 2D remplaçant le sticker", "2031 : date limite pour la transition complète dans tous les consulats"] },
     ],
     faq: [
       { q: "Mon visa sticker actuel est-il encore valable ?", a: "Oui, absolument. Tous les visas sticker délivrés restent valables jusqu'à leur date d'expiration. La transition vers le digital sera progressive et les deux systèmes coexisteront pendant plusieurs années." },
-      { q: "Dois-je faire ma demande de visa en ligne maintenant ?", a: "Pas obligatoirement. Le CEV de Kinshasa accepte toujours les dossiers physiques. Cependant, certains consulats (France, Italie) offrent déjà la possibilité d'uploader des documents en ligne pour gagner du temps au rendez-vous." },
+      { q: "Dois-je suivre VFS ou TLScontact à Kinshasa ?", a: "Non pour une demande relevant du CEV. Créez votre compte personnel Visa On Web, remplissez et soumettez le formulaire, puis suivez le bouton de rendez-vous et les instructions publiées par cev-kin.eu." },
       { q: "La biométrie sera-t-elle toujours nécessaire ?", a: "Oui pour les premiers demandeurs. Si vos empreintes ont déjà été collectées dans les 59 derniers mois, vous n'aurez pas besoin de les refaire — ce qui ouvre la voie à une demande 100% en ligne pour les renouvellements." },
     ],
-    relatedSlugs: ["ees-schengen-2026-controle-biometrique", "documents-visa-schengen-kinshasa", "visa-schengen-kinshasa"],
+    relatedSlugs: ["ees-schengen-2026-controle-biometrique", "documents-visa-schengen-kinshasa", "rendez-vous-cev-kinshasa-visa-schengen"],
     relatedDestination: "visa-schengen-kinshasa",
   },
 
@@ -1493,22 +1492,22 @@ const guides: Guide[] = [
 
   {
     slug: "rendez-vous-cev-kinshasa-visa-schengen",
-    title: "Prendre rendez-vous au CEV Kinshasa pour un visa Schengen 2026 — Procédure complète (Visa On Web + cev-kin.eu)",
-    metaTitle: "Rendez-vous CEV Kinshasa Visa Schengen 2026 — Comment prendre RDV étape par étape | Joventy",
+    title: "Tutoriel rendez-vous CEV Kinshasa : Visa On Web et réservation",
+    metaTitle: "Rendez-vous CEV Kinshasa : Visa On Web et réservation | 2026",
     metaDescription:
-      "Comment prendre rendez-vous au CEV Kinshasa (cev-kin.eu) pour un visa Schengen en 2026 : créer votre compte Visa On Web, réserver un créneau, délais réels, frais, et erreurs qui font perdre le rendez-vous.",
+      "Tutoriel officiel du rendez-vous CEV Kinshasa : compte Visa On Web personnel, formulaire, bouton « Créez un rendez-vous », données contrôlées et réservation gratuite.",
     publishedDate: "2026-06-15",
-    updatedDate: "2026-06-27",
+    updatedDate: "2026-09-06",
     readingTime: 8,
     category: "Visa Schengen",
     coverEmoji: "🏛️",
     intro:
-      "Le Centre Européen des Visas (CEV) à Kinshasa est le seul guichet où les ressortissants congolais peuvent déposer une demande de visa Schengen court séjour. Il représente la France, la Belgique, l'Allemagne, les Pays-Bas et d'autres États Schengen. Mais sa procédure de prise de rendez-vous en ligne — via le portail Visa On Web — est souvent source de confusion et de blocage. Ce guide vous explique les étapes exactes, les délais réels et les erreurs fréquentes.",
+      "Le Centre Européen des Visas (CEV), anciennement Maison Schengen et géré par l’Ambassade de Belgique, reçoit les demandes de court séjour des pays qu’il représente. Ce tutoriel explique le parcours Visa On Web, puis la réservation gratuite : vérifiez la liste officielle des destinations avant de commencer.",
     sections: [
       {
         heading: "Le CEV en bref — ce qu'il faut savoir avant de commencer",
         body:
-          "Le CEV n'est ni une ambassade ni un centre privé comme VFS ou TLS Contact ailleurs dans le monde. C'est un centre commun officiel, géré par l'Ambassade de Belgique, qui reçoit et instruit les demandes pour le compte de plusieurs pays Schengen. Toute la procédure commence en ligne, mais la dépose du dossier et la prise d'empreintes se font obligatoirement en personne.",
+          "Le CEV est un centre officiel géré par l’Ambassade de Belgique, distinct de TLScontact ou VFS. Il reçoit les demandes des pays qu’il représente : vérifiez la compétence sur cev-kin.eu, notamment car l’Espagne suit une procédure distincte.",
         list: [
           "🌐 Site officiel : www.cev-kin.eu",
           "📍 Adresse : Avenue Pierre Mulele (ex-24 Novembre), Gombe – Kinshasa",
@@ -1524,13 +1523,13 @@ const guides: Guide[] = [
         body:
           "Visa On Web (visaonweb.be) est le portail officiel du gouvernement belge pour les demandes de visa Schengen. C'est la première étape obligatoire — sans compte Visa On Web actif, vous ne pouvez pas prendre rendez-vous au CEV.",
         list: [
-          "Rendez-vous sur visaonweb.be et créez un compte avec une adresse email valide",
+          "Rendez-vous sur Visa On Web et créez votre propre compte avec votre adresse email personnelle",
           "Vérifiez votre email et activez le compte (vérifier les spams si vous ne recevez pas l'email)",
           "Connectez-vous et cliquez sur « Introduire une nouvelle demande »",
           "Sélectionnez « Visa de court séjour (type C) » et choisissez le pays de destination principale",
           "Remplissez le formulaire en ligne : informations personnelles, motif du voyage, itinéraire prévu",
-          "Une fois le formulaire soumis, le système génère un numéro de dossier VOW — conservez-le",
-          "Important : le formulaire VOW ne remplace pas le formulaire papier que vous signerez au guichet du CEV",
+          "Soumettez et imprimez le formulaire : conservez votre numéro de dossier VOW",
+          "Contrôlez chaque donnée : celles du rendez-vous viennent du formulaire VOW, ne sont plus modifiables ensuite et sont contrôlées à l’entrée",
         ],
       },
       {
@@ -1538,13 +1537,13 @@ const guides: Guide[] = [
         body:
           "Une fois votre dossier VOW créé, vous pouvez prendre rendez-vous sur le site du CEV. Les créneaux disponibles s'affichent en temps réel et partent rapidement, surtout en période de forte demande (mai-septembre).",
         list: [
-          "Rendez-vous sur www.cev-kin.eu et cliquez sur « Prendre rendez-vous »",
-          "Connectez-vous avec vos identifiants Visa On Web",
-          "Sélectionnez le nombre de personnes (si dépôt groupé pour une famille)",
+          "Rendez-vous sur www.cev-kin.eu et cliquez sur « Créez un rendez-vous »",
+          "Utilisez les données de votre demande Visa On Web",
+          "Ne prenez pas de rendez-vous multiples",
           "Choisissez une date et un créneau horaire disponibles — les créneaux du matin partent en premier",
           "Confirmez le rendez-vous : vous recevez un email de confirmation avec votre numéro de rendez-vous",
           "Imprimez ou enregistrez la confirmation — elle est exigée à l'entrée du CEV",
-          "Si aucun créneau n'est disponible : revenez sur le portail les matins en semaine, les annulations libèrent des places en cours de journée",
+          "Si aucun créneau n'est disponible : les plages ouvertes sont déjà réservées ; réessayez le lendemain",
         ],
       },
       {
@@ -1561,17 +1560,15 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Délais d'attente pour un rendez-vous CEV en 2026",
+        heading: "Disponibilités de rendez-vous : ce que le CEV annonce",
         body:
-          "Les délais varient considérablement selon la période. En 2026, voici les tendances observées sur le portail CEV :",
+          "Le CEV n’annonce pas de délai individuel garanti. Son site indique une période glissante de cinq semaines, de nouvelles plages chaque jour et environ 1 000 possibilités par semaine.",
         list: [
-          "Janvier – mars (basse saison) : rendez-vous disponible sous 1 à 2 semaines",
-          "Avril – juin (montée en charge) : 2 à 4 semaines d'attente",
-          "Juillet – septembre (haute saison) : 3 à 6 semaines, parfois plus — planifiez en avance",
-          "Octobre – décembre : retour à 2 à 3 semaines",
-          "Après obtention du rendez-vous, délai de traitement : 15 jours ouvrables réglementaires maximum",
-          "Déposez votre dossier entre 15 jours et 6 mois avant votre date de départ prévue",
-          "Conseil : si votre voyage est urgent, prenez rendez-vous dès que possible — les créneaux ne s'améliorent pas à court terme",
+          "Nouvelles plages publiées chaque jour",
+          "Si aucune date n’apparaît, les créneaux ouverts sont déjà réservés : réessayez le lendemain",
+          "Ne demandez pas un rendez-vous plus de trois mois avant le voyage",
+          "Un rendez-vous après la date de voyage peut être annulé",
+          "L’instruction du visa après dépôt est distincte de la recherche d’un rendez-vous",
         ],
       },
       {
@@ -1603,10 +1600,10 @@ const guides: Guide[] = [
       {
         heading: "Comment Joventy accompagne votre dossier CEV",
         body:
-          "Chez Joventy, nos conseillers prennent en charge l'intégralité de la procédure CEV pour vous — de la création du compte Visa On Web jusqu'au suivi après dépôt :",
+          "Joventy propose une assistance administrative privée. Le demandeur crée et conserve son propre compte Visa On Web avec son email personnel ; Joventy n’est pas le CEV et ne dispose d’aucun accès privilégié :",
         list: [
-          "Création et configuration du compte Visa On Web à votre place",
-          "Veille quotidienne des créneaux disponibles sur cev-kin.eu et réservation dès qu'une date correspond à votre planning",
+          "Explication du parcours et vérification administrative du formulaire du demandeur",
+          "Assistance de surveillance des disponibilités publiques, sans garantie de date",
           "Vérification complète de votre dossier papier avant le rendez-vous — aucun document manquant",
           "Préparation du formulaire de demande et de la lettre de motivation personnalisée selon votre profil",
           "Accompagnement au CEV le jour J si nécessaire",
@@ -1619,7 +1616,7 @@ const guides: Guide[] = [
     faq: [
       {
         q: "Peut-on prendre rendez-vous au CEV sans compte Visa On Web ?",
-        a: "Non. La création d'un compte sur visaonweb.be est obligatoire avant toute prise de rendez-vous au CEV. C'est le portail officiel belge qui génère votre numéro de dossier, vérifié à l'accueil du CEV.",
+        a: "Le parcours officiel demande un compte Visa On Web. Créez-le vous-même avec votre email personnel, car les données du formulaire sont reprises pour le rendez-vous.",
       },
       {
         q: "Le CEV à Kinshasa traite-t-il les visas pour tous les pays Schengen ?",
@@ -1635,19 +1632,15 @@ const guides: Guide[] = [
       },
       {
         q: "Le CEV de Lubumbashi accepte-t-il les mêmes demandes que celui de Kinshasa ?",
-        a: "Oui. Le Consulat Général de Belgique à Lubumbashi accepte les demandes de visa Schengen dans les mêmes conditions que le CEV de Kinshasa. Si vous résidez au Katanga ou dans les provinces de l'est, c'est l'option la plus pratique.",
+        a: "Sélectionnez Lubumbashi pour le Grand Katanga et Kinshasa pour le reste du pays, selon le parcours officiel. Les compétences ne sont pas identiques : Estonie, Hongrie et Slovaquie sont indiquées pour Kinshasa seulement.",
       },
       {
         q: "Quel est le délai entre la prise de rendez-vous et le résultat final ?",
-        a: "En 2026 : comptez entre 3 et 8 semaines au total — délai d'attente pour le rendez-vous (1 à 6 semaines selon la saison) + délai de traitement (15 jours ouvrables réglementaires après le dépôt). Planifiez votre demande au minimum 2 mois avant votre date de voyage.",
+        a: "Il n’existe pas de délai global garanti. L’ouverture d’un créneau, sa date et l’instruction après dépôt sont trois étapes distinctes ; consultez les informations officielles du pays compétent.",
       },
     ],
-    relatedSlugs: [
-      "visa-royaume-uni-kinshasa",
-      "ambassade-royaume-uni-kinshasa",
-      "que-faire-apres-refus-visa-kinshasa-recours",
-    ],
-    relatedDestination: "visa-royaume-uni-kinshasa",
+    relatedSlugs: ["guide-cev-kinshasa-reservation-rdv-depot", "aucun-creneau-rendez-vous-cev-kinshasa", "delai-ouverture-rendez-vous-cev-kinshasa", "pays-representes-cev-kinshasa-court-long-sejour"],
+    relatedDestination: "visa-schengen-kinshasa",
   },
 
   {
@@ -2466,28 +2459,26 @@ const guides: Guide[] = [
 
   {
     slug: "guide-cev-kinshasa-reservation-rdv-depot",
-    title: "Guide CEV Kinshasa 2026 : réserver son rendez-vous et préparer son dépôt",
-    metaTitle: "CEV Kinshasa 2026 — Réserver un Rendez-Vous et Déposer son Dossier | Joventy",
+    title: "Dépôt au CEV Kinshasa : préparation et déroulement du jour J",
+    metaTitle: "Dépôt CEV Kinshasa : préparation du dossier et jour J | 2026",
     metaDescription:
-      "Guide pratique pour réserver un rendez-vous au Centre Européen des Visas de Kinshasa en 2026 : étapes en ligne, documents à apporter, délais et adresse.",
+      "Guide pratique du dépôt CEV à Kinshasa : lieu, contrôle d’identité, dossier, paiement officiel et suivi après le rendez-vous.",
     publishedDate: "2026-07-09",
-    updatedDate: "2026-07-09",
+    updatedDate: "2026-09-06",
     readingTime: 7,
     category: "Visa Schengen",
     coverEmoji: "📍",
     intro:
-      "Le Centre Européen des Visas (CEV, cev-kin.eu) est le passage obligatoire pour toute demande de visa Schengen court séjour depuis Kinshasa. En 2026, la demande de rendez-vous se fait exclusivement en ligne, avec des créneaux qui se remplissent vite en haute saison. Voici la procédure complète étape par étape.",
+      "Ce guide commence une fois votre rendez-vous officiel confirmé. Le CEV, géré par l’Ambassade de Belgique, reçoit les demandes relevant de sa compétence. Pour créer le formulaire Visa On Web et réserver, consultez le tutoriel dédié ; ici, préparez le dépôt et le jour J.",
     sections: [
       {
-        heading: "Étapes pour réserver un rendez-vous en ligne",
+        heading: "Avant de vous présenter : confirmation et lieu",
         body:
-          "La réservation se fait uniquement via le site officiel cev-kin.eu — aucune réservation par téléphone ou en personne n'est possible.",
+          "Vérifiez l’adresse, l’horaire et les instructions affichées sur votre confirmation officielle. Le rendez-vous est gratuit ; ne confondez pas cette gratuité avec les frais officiels éventuellement dus au dépôt.",
         list: [
-          "1. Créer un compte sur cev-kin.eu avec une adresse email valide",
-          "2. Sélectionner le pays de destination Schengen (France, Belgique, Allemagne, etc.)",
-          "3. Choisir le type de visa (court séjour tourisme, affaires, visite familiale)",
-          "4. Sélectionner un créneau disponible — compter 1 à 4 semaines d'attente selon la période de l'année",
-          "5. Recevoir la confirmation de rendez-vous par email, à imprimer et présenter le jour J",
+          "Apporter la confirmation de rendez-vous et le formulaire Visa On Web imprimé",
+          "Vérifier que nom, date de naissance et passeport correspondent exactement",
+          "Préparer les originaux et copies de la checklist du pays compétent",
         ],
       },
       {
@@ -2502,9 +2493,9 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Après le dépôt : suivi et retrait du passeport",
+        heading: "Après le dépôt : suivi et instruction",
         body:
-          "Une fois le dossier déposé, les empreintes biométriques sont enregistrées et le passeport est conservé par le CEV jusqu'à la décision — comptez 15 jours ouvrables en moyenne, plus en période estivale.",
+          "Après réception, l’instruction dépend de l’autorité compétente. Le CEV ou l’autorité peut demander des compléments. Ne confondez pas l’attente d’un rendez-vous avec le délai d’instruction et ne vous fiez pas à une durée non officielle.",
       },
     ],
     faq: [
@@ -2517,11 +2508,7 @@ const guides: Guide[] = [
         a: "Oui, chaque membre de la famille doit néanmoins avoir son propre créneau, généralement réservables à des horaires proches sur la même journée.",
       },
     ],
-    relatedSlugs: [
-      "documents-visa-schengen-kinshasa",
-      "visa-schengen-assurance-voyage-30k-kinshasa",
-      "visa-schengen-mineur-kinshasa",
-    ],
+    relatedSlugs: ["rendez-vous-cev-kinshasa-visa-schengen", "aucun-creneau-rendez-vous-cev-kinshasa", "delai-ouverture-rendez-vous-cev-kinshasa", "pays-representes-cev-kinshasa-court-long-sejour"],
     relatedDestination: "visa-schengen-kinshasa",
   },
 
@@ -4382,6 +4369,76 @@ const guides: Guide[] = [
     relatedDestination: "visa-france-long-sejour-kinshasa",
     internalLinks: [{ href: "/ambassade-schengen-france-kinshasa", label: "Ambassade de France à Kinshasa", description: "Coordonnées et distinction court / long séjour." }],
     conversion: { heading: "Organiser votre dossier familial avec prudence", body: "Joventy apporte une assistance administrative et peut suivre le rendez-vous officiel. Le service créneau France long séjour est de 350 USD, payable seulement après obtention et sans acompte ; ce service ne constitue pas un conseil juridique ni une garantie de visa.", primaryLabel: "Voir le service créneau France", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Question visa famille France", whatsappMessage: "Bonjour, je souhaite des informations administratives sur un visa France famille depuis Kinshasa." },
+  },
+  {
+    slug: "aucun-creneau-rendez-vous-cev-kinshasa",
+    title: "Aucun créneau CEV Kinshasa : que faire pour un rendez-vous ?",
+    metaTitle: "Aucun créneau CEV Kinshasa : que faire ? | Guide 2026",
+    metaDescription: "Aucun rendez-vous CEV à Kinshasa ? Comprendre les ouvertures sur cinq semaines, les nouvelles plages quotidiennes, les actions sûres et les arnaques.",
+    publishedDate: "2026-09-06", updatedDate: "2026-09-06", readingTime: 7, category: "Visa Schengen", coverEmoji: "📅",
+    intro: "L’absence de créneau affiché ne signifie pas que votre demande est bloquée. Le CEV annonce des rendez-vous sur une période glissante de cinq semaines, avec de nouvelles plages chaque jour et environ 1 000 possibilités par semaine. Lorsqu’aucune date n’est visible, les créneaux déjà ouverts sont réservés.",
+    sections: [
+      { heading: "Pourquoi aucun rendez-vous n’apparaît", body: "Le calendrier ne montre que les places encore disponibles. Le CEV indique que les ouvertures couvrent cinq semaines glissantes et que les places sont très demandées. Une page vide ne justifie ni paiement à un intermédiaire ni tentative de contourner le système.", list: ["Environ 1 000 possibilités annoncées par semaine", "Nouvelles plages ajoutées chaque jour", "Une place absente est généralement déjà réservée"] },
+      { heading: "Actions sûres à effectuer", body: "Vérifiez votre formulaire Visa On Web, son impression et les données de passeport avant toute réservation. Revenez consulter le parcours officiel le lendemain. Préparez le dossier parallèlement afin de pouvoir choisir une date compatible avec le voyage.", list: ["Utiliser son propre compte et son email personnel", "Consulter la page officielle cev-kin.eu", "Vérifier la compétence du pays et du type de séjour", "Ne pas demander le rendez-vous plus de trois mois avant le voyage"] },
+      { heading: "Éviter les arnaques et les faux raccourcis", body: "La prise de rendez-vous officielle est gratuite. Personne ne peut vendre une date CEV, modifier des données après réservation ou garantir un accès prioritaire. Ne communiquez pas vos identifiants ou votre passeport à un inconnu.", list: ["Refuser les promesses de « créneau garanti »", "Ne jamais payer le CEV pour réserver", "Contrôler les informations avant de confirmer", "Conserver les confirmations officielles"] },
+      { heading: "Quand réorganiser votre projet", body: "Une date obtenue après votre départ prévu peut être annulée. Ajustez votre calendrier sans acheter de prestation irréversible et vérifiez les exigences de l’autorité compétente. Un service privé peut aider à surveiller ou préparer, mais ne remplace pas le canal officiel.", list: ["Comparer la date au voyage prévu", "Suivre les instructions du CEV après le dépôt", "Distinguer frais officiels et service privé"] },
+    ],
+    faq: [
+      { q: "Pourquoi le calendrier CEV est-il vide ?", a: "Les créneaux qui ont déjà été ouverts peuvent être réservés. Le CEV recommande de réessayer le lendemain." },
+      { q: "Le CEV ouvre-t-il les dates chaque jour ?", a: "Le site officiel annonce de nouvelles plages chaque jour sur une période glissante de cinq semaines." },
+      { q: "Peut-on payer pour obtenir un rendez-vous CEV ?", a: "Non. La prise de rendez-vous officielle est absolument gratuite." },
+      { q: "Un intermédiaire peut-il garantir une date ?", a: "Non. Aucun service privé n’a d’accès privilégié et aucune date ne peut être garantie." },
+    ],
+    relatedSlugs: ["delai-ouverture-rendez-vous-cev-kinshasa", "rendez-vous-cev-kinshasa-visa-schengen", "pays-representes-cev-kinshasa-court-long-sejour"],
+    relatedDestination: "visa-schengen-kinshasa",
+    internalLinks: [{ href: "/creneaux-visa-schengen-belgique-kinshasa", label: "Service privé de surveillance CEV", description: "350 USD après obtention, sans acompte ; le rendez-vous officiel reste gratuit." }],
+    conversion: { heading: "Besoin d’une assistance privée ?", body: "Joventy peut assister la surveillance et la préparation, sans accès privilégié ni garantie de date. Le service CEV coûte 350 USD après obtention, sans acompte.", primaryLabel: "Voir le service CEV", primaryHref: "/creneaux-visa-schengen-belgique-kinshasa", whatsappLabel: "Question sur les créneaux CEV", whatsappMessage: "Bonjour, je souhaite comprendre les disponibilités CEV à Kinshasa." },
+  },
+  {
+    slug: "delai-ouverture-rendez-vous-cev-kinshasa",
+    title: "Délai d’ouverture des rendez-vous CEV Kinshasa : repères 2026",
+    metaTitle: "Délai rendez-vous CEV Kinshasa : ouvertures 2026 | Joventy",
+    metaDescription: "Quand ouvrent les rendez-vous CEV Kinshasa ? Distinguez ouverture du calendrier, date de rendez-vous et instruction du visa, sans délais inventés.",
+    publishedDate: "2026-09-06", updatedDate: "2026-09-06", readingTime: 6, category: "Visa Schengen", coverEmoji: "⏱️",
+    intro: "Il n’existe pas de délai individuel garanti pour obtenir un rendez-vous CEV. Pour planifier correctement, distinguez l’ouverture du calendrier, la date finalement choisie et le temps d’instruction après le dépôt.",
+    sections: [
+      { heading: "Ouverture du calendrier : cinq semaines glissantes", body: "Le CEV annonce des possibilités sur cinq semaines glissantes, avec de nouvelles plages chaque jour et environ 1 000 possibilités hebdomadaires. Ce fonctionnement ne permet pas de prédire une date personnelle.", list: ["Consulter régulièrement le canal officiel", "Ne pas déduire un délai d’une journée sans créneau", "Réessayer le lendemain si le calendrier est vide"] },
+      { heading: "Délai pour obtenir un rendez-vous", body: "Le délai pour trouver une place dépend des disponibilités affichées et de votre catégorie. Le CEV ne publie pas une attente garantie : évitez les promesses de jours ou semaines exacts.", list: ["Aucune date personnelle garantie", "Les ouvertures quotidiennes ne garantissent pas une place", "Le rendez-vous officiel est gratuit"] },
+      { heading: "Date du rendez-vous et date du voyage", body: "Le CEV déconseille de demander un rendez-vous plus de trois mois avant le voyage. Une date située après le voyage prévu peut être annulée. Vérifiez donc les données VOW et le calendrier avant validation.", list: ["Comparer la date retenue au projet de voyage", "Contrôler identité, destination et dates avant confirmation", "Les données réservées ne sont plus modifiables"] },
+      { heading: "Instruction après le dépôt", body: "L’instruction commence après le dépôt du dossier et relève de l’autorité compétente. Elle ne doit pas être confondue avec l’attente d’un créneau. Consultez les consignes du pays représenté plutôt que d’additionner des estimations non officielles.", list: ["Dossier complet le jour J", "Suivi selon les instructions officielles", "Aucune décision de visa ne peut être promise"] },
+    ],
+    faq: [
+      { q: "Quand le CEV ouvre-t-il les rendez-vous ?", a: "Le CEV annonce de nouvelles plages chaque jour sur une période glissante de cinq semaines." },
+      { q: "Quel délai garanti pour avoir un rendez-vous ?", a: "Aucun délai individuel garanti n’est publié ; consultez le calendrier officiel." },
+      { q: "Puis-je réserver quatre mois avant mon voyage ?", a: "Le CEV déconseille de demander un rendez-vous plus de trois mois avant le voyage." },
+      { q: "Le délai d’instruction est-il le délai du rendez-vous ?", a: "Non. L’instruction intervient après le dépôt et dépend de l’autorité compétente." },
+    ],
+    relatedSlugs: ["aucun-creneau-rendez-vous-cev-kinshasa", "rendez-vous-cev-kinshasa-visa-schengen", "guide-cev-kinshasa-reservation-rdv-depot"],
+    relatedDestination: "visa-schengen-kinshasa",
+    internalLinks: [{ href: "/guides/pays-representes-cev-kinshasa-court-long-sejour", label: "Pays représentés par le CEV", description: "Vérifier la compétence avant de rechercher une date." }],
+  },
+  {
+    slug: "pays-representes-cev-kinshasa-court-long-sejour",
+    title: "Pays représentés par le CEV Kinshasa : court et long séjour",
+    metaTitle: "Pays représentés CEV Kinshasa : court et long séjour 2026",
+    metaDescription: "CEV Kinshasa : 20 représentations pour le court séjour, long séjour Belgique/Luxembourg, exceptions Espagne, France, Allemagne et Lubumbashi.",
+    publishedDate: "2026-09-06", updatedDate: "2026-09-06", readingTime: 8, category: "Visa Schengen", coverEmoji: "🗺️",
+    intro: "Le CEV géré par l’Ambassade de Belgique représente actuellement 20 ambassades ou consulats pour le court séjour. La liste et la compétence doivent être vérifiées sur la page officielle des destinations, car elles peuvent évoluer.",
+    sections: [
+      { heading: "Court séjour : vérifier les 20 représentations", body: "Le CEV est compétent seulement pour les pays qu’il représente et pour le bon motif de court séjour. Ne choisissez pas un pays pour la commodité : la destination principale réelle détermine la demande.", list: ["Consulter la page officielle des destinations CEV", "Ne pas utiliser une liste copiée ou ancienne", "Vérifier le pays avant de créer le formulaire VOW"] },
+      { heading: "Long séjour : Belgique et Luxembourg au CEV", body: "Pour le long séjour, le CEV concerne uniquement la Belgique et le Luxembourg. Les autres visas nationaux relèvent de l’ambassade concernée et de son parcours propre.", list: ["Belgique : long séjour selon la procédure CEV", "Luxembourg : long séjour selon la procédure CEV", "Autres pays : vérifier l’ambassade compétente"] },
+      { heading: "France, Allemagne et Espagne : parcours distincts", body: "La France et l’Allemagne peuvent relever du CEV pour le court séjour lorsqu’il est compétent, mais leurs longs séjours sont traités par leurs ambassades. L’Espagne ne passe pas par le CEV à Kinshasa.", list: ["France long séjour : Ambassade de France", "Allemagne long séjour : Ambassade d’Allemagne", "Espagne : procédure directe de l’ambassade"] },
+      { heading: "Kinshasa et Lubumbashi", body: "Pour le reste du pays, sélectionnez Kinshasa ; pour le Grand Katanga, sélectionnez Lubumbashi dans le parcours officiel. L’Estonie, la Hongrie et la Slovaquie sont indiquées pour Kinshasa uniquement, pas Lubumbashi.", list: ["Reste du pays : Kinshasa", "Grand Katanga : Lubumbashi", "Estonie, Hongrie, Slovaquie : Kinshasa seulement"] },
+    ],
+    faq: [
+      { q: "Combien de pays le CEV représente-t-il ?", a: "Le site officiel indique actuellement 20 représentations pour le court séjour. Vérifiez toujours la liste à jour." },
+      { q: "Le CEV traite-t-il tous les longs séjours ?", a: "Non. Il concerne uniquement Belgique et Luxembourg pour le long séjour." },
+      { q: "L’Espagne passe-t-elle par le CEV ?", a: "Non, l’Espagne suit une procédure directe auprès de son ambassade." },
+      { q: "Puis-je choisir Lubumbashi pour l’Estonie, la Hongrie ou la Slovaquie ?", a: "Non. Ces trois pays sont indiqués pour Kinshasa seulement." },
+    ],
+    relatedSlugs: ["rendez-vous-cev-kinshasa-visa-schengen", "guide-cev-kinshasa-reservation-rdv-depot", "aucun-creneau-rendez-vous-cev-kinshasa"],
+    relatedDestination: "visa-schengen-kinshasa",
+    internalLinks: [{ href: "/visa-schengen-kinshasa", label: "Hub visa Schengen Kinshasa", description: "Comprendre le parcours CEV avant de choisir la destination." }, { href: "/visa-espagne-kinshasa", label: "Visa Espagne hors CEV", description: "Consulter le parcours espagnol distinct." }],
   },
 ];
 export function getAllGuides(): Guide[] {

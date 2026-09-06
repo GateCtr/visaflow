@@ -208,10 +208,13 @@ export default function Prix() {
           <p className="text-sm text-muted-foreground mb-5">
             Votre dossier est prêt et vous cherchez uniquement un rendez-vous ? Sélectionnez votre destination :
           </p>
+            <p className="text-xs text-green-800 mb-5">
+              Pour le CEV Kinshasa, le rendez-vous officiel est gratuit. Les 350 USD rémunèrent uniquement le service privé Joventy de surveillance et d’assistance, après obtention, sans accès privilégié ni garantie de date.
+            </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               { href: "/creneaux-visa-espagne-kinshasa", flag: "es", label: "Créneau Visa Espagne", sub: "Visa Schengen via ambassade d'Espagne" },
-              { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", label: "Créneau Schengen — CEV Belgique", sub: "France, Belgique, Pays-Bas, Italie…" },
+              { href: "/creneaux-visa-schengen-belgique-kinshasa", flag: "be", label: "Rendez-vous Schengen — CEV Kinshasa", sub: "Pays représentés : vérifiez cev-kin.eu" },
               { href: "/creneaux-visa-usa-kinshasa", flag: "us", label: "Créneau Visa USA", sub: "B1/B2 Tourisme · F1 Études" },
               { href: "/creneaux-visa-allemagne-kinshasa", flag: "de", label: "Créneau Long Séjour Allemagne", sub: "Études, travail, regroupement familial" },
               { href: "/creneaux-visa-france-long-sejour-kinshasa", flag: "fr", label: "Créneau France long séjour", sub: "France-Visas · études, famille, travail" },
@@ -230,6 +233,9 @@ export default function Prix() {
           </div>
           <p className="text-xs text-green-700 font-medium mt-4 text-center">
             Toutes ces pages · 350 $ payés uniquement après obtention du créneau · 0 $ d'acompte
+          </p>
+          <p className="text-center mt-3">
+            <Link href="/guides/rendez-vous-cev-kinshasa-visa-schengen" className="text-xs font-semibold text-primary underline underline-offset-2">Comprendre Visa On Web et le rendez-vous CEV</Link>
           </p>
         </div>
       </section>
