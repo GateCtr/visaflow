@@ -14,8 +14,8 @@
  *   Quand plusieurs Set-Cookie sont joints dans une seule chaîne, ils sont séparés par
  *   une virgule suivie du DÉBUT d'un nouveau cookie : `nom=`. On ne coupe donc QUE sur
  *   une virgule suivie (après espaces optionnels) d'un token de nom de cookie valide
- *   puis d'un `=`. Les virgules à l'intérieur d'une valeur (PHPSESSID) ou d'un
- *   attribut `Expires=...,` de date ne déclenchent pas de coupure.
+ *   puis d'un `=`. Les virgules à l'intérieur d'une valeur (PHPSESSID), d'une valeur
+ *   entre guillemets ou d'un attribut `Expires=...,` de date ne déclenchent pas de coupure.
  */
 
 /** Nom de cookie valide (RFC 6265 token, jeu de caractères pragmatique). */
@@ -31,12 +31,28 @@ function splitSetCookieHeader(raw: string): string[] {
   const byLine = raw.split(/\r?\n/).filter((s) => s.trim() !== "");
   const out: string[] = [];
   for (const line of byLine) {
-    // Coupe sur `, ` (ou `,`) SEULEMENT devant `nom=` — début d'un nouveau cookie.
-    // Lookahead : virgule + espaces optionnels + nom + '='. L'attribut de date
-    // `Expires=Wed, 09 ...` n'est jamais suivi de `nom=` juste après la virgule
-    // (il y a un jour puis un espace), donc il n'est pas coupé.
-    const parts = line.split(new RegExp(`,(?=\\s*${COOKIE_NAME}=)`));
-    for (const p of parts) out.push(p);
+    // Ne pas utiliser un split global : certains portails renvoient une valeur
+    // PHPSESSID non conforme contenant une virgule, et les valeurs entre guillemets
+    // peuvent également contenir des virgules. On reconnaît donc les frontières
+    // cookie par cookie, en ignorant les virgules entre guillemets.
+    const boundary = new RegExp(`^\\s*(${COOKIE_NAME})=`);
+    let start = 0;
+    let quoted = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === "\"" && line[i - 1] !== "\\") {
+        quoted = !quoted;
+        continue;
+      }
+      if (char !== "," || quoted) continue;
+
+      const candidate = line.slice(i + 1);
+      if (!boundary.test(candidate)) continue;
+      out.push(line.slice(start, i));
+      start = i + 1;
+    }
+    out.push(line.slice(start));
   }
   return out;
 }

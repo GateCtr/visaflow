@@ -149,18 +149,22 @@ function formatSetCookieTrace(response: Response): string {
   const values = getSetCookieValues(response);
   const raw = values.join("\n");
   if (!raw) return "set-cookie=none";
-  const names = [...raw.matchAll(/(?:^|,\s*)([^=;,\s]+)=/g)]
-    .map((match) => match[1])
-    .filter(Boolean);
+  const names = Object.keys(parseSetCookies(raw));
   return `set-cookie=present bytes=${raw.length} names=${names.join(",") || "unknown"}`;
 }
 
 function getSetCookieValues(response: Response): string[] {
   const headers = response.headers as Headers & {
     getSetCookie?: () => string[];
+    raw?: () => Record<string, string[]>;
   };
   if (typeof headers.getSetCookie === "function") {
-    return headers.getSetCookie().filter((value): value is string => Boolean(value));
+    const values = headers.getSetCookie().filter((value): value is string => Boolean(value));
+    if (values.length > 0) return values;
+  }
+  if (typeof headers.raw === "function") {
+    const values = headers.raw()["set-cookie"] ?? headers.raw()["Set-Cookie"] ?? [];
+    if (values.length > 0) return values.filter((value): value is string => Boolean(value));
   }
   const raw = headers.get("set-cookie") ?? "";
   return raw ? [raw] : [];
@@ -289,14 +293,146 @@ function logBookingResponseCookieTrace(endpoint: string, response: Response): vo
  * Compatible avec les préfixes `jQuery...({...})` et `callback={...}`.
  */
 export function parseDirectJsonp(raw: string): unknown | null {
-  let src = raw.trim();
-  if (!src) return null;
-  if (src.startsWith("callback=")) src = src.slice("callback=".length);
-  const m = src.match(/^[\w$.]+\(([\s\S]*)\);?$/);
-  if (!m) {
-    try { return JSON.parse(src); } catch { return null; }
+  return parseDirectJsonpDetailed(raw).payload;
+}
+
+type DirectPayloadParse = {
+  payload: unknown | null;
+  shape: "empty" | "callback-prefix" | "jsonp" | "json" | "other";
+  parsed: boolean;
+  error: "empty" | "invalid-json" | "invalid-jsonp" | null;
+};
+
+function parseDirectJsonpDetailed(raw: string): DirectPayloadParse {
+  let src = raw.replace(/^\uFEFF/, "").trim();
+  if (!src) {
+    return { payload: null, shape: "empty", parsed: false, error: "empty" };
   }
-  try { return JSON.parse(m[1].trim()); } catch { return null; }
+
+  let shape: DirectPayloadParse["shape"] = "other";
+  const hasCallbackPrefix = /^callback\s*=/i.test(src);
+  if (hasCallbackPrefix) {
+    src = src.replace(/^callback\s*=\s*/i, "");
+    shape = "callback-prefix";
+  }
+
+  const jsonp = src.match(/^[\w$.]+\(([\s\S]*)\)\s*;?\s*$/);
+  if (jsonp) {
+    try {
+      return {
+        payload: JSON.parse(jsonp[1].trim()),
+        shape: hasCallbackPrefix ? "callback-prefix" : "jsonp",
+        parsed: true,
+        error: null,
+      };
+    } catch {
+      return {
+        payload: null,
+        shape: hasCallbackPrefix ? "callback-prefix" : "jsonp",
+        parsed: false,
+        error: "invalid-jsonp",
+      };
+    }
+  }
+
+  if (src.startsWith("{") || src.startsWith("[")) shape = "json";
+  try {
+    return { payload: JSON.parse(src), shape, parsed: true, error: null };
+  } catch {
+    return { payload: null, shape, parsed: false, error: shape === "json" ? "invalid-json" : null };
+  }
+}
+
+function fingerprintText(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function objectKeys(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "-";
+  return Object.keys(value as Record<string, unknown>).sort().slice(0, 20).join("|") || "-";
+}
+
+function countErrors(value: unknown): number {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return 0;
+  const errors = (value as Record<string, unknown>).errors;
+  return Array.isArray(errors) ? errors.length : 0;
+}
+
+function payloadTraceSummary(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "payload=scalar";
+  if (Array.isArray(payload)) return `payload=array(${payload.length})`;
+
+  const root = payload as Record<string, unknown>;
+  const client = root.Client && typeof root.Client === "object" ? root.Client : null;
+  const access = root.Access && typeof root.Access === "object" ? root.Access : null;
+  const customFields = root.CustomFields && typeof root.CustomFields === "object"
+    ? root.CustomFields
+    : null;
+  const clientRecord = client as Record<string, unknown> | null;
+  const accessRecord = access as Record<string, unknown> | null;
+
+  const hasToken = Boolean(
+    root.bktToken ||
+    accessRecord?.bktToken ||
+    clientRecord?.bktToken,
+  );
+  const errors = countErrors(clientRecord) || countErrors(root);
+
+  return [
+    `payload=object`,
+    `keys=${objectKeys(root)}`,
+    `clientKeys=${objectKeys(client)}`,
+    `accessKeys=${objectKeys(access)}`,
+    `customFieldsKeys=${objectKeys(customFields)}`,
+    `errors=${errors}`,
+    `bktToken=${hasToken ? "yes" : "no"}`,
+  ].join(" ");
+}
+
+function responseHeader(response: Response, name: string): string {
+  return response.headers.get(name) ?? "-";
+}
+
+function responseUrlTrace(response: Response): string {
+  const raw = response.url || "-";
+  if (raw === "-") return raw;
+  try {
+    return formatBookingTraceUrl(raw);
+  } catch {
+    return "invalid-url";
+  }
+}
+
+function logBookingResponseTrace(
+  endpoint: string,
+  requestUrl: string,
+  response: Response,
+  body: string,
+  parsed: DirectPayloadParse,
+): void {
+  if (!BOOKING_TRACE_ENDPOINTS.has(endpoint)) return;
+  const requestParams = new URL(requestUrl).searchParams;
+  const bodyBytes = new TextEncoder().encode(body).byteLength;
+  const contentType = responseHeader(response, "content-type");
+  const contentLength = responseHeader(response, "content-length");
+  const retryAfter = responseHeader(response, "retry-after");
+  console.log(
+    `[bookitit-trace] RESPONSE ${endpoint} ` +
+    `HTTP=${response.status} ok=${response.ok ? "yes" : "no"} ` +
+    `statusText=${response.statusText || "-"} redirected=${response.redirected ? "yes" : "no"} ` +
+    `url=${responseUrlTrace(response)} ` +
+    `raw=${body.length}B utf8=${bodyBytes} bodyFp=${fingerprintText(body)} ` +
+    `contentType=${contentType} contentLength=${contentLength} retryAfter=${retryAfter} ` +
+    `shape=${parsed.shape} parsed=${parsed.parsed ? "yes" : "no"} parseError=${parsed.error ?? "-"} ` +
+    `date=${requestParams.get("date") ?? "-"} time=${requestParams.get("time") ?? "-"} ` +
+    `svc=${requestParams.get("services[]") ?? "-"} ag=${requestParams.get("agendas[]") ?? "-"} ` +
+    `${payloadTraceSummary(parsed.payload)}`,
+  );
 }
 
 // ─── Appel direct ─────────────────────────────────────────────────────────────
@@ -315,14 +451,14 @@ export function parseDirectJsonp(raw: string): unknown | null {
  *  infinis tout en laissant le temps au serveur de répondre sous forte charge). */
 const CALL_DIRECT_TIMEOUT_MS = 120_000;
 
-/** Codes HTTP retryables (erreurs serveur sous charge) */
-const RETRYABLE_HTTP_CODES = new Set([502, 503, 504]);
+/** Codes HTTP transitoires : surcharge, rate limit ou connexion interrompue. */
+const RETRYABLE_HTTP_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 /**
- * Nombre de retries sur 502/503/504 ou erreur réseau.
+ * Nombre de retries sur les statuts transitoires ou erreur réseau.
  * Pendant le pic de publication, le serveur Bookitit crache des 504 pendant
  * plusieurs secondes (surcharge réelle côté serveur, pas notre fait). 2 retries
  * ne suffisent pas : beaucoup de workers abandonnent le scan et ratent les créneaux.
- * Configurable via SPAIN_BOOKITIT_MAX_RETRIES (défaut 4 = 5 tentatives).
+ * Configurable via SPAIN_BOOKITIT_MAX_RETRIES (défaut 2 = 3 tentatives).
  */
 const CALL_DIRECT_MAX_RETRIES = ((): number => {
   const v = Number(process.env.SPAIN_BOOKITIT_MAX_RETRIES ?? "2");
@@ -338,6 +474,21 @@ function retryBackoffMs(attempt: number): number {
   return Math.min(CALL_DIRECT_RETRY_BASE_MS * (attempt + 1) + attempt * 200, CALL_DIRECT_RETRY_MAX_MS);
 }
 
+function retryAfterMs(response: Response, attempt: number): number {
+  const raw = response.headers.get("retry-after");
+  if (raw) {
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(Math.max(seconds * 1_000, 250), CALL_DIRECT_RETRY_MAX_MS);
+    }
+    const dateMs = Date.parse(raw) - Date.now();
+    if (Number.isFinite(dateMs) && dateMs >= 0) {
+      return Math.min(Math.max(dateMs, 250), CALL_DIRECT_RETRY_MAX_MS);
+    }
+  }
+  return retryBackoffMs(attempt);
+}
+
 export async function callDirect(
   ds: DynamicSession,
   endpoint: string,
@@ -348,56 +499,41 @@ export async function callDirect(
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
 
   for (let attempt = 0; attempt <= CALL_DIRECT_MAX_RETRIES; attempt++) {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
+      timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
       // Le flow de booking réutilise le même jar, en le mettant à jour si
       // Bookitit renouvelle PHPSESSID via Set-Cookie.
       const headers = makeDirectHeaders(ds);
       logBookingRequestTrace(endpoint, url, ds, headers, attempt);
       const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
       clearTimeout(timeout);
+      timeout = undefined;
       logBookingResponseCookieTrace(endpoint, res);
       mergeResponseCookies(ds, res);
+      const body = await res.text();
+      const parsed = parseDirectJsonpDetailed(body);
+      logBookingResponseTrace(endpoint, url, res, body, parsed);
       if (!res.ok) {
-        // P3 — Retry sur 502/503/504 (serveur surchargé sous publication)
+        // Retry uniquement sur les statuts transitoires. Les 4xx métier
+        // (400/401/403/404/409/422) restent déterministes et ne sont pas répétés.
         if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < CALL_DIRECT_MAX_RETRIES) {
-          const backoff = retryBackoffMs(attempt);
+          const backoff = retryAfterMs(res, attempt);
           console.warn(`${prefix} ${endpoint} → HTTP ${res.status} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
           await new Promise((r) => setTimeout(r, backoff));
           continue;
         }
         if (RETRYABLE_HTTP_CODES.has(res.status)) {
-          console.warn(`${prefix} ${endpoint} → HTTP ${res.status} après retries — surcharge serveur`);
+          console.warn(`${prefix} ${endpoint} → HTTP ${res.status} après retries — réponse transitoire non résolue`);
           return CALL_DIRECT_HTTP_OVERLOAD;
         }
         console.warn(`${prefix} ${endpoint} → HTTP ${res.status}`);
         return null;
       }
-      const body = await res.text();
-      const parsed = parseDirectJsonp(body);
-      if (endpoint === "getsigninfields/" || endpoint === "signin/") {
-        const trimmed = body.trim();
-        const requestParams = new URL(url).searchParams;
-        const shape = !trimmed
-          ? "empty"
-          : trimmed.startsWith("callback=")
-          ? "callback-prefix"
-          : /^[\w$.]+\(/.test(trimmed)
-          ? "jsonp"
-          : trimmed.startsWith("{")
-          ? "json"
-          : "other";
-        console.log(
-          `[bookitit-trace] RESPONSE ${endpoint} → HTTP ${res.status} raw=${body.length}B ` +
-          `parsed=${parsed === null ? "no" : "yes"} shape=${shape} ` +
-          `date=${requestParams.get("date") ?? "-"} time=${requestParams.get("time") ?? "-"} ` +
-          `svc=${requestParams.get("services[]") ?? "-"} ` +
-          `ag=${requestParams.get("agendas[]") ?? "-"}`,
-        );
-      }
-      return parsed;
+      return parsed.payload;
     } catch (e) {
+      if (timeout) clearTimeout(timeout);
       // Retry sur erreur réseau (TLS corrompue, proxy timeout, CONNECT cassé)
       if (attempt < CALL_DIRECT_MAX_RETRIES) {
         const backoff = retryBackoffMs(attempt);
@@ -421,7 +557,8 @@ export async function callDirect(
 export const CALL_DIRECT_NETWORK_ERROR: unique symbol = Symbol("CALL_DIRECT_NETWORK_ERROR");
 
 /**
- * Sentinel retourné quand Bookitit a répondu 502/503/504 après tous les retries.
+ * Sentinel retourné quand Bookitit a répondu un statut transitoire (408/425/429/
+ * 500/502/503/504) après tous les retries.
  * Il ne faut pas le confondre avec une réponse 0B ni avec une panne proxy :
  * le worker conserve son identité et retente le cycle sans rotation IP.
  */

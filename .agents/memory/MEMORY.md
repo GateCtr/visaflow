@@ -49,3 +49,4 @@
 - [Spain session cookie rotation](spain-session-cookie-rotation.md) — Bookitit peut renouveler PHPSESSID entre getsigninfields/ et signin/; propager Set-Cookie dans le même flow.
 - [Kinshasa bundle analysis](spain-kinshasa-bundle-analysis.md) — le JS statique est un loader; le contrat signin vient de la réponse dynamique onlinebookings/main.
 - [Spain signin account fields](spain-signinaccount-fields.md) — getsigninaccountfields/ donne les valeurs logintype réelles; Saopolo et Cuba retournent document.
+- [Spain signin HTTP observability](spain-signin-http-observability.md) — compare status, body shape, fingerprints and cookie state without secrets; retry only transient HTTP responses.

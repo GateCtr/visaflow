@@ -1,14 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
   callDirect,
+  parseDirectJsonp,
   type DynamicSession,
 } from "../spain-bookitit-direct.js";
+import { parseSetCookies } from "../spain-cookie-parser.js";
 
 function jsonp(payload: unknown): string {
   return `jQuery123(${JSON.stringify(payload)});`;
 }
 
 describe("callDirect — propagation PHPSESSID", () => {
+  it("préserve les virgules dans PHPSESSID et sépare les cookies joints", () => {
+    const parsed = parseSetCookies(
+      "PHPSESSID=Gn0w,I8x,part-3; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Path=/, " +
+      "cf_clearance=\"clear,ance\"; Path=/; HttpOnly\n" +
+      "foo=bar; Path=/",
+    );
+
+    expect(parsed).toEqual({
+      PHPSESSID: "Gn0w,I8x,part-3",
+      cf_clearance: "\"clear,ance\"",
+      foo: "bar",
+    });
+  });
+
+  it("accepte les formes JSONP observées sans confondre BOM et callback-prefix", () => {
+    expect(parseDirectJsonp("\uFEFFcallback=jQuery123({\"ok\":true});")).toEqual({ ok: true });
+    expect(parseDirectJsonp("{\"ok\":true}")).toEqual({ ok: true });
+  });
+
   it("réutilise le PHPSESSID reçu par getsigninfields/ pour signin/", async () => {
     const seenCookies: string[] = [];
     const responses = [
