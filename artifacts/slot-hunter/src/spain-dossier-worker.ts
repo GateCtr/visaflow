@@ -2010,8 +2010,8 @@ export async function runDossierWorker(
             }).catch(() => {});
 
             // ── P5 : getsigninfields/ — skip immédiat si 0B (pas de retry en booking) ──
-            const gsfPhpsessid = Object.entries(ds.jar).find(([k]) => k === "PHPSESSID")?.[1]?.slice(0, 8) ?? "?";
-            log("INFO", `${tag} 🔑 getsigninfields/ — ds.PHPSESSID=${gsfPhpsessid}… src=${ds.widgetUrl.slice(-40)}`);
+            const hasGsfPhpsessid = Boolean(ds.jar.PHPSESSID);
+            log("INFO", `${tag} 🔑 getsigninfields/ — PHPSESSID=${hasGsfPhpsessid ? "present" : "absent"}`);
             const gsfPayload = await callDirect(ds, "getsigninfields/", {
               "services[]": bookExtra["services[]"],
               "agendas[]":  bookExtra["agendas[]"] ?? "",
