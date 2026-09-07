@@ -98,6 +98,61 @@ function buildCookieString(jar: Record<string, string>): string {
   return Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
+type CookieTraceValue = { length: number; fingerprint: string };
+const cookieTraceSnapshots = new WeakMap<object, Map<string, CookieTraceValue>>();
+
+function traceSecretFingerprint(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function getCookieTraceSnapshot(jar: Record<string, string>): Map<string, CookieTraceValue> {
+  return new Map(
+    Object.entries(jar)
+      .filter(([, value]) => Boolean(value))
+      .map(([name, value]) => [
+        name,
+        { length: value.length, fingerprint: traceSecretFingerprint(value) },
+      ]),
+  );
+}
+
+function formatCookieTrace(ds: DynamicSession): string {
+  const current = getCookieTraceSnapshot(ds.jar);
+  const previous = cookieTraceSnapshots.get(ds);
+  let state = "INITIAL";
+
+  if (previous) {
+    const names = new Set([...previous.keys(), ...current.keys()]);
+    const changed = [...names].some((name) => {
+      const before = previous.get(name);
+      const after = current.get(name);
+      return before?.length !== after?.length || before?.fingerprint !== after?.fingerprint;
+    });
+    state = changed ? "CHANGED" : "UNCHANGED";
+  }
+
+  cookieTraceSnapshots.set(ds, current);
+  const cookies = [...current.entries()]
+    .map(([name, value]) => `${name}(len=${value.length},fp=${value.fingerprint})`)
+    .join(",");
+  return `cookieState=${state} cookieCount=${current.size} ` +
+    `cookieHeaderBytes=${buildCookieString(ds.jar).length} cookies=${cookies || "-"}`;
+}
+
+function formatSetCookieTrace(response: Response): string {
+  const raw = response.headers.get("set-cookie") ?? "";
+  if (!raw) return "set-cookie=none";
+  const names = [...raw.matchAll(/(?:^|,\s*)([^=;,\s]+)=/g)]
+    .map((match) => match[1])
+    .filter(Boolean);
+  return `set-cookie=present bytes=${raw.length} names=${names.join(",") || "unknown"}`;
+}
+
 /**
  * Construit l'URL JSONP Bookitit.
  *
@@ -173,6 +228,7 @@ function formatBookingTraceUrl(rawUrl: string): string {
 function logBookingRequestTrace(
   endpoint: string,
   url: string,
+  ds: DynamicSession,
   headers: Record<string, string>,
   attempt: number,
 ): void {
@@ -180,8 +236,13 @@ function logBookingRequestTrace(
   console.log(
     `[bookitit-trace] REQUEST ${endpoint} attempt=${attempt + 1} ` +
     `url=${formatBookingTraceUrl(url)} ` +
-    `headers=${Object.keys(headers).sort().join(",")} cookie=[REDACTED]`,
+    `headers=${Object.keys(headers).sort().join(",")} ${formatCookieTrace(ds)}`,
   );
+}
+
+function logBookingResponseCookieTrace(endpoint: string, response: Response): void {
+  if (!BOOKING_TRACE_ENDPOINTS.has(endpoint)) return;
+  console.log(`[bookitit-trace] RESPONSE-COOKIES ${endpoint} ${formatSetCookieTrace(response)}`);
 }
 
 /**
@@ -254,9 +315,10 @@ export async function callDirect(
       // Le flow de booking réutilise volontairement le même jar/PHPSESSID
       // jusqu'à summary/. Ne pas fusionner automatiquement les Set-Cookie ici.
       const headers = makeDirectHeaders(ds);
-      logBookingRequestTrace(endpoint, url, headers, attempt);
+      logBookingRequestTrace(endpoint, url, ds, headers, attempt);
       const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
       clearTimeout(timeout);
+      logBookingResponseCookieTrace(endpoint, res);
       if (!res.ok) {
         // P3 — Retry sur 502/503/504 (serveur surchargé sous publication)
         if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < CALL_DIRECT_MAX_RETRIES) {
