@@ -225,3 +225,10 @@ pas un agenda vide. Avec un `globalMaxDays` ancien (ex. 2026-09-07), le scan peu
 marquer `not_found` et arrêter avant le mois suivant malgré une réponse mensuelle
 incomplète. Ne pas conclure sur `maxDays` avant de séparer statut HTTP, 0B légitime et
 réponse JSONP valide.
+
+## Comparaison Sao Paulo — test production du 2026-09-07
+Le même chemin de production Bookitit a trouvé 301 créneaux réels sur Sao Paulo
+(2 en septembre, 299 en octobre) et a atteint `signin/` avec les faux identifiants.
+Cela confirme que l'extraction fonctionne sur un payload Bookitit réel avec `state=1`.
+La différence avec Kinshasa est donc principalement la surcharge observée pendant la
+publication (504 simultanés et réponses 0B), sans exclure une variation de payload.
