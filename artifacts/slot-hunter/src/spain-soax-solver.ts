@@ -197,6 +197,16 @@ export interface SpainCfSession {
   };
 }
 
+/** Trace optionnelle des headers Set-Cookie capturés pendant l'initialisation. */
+export interface SetCookieTrace {
+  phase: string;
+  raw: string;
+  values: string[];
+}
+
+/** Hook de diagnostic : ne doit jamais journaliser les valeurs brutes. */
+export type SetCookieObserver = (trace: SetCookieTrace) => void;
+
 /**
  * Crée une copie de session pour un flux Bookitit isolé par dossier.
  *
@@ -1727,11 +1737,29 @@ export async function initWorkerSession(
   stickyProxyUrl: string,
   targetUrl: string,
   capsolverApiKey: string,
+  onSetCookie?: SetCookieObserver,
 ): Promise<{ session: SpainCfSession; impit: InstanceType<typeof Impit>; cfFromCache: boolean } | null> {
 
   /** Helpers locaux identiques au bloc capsolver-residential */
-  const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
+  const captureSetCookies = (
+    phase: string,
+    headers: { get: (k: string) => string | null },
+  ): void => {
+    if (!onSetCookie) return;
+    const h = headers as any;
+    const raw = h?.get?.("set-cookie") ?? "";
+    const values = typeof h?.getSetCookie === "function"
+      ? (h.getSetCookie() as unknown[]).filter((v): v is string => typeof v === "string")
+      : [];
+    onSetCookie({ phase, raw, values });
+  };
+
+  const extractCookies = (
+    headers: { get: (k: string) => string | null },
+    phase: string,
+  ): Record<string, string> => {
     // Parsing robuste (préserve les virgules internes aux valeurs, ex. PHPSESSID).
+    captureSetCookies(phase, headers);
     return parseSetCookiesFromHeaders(headers);
   };
   const buildCookieStr = (j: Record<string, string>) =>
@@ -1797,7 +1825,7 @@ export async function initWorkerSession(
       headers: { "User-Agent": WORKER_UA, "Accept": "text/html,*/*;q=0.8" },
     } as any) as unknown as Promise<Response>);
     const body1 = await r1.text();
-    Object.assign(jar, extractCookies(r1.headers as any));
+    Object.assign(jar, extractCookies(r1.headers as any, "probe"));
     const isCf = r1.status === 403 || /just a moment|_cf_chl_opt/i.test(body1.slice(0, 3000));
     if (isCf) {
       challengeHtml = body1;
@@ -1847,7 +1875,7 @@ export async function initWorkerSession(
       headers: { "User-Agent": WORKER_UA, "Cookie": buildCookieStr(jar) },
     }, "GET widget (token)");
     if (!r) return { token: undefined, status: 0, bytes: 0 };
-    Object.assign(jar, extractCookies(r.res.headers as any));
+    Object.assign(jar, extractCookies(r.res.headers as any, "get-widget-token"));
     return {
       token: r.body.match(/name="token"\s+value="([^"]+)"/i)?.[1],
       status: r.res.status,
@@ -1914,7 +1942,7 @@ export async function initWorkerSession(
       return null;
     }
     const bodyPost = rp.body;
-    Object.assign(jar, extractCookies(rp.res.headers as any));
+    Object.assign(jar, extractCookies(rp.res.headers as any, "post-token"));
     srvsrc  = bodyPost.match(/srvsrc:\s*'([^']+)'/)?.[1]  ?? baseHost;
     version = bodyPost.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
     console.log(`[spain-soax] 🔧   ✅ POST token → HTTP ${rp.res.status} | srvsrc=${srvsrc} | v=${version} | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
@@ -1964,6 +1992,7 @@ export async function initWorkerSession(
         },
       }, "GET /main/");
       if (!rm) break;
+      captureSetCookies("main", rm.res.headers as any);
       prefetchedMainHtml = rm.body;
       if (prefetchedMainHtml.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
       // Réponse tronquée (0B ou 6kB = surcharge PHP) → retry

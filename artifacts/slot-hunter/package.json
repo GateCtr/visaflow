@@ -46,6 +46,7 @@
     "usa:test:jwt-ip": "tsx src/test-usa-jwt-ip-binding.ts",
     "germany:diag": "tsx scripts/germany-network-diag.ts",
     "spain:test:scrapedo": "tsx src/scripts/test-scrapedo-citaconsular.ts",
+    "spain:test:cookie-parser": "tsx src/scripts/test-cookie-parser-portals.ts",
     "spain:test:watcher-e2e": "tsx src/scripts/test-spain-watcher-portal-e2e.ts",
     "test:anticaptcha": "tsx test-anticaptcha-soax.ts",
     "test:cev:anticaptcha": "tsx test-cev-anticaptcha-proxyless.ts",
