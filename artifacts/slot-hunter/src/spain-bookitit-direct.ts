@@ -17,7 +17,10 @@
 
 import type { SpainCfSession } from "./spain-soax-solver.js";
 import { Impit } from "impit";
-import { parseSetCookies } from "./spain-cookie-parser.js";
+import {
+  inspectSetCookieHeader,
+  parseSetCookies,
+} from "./spain-cookie-parser.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -149,8 +152,18 @@ function formatSetCookieTrace(response: Response): string {
   const values = getSetCookieValues(response);
   const raw = values.join("\n");
   if (!raw) return "set-cookie=none";
-  const names = Object.keys(parseSetCookies(raw));
-  return `set-cookie=present bytes=${raw.length} names=${names.join(",") || "unknown"}`;
+  const diagnostic = inspectSetCookieHeader(raw);
+  const entries = diagnostic.entries
+    .map((entry) =>
+      `${entry.name}(len=${entry.length},fp=${entry.fingerprint},comma=${entry.literalCommas},%2C=${entry.encodedCommas})`,
+    )
+    .join(",");
+  return (
+    `set-cookie=present rawBytes=${diagnostic.rawLength} rawFp=${diagnostic.rawFingerprint} ` +
+    `segments=${diagnostic.segmentCount} invalid=${diagnostic.invalidSegmentCount} ` +
+    `duplicates=${diagnostic.duplicateNames.join(",") || "-"} ` +
+    `entries=${entries || "-"}`
+  );
 }
 
 function getSetCookieValues(response: Response): string[] {
@@ -179,7 +192,8 @@ function mergeResponseCookies(ds: DynamicSession, response: Response): void {
   const raw = getSetCookieValues(response).join("\n");
   if (!raw) return;
 
-  const received = parseSetCookies(raw);
+  const diagnostic = inspectSetCookieHeader(raw);
+  const received = diagnostic.cookies;
   for (const [name, value] of Object.entries(received)) {
     // Une valeur vide représente une suppression (Max-Age=0/Expires passée).
     if (value) ds.jar[name] = value;
@@ -194,6 +208,23 @@ function mergeResponseCookies(ds: DynamicSession, response: Response): void {
       ds.session.cfClearance = received.cf_clearance || "";
     }
   }
+
+  const jarState = getCookieTraceSnapshot(ds.jar);
+  const mismatches = diagnostic.entries
+    .filter((entry) => {
+      const jarEntry = jarState.get(entry.name);
+      return entry.length > 0
+        ? jarEntry?.length !== entry.length || jarEntry.fingerprint !== entry.fingerprint
+        : jarEntry !== undefined;
+    })
+    .map((entry) => entry.name);
+  console.log(
+    `[bookitit-trace] COOKIE-PARSE ` +
+    `rawFp=${diagnostic.rawFingerprint} segments=${diagnostic.segmentCount} ` +
+    `parsed=${diagnostic.entries.length} invalid=${diagnostic.invalidSegmentCount} ` +
+    `duplicates=${diagnostic.duplicateNames.join(",") || "-"} ` +
+    `jarCompare=${mismatches.length ? `MISMATCH(${mismatches.join(",")})` : "MATCH"}`,
+  );
 }
 
 /**

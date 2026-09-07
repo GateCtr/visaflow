@@ -4,7 +4,10 @@ import {
   parseDirectJsonp,
   type DynamicSession,
 } from "../spain-bookitit-direct.js";
-import { parseSetCookies } from "../spain-cookie-parser.js";
+import {
+  inspectSetCookieHeader,
+  parseSetCookies,
+} from "../spain-cookie-parser.js";
 
 function jsonp(payload: unknown): string {
   return `jQuery123(${JSON.stringify(payload)});`;
@@ -12,17 +15,28 @@ function jsonp(payload: unknown): string {
 
 describe("callDirect — propagation PHPSESSID", () => {
   it("préserve les virgules dans PHPSESSID et sépare les cookies joints", () => {
-    const parsed = parseSetCookies(
+    const raw = (
       "PHPSESSID=Gn0w,I8x,part-3; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Path=/, " +
       "cf_clearance=\"clear,ance\"; Path=/; HttpOnly\n" +
-      "foo=bar; Path=/",
+      "foo=bar; Path=/"
     );
+    const parsed = parseSetCookies(raw);
+    const diagnostic = inspectSetCookieHeader(raw);
 
     expect(parsed).toEqual({
       PHPSESSID: "Gn0w,I8x,part-3",
       cf_clearance: "\"clear,ance\"",
       foo: "bar",
     });
+    expect(diagnostic.segmentCount).toBe(3);
+    expect(diagnostic.invalidSegmentCount).toBe(0);
+    expect(diagnostic.duplicateNames).toEqual([]);
+    expect(diagnostic.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "PHPSESSID", length: 15, literalCommas: 2 }),
+        expect.objectContaining({ name: "cf_clearance", literalCommas: 1 }),
+      ]),
+    );
   });
 
   it("accepte les formes JSONP observées sans confondre BOM et callback-prefix", () => {

@@ -20,6 +20,38 @@
 
 /** Nom de cookie valide (RFC 6265 token, jeu de caractères pragmatique). */
 const COOKIE_NAME = "[A-Za-z0-9!#$%&'*+.^_`|~-]+";
+const COOKIE_NAME_RE = new RegExp(`^${COOKIE_NAME}$`);
+
+export type SetCookieDiagnosticEntry = {
+  name: string;
+  length: number;
+  fingerprint: string;
+  literalCommas: number;
+  encodedCommas: number;
+};
+
+export type SetCookieDiagnostics = {
+  rawLength: number;
+  rawFingerprint: string;
+  segmentCount: number;
+  invalidSegmentCount: number;
+  duplicateNames: string[];
+  cookies: Record<string, string>;
+  entries: SetCookieDiagnosticEntry[];
+};
+
+function fingerprint(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function count(value: string, pattern: RegExp): number {
+  return (value.match(pattern) ?? []).length;
+}
 
 /**
  * Sépare une chaîne Set-Cookie (éventuellement multi-cookies) en segments, un par
@@ -57,6 +89,81 @@ function splitSetCookieHeader(raw: string): string[] {
   return out;
 }
 
+function parseCookieSegment(segment: string): { name: string; value: string } | null {
+  const trimmed = segment.trim();
+  const separator = trimmed.indexOf("=");
+  if (separator <= 0) return null;
+
+  const name = trimmed.slice(0, separator).trim();
+  if (!COOKIE_NAME_RE.test(name)) return null;
+
+  // Un cookie peut être cité. Dans ce cas, un `;` à l'intérieur de la valeur
+  // ne doit pas être confondu avec le début des attributs.
+  let quoted = false;
+  let valueEnd = trimmed.length;
+  for (let i = separator + 1; i < trimmed.length; i++) {
+    const char = trimmed[i];
+    if (char === "\"" && trimmed[i - 1] !== "\\") {
+      quoted = !quoted;
+      continue;
+    }
+    if (char === ";" && !quoted) {
+      valueEnd = i;
+      break;
+    }
+  }
+
+  return {
+    name,
+    value: trimmed.slice(separator + 1, valueEnd),
+  };
+}
+
+/**
+ * Inspecte le contenu parsé sans jamais retourner une valeur sensible dans le
+ * résumé destiné aux logs. `cookies` reste disponible pour le code de fusion ;
+ * `entries` est la vue sûre à utiliser pour comparer raw et jar.
+ */
+export function inspectSetCookieHeader(
+  raw: string | null | undefined,
+): SetCookieDiagnostics {
+  const source = raw ?? "";
+  const segments = splitSetCookieHeader(source);
+  const cookies: Record<string, string> = {};
+  const entries: SetCookieDiagnosticEntry[] = [];
+  const seen = new Set<string>();
+  const duplicateNames = new Set<string>();
+  let invalidSegmentCount = 0;
+
+  for (const segment of segments) {
+    const parsed = parseCookieSegment(segment);
+    if (!parsed) {
+      invalidSegmentCount++;
+      continue;
+    }
+    if (seen.has(parsed.name)) duplicateNames.add(parsed.name);
+    seen.add(parsed.name);
+    cookies[parsed.name] = parsed.value;
+    entries.push({
+      name: parsed.name,
+      length: parsed.value.length,
+      fingerprint: fingerprint(parsed.value),
+      literalCommas: count(parsed.value, /,/g),
+      encodedCommas: count(parsed.value, /%2c/gi),
+    });
+  }
+
+  return {
+    rawLength: source.length,
+    rawFingerprint: fingerprint(source),
+    segmentCount: segments.length,
+    invalidSegmentCount,
+    duplicateNames: [...duplicateNames].sort(),
+    cookies,
+    entries,
+  };
+}
+
 /**
  * Parse un en-tête Set-Cookie en map { nom: valeur }. Préserve les virgules internes
  * aux valeurs (ex. PHPSESSID contenant `,`). Ne conserve que la paire nom=valeur
@@ -66,14 +173,7 @@ function splitSetCookieHeader(raw: string): string[] {
  * @returns    Map des cookies { nom: valeur }.
  */
 export function parseSetCookies(raw: string | null | undefined): Record<string, string> {
-  const result: Record<string, string> = {};
-  if (!raw) return result;
-  for (const segment of splitSetCookieHeader(raw)) {
-    // Première paire `nom=valeur` du segment, valeur = tout jusqu'au premier `;`.
-    const m = segment.trim().match(/^([^=;]+)=([^;]*)/);
-    if (m) result[m[1].trim()] = m[2];
-  }
-  return result;
+  return inspectSetCookieHeader(raw).cookies;
 }
 
 /**
