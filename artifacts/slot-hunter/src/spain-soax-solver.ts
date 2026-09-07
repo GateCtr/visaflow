@@ -31,6 +31,7 @@ import {
   type SerializableSpainCfSession,
 } from "./spain-redis-persistence.js";
 import { cookieManager } from "./cookie-manager.js";
+import { parseSetCookiesFromHeaders } from "./spain-cookie-parser.js";
 import { solveSpainWidgetSession } from "./local-playwright-solver.js";
 import { applyStableGaProfile } from "./spain-redis-persistence.js";
 import {
@@ -870,13 +871,8 @@ export async function ensureSpainCfSession(
 
     /** Extrait tous les Set-Cookie en un dictionnaire name→value. */
     const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
-      const jar: Record<string, string> = {};
-      const raw = headers.get("set-cookie") ?? "";
-      for (const part of raw.split(/,(?=[^ ])/)) {
-        const m = part.trim().match(/^([^=]+)=([^;]*)/);
-        if (m) jar[m[1].trim()] = m[2];
-      }
-      return jar;
+      // Parsing robuste (préserve les virgules internes aux valeurs, ex. PHPSESSID).
+      return parseSetCookiesFromHeaders(headers);
     };
 
     const buildCookieStr = (j: Record<string, string>) =>
@@ -1735,13 +1731,8 @@ export async function initWorkerSession(
 
   /** Helpers locaux identiques au bloc capsolver-residential */
   const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
-    const jar: Record<string, string> = {};
-    const raw = headers.get("set-cookie") ?? "";
-    for (const part of raw.split(/,(?=[^ ])/)) {
-      const m = part.trim().match(/^([^=]+)=([^;]*)/);
-      if (m) jar[m[1].trim()] = m[2];
-    }
-    return jar;
+    // Parsing robuste (préserve les virgules internes aux valeurs, ex. PHPSESSID).
+    return parseSetCookiesFromHeaders(headers);
   };
   const buildCookieStr = (j: Record<string, string>) =>
     Object.entries(j).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");

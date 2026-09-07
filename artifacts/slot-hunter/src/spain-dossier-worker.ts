@@ -84,6 +84,7 @@ import {
   type SlotDiscoveryEvent,
 } from "./convexClient.js";
 import { log } from "./scheduler-utils.js";
+import { parseSetCookies, parseSetCookiesFromHeaders } from "./spain-cookie-parser.js";
 // ── spain-synchronized-scan (task 10.1) : grille d'horloge murale + machine à états ──
 import { createGridResolver, type GridResolver } from "./spain/spain-wallclock-grid.js";
 import { loadGridConfig } from "./spain/spain-grid-config.js";
@@ -1010,15 +1011,10 @@ export async function refreshSessionAndScan(
   const cfClearance = session.cfClearance;
 
   // Helpers
-  const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> => {
-    const result: Record<string, string> = {};
-    const raw = headers.get("set-cookie") ?? "";
-    for (const part of raw.split(/,(?=[^ ])/)) {
-      const m = part.trim().match(/^([^=]+)=([^;]*)/);
-      if (m) result[m[1].trim()] = m[2];
-    }
-    return result;
-  };
+  // Parsing robuste : ne coupe PAS les valeurs contenant une virgule (ex. PHPSESSID
+  // Kinshasa `Gn0w,I8x...`). L'ancien split /,(?=[^ ])/ tronquait ces PHPSESSID → 0B.
+  const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> =>
+    parseSetCookiesFromHeaders(headers);
   const buildCookieStr = (jar: Record<string, string>): string =>
     Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
 
@@ -2462,12 +2458,10 @@ async function captureChallengePage(
     // Cookie header du GET portail post-solve. Sans eux, CF rejette la requête HTML (403).
     const probeCookies: Array<{name: string; value: string}> = [];
     try {
-      const rawSC = (res.headers as any).get?.("set-cookie") ?? "";
-      // Certains runtimes retournent plusieurs Set-Cookie séparés par \n
-      const parts = rawSC.split(/,(?=[^ ])/);
-      for (const part of parts) {
-        const m = part.trim().match(/^([^=;]+)=([^;]*)/);
-        if (m && m[1] && m[2]) probeCookies.push({ name: m[1].trim(), value: m[2].trim() });
+      // Parsing robuste (préserve les virgules internes aux valeurs).
+      const parsed = parseSetCookies((res.headers as any).get?.("set-cookie") ?? "");
+      for (const [name, value] of Object.entries(parsed)) {
+        if (name && value) probeCookies.push({ name, value: value.trim() });
       }
     } catch { /* non-fatal */ }
 
