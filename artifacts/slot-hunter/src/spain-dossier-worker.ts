@@ -37,7 +37,6 @@ import {
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
-  refreshPhpsessidForCapsolver,
   type SpainBookingResult,
 } from "./spain-http-booking.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
@@ -767,88 +766,6 @@ export async function initPhpState(
     allowAppointment, ds,
     _trace: { cfgBytes, svcBytes, svcStr, agBytes },
   };
-}
-
-/**
- * Prépare une session PHP dédiée au booking.
- *
- * Le scan peut appeler datetime/ sur plusieurs mois et laisser la session PHP
- * dans un état qui répond encore à getsigninfields/ mais ne traite plus
- * correctement signin/. On conserve la même clearance CF, le même proxy et le
- * même impit/TLS, mais on repart avec un PHPSESSID frais puis on réamorce
- * l'état Bookitit avec getservices/. Le datetime/ du créneau est fait juste
- * avant getsigninfields/ dans la boucle de booking.
- */
-async function createFreshDirectBookingSession(
-  sourceSession: SpainCfSession,
-  portalUrl: string,
-  tag: string,
-): Promise<DynamicSession | null> {
-  const freshSession: SpainCfSession = {
-    ...sourceSession,
-    allCookies: sourceSession.allCookies
-      .filter((cookie) => cookie.name !== "PHPSESSID")
-      .map((cookie) => ({ ...cookie })),
-    extraHeaders: { ...sourceSession.extraHeaders },
-    bookititState: sourceSession.bookititState
-      ? { ...sourceSession.bookititState }
-      : undefined,
-  };
-
-  const refreshed = await refreshPhpsessidForCapsolver(freshSession, portalUrl);
-  if (!refreshed) {
-    log("WARN", `${tag} 🔒 Session booking fraîche impossible — fallback session scan`);
-    return null;
-  }
-
-  const ds = buildDynamicSession(freshSession);
-  if (!ds) {
-    log("WARN", `${tag} 🔒 Session booking fraîche sans DynamicSession`);
-    return null;
-  }
-
-  const services = await callDirect(ds, "getservices/", undefined, tag);
-  if (
-    services === null ||
-    services === CALL_DIRECT_NETWORK_ERROR ||
-    services === CALL_DIRECT_HTTP_OVERLOAD
-  ) {
-    log("WARN", `${tag} 🔒 Session booking fraîche non amorcée par getservices/`);
-    return null;
-  }
-
-  const phpSessid = ds.jar.PHPSESSID?.slice(0, 8) ?? "?";
-  log("INFO", `${tag} 🔒 Session booking isolée prête — PHPSESSID=${phpSessid}…`);
-  return ds;
-}
-
-async function primeFreshBookingSlot(
-  ds: DynamicSession,
-  serviceId: string,
-  agendaId: string | undefined,
-  date: string,
-  tag: string,
-): Promise<boolean> {
-  const monthStart = `${date.slice(0, 7)}-01`;
-  const [year, month] = date.slice(0, 7).split("-").map(Number);
-  const lastDay = new Date(year, month, 0).getDate();
-  const datetimePayload = await callDirect(ds, "datetime/", {
-    "services[]": serviceId,
-    ...(agendaId ? { "agendas[]": agendaId } : {}),
-    start: monthStart,
-    end: `${date.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`,
-    selectedPeople: "1",
-  }, tag);
-
-  if (
-    datetimePayload === null ||
-    datetimePayload === CALL_DIRECT_NETWORK_ERROR ||
-    datetimePayload === CALL_DIRECT_HTTP_OVERLOAD
-  ) {
-    log("WARN", `${tag} 🔒 datetime/ booking ciblé invalide pour ${date}`);
-    return false;
-  }
-  return true;
 }
 
 /**
@@ -2048,14 +1965,6 @@ export async function runDossierWorker(
           }
 
           if (holdingBookingSlot) {
-          // Ne pas réserver avec le PHPSESSID qui vient de servir le scan
-          // multi-mois. La session fraîche garde la même identité réseau/CF,
-          // mais son état PHP est réinitialisé pour le créneau de booking.
-          const freshBookingDs = await createFreshDirectBookingSession(
-            session,
-            config.portalUrl,
-            tag,
-          );
           for (const candidate of bookingCandidates) {
             // Hors race seulement : claim atomique anti-collision historique.
             // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
@@ -2083,7 +1992,7 @@ export async function runDossierWorker(
 
             // ── Booking inline — même session, même PHPSESSID que le scan ────────
             const bookT0 = Date.now();
-            const ds = freshBookingDs ?? scan.ds ?? phpState!.ds;
+            const ds = scan.ds ?? phpState!.ds;
             const bookExtra: Record<string, string> = {
               "services[]": scan.serviceId!,
               date:          slot.date,
@@ -2091,20 +2000,6 @@ export async function runDossierWorker(
               selectedPeople: "1",
             };
             if (slot.agendaId) bookExtra["agendas[]"] = slot.agendaId;
-
-            if (freshBookingDs) {
-              const primed = await primeFreshBookingSlot(
-                freshBookingDs,
-                bookExtra["services[]"],
-                bookExtra["agendas[]"],
-                slot.date,
-                tag,
-              );
-              if (!primed) {
-                await sleep(200);
-                continue;
-              }
-            }
 
             // Email admin : tentative de booking (fire-and-forget)
             reportBookingLog({
