@@ -320,7 +320,6 @@ export async function callBookititEndpoint(
     }
 
     lastStatus = res.status;
-
     // 5xx transitoire → retry
     if (BOOKING_5XX_RETRY_CODES.has(res.status)) {
       continue;

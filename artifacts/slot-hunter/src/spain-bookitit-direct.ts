@@ -198,17 +198,15 @@ export async function callDirect(
   tag?: string,
 ): Promise<unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD> {
   const url = makeDirectUrl(ds, endpoint, extra);
-  const headers = makeDirectHeaders(ds);
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
 
   for (let attempt = 0; attempt <= CALL_DIRECT_MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
-      // Headers figés (jar stable) — comportement d'origine (31 août). Le merge des
-      // Set-Cookie de réponse a été retiré : le test test-signin-cookies.ts a prouvé
-      // que getsigninfields/ et signin/ ne posent AUCUN Set-Cookie, donc merger était
-      // inutile et pouvait écraser le PHPSESSID de session entre les appels.
+      // Le flow de booking réutilise volontairement le même jar/PHPSESSID
+      // jusqu'à summary/. Ne pas fusionner automatiquement les Set-Cookie ici.
+      const headers = makeDirectHeaders(ds);
       const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
       clearTimeout(timeout);
       if (!res.ok) {
