@@ -32,6 +32,17 @@ keep-alive timer can also start a competing pre-warm after the worker has resume
 Keep the global preflight pool for recovery reserves only; it must not independently
 re-solve per-dossier sessions that are not transferred to the worker.
 
+During a mid-session rotation, the failed base proxy must be explicitly excluded from
+the replacement selection; deleting only the blacklist/identity is not sufficient while
+the legacy last-proxy key may still point to it.
+
+**Why:** A trace showed a proxy blacklisted for CONNECT failure being selected again
+immediately, then its host:port CF cache was restored under a new sticky ID and rejected
+with 403, causing an avoidable CapSolver solve.
+
+**How to apply:** Pass the failed base proxy as an exclusion through both the saved-proxy
+fast path and the round-robin fallback whenever rotateWorkerIp selects a replacement.
+
 ## Root cause of cfCached=false
 `runDossierWorker` was generating `stickyId = Math.random()` on every window start.
 The Redis key for the CF cache (`proxyToWorkerKey`) is stable by host:port — but the

@@ -2412,12 +2412,17 @@ async function rotateWorkerIp(
   if (currentProxyUrl) {
     flagDecodoIp(currentProxyUrl, reason);
     await releaseWorkerIp(currentProxyUrl, config.id).catch(() => {});
+    // Le couple précédent ne doit plus être considéré comme réutilisable pendant
+    // cette rotation. La clé legacy last-proxy peut encore exister, donc l'exclusion
+    // explicite est nécessaire même si le blacklist Redis n'est pas encore visible.
+    await deleteWorkerProxyIdentity(config.id).catch(() => {});
+    await deleteLastStickyForDossier(config.id).catch(() => {});
   }
 
   // 2. Nouvelle IP + initWorkerSession complète (même séquence que l'init initiale)
   const portalUrl = config.portalUrl.split("#")[0];
 
-  const newProxy = await pickDedicatedProxy(config.id, tag);
+  const newProxy = await pickDedicatedProxy(config.id, tag, stripStickySession(currentProxyUrl));
   if (!newProxy) {
     log("WARN", `${tag} ❌ Rotation impossible — pool Decodo épuisé`);
     return null;
@@ -2465,6 +2470,7 @@ async function rotateWorkerIp(
 async function pickDedicatedProxy(
   dossierId: string,
   tag: string,
+  excludedBaseProxy?: string,
 ): Promise<string | null> {
   const poolSize = getDecodoPoolSize();
 
@@ -2479,7 +2485,7 @@ async function pickDedicatedProxy(
   // identique → cache hit → CapSolver évité (~20s + balance économisés).
   const savedIdentity = await getWorkerProxyIdentity(dossierId).catch(() => null);
   const lastProxy = savedIdentity?.baseProxy ?? await getLastProxyForDossier(dossierId);
-  if (lastProxy && !isDecodoIpBlacklisted(lastProxy)) {
+  if (lastProxy && lastProxy !== excludedBaseProxy && !isDecodoIpBlacklisted(lastProxy)) {
     const reservedByOther = await isIpReservedByOther(lastProxy, dossierId);
     if (!reservedByOther) {
       const ok = await reserveWorkerIp(lastProxy, dossierId);
@@ -2501,6 +2507,7 @@ async function pickDedicatedProxy(
     const idx = (startIndex + i) % poolSize;
     const url = getDecodoProxyForIndex(idx) ?? "";
     if (!url) continue;
+    if (url === excludedBaseProxy) continue;
 
     // Skip les IPs blacklistées (portal-html-403, probe-error, etc.)
     if (isDecodoIpBlacklisted(url)) continue;
