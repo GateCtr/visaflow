@@ -211,3 +211,17 @@ DÉCISION TRANCHÉE (user 2026-08-31): Option C retenue, tick lent = **60s**.
 - Env: SPAIN_LATE_WINDOW_START_MIN=17, SPAIN_LATE_TICK_MS=60000.
 - Note: si un créneau EST détecté puis épuisé, on reste en cadence pleine (annulations
   possibles) — le ralentissement ne s'active que si RIEN n'est jamais apparu.
+
+## Observation confirmée — publication HH:13 du 2026-09-06
+Les logs montrent que `agenda=bkt391787` a bien été servi à plusieurs workers vers
+22:13 UTC (23:13 Kinshasa), donc le scan a atteint `datetime/`. Octobre n'a pas été
+ignoré : plusieurs workers l'ont appelé, mais certains ont reçu `maxDays=2026-09-07`
+et d'autres `maxDays=2026-10-12`.
+
+Point critique pour l'analyse : après les retries, un HTTP 504 de `callDirect()` retourne
+`null`, exactement comme une réponse 0B/JSONP vide ; seul un throw réseau retourne le
+sentinel distinct. Ainsi les traces `HTTP 504` puis `0 (0B) | maxDays absent` ne prouvent
+pas un agenda vide. Avec un `globalMaxDays` ancien (ex. 2026-09-07), le scan peut alors
+marquer `not_found` et arrêter avant le mois suivant malgré une réponse mensuelle
+incomplète. Ne pas conclure sur `maxDays` avant de séparer statut HTTP, 0B légitime et
+réponse JSONP valide.
