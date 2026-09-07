@@ -44,3 +44,4 @@
 - [Spain publication forensic 2026-08-31](spain-publication-2026-08-31-forensic.md) — analyse ms-par-ms d'une publication (26 créneaux <1min, 3 bookings). Chronologie triée dans src/chronologie.txt. Découverte clé: 12/12 workers en not_found SAIN avant publi, 0 erreur → cause n'est PAS des erreurs pré-existantes. Hypothèses éliminées: scanDatetimeDirect (casse Kinshasa agenda-vide), "serveur 0B". Analyse en cours, piloté par questions user.
 - [Spain race booking arbitration](spain-race-booking-arbitration.md) — en publication/race, aucun verrou avant signin; Bookitit choisit le gagnant et les 0B basculent au candidat suivant.
 - [Spain cancellation month scan](spain-cancellation-month-scan.md) — mercredi–samedi à Kinshasa, arrêter les mois suivants dès qu'un mois contient des créneaux.
+- [Spain session cookie rotation](spain-session-cookie-rotation.md) — Bookitit peut renouveler PHPSESSID entre getsigninfields/ et signin/; propager Set-Cookie dans le même flow.

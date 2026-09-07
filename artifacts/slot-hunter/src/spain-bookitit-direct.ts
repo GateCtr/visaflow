@@ -41,6 +41,8 @@ export interface DynamicSession {
   srvsrc: string;
   /** Base des endpoints Bookitit (ex : "https://www.citaconsular.es/onlinebookings") */
   bookititBase: string;
+  /** Session source — permet de persister les Set-Cookie reçus pendant le flow. */
+  session?: SpainCfSession;
 }
 
 // ─── Constructeur ─────────────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ export function buildDynamicSession(session: SpainCfSession): DynamicSession | n
     widgetUrl: state.widgetUrl,
     srvsrc: state.srvsrc,
     bookititBase: state.bookititBase,
+    session,
   };
 }
 
@@ -86,6 +89,27 @@ export function buildDynamicSession(session: SpainCfSession): DynamicSession | n
 
 function buildCookieString(jar: Record<string, string>): string {
   return Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+}
+
+function extractSetCookies(headers: { get: (name: string) => string | null }): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  const raw = headers.get("set-cookie") ?? "";
+  for (const part of raw.split(/,(?=[^ ])/)) {
+    const match = part.trim().match(/^([^=]+)=([^;]*)/);
+    if (match) cookies[match[1].trim()] = match[2];
+  }
+  return cookies;
+}
+
+function mergeResponseCookies(ds: DynamicSession, response: Response): void {
+  const updates = extractSetCookies(response.headers);
+  if (Object.keys(updates).length === 0) return;
+  Object.assign(ds.jar, updates);
+  if (ds.session) {
+    ds.session.allCookies = Object.entries(ds.jar)
+      .filter(([, value]) => value)
+      .map(([name, value]) => ({ name, value }));
+  }
 }
 
 /**
@@ -195,15 +219,18 @@ export async function callDirect(
   tag?: string,
 ): Promise<unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD> {
   const url = makeDirectUrl(ds, endpoint, extra);
-  const headers = makeDirectHeaders(ds);
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
 
   for (let attempt = 0; attempt <= CALL_DIRECT_MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
+      // Rebuild the headers for every attempt: the previous response may have
+      // rotated PHPSESSID via Set-Cookie.
+      const headers = makeDirectHeaders(ds);
       const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
       clearTimeout(timeout);
+      mergeResponseCookies(ds, res);
       if (!res.ok) {
         // P3 — Retry sur 502/503/504 (serveur surchargé sous publication)
         if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < CALL_DIRECT_MAX_RETRIES) {
