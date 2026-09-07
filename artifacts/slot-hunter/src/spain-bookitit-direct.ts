@@ -274,6 +274,7 @@ export function makeDirectHeaders(ds: DynamicSession): Record<string, string> {
 }
 
 const BOOKING_TRACE_ENDPOINTS = new Set(["getsigninfields/", "signin/"]);
+const signinFieldsComparison = new Map<string, { contentFp: string; schemaFp: string }>();
 const BOOKING_TRACE_REDACTED_KEYS = new Set([
   "callback",
   "publickey",
@@ -425,6 +426,91 @@ function payloadTraceSummary(payload: unknown): string {
   ].join(" ");
 }
 
+const DYNAMIC_PAYLOAD_KEY = /^(?:_|callback|nonce|token|bktToken|csrf|session|cookie|timestamp|createdAt|updatedAt)$/i;
+
+function payloadSchema(value: unknown, depth = 0): unknown {
+  if (depth > 10) return "depth-limit";
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      length: value.length,
+      items: value.slice(0, 50).map((item) => payloadSchema(item, depth + 1)),
+    };
+  }
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((key) => [key, payloadSchema((value as Record<string, unknown>)[key], depth + 1)]),
+    );
+  }
+  return typeof value;
+}
+
+function payloadContentFingerprint(value: unknown, key = "", depth = 0): unknown {
+  if (depth > 10) return "depth-limit";
+  if (DYNAMIC_PAYLOAD_KEY.test(key)) return "[dynamic]";
+  if (typeof value === "string") {
+    return { type: "string", length: value.length, fingerprint: fingerprintText(value) };
+  }
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return value.slice(0, 50).map((item) => payloadContentFingerprint(item, key, depth + 1));
+  }
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((childKey) => [
+          childKey,
+          payloadContentFingerprint((value as Record<string, unknown>)[childKey], childKey, depth + 1),
+        ]),
+    );
+  }
+  return value;
+}
+
+function signinFieldsComparisonTrace(ds: DynamicSession, payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "gsfCompare=UNPARSED";
+
+  const contentFp = fingerprintText(JSON.stringify(payloadContentFingerprint(payload)));
+  const schemaFp = fingerprintText(JSON.stringify(payloadSchema(payload)));
+  const key = `${ds.bookititBase}|${ds.publickey}`;
+  const previous = signinFieldsComparison.get(key);
+  const contentState = !previous
+    ? "INITIAL"
+    : previous.contentFp === contentFp
+    ? "UNCHANGED"
+    : "CHANGED";
+  const schemaState = !previous
+    ? "INITIAL"
+    : previous.schemaFp === schemaFp
+    ? "UNCHANGED"
+    : "CHANGED";
+  signinFieldsComparison.set(key, { contentFp, schemaFp });
+
+  const root = payload as Record<string, unknown>;
+  const customFields = root.CustomFields && typeof root.CustomFields === "object"
+    ? root.CustomFields as Record<string, unknown>
+    : null;
+  const clients = customFields && Array.isArray(customFields.Clients) ? customFields.Clients : [];
+  const fieldShapes = clients.slice(0, 30).map((field) => {
+    if (!field || typeof field !== "object" || Array.isArray(field)) return typeof field;
+    return Object.keys(field as Record<string, unknown>).sort().join("|") || "-";
+  });
+
+  return [
+    `gsfCompare=content:${contentState}`,
+    `schema:${schemaState}`,
+    `contentFp=${contentFp}`,
+    `schemaFp=${schemaFp}`,
+    `rootKeys=${objectKeys(payload)}`,
+    `clients=${clients.length}`,
+    `fieldShapes=${fieldShapes.join(";") || "-"}`,
+  ].join(" ");
+}
+
 function responseHeader(response: Response, name: string): string {
   return response.headers.get(name) ?? "-";
 }
@@ -546,6 +632,12 @@ export async function callDirect(
       const body = await res.text();
       const parsed = parseDirectJsonpDetailed(body);
       logBookingResponseTrace(endpoint, url, res, body, parsed);
+      if (endpoint === "getsigninfields/") {
+        console.log(
+          `[bookitit-trace] GSF-COMPARE portalFp=${fingerprintText(`${ds.bookititBase}|${ds.publickey}`)} ` +
+          `${signinFieldsComparisonTrace(ds, parsed.payload)}`,
+        );
+      }
       if (!res.ok) {
         // Retry uniquement sur les statuts transitoires. Les 4xx métier
         // (400/401/403/404/409/422) restent déterministes et ne sont pas répétés.
