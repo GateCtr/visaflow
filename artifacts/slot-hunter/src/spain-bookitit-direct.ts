@@ -91,27 +91,6 @@ function buildCookieString(jar: Record<string, string>): string {
   return Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
-function extractSetCookies(headers: { get: (name: string) => string | null }): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  const raw = headers.get("set-cookie") ?? "";
-  for (const part of raw.split(/,(?=[^ ])/)) {
-    const match = part.trim().match(/^([^=]+)=([^;]*)/);
-    if (match) cookies[match[1].trim()] = match[2];
-  }
-  return cookies;
-}
-
-function mergeResponseCookies(ds: DynamicSession, response: Response): void {
-  const updates = extractSetCookies(response.headers);
-  if (Object.keys(updates).length === 0) return;
-  Object.assign(ds.jar, updates);
-  if (ds.session) {
-    ds.session.allCookies = Object.entries(ds.jar)
-      .filter(([, value]) => value)
-      .map(([name, value]) => ({ name, value }));
-  }
-}
-
 /**
  * Construit l'URL JSONP Bookitit.
  *
