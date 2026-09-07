@@ -225,7 +225,24 @@ export async function callDirect(
         return null;
       }
       const body = await res.text();
-      return parseDirectJsonp(body);
+      const parsed = parseDirectJsonp(body);
+      if (endpoint === "getsigninfields/" || endpoint === "signin/") {
+        const trimmed = body.trim();
+        const shape = !trimmed
+          ? "empty"
+          : trimmed.startsWith("callback=")
+          ? "callback-prefix"
+          : /^[\w$.]+\(/.test(trimmed)
+          ? "jsonp"
+          : trimmed.startsWith("{")
+          ? "json"
+          : "other";
+        console.log(
+          `${prefix} ${endpoint} → HTTP ${res.status} raw=${body.length}B ` +
+          `parsed=${parsed === null ? "no" : "yes"} shape=${shape}`,
+        );
+      }
+      return parsed;
     } catch (e) {
       // Retry sur erreur réseau (TLS corrompue, proxy timeout, CONNECT cassé)
       if (attempt < CALL_DIRECT_MAX_RETRIES) {
