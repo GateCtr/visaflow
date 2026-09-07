@@ -1,0 +1,12 @@
+[
+  {
+    "name": "PHPSESSID",
+    "value": "zBEPssZCAqh8KXwrbPetxqZj",
+    "domain": "www.citaconsular.es",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  }
+]
