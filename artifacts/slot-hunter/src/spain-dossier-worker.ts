@@ -39,6 +39,7 @@ import {
 import {
   type SpainBookingResult,
 } from "./spain-http-booking.js";
+import { getSpainLoginTypes, type SpainLoginType } from "./spain-login-types.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
@@ -2027,17 +2028,60 @@ export async function runDossierWorker(
               await sleep(200);
               continue;
             }
-            const logintype = "document";
+            // ── signin/ — document d'abord, fallbacks uniquement si réponse vide ─
+            const loginTypes = getSpainLoginTypes();
+            let signinLogintype: SpainLoginType = loginTypes[0];
+            let signinRaw: unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD = null;
+            for (let loginTypeIndex = 0; loginTypeIndex < loginTypes.length; loginTypeIndex++) {
+              const candidateLoginType = loginTypes[loginTypeIndex];
+              signinLogintype = candidateLoginType;
+              log(
+                "INFO",
+                `${tag} 🔑 signin/ (${candidateLoginType})${loginTypeIndex > 0 ? " — fallback" : ""}…`,
+              );
+              signinRaw = await callDirect(ds, "signin/", {
+                ...bookExtra,
+                logintype: candidateLoginType,
+                login:     config.login,
+                password:  config.password,
+                comments:  "",
+              });
 
-            // ── signin/ — appel unique, skip immédiat si 0B ─────────────────────
-            log("INFO", `${tag} 🔑 signin/…`);
-            const signinRaw = await callDirect(ds, "signin/", {
-              ...bookExtra,
-              logintype,
-              login:     config.login,
-              password:  config.password,
-              comments:  "",
-            });
+              if (
+                signinRaw === CALL_DIRECT_NETWORK_ERROR ||
+                signinRaw === CALL_DIRECT_HTTP_OVERLOAD
+              ) {
+                break;
+              }
+
+              if (signinRaw === null) {
+                if (loginTypeIndex + 1 < loginTypes.length) {
+                  log("WARN", `${tag} signin/ (${candidateLoginType}) → réponse vide, essai du type suivant`);
+                }
+                continue;
+              }
+
+              const candidatePayload = signinRaw as Record<string, unknown>;
+              const candidateInner = (candidatePayload as any)?.Client ?? candidatePayload;
+              const candidateToken = String(
+                (candidatePayload as any)?.Access?.bktToken ??
+                candidateInner?.bktToken ??
+                (candidatePayload as any)?.bktToken ??
+                "",
+              );
+              const candidateErrors: Array<{ message?: string }> =
+                Array.isArray(candidateInner?.errors) ? candidateInner.errors : [];
+
+              // Un token ou une erreur métier est une réponse déterminée :
+              // ne pas tester d'autres types et ne pas provoquer de tentatives
+              // supplémentaires avec les mêmes identifiants.
+              if (candidateToken || candidateErrors.length > 0) break;
+
+              if (loginTypeIndex + 1 < loginTypes.length) {
+                log("WARN", `${tag} signin/ (${candidateLoginType}) → réponse sans token ni erreur, essai du type suivant`);
+              }
+            }
+
             const signinPayload: Record<string, unknown> | null =
               (signinRaw === null || signinRaw === CALL_DIRECT_NETWORK_ERROR || signinRaw === CALL_DIRECT_HTTP_OVERLOAD)
                 ? null
@@ -2062,7 +2106,7 @@ export async function runDossierWorker(
               bookResult = { status: "signin_failed", errorMessage: errMsg, durationMs: Date.now() - bookT0 };
             } else {
               // ── P2 : summary/ avec retry 2× sur 504/null ───────────────────────
-              log("INFO", `${tag} 📝 summary/ (bktToken: ${bktToken.slice(0, 15)}…)…`);
+              log("INFO", `${tag} 📝 summary/ (type=${signinLogintype}, bktToken: ${bktToken.slice(0, 15)}…)…`);
               const summaryExtra: Record<string, string> = {
                 "services[]": scan.serviceId!,
                 date:          slot.date,
@@ -2074,7 +2118,7 @@ export async function runDossierWorker(
                 bktToken,
                 login:          config.login,
                 password:       config.password,
-                logintype:      "document",
+                logintype:      signinLogintype,
                 comments:       "",
                 client_signin:  "true",
                 event_created:  "true",

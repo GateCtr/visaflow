@@ -49,6 +49,7 @@ import {
 import { matchServiceForVisa } from "./spain-service-mapping.js";
 import { generateSpainConfirmationPdf, extractConfirmationData } from "./_legacy_spain-confirmation-pdf.js";
 import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
+import { getSpainLoginTypes, type SpainLoginType } from "./spain-login-types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1197,16 +1198,16 @@ export async function executeHttpBooking(
     params: Record<string, string>;
   }
 
-  const candidateSignin: AuthCandidate = {
+  const signinCandidates: AuthCandidate[] = getSpainLoginTypes().map((logintype: SpainLoginType, index) => ({
     endpoint: "signin/",
-    label: "signsecondappointment",
+    label: `signsecondappointment (${logintype})${index > 0 ? " fallback" : ""}`,
     params: {
       ...authBookingBase,
-      logintype: "document",
+      logintype,
       login: config.login,
       password: config.password,
     },
-  };
+  }));
 
   const candidateSignupFirst: AuthCandidate = {
     endpoint: "signupfirstappointment/",
@@ -1380,10 +1381,10 @@ export async function executeHttpBooking(
   // inconnu → signin en premier, puis signupfirstappointment/ et signup/ en fallback
   const authCandidates: AuthCandidate[] =
     registrationType === "1"
-      ? [candidateSignupFirst, candidateSignin, candidateSignup]
+      ? [candidateSignupFirst, ...signinCandidates, candidateSignup]
       : registrationType === "2"
-      ? [candidateSignin] // signupsecondappointment → signin/ seulement (extends SignInContainer)
-      : [candidateSignin, candidateSignupFirst, candidateSignup];
+      ? signinCandidates // signupsecondappointment → signin/ seulement (extends SignInContainer)
+      : [...signinCandidates, candidateSignupFirst, candidateSignup];
 
   console.log(
     `[spain-booking] 🔍 Auto-découverte endpoint auth — registration_type=${registrationType} — ` +
