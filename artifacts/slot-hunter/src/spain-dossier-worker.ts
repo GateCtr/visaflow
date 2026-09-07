@@ -34,12 +34,13 @@ import {
   makeDirectHeaders,
   CALL_DIRECT_NETWORK_ERROR,
   CALL_DIRECT_HTTP_OVERLOAD,
+  discoverSigninAccountLoginTypes,
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
   type SpainBookingResult,
 } from "./spain-http-booking.js";
-import { getSpainLoginTypes, type SpainLoginType } from "./spain-login-types.js";
+import type { SpainLoginType } from "./spain-login-types.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
@@ -2028,8 +2029,13 @@ export async function runDossierWorker(
               await sleep(200);
               continue;
             }
-            // ── signin/ — document d'abord, fallbacks uniquement si réponse vide ─
-            const loginTypes = getSpainLoginTypes();
+            // ── signin/ — types fournis par le formulaire dynamique du portail ─
+            const loginTypes = await discoverSigninAccountLoginTypes(ds, tag);
+            if (loginTypes.length === 0) {
+              log("WARN", `${tag} getsigninaccountfields/ → aucune valeur logintype exploitable — skip slot`);
+              await sleep(200);
+              continue;
+            }
             let signinLogintype: SpainLoginType = loginTypes[0];
             let signinRaw: unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD = null;
             for (let loginTypeIndex = 0; loginTypeIndex < loginTypes.length; loginTypeIndex++) {

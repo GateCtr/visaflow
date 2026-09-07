@@ -17,6 +17,7 @@
 
 import type { SpainCfSession } from "./spain-soax-solver.js";
 import { Impit } from "impit";
+import { extractSpainLoginTypes, type SpainLoginType } from "./spain-login-types.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,8 @@ export interface DynamicSession {
   /** Session source — permet de persister les Set-Cookie reçus pendant le flow. */
   session?: SpainCfSession;
 }
+
+const signinAccountLoginTypesCache = new WeakMap<DynamicSession, SpainLoginType[]>();
 
 // ─── Constructeur ─────────────────────────────────────────────────────────────
 
@@ -83,6 +86,33 @@ export function buildDynamicSession(session: SpainCfSession): DynamicSession | n
     bookititBase: state.bookititBase,
     session,
   };
+}
+
+/**
+ * Lit les valeurs de logintype exposées par le formulaire
+ * « historique et annulations » du portail courant.
+ *
+ * Le résultat est mémorisé pour la durée de la DynamicSession afin de ne pas
+ * refaire cet appel à chaque tentative de créneau.
+ */
+export async function discoverSigninAccountLoginTypes(
+  ds: DynamicSession,
+  tag = "[bookitit-login-types]",
+): Promise<SpainLoginType[]> {
+  const cached = signinAccountLoginTypesCache.get(ds);
+  if (cached) return cached;
+
+  const payload = await callDirect(ds, "getsigninaccountfields/", undefined, tag);
+  if (
+    payload === CALL_DIRECT_NETWORK_ERROR ||
+    payload === CALL_DIRECT_HTTP_OVERLOAD
+  ) {
+    return [];
+  }
+
+  const types = extractSpainLoginTypes(payload);
+  signinAccountLoginTypesCache.set(ds, types);
+  return types;
 }
 
 // ─── Helpers internes (identiques au dynamic test) ────────────────────────────

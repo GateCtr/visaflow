@@ -49,7 +49,7 @@ import {
 import { matchServiceForVisa } from "./spain-service-mapping.js";
 import { generateSpainConfirmationPdf, extractConfirmationData } from "./_legacy_spain-confirmation-pdf.js";
 import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
-import { getSpainLoginTypes, type SpainLoginType } from "./spain-login-types.js";
+import { extractSpainLoginTypes, type SpainLoginType } from "./spain-login-types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1198,16 +1198,7 @@ export async function executeHttpBooking(
     params: Record<string, string>;
   }
 
-  const signinCandidates: AuthCandidate[] = getSpainLoginTypes().map((logintype: SpainLoginType, index) => ({
-    endpoint: "signin/",
-    label: `signsecondappointment (${logintype})${index > 0 ? " fallback" : ""}`,
-    params: {
-      ...authBookingBase,
-      logintype,
-      login: config.login,
-      password: config.password,
-    },
-  }));
+  let signinCandidates: AuthCandidate[] = [];
 
   const candidateSignupFirst: AuthCandidate = {
     endpoint: "signupfirstappointment/",
@@ -1370,6 +1361,27 @@ export async function executeHttpBooking(
     }
   }
 
+  // Le formulaire d'accès à l'historique expose les valeurs logintype
+  // réellement acceptées par ce portail. On les réutilise pour signin/ au lieu
+  // de maintenir une liste globale qui peut être fausse pour un autre portail.
+  const signinAccountFieldsPayload = await callEndpoint("getsigninaccountfields/", baseParams);
+  const discoveredLoginTypes = extractSpainLoginTypes(signinAccountFieldsPayload);
+  if (discoveredLoginTypes.length === 0) {
+    console.warn(`${logPrefix} ⚠️ getsigninaccountfields/ → aucune valeur logintype exploitable`);
+  } else {
+    console.log(`${logPrefix} ✅ logintype(s) fourni(s) par le portail: ${discoveredLoginTypes.join(", ")}`);
+  }
+  signinCandidates = discoveredLoginTypes.map((logintype: SpainLoginType, index) => ({
+    endpoint: "signin/",
+    label: `signsecondappointment (${logintype})${index > 0 ? " fallback" : ""}`,
+    params: {
+      ...authBookingBase,
+      logintype,
+      login: config.login,
+      password: config.password,
+    },
+  }));
+
   // Ordre selon registration_type (endpoints confirmés depuis bundle citaconsular)
   // type=1 → signupfirstappointment/ (premier RDV, pas de compte existant)
   // type=2 → signin/ UNIQUEMENT via #signupsecondappointment (SignUpSecondAppointmentContainer extends
@@ -1394,6 +1406,7 @@ export async function executeHttpBooking(
   // ─── Tentative séquentielle des candidats ────────────────────────────
   let signinPayload: unknown = null;
   let confirmedEndpoint = "";
+  let confirmedLoginType = "";
 
   for (const candidate of authCandidates) {
     console.log(`[spain-booking] 🔑 Tentative ${candidate.label} (${candidate.endpoint})…`);
@@ -1460,6 +1473,7 @@ export async function executeHttpBooking(
       // ✅ Succès — cet endpoint a fonctionné
       signinPayload = payload;
       confirmedEndpoint = candidate.endpoint;
+      confirmedLoginType = candidate.params.logintype ?? "";
       console.log(`[spain-booking] ✅ Endpoint confirmé: ${candidate.endpoint} — bktToken: ${String(token).slice(0, 20)}…`);
       break;
     }
@@ -1593,8 +1607,8 @@ export async function executeHttpBooking(
       time: slotTime,
       bktToken: String(bktToken),
       login: config.login,
-      logintype: "document",
     };
+    if (confirmedLoginType) summaryParams.logintype = confirmedLoginType;
     summaryPayload = await callEndpoint("summary/", summaryParams);
   }
 

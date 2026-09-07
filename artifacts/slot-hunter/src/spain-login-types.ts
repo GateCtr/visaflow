@@ -1,32 +1,36 @@
 /**
- * Types de login Bookitit essayés dans un ordre strict.
+ * Types de login fournis dynamiquement par Bookitit.
  *
- * Le portail Kinshasa a historiquement utilisé `document`. Les autres valeurs
- * ne sont des fallbacks que lorsque signin/ ne renvoie aucune réponse exploitable;
- * une erreur métier explicite ne doit jamais déclencher une nouvelle tentative.
+ * Ne pas maintenir de liste locale (`document`, `passport`, etc.) : chaque
+ * portail renvoie ses valeurs autorisées via getsigninaccountfields/.
  */
+export type SpainLoginType = string;
 
-export type SpainLoginType = "document" | "passport" | "email" | "dni" | "nationalid";
-
-const DEFAULT_LOGIN_TYPES: readonly SpainLoginType[] = ["document", "passport", "email"];
-const ALLOWED_LOGIN_TYPES = new Set<SpainLoginType>([
-  "document",
-  "passport",
-  "email",
-  "dni",
-  "nationalid",
-]);
+function isEnabled(value: unknown): boolean {
+  return value === true || value === 1 || value === "1";
+}
 
 /**
- * Permet d'ajuster l'ordre sans modifier le code, tout en restant limité aux
- * valeurs connues. Le premier type reste `document` par défaut.
+ * Extrait les options réellement exposées par le formulaire de connexion
+ * historique/annulations.
  */
-export function getSpainLoginTypes(): SpainLoginType[] {
-  const configured = (process.env.SPAIN_LOGIN_TYPES ?? DEFAULT_LOGIN_TYPES.join(","))
-    .split(",")
-    .map((value) => value.trim().toLowerCase() as SpainLoginType)
-    .filter((value) => ALLOWED_LOGIN_TYPES.has(value));
+export function extractSpainLoginTypes(payload: unknown): SpainLoginType[] {
+  const root = payload as {
+    CustomFields?: { Clients?: unknown };
+    Clients?: unknown;
+  } | null;
 
-  const unique = [...new Set(configured)];
-  return unique.length > 0 ? unique : [...DEFAULT_LOGIN_TYPES];
+  const clients = root?.CustomFields && typeof root.CustomFields === "object"
+    ? (root.CustomFields as { Clients?: unknown }).Clients
+    : root?.Clients;
+
+  if (!Array.isArray(clients)) return [];
+
+  return [...new Set(
+    clients
+      .filter((field): field is Record<string, unknown> => Boolean(field) && typeof field === "object")
+      .filter((field) => isEnabled(field.show_widget) && isEnabled(field.validate))
+      .map((field) => typeof field.input_text === "string" ? field.input_text.trim() : "")
+      .filter((value) => value.length > 0),
+  )];
 }
