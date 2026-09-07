@@ -33,6 +33,7 @@ import {
   makeDirectUrl,
   makeDirectHeaders,
   CALL_DIRECT_NETWORK_ERROR,
+  CALL_DIRECT_HTTP_OVERLOAD,
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
@@ -582,7 +583,7 @@ interface WorkerSlot {
 }
 
 export interface WorkerScanResult {
-  status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error" | "session_dead" | "cf_expired";
+  status: "found" | "not_found" | "error" | "ajax_unavailable" | "proxy_error" | "server_overload" | "session_dead" | "cf_expired";
   slots?: WorkerSlot[];
   mainHtml?: string;
   serviceId?: string;
@@ -654,6 +655,13 @@ export interface WorkerPhpState {
   };
 }
 
+type PhpInitFailure = "server_overload" | "network";
+const phpInitFailureBySession = new WeakMap<object, PhpInitFailure>();
+
+function getPhpInitFailure(session: SpainCfSession): PhpInitFailure | undefined {
+  return phpInitFailureBySession.get(session);
+}
+
 /**
  * Initialise l'état PHP Bookitit une seule fois par session.
  * Reproduit exactement la section 3 de test-bookitit-dynamic.ts :
@@ -667,6 +675,7 @@ export async function initPhpState(
   config: SpainDossierConfig,
   tag: string,
 ): Promise<WorkerPhpState | null> {
+  phpInitFailureBySession.delete(session);
   // Construit la DynamicSession — même impit + jar + jqCallback que initWorkerSession.
   // Tous les appels Bookitit passent par callDirect() pour éviter les différences de
   // headers de callBookititEndpoint/spainCfFetch qui causent 0B sur getservices/.
@@ -678,10 +687,26 @@ export async function initPhpState(
 
   // 1. getwidgetconfigurations/ — initialise le widget PHP côté serveur
   const cfgPayload = await callDirect(ds, "getwidgetconfigurations/", undefined, tag);
+  if (cfgPayload === CALL_DIRECT_HTTP_OVERLOAD) {
+    phpInitFailureBySession.set(session, "server_overload");
+    return null;
+  }
+  if (cfgPayload === CALL_DIRECT_NETWORK_ERROR) {
+    phpInitFailureBySession.set(session, "network");
+    return null;
+  }
   const cfgBytes = JSON.stringify(cfgPayload ?? "").length;
 
   // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
+  if (svcPayload === CALL_DIRECT_HTTP_OVERLOAD) {
+    phpInitFailureBySession.set(session, "server_overload");
+    return null;
+  }
+  if (svcPayload === CALL_DIRECT_NETWORK_ERROR) {
+    phpInitFailureBySession.set(session, "network");
+    return null;
+  }
   const svcBytes = JSON.stringify(svcPayload ?? "").length;
   const svcStr = JSON.stringify(svcPayload ?? "");
 
@@ -720,6 +745,14 @@ export async function initPhpState(
     "services[]": bestSvc.serviceId,
     selectedPeople: "1",
   }, tag) as any;
+  if (agPayload === CALL_DIRECT_HTTP_OVERLOAD) {
+    phpInitFailureBySession.set(session, "server_overload");
+    return null;
+  }
+  if (agPayload === CALL_DIRECT_NETWORK_ERROR) {
+    phpInitFailureBySession.set(session, "network");
+    return null;
+  }
 
   const rawAgendas: Array<{ id: string }> =
     agPayload?.Agendas ?? agPayload?.agendas ?? [];
@@ -768,12 +801,29 @@ export async function scanDatetimeDirect(
     log("INFO", `${tag}   📅 Fin de mois (${daysRemainingInMonth}j restants ≤ ${END_OF_MONTH_THRESHOLD_DAYS}) — scan démarre au mois suivant`);
   }
 
-  let monthOffset = startMonthOffset;
+  const weekdayKinshasa = new Intl.DateTimeFormat("en-US", {
+    timeZone: SPAIN_CANCELLATION_SCAN_TIME_ZONE,
+    weekday: "short",
+  }).format(now);
+  const isPublicationDay = !CANCELLATION_PUBLICATION_DAYS.has(weekdayKinshasa);
+  const monthOffsets = Array.from(
+    { length: MAX_MONTHS - startMonthOffset },
+    (_, index) => startMonthOffset + index,
+  );
+  // Dimanche–mardi : le premier mois futur passe avant le mois courant.
+  // Mercredi–samedi : ordre historique inchangé (mois courant utile puis suivant).
+  if (isPublicationDay && startMonthOffset === 0 && monthOffsets.length >= 2) {
+    [monthOffsets[0], monthOffsets[1]] = [monthOffsets[1], monthOffsets[0]];
+  }
+
+  let scanIndex = 0;
   let networkErrorCount = 0; // Compteur d'erreurs réseau (ProxyTunnelError, Timeout, etc.)
+  let overloadCount = 0;     // 502/503/504 après retries — surcharge Bookitit, pas rotation IP
   let httpNullCount = 0;     // Compteur de réponses HTTP 0B légitimes (payload null, pas sentinel)
   let monthsChecked = 0;
 
-  while (monthOffset < MAX_MONTHS) {
+  while (scanIndex < monthOffsets.length) {
+    const monthOffset = monthOffsets[scanIndex];
     const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
     // Premier mois scanné : start = date du jour (si mois courant) pour ne pas rater les
     // créneaux en milieu de mois. Mois suivants : start = 1er du mois (scan complet).
@@ -798,15 +848,19 @@ export async function scanDatetimeDirect(
 
     // Distinguer erreur réseau (sentinel) d'une réponse HTTP vide légitime (null).
     // ProxyTunnelError/Timeout → CALL_DIRECT_NETWORK_ERROR.
+    // HTTP 502/503/504 après retries → CALL_DIRECT_HTTP_OVERLOAD.
     // Réponse 0B serveur (pas de créneau, agenda absent) → null.
     const isNetworkError = raw === CALL_DIRECT_NETWORK_ERROR;
+    const isServerOverload = raw === CALL_DIRECT_HTTP_OVERLOAD;
     if (isNetworkError) {
       networkErrorCount++;
+    } else if (isServerOverload) {
+      overloadCount++;
     } else if (raw === null) {
       httpNullCount++;
     }
 
-    const payload = isNetworkError ? null : raw;
+    const payload = isNetworkError || isServerOverload ? null : raw;
     const rawBytes = JSON.stringify(payload ?? "").length;
 
     const dtData = payload as any;
@@ -819,7 +873,7 @@ export async function scanDatetimeDirect(
     const slots = extractAllSlotsFromPayload(payload, phpState.agendaId, config.groupSize ?? 1);
     log(
       "INFO",
-      `${tag}   ${monthLabel}: ${slots.length > 0 ? slots.length + " créneau(x)" : isNetworkError ? "0 (err réseau)" : payload === null ? "0 (0B)" : "0 (vide)"}  | maxDays=${maxDaysRaw || "(absent)"}`,
+      `${tag}   ${monthLabel}: ${slots.length > 0 ? slots.length + " créneau(x)" : isNetworkError ? "0 (err réseau)" : isServerOverload ? "0 (surcharge HTTP)" : payload === null ? "0 (0B)" : "0 (vide)"}  | maxDays=${maxDaysRaw || "(absent)"}`,
     );
 
     // Trace par mois — 0B = null payload (normal quand aucun créneau), ok si non-null
@@ -835,25 +889,30 @@ export async function scanDatetimeDirect(
         );
         break;
       }
-    } else {
+    } else if (!isNetworkError && !isServerOverload) {
       consecutiveEmpty++;
     }
 
-    monthOffset++;
+    scanIndex++;
+
+    // Une surcharge HTTP rend le scan courant incomplet. Ne pas poursuivre avec
+    // un ancien maxDays ni transformer ce cycle en not_found.
+    if (isServerOverload) break;
 
     // Stop condition identique au test dynamic (section 4 l.288-304).
     // Le décalage fin-de-mois est géré en amont via startMonthOffset (on démarre au mois
     // suivant quand le mois courant est quasi épuisé), donc offset 2 fixe ici reste correct :
     // on scanne toujours 2 mois UTILES.
-    const relativeOffset = monthOffset - startMonthOffset;
-    if (relativeOffset >= 2 && globalMaxDays) {
-      const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const relativeOffset = scanIndex;
+    if (relativeOffset >= 2 && globalMaxDays && overloadCount === 0 && networkErrorCount === 0) {
+      const nextMonthOffset = monthOffsets[scanIndex] ?? monthOffset + 1;
+      const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + nextMonthOffset, 1);
       if (firstOfNextMonth > globalMaxDays) {
         log("INFO", `${tag}   ⏹ fin : ${firstOfNextMonth.toISOString().slice(0, 10)} > maxDays ${globalMaxDays.toISOString().slice(0, 10)}`);
         break;
       }
     }
-    if (!globalMaxDays && consecutiveEmpty >= 3) {
+    if (!globalMaxDays && consecutiveEmpty >= 3 && overloadCount === 0 && networkErrorCount === 0) {
       log("WARN", `${tag}   ⏹ 3 mois vides sans maxDays — arrêt`);
       break;
     }
@@ -865,6 +924,18 @@ export async function scanDatetimeDirect(
     log("WARN", `${tag}   ⚠️ Proxy CONNECT cassé — ${networkErrorCount}/${monthsChecked} mois en erreur réseau → rotation IP`);
     return {
       status: "proxy_error",
+      serviceId: phpState.bestServiceId,
+      serviceName: phpState.bestServiceName,
+      monthTraces,
+    };
+  }
+
+  // Une réponse 502/503/504 n'est jamais une absence de créneau. Le worker garde
+  // sa session/proxy et laissera le prochain front retenter sans rotation IP.
+  if (overloadCount > 0) {
+    log("WARN", `${tag}   ⚠️ Surcharge Bookitit — ${overloadCount}/${monthsChecked} mois en 502/503/504 → retry même identité`);
+    return {
+      status: "server_overload",
       serviceId: phpState.bestServiceId,
       serviceName: phpState.bestServiceName,
       monthTraces,
@@ -1013,8 +1084,10 @@ export async function refreshSessionAndScan(
     }
     token = body.match(/name="token"\s+value="([^"]+)"/i)?.[1] ?? "";
     if (!token) {
-      // Token absent après retries = page 504/erreur (surcharge serveur) → proxy_error
-      // (rotation IP + réinit) au lieu de error qui ferait boucler à vide sur la même IP.
+      if (RS_OVERLOAD.has(r.status)) {
+        log("WARN", `${tag} ① GET widget → HTTP ${r.status} après retries → server_overload (même identité)`);
+        return { status: "server_overload", errorMessage: `GET widget HTTP ${r.status}`, monthTraces: [] };
+      }
       log("WARN", `${tag} ① GET widget → token absent (HTTP ${r.status}, ${body.length}B) → proxy_error`);
       return { status: "proxy_error", errorMessage: `Token absent (HTTP ${r.status}, ${body.length}B)`, monthTraces: [] };
     }
@@ -1046,7 +1119,10 @@ export async function refreshSessionAndScan(
     srvsrc = body.match(/srvsrc:\s*'([^']+)'/)?.[1] ?? baseHost;
     version = body.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
     if (!jar.PHPSESSID) {
-      // PHPSESSID absent = POST 504/erreur (surcharge) → proxy_error (rotation) au lieu de error.
+      if (RS_OVERLOAD.has(r.status)) {
+        log("WARN", `${tag} ② POST token → HTTP ${r.status} après retries → server_overload (même identité)`);
+        return { status: "server_overload", errorMessage: `POST token HTTP ${r.status}`, monthTraces: [] };
+      }
       log("WARN", `${tag} ② POST → PHPSESSID absent → proxy_error`);
       return { status: "proxy_error", errorMessage: "PHPSESSID absent après POST", monthTraces: [] };
     }
@@ -1107,8 +1183,8 @@ export async function refreshSessionAndScan(
       }
     }
     if (!mainOk) {
-      log("WARN", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué après retries) → proxy_error`);
-      return { status: "proxy_error", errorMessage: `/main/ ${mainBody.length}B tronqué`, monthTraces: [] };
+      log("WARN", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué après retries) → server_overload`);
+      return { status: "server_overload", errorMessage: `/main/ ${mainBody.length}B tronqué`, monthTraces: [] };
     }
     log("INFO", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB ✅`);
   } catch (e) {
@@ -1117,10 +1193,22 @@ export async function refreshSessionAndScan(
   }
 
   // 4. getwidgetconfigurations/
-  await callDirect(ds, "getwidgetconfigurations/", undefined, tag);
+  const cfgPayload = await callDirect(ds, "getwidgetconfigurations/", undefined, tag);
+  if (cfgPayload === CALL_DIRECT_HTTP_OVERLOAD) {
+    log("WARN", `${tag} ④ getwidgetconfigurations/ → surcharge HTTP → server_overload`);
+    return { status: "server_overload", errorMessage: "getwidgetconfigurations/ HTTP overload", monthTraces: [] };
+  }
+  if (cfgPayload === CALL_DIRECT_NETWORK_ERROR) {
+    log("WARN", `${tag} ④ getwidgetconfigurations/ → erreur réseau`);
+    return { status: "proxy_error", errorMessage: "getwidgetconfigurations/ network error", monthTraces: [] };
+  }
 
   // 5. getservices/
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
+  if (svcPayload === CALL_DIRECT_HTTP_OVERLOAD) {
+    log("WARN", `${tag} ⑤ getservices/ → surcharge HTTP → server_overload`);
+    return { status: "server_overload", errorMessage: "getservices/ HTTP overload", monthTraces: [] };
+  }
   if (svcPayload === CALL_DIRECT_NETWORK_ERROR) {
     log("WARN", `${tag} ⑤ getservices/ → erreur réseau`);
     return { status: "proxy_error", errorMessage: "getservices/ network error", monthTraces: [] };
@@ -1146,6 +1234,10 @@ export async function refreshSessionAndScan(
     "services[]": bestSvc.serviceId,
     selectedPeople: "1",
   }, tag) as any;
+  if (agPayload === CALL_DIRECT_HTTP_OVERLOAD) {
+    log("WARN", `${tag} ⑥ getagendas/ → surcharge HTTP → server_overload`);
+    return { status: "server_overload", errorMessage: "getagendas/ HTTP overload", monthTraces: [] };
+  }
   if (agPayload === CALL_DIRECT_NETWORK_ERROR) {
     log("WARN", `${tag} ⑥ getagendas/ → erreur réseau`);
     return { status: "proxy_error", errorMessage: "getagendas/ network error", monthTraces: [] };
@@ -1384,7 +1476,14 @@ export async function runDossierWorker(
     const MAX_INIT_ROTATIONS = 2;
     while (!phpState && initRetries < MAX_INIT_ROTATIONS) {
       initRetries++;
-      log("WARN", `${tag} ⚠️ initPhpState échoué (getservices/ 0B — proxy mort/surcharge) — rotation IP ${initRetries}/${MAX_INIT_ROTATIONS}`);
+      const initFailure = getPhpInitFailure(session);
+      if (initFailure === "server_overload") {
+        log("WARN", `${tag} ⚠️ initPhpState → surcharge HTTP — retry même proxy ${initRetries}/${MAX_INIT_ROTATIONS}`);
+        await sleep(Math.min(400 * initRetries, 1_000));
+        phpState = await initPhpState(session, config, tag);
+        continue;
+      }
+      log("WARN", `${tag} ⚠️ initPhpState échoué (getservices/ 0B ou erreur réseau) — rotation IP ${initRetries}/${MAX_INIT_ROTATIONS}`);
       const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "main-0b-rotation");
       if (!newProxy) {
         log("WARN", `${tag} ❌ Rotation impossible — pool épuisé`);
@@ -1553,7 +1652,8 @@ export async function runDossierWorker(
       // `found` (succès) est court-circuité → classify n'est appelé que sur les non-found.
       // Pour un scan `found`, `kind` reste undefined : il n'est lu que dans les branches
       // d'échec (`not_found`, `error`/`ajax_unavailable`), toutes gardées par scan.status.
-      const kind: FailureKind | undefined = scan.status === "found" ? undefined : classify(scan);
+      const kind: FailureKind | undefined =
+        scan.status === "found" || scan.status === "server_overload" ? undefined : classify(scan);
 
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
@@ -1591,6 +1691,13 @@ export async function runDossierWorker(
         rt.phpState = phpState;
         transition(rt, "recovered");
         continue; // Repartir immédiatement sur le nouveau proxy
+      }
+
+      if (scan.status === "server_overload") {
+        // 502/503/504 Bookitit : le proxy et le CF restent valides.
+        // Laisser la grille planifier le prochain cycle sans rotation IP ni re-solve.
+        transition(rt, "scan_ok");
+        log("WARN", `${tag} ⏳ surcharge Bookitit — aucune rotation IP, prochain cycle avec la même identité`);
       }
 
       if (scan.status === "cf_expired") {
@@ -1915,9 +2022,11 @@ export async function runDossierWorker(
               time:         bookExtra.time,
               selectedPeople: bookExtra.selectedPeople,
             }, tag) as any;
-            const gsfBytes = gsfPayload ? JSON.stringify(gsfPayload).length : 0;
+            const gsfBytes = gsfPayload && gsfPayload !== CALL_DIRECT_NETWORK_ERROR && gsfPayload !== CALL_DIRECT_HTTP_OVERLOAD
+              ? JSON.stringify(gsfPayload).length
+              : 0;
             log("INFO", `${tag} 🔑 getsigninfields/ → ${gsfBytes}B${gsfPayload ? " ✅" : " ❌ 0B — skip slot"}`);
-            if (gsfPayload === null) {
+            if (gsfPayload === null || gsfPayload === CALL_DIRECT_NETWORK_ERROR || gsfPayload === CALL_DIRECT_HTTP_OVERLOAD) {
               // Serveur surchargé — passer au créneau suivant immédiatement
               await sleep(200);
               continue;
@@ -1934,7 +2043,7 @@ export async function runDossierWorker(
               comments:  "",
             });
             const signinPayload: Record<string, unknown> | null =
-              (signinRaw === null || signinRaw === CALL_DIRECT_NETWORK_ERROR)
+              (signinRaw === null || signinRaw === CALL_DIRECT_NETWORK_ERROR || signinRaw === CALL_DIRECT_HTTP_OVERLOAD)
                 ? null
                 : signinRaw as Record<string, unknown>;
 
@@ -1984,7 +2093,7 @@ export async function runDossierWorker(
                   await sleep(backoff);
                 }
                 const raw = await callDirect(ds, "summary/", summaryParams);
-                if (raw === CALL_DIRECT_NETWORK_ERROR) {
+                if (raw === CALL_DIRECT_NETWORK_ERROR || raw === CALL_DIRECT_HTTP_OVERLOAD) {
                   // Proxy cassé — pas la peine de retry summary/
                   break;
                 }

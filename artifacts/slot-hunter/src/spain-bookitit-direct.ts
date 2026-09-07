@@ -153,7 +153,8 @@ export function parseDirectJsonp(raw: string): unknown | null {
 
 /**
  * Appelle un endpoint Bookitit directement via impit.fetch — exactement comme le
- * dynamic test.  Retourne le payload parsé, ou null si réponse vide / erreur réseau.
+ * dynamic test. Retourne le payload parsé, ou un sentinel distinguant surcharge
+ * HTTP, erreur réseau et réponse vide.
  *
  * @param ds        DynamicSession (impit + jar + état jQuery)
  * @param endpoint  Ex : "getservices/", "datetime/"
@@ -192,7 +193,7 @@ export async function callDirect(
   endpoint: string,
   extra?: Record<string, string>,
   tag?: string,
-): Promise<unknown | null | typeof CALL_DIRECT_NETWORK_ERROR> {
+): Promise<unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD> {
   const url = makeDirectUrl(ds, endpoint, extra);
   const headers = makeDirectHeaders(ds);
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
@@ -210,6 +211,10 @@ export async function callDirect(
           console.warn(`${prefix} ${endpoint} → HTTP ${res.status} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
           await new Promise((r) => setTimeout(r, backoff));
           continue;
+        }
+        if (RETRYABLE_HTTP_CODES.has(res.status)) {
+          console.warn(`${prefix} ${endpoint} → HTTP ${res.status} après retries — surcharge serveur`);
+          return CALL_DIRECT_HTTP_OVERLOAD;
         }
         console.warn(`${prefix} ${endpoint} → HTTP ${res.status}`);
         return null;
@@ -238,3 +243,10 @@ export async function callDirect(
  * vide légitime (null retourné par parseDirectJsonp sur corps vide).
  */
 export const CALL_DIRECT_NETWORK_ERROR: unique symbol = Symbol("CALL_DIRECT_NETWORK_ERROR");
+
+/**
+ * Sentinel retourné quand Bookitit a répondu 502/503/504 après tous les retries.
+ * Il ne faut pas le confondre avec une réponse 0B ni avec une panne proxy :
+ * le worker conserve son identité et retente le cycle sans rotation IP.
+ */
+export const CALL_DIRECT_HTTP_OVERLOAD: unique symbol = Symbol("CALL_DIRECT_HTTP_OVERLOAD");
