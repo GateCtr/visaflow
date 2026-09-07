@@ -157,29 +157,12 @@ const BOOKING_TRACE_REDACTED_KEYS = new Set([
   "_",
 ]);
 
-/**
- * Empreinte non réversible pour comparer un service/agenda entre les étapes
- * sans écrire l'identifiant brut dans les logs.
- */
-function traceFingerprint(value: string | null): string {
-  if (!value) return "-";
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `#${(hash >>> 0).toString(16).padStart(8, "0")}`;
-}
-
 function formatBookingTraceUrl(rawUrl: string): string {
   const parsed = new URL(rawUrl);
   const query = [...parsed.searchParams.entries()]
     .map(([key, value]) => {
       if (BOOKING_TRACE_REDACTED_KEYS.has(key)) {
         return `${key}=[REDACTED]`;
-      }
-      if (key === "services[]" || key === "agendas[]") {
-        return `${key}=${traceFingerprint(value)}`;
       }
       return `${key}=${value}`;
     })
@@ -307,8 +290,8 @@ export async function callDirect(
           `[bookitit-trace] RESPONSE ${endpoint} → HTTP ${res.status} raw=${body.length}B ` +
           `parsed=${parsed === null ? "no" : "yes"} shape=${shape} ` +
           `date=${requestParams.get("date") ?? "-"} time=${requestParams.get("time") ?? "-"} ` +
-          `svc=${traceFingerprint(requestParams.get("services[]"))} ` +
-          `ag=${traceFingerprint(requestParams.get("agendas[]"))}`,
+          `svc=${requestParams.get("services[]") ?? "-"} ` +
+          `ag=${requestParams.get("agendas[]") ?? "-"}`,
         );
       }
       return parsed;
