@@ -228,6 +228,7 @@ export async function callDirect(
       const parsed = parseDirectJsonp(body);
       if (endpoint === "getsigninfields/" || endpoint === "signin/") {
         const trimmed = body.trim();
+        const requestParams = new URL(url).searchParams;
         const shape = !trimmed
           ? "empty"
           : trimmed.startsWith("callback=")
@@ -239,7 +240,9 @@ export async function callDirect(
           : "other";
         console.log(
           `${prefix} ${endpoint} → HTTP ${res.status} raw=${body.length}B ` +
-          `parsed=${parsed === null ? "no" : "yes"} shape=${shape}`,
+          `parsed=${parsed === null ? "no" : "yes"} shape=${shape} ` +
+          `date=${requestParams.get("date") ?? "-"} time=${requestParams.get("time") ?? "-"} ` +
+          `svc=${requestParams.get("services[]") ?? "-"} ag=${requestParams.get("agendas[]") ?? "-"}`,
         );
       }
       return parsed;
