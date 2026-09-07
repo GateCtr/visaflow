@@ -1322,6 +1322,7 @@ export async function runDossierWorker(
 
     // Échec → flag + libérer + prendre le suivant
     log("WARN", `${tag} ❌ initWorkerSession échoué — flag + rotation (tentative ${attempt + 1})`);
+    const failedBaseProxy = stripStickySession(proxyUrl);
     flagDecodoIp(proxyUrl, "init-session-failed");
     await releaseWorkerIp(proxyUrl, config.id).catch(() => {});
 
@@ -1335,7 +1336,7 @@ export async function runDossierWorker(
       log("INFO", `${tag} 🗑️ StickyId invalidé (port blacklisté) — prochain solve sera frais`);
     }
 
-    const nextProxy = await pickDedicatedProxy(config.id, tag);
+    const nextProxy = await pickDedicatedProxy(config.id, tag, failedBaseProxy);
     if (!nextProxy) { log("WARN", `${tag} Pool Decodo épuisé`); proxyUrl = ""; break; }
     proxyUrl = nextProxy;
   }
