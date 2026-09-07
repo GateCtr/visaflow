@@ -46,3 +46,4 @@
 - [Spain race booking arbitration](spain-race-booking-arbitration.md) — en publication/race, aucun verrou avant signin; Bookitit choisit le gagnant et les 0B basculent au candidat suivant.
 - [Spain cancellation month scan](spain-cancellation-month-scan.md) — mercredi–samedi à Kinshasa, arrêter les mois suivants dès qu'un mois contient des créneaux.
 - [Spain session cookie rotation](spain-session-cookie-rotation.md) — Bookitit peut renouveler PHPSESSID entre getsigninfields/ et signin/; propager Set-Cookie dans le même flow.
+- [Kinshasa bundle analysis](spain-kinshasa-bundle-analysis.md) — le JS statique est un loader; le contrat signin vient de la réponse dynamique onlinebookings/main.
