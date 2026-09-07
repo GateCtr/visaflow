@@ -144,6 +144,63 @@ export function makeDirectHeaders(ds: DynamicSession): Record<string, string> {
   };
 }
 
+const BOOKING_TRACE_ENDPOINTS = new Set(["getsigninfields/", "signin/"]);
+const BOOKING_TRACE_REDACTED_KEYS = new Set([
+  "callback",
+  "publickey",
+  "src",
+  "srvsrc",
+  "login",
+  "password",
+  "bktToken",
+  "comments",
+  "_",
+]);
+
+/**
+ * Empreinte non réversible pour comparer un service/agenda entre les étapes
+ * sans écrire l'identifiant brut dans les logs.
+ */
+function traceFingerprint(value: string | null): string {
+  if (!value) return "-";
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `#${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function formatBookingTraceUrl(rawUrl: string): string {
+  const parsed = new URL(rawUrl);
+  const query = [...parsed.searchParams.entries()]
+    .map(([key, value]) => {
+      if (BOOKING_TRACE_REDACTED_KEYS.has(key)) {
+        return `${key}=[REDACTED]`;
+      }
+      if (key === "services[]" || key === "agendas[]") {
+        return `${key}=${traceFingerprint(value)}`;
+      }
+      return `${key}=${value}`;
+    })
+    .join("&");
+  return `${parsed.origin}${parsed.pathname}?${query}`;
+}
+
+function logBookingRequestTrace(
+  endpoint: string,
+  url: string,
+  headers: Record<string, string>,
+  attempt: number,
+): void {
+  if (!BOOKING_TRACE_ENDPOINTS.has(endpoint)) return;
+  console.log(
+    `[bookitit-trace] REQUEST ${endpoint} attempt=${attempt + 1} ` +
+    `url=${formatBookingTraceUrl(url)} ` +
+    `headers=${Object.keys(headers).sort().join(",")} cookie=[REDACTED]`,
+  );
+}
+
 /**
  * Parse une réponse JSONP Bookitit.
  * Compatible avec les préfixes `jQuery...({...})` et `callback={...}`.
@@ -214,6 +271,7 @@ export async function callDirect(
       // Le flow de booking réutilise volontairement le même jar/PHPSESSID
       // jusqu'à summary/. Ne pas fusionner automatiquement les Set-Cookie ici.
       const headers = makeDirectHeaders(ds);
+      logBookingRequestTrace(endpoint, url, headers, attempt);
       const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
       clearTimeout(timeout);
       if (!res.ok) {
@@ -246,10 +304,11 @@ export async function callDirect(
           ? "json"
           : "other";
         console.log(
-          `${prefix} ${endpoint} → HTTP ${res.status} raw=${body.length}B ` +
+          `[bookitit-trace] RESPONSE ${endpoint} → HTTP ${res.status} raw=${body.length}B ` +
           `parsed=${parsed === null ? "no" : "yes"} shape=${shape} ` +
           `date=${requestParams.get("date") ?? "-"} time=${requestParams.get("time") ?? "-"} ` +
-          `svc=${requestParams.get("services[]") ?? "-"} ag=${requestParams.get("agendas[]") ?? "-"}`,
+          `svc=${traceFingerprint(requestParams.get("services[]"))} ` +
+          `ag=${traceFingerprint(requestParams.get("agendas[]"))}`,
         );
       }
       return parsed;
