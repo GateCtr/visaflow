@@ -47,3 +47,4 @@
 - [Spain cancellation month scan](spain-cancellation-month-scan.md) — mercredi–samedi à Kinshasa, arrêter les mois suivants dès qu'un mois contient des créneaux.
 - [Spain session cookie rotation](spain-session-cookie-rotation.md) — Bookitit peut renouveler PHPSESSID entre getsigninfields/ et signin/; propager Set-Cookie dans le même flow.
 - [Kinshasa bundle analysis](spain-kinshasa-bundle-analysis.md) — le JS statique est un loader; le contrat signin vient de la réponse dynamique onlinebookings/main.
+- [Spain signin account fields](spain-signinaccount-fields.md) — getsigninaccountfields/ donne les valeurs logintype réelles; Saopolo et Cuba retournent document.
