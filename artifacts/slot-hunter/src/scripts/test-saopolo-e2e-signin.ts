@@ -2,7 +2,7 @@
  * test-saopolo-e2e-signin.ts — E2E São Paulo en appelant DIRECTEMENT le code prod
  *
  * Utilise exactement les mêmes fonctions que runDossierWorker :
- *   initWorkerSession → initPhpState → scanDatetimeDirect → getsigninfields/ → signin/ → summary/
+ *   initWorkerSession → refreshSessionAndScan → getsigninfields/ → signin/ → summary/
  *
  * Objectif : détecter à quelle étape le flux casse, avec les mêmes logs que la prod.
  * Les faux identifiants permettent de tester jusqu'à signin/ sans réellement booker.
@@ -14,8 +14,8 @@
 
 import "dotenv/config";
 import { initWorkerSession }        from "../spain-soax-solver.js";
-import { initPhpState, scanDatetimeDirect, type SpainDossierConfig, type WorkerPhpState } from "../spain-dossier-worker.js";
-import { buildDynamicSession, callDirect, CALL_DIRECT_NETWORK_ERROR } from "../spain-bookitit-direct.js";
+import { refreshSessionAndScan, type SpainDossierConfig } from "../spain-dossier-worker.js";
+import { callDirect, CALL_DIRECT_NETWORK_ERROR } from "../spain-bookitit-direct.js";
 
 // ─── Config du dossier de test (simule un vrai dossier en prod) ───────────────
 
@@ -85,32 +85,13 @@ async function main(): Promise<void> {
   const { session, cfFromCache } = initResult;
   log("OK", `✅ Session CF établie | cfFromCache=${cfFromCache} | /main/=${session.prefetchedMainHtml?.length ?? 0}B`);
 
-  // ── ÉTAPE 2 : initPhpState — getwidgetconfigurations/ + getservices/ + getagendas/ ──
-  section("ÉTAPE 2 — initPhpState (cfg + svc + agenda)");
-  const phpState: WorkerPhpState | null = await initPhpState(session, TEST_CONFIG, "[TEST]");
-  if (!phpState) {
-    log("ERR", "❌ initPhpState échoué — getservices/ 0B ou aucun service");
-    process.exit(1);
-  }
-  log("OK", `✅ PHP init OK`);
-  log("INFO", `  services (${phpState.services.length}):`);
-  for (const s of phpState.services) {
-    const marker = s.serviceId === phpState.bestServiceId ? " ← sélectionné" : "";
-    log("INFO", `    • ${s.serviceId} : "${s.serviceName}"${marker}`);
-  }
-  log("INFO", `  bestService = ${phpState.bestServiceId} ("${phpState.bestServiceName}")`);
-  log("INFO", `  agendaId    = ${phpState.agendaId || "(vide)"}`);
-  log("INFO", `  allowAppointment = ${phpState.allowAppointment}`);
-
-  if (!phpState.agendaId) {
-    log("WARN", "⚠️ agendaId vide — portail fermé ou pas de créneaux (getagendas/ retourne vide)");
-    log("INFO", "→ Le scan datetime/ retournera not_found — comportement normal si portail fermé");
-    process.exit(0);
-  }
-
-  // ── ÉTAPE 3 : scanDatetimeDirect — boucle datetime/ multi-mois (code prod exact) ──
-  section("ÉTAPE 3 — scanDatetimeDirect (boucle datetime/)");
-  const scanResult = await scanDatetimeDirect(phpState, TEST_CONFIG, "[TEST]");
+  // ── ÉTAPE 2 : refreshSessionAndScan — même chemin que runDossierWorker ───────
+  // Ce point est important : refreshSessionAndScan crée le PHPSESSID frais du
+  // cycle courant et retourne le DynamicSession qui a réellement fait datetime/.
+  // Ne pas remplacer scanResult.ds par la session issue de initWorkerSession :
+  // Bookitit peut renouveler PHPSESSID pendant le cycle, ce qui donne 0B ensuite.
+  section("ÉTAPE 2 — refreshSessionAndScan (session fraîche + datetime/)");
+  const scanResult = await refreshSessionAndScan(session, TEST_CONFIG, "[TEST]");
   log("INFO", `Scan status: ${scanResult.status}`);
 
   if (scanResult.status === "proxy_error") {
@@ -175,15 +156,19 @@ async function main(): Promise<void> {
   const slot = eligible[0];
   log("OK", `Créneau sélectionné: ${slot.date} ${slot.time} | freeSlots=${slot.freeslots} | agenda=${slot.agendaId}`);
 
-  // ── ÉTAPE 4 : getsigninfields/ — amorce le nonce PHP (code prod exact) ────
-  section("ÉTAPE 4 — getsigninfields/");
-  // IMPORTANT : utiliser le ds de phpState, pas buildDynamicSession(session)
-  // Le ds de phpState a le jar à jour après initPhpState + scanDatetimeDirect.
-  // Recréer un ds depuis session.allCookies donnerait le vieux PHPSESSID.
-  const ds = phpState.ds;
+  // ── ÉTAPE 3 : getsigninfields/ — amorce le nonce PHP (code prod exact) ────
+  section("ÉTAPE 3 — getsigninfields/");
+  // IMPORTANT : utiliser le ds retourné par le scan du cycle courant.
+  // Recréer un ds depuis session.allCookies peut donner un ancien PHPSESSID.
+  if (!scanResult.ds || !scanResult.serviceId) {
+    log("ERR", "❌ Le scan n'a pas retourné le DynamicSession ou le service du cycle");
+    process.exit(1);
+  }
+  const ds = scanResult.ds;
+  const serviceId = scanResult.serviceId;
 
   const gsfPayload = await callDirect(ds, "getsigninfields/", {
-    "services[]": phpState.bestServiceId,
+    "services[]": serviceId,
     "agendas[]":  slot.agendaId ?? "",
     date:         slot.date,
     time:         slot.time,
@@ -201,9 +186,9 @@ async function main(): Promise<void> {
     log("INFO", `  captcha=${captcha} | raw: ${JSON.stringify(gsfPayload).slice(0, 120)}`);
   }
 
-  // ── ÉTAPE 5 : signin/ — retry 3× comme en prod ────────────────────────────
-  section("ÉTAPE 5 — signin/ (faux identifiants — retry 3×)");
-  log("INFO", `Params: services[]=${phpState.bestServiceId} agendas[]=${slot.agendaId}`);
+  // ── ÉTAPE 4 : signin/ — retry 3× comme en prod ────────────────────────────
+  section("ÉTAPE 4 — signin/ (faux identifiants — retry 3×)");
+  log("INFO", `Params: services[]=${serviceId} agendas[]=${slot.agendaId}`);
   log("INFO", `        date=${slot.date} time=${slot.time} selectedPeople=${TEST_CONFIG.groupSize ?? 1}`);
   log("INFO", `        logintype=document login=${FAKE_LOGIN} password=${FAKE_PASSWORD}`);
 
@@ -215,7 +200,7 @@ async function main(): Promise<void> {
       await new Promise(r => setTimeout(r, delay));
     }
     const raw = await callDirect(ds, "signin/", {
-      "services[]":   phpState.bestServiceId,
+      "services[]":   serviceId,
       "agendas[]":    slot.agendaId ?? "",
       date:           slot.date,
       time:           slot.time,
@@ -265,9 +250,9 @@ async function main(): Promise<void> {
 
     // ── ÉTAPE 6 : summary/ — confirmation finale (code prod exact) ──────────
     // En prod : si bktToken présent → appel summary/ → locator = booking confirmé
-    section("ÉTAPE 6 — summary/ (ne devrait pas arriver avec faux identifiants)");
+    section("ÉTAPE 5 — summary/ (ne devrait pas arriver avec faux identifiants)");
     const summaryPayload = await callDirect(ds, "summary/", {
-      "services[]": phpState.bestServiceId,
+      "services[]": serviceId,
       "agendas[]":  slot.agendaId ?? "",
       date:         slot.date,
       time:         slot.time,
@@ -305,11 +290,10 @@ async function main(): Promise<void> {
   // ── Résumé final ──────────────────────────────────────────────────────────
   section("RÉSUMÉ FLUX PROD");
   log("OK", "1. initWorkerSession     ✅ CF solve + /main/");
-  log("OK", "2. initPhpState          ✅ cfg + svc + agenda");
-  log("OK", `3. scanDatetimeDirect    ✅ ${eligible.length} créneau(x) éligible(s)`);
-  log("OK", `4. getsigninfields/      ${!gsfPayload ? "⚠️ 0B" : "✅"}`);
-  log("OK", `5. signin/               ${bktToken ? "⚠️ bktToken (inattendu)" : signinErrors.length ? "✅ erreur credentials" : "⚠️ 0B"}`);
-  log("INFO", "6. summary/            → appelé uniquement si bktToken présent (prod uniquement)");
+  log("OK", "2. refreshSessionAndScan ✅ session fraîche + datetime/");
+  log("OK", `3. getsigninfields/      ${!gsfPayload ? "⚠️ 0B" : "✅"}`);
+  log("OK", `4. signin/               ${bktToken ? "⚠️ bktToken (inattendu)" : signinErrors.length ? "✅ erreur credentials" : "⚠️ 0B"}`);
+  log("INFO", "5. summary/            → appelé uniquement si bktToken présent (prod uniquement)");
   log("OK", "Flux complet traversé sans crash — prêt pour vrais identifiants");
 
   process.exit(0);
