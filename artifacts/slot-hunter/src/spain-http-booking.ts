@@ -1230,6 +1230,8 @@ export async function executeHttpBooking(
   // Backbone lors de navigateToSelecttime() → nonce PHP stocké → signin/ accepté.
   // En mode HTTP-only : on appelle getsigninfields/ manuellement (confirmé 2026-08-12 :
   // sans ce call, signin/ retourne 0B ; avec ce call, signin/ répond normalement).
+  let signinFieldsPayload: unknown = null;
+
   if (useBrowserCalls) {
     // ── Navigation native vers le créneau ─────────────────────────────────────
     //
@@ -1353,8 +1355,8 @@ export async function executeHttpBooking(
       selectedPeople: String(config.groupSize && config.groupSize > 1 ? config.groupSize : 1),
     };
     console.log(`${logPrefix} 🔑 getsigninfields/ — activation nonce PHP pour signin/…`);
-    const gsfPayload = await callEndpoint("getsigninfields/", gsfParams);
-    if (gsfPayload) {
+    signinFieldsPayload = await callEndpoint("getsigninfields/", gsfParams);
+    if (signinFieldsPayload) {
       console.log(`${logPrefix} ✅ getsigninfields/ OK — nonce PHP activé`);
     } else {
       console.warn(`${logPrefix} ⚠️ getsigninfields/ → 0B — signin/ pourrait retourner 0B (portail non compatible HTTP pur ?)`);
@@ -1366,12 +1368,7 @@ export async function executeHttpBooking(
   // champs dans le DOM : le type central configuré est le fallback sûr.
   const discoveredLoginTypes = useBrowserCalls
     ? []
-    : extractSpainLoginTypes(
-      // Le payload est conservé par le bloc HTTP-only ci-dessus via la variable
-      // locale de booking ; en l'absence de champs exploitables, on utilise le
-      // type central confirmé pour les trois portails.
-      undefined,
-    );
+    : extractSpainLoginTypes(signinFieldsPayload);
   const loginTypes = discoveredLoginTypes.length > 0
     ? discoveredLoginTypes
     : [getSpainBookingLoginType()];
