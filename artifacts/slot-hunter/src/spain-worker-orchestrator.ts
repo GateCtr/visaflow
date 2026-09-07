@@ -584,7 +584,10 @@ async function fetchActiveDossiers(): Promise<SpainDossierConfig[]> {
       )
       .filter(
         (j: HunterJob) =>
-          !!(j.portalUrl ?? (j.hunterConfig as { scheduleUrl?: string }).scheduleUrl),
+          !!(
+            (j.hunterConfig as { scheduleUrl?: string }).scheduleUrl ??
+            j.portalUrl
+          ),
       );
 
     if (spainJobs.length === 0 && jobs.length > 0) {
@@ -611,9 +614,13 @@ async function fetchActiveDossiers(): Promise<SpainDossierConfig[]> {
         | "manual",
       slotDateFrom: j.hunterConfig.slotDateFrom,
       slotDateDeadline: j.hunterConfig.slotDateDeadline,
+      // Le scheduleUrl est le portail assigné à CE dossier. Le portalUrl
+      // top-level vient du pricing global (actuellement Kinshasa pour Spain)
+      // et ne doit servir que de fallback si aucun portail n'est configuré
+      // dans le hunterConfig du dossier.
       portalUrl:
-        j.portalUrl ??
         (j.hunterConfig as { scheduleUrl?: string }).scheduleUrl ??
+        j.portalUrl ??
         "",
       groupSize: j.hunterConfig.groupSize,
       spainPriorityIndex: (j.hunterConfig as { spainPriorityIndex?: number }).spainPriorityIndex,
