@@ -17,6 +17,7 @@
 
 import type { SpainCfSession } from "./spain-soax-solver.js";
 import { Impit } from "impit";
+import { parseSetCookies } from "./spain-cookie-parser.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -145,12 +146,50 @@ function formatCookieTrace(ds: DynamicSession): string {
 }
 
 function formatSetCookieTrace(response: Response): string {
-  const raw = response.headers.get("set-cookie") ?? "";
+  const values = getSetCookieValues(response);
+  const raw = values.join("\n");
   if (!raw) return "set-cookie=none";
   const names = [...raw.matchAll(/(?:^|,\s*)([^=;,\s]+)=/g)]
     .map((match) => match[1])
     .filter(Boolean);
   return `set-cookie=present bytes=${raw.length} names=${names.join(",") || "unknown"}`;
+}
+
+function getSetCookieValues(response: Response): string[] {
+  const headers = response.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
+  if (typeof headers.getSetCookie === "function") {
+    return headers.getSetCookie().filter((value): value is string => Boolean(value));
+  }
+  const raw = headers.get("set-cookie") ?? "";
+  return raw ? [raw] : [];
+}
+
+/**
+ * Bookitit peut renouveler PHPSESSID pendant getsigninfields/ ou signin/.
+ * Le jar manuel envoyé par makeDirectHeaders doit donc suivre les Set-Cookie
+ * reçus, sinon l'appel suivant continue avec une session PHP obsolète.
+ */
+function mergeResponseCookies(ds: DynamicSession, response: Response): void {
+  const raw = getSetCookieValues(response).join("\n");
+  if (!raw) return;
+
+  const received = parseSetCookies(raw);
+  for (const [name, value] of Object.entries(received)) {
+    // Une valeur vide représente une suppression (Max-Age=0/Expires passée).
+    if (value) ds.jar[name] = value;
+    else delete ds.jar[name];
+  }
+
+  if (ds.session) {
+    ds.session.allCookies = Object.entries(ds.jar)
+      .filter(([, value]) => Boolean(value))
+      .map(([name, value]) => ({ name, value }));
+    if (Object.hasOwn(received, "cf_clearance")) {
+      ds.session.cfClearance = received.cf_clearance || "";
+    }
+  }
 }
 
 /**
@@ -312,13 +351,14 @@ export async function callDirect(
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
-      // Le flow de booking réutilise volontairement le même jar/PHPSESSID
-      // jusqu'à summary/. Ne pas fusionner automatiquement les Set-Cookie ici.
+      // Le flow de booking réutilise le même jar, en le mettant à jour si
+      // Bookitit renouvelle PHPSESSID via Set-Cookie.
       const headers = makeDirectHeaders(ds);
       logBookingRequestTrace(endpoint, url, ds, headers, attempt);
       const res = await (ds.impit.fetch(url, { headers, signal: controller.signal } as any) as unknown as Promise<Response>);
       clearTimeout(timeout);
       logBookingResponseCookieTrace(endpoint, res);
+      mergeResponseCookies(ds, res);
       if (!res.ok) {
         // P3 — Retry sur 502/503/504 (serveur surchargé sous publication)
         if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < CALL_DIRECT_MAX_RETRIES) {
