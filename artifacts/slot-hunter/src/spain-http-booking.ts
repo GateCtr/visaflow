@@ -49,7 +49,7 @@ import {
 import { matchServiceForVisa } from "./spain-service-mapping.js";
 import { generateSpainConfirmationPdf, extractConfirmationData } from "./_legacy_spain-confirmation-pdf.js";
 import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
-import { extractSpainLoginTypes, type SpainLoginType } from "./spain-login-types.js";
+import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1361,17 +1361,22 @@ export async function executeHttpBooking(
     }
   }
 
-  // Le formulaire d'accès à l'historique expose les valeurs logintype
-  // réellement acceptées par ce portail. On les réutilise pour signin/ au lieu
-  // de maintenir une liste globale qui peut être fausse pour un autre portail.
-  const signinAccountFieldsPayload = await callEndpoint("getsigninaccountfields/", baseParams);
-  const discoveredLoginTypes = extractSpainLoginTypes(signinAccountFieldsPayload);
-  if (discoveredLoginTypes.length === 0) {
-    console.warn(`${logPrefix} ⚠️ getsigninaccountfields/ → aucune valeur logintype exploitable`);
-  } else {
-    console.log(`${logPrefix} ✅ logintype(s) fourni(s) par le portail: ${discoveredLoginTypes.join(", ")}`);
-  }
-  signinCandidates = discoveredLoginTypes.map((logintype: SpainLoginType, index) => ({
+  // En HTTP-only, getsigninfields/ renvoie CustomFields.Clients avec les
+  // valeurs logintype utilisables. En browser, le widget a déjà chargé ces
+  // champs dans le DOM : le type central configuré est le fallback sûr.
+  const discoveredLoginTypes = useBrowserCalls
+    ? []
+    : extractSpainLoginTypes(
+      // Le payload est conservé par le bloc HTTP-only ci-dessus via la variable
+      // locale de booking ; en l'absence de champs exploitables, on utilise le
+      // type central confirmé pour les trois portails.
+      undefined,
+    );
+  const loginTypes = discoveredLoginTypes.length > 0
+    ? discoveredLoginTypes
+    : [getSpainBookingLoginType()];
+  console.log(`${logPrefix} ✅ logintype booking: ${loginTypes.join(", ")}`);
+  signinCandidates = loginTypes.map((logintype: SpainLoginType, index) => ({
     endpoint: "signin/",
     label: `signsecondappointment (${logintype})${index > 0 ? " fallback" : ""}`,
     params: {

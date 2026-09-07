@@ -1,8 +1,10 @@
 /**
- * Types de login fournis dynamiquement par Bookitit.
+ * Type de login utilisé par le booking.
  *
- * Ne pas maintenir de liste locale (`document`, `passport`, etc.) : chaque
- * portail renvoie ses valeurs autorisées via getsigninaccountfields/.
+ * Le flux de réservation ne passe pas par la section historique/annulations :
+ * il utilise directement le contrat `signin/`. `document` est la valeur
+ * confirmée sur Kinshasa, Saopolo et Cuba ; un override reste possible pour
+ * un futur portail divergent.
  */
 export type SpainLoginType = string;
 
@@ -11,8 +13,9 @@ function isEnabled(value: unknown): boolean {
 }
 
 /**
- * Extrait les options réellement exposées par le formulaire de connexion
- * historique/annulations.
+ * Extrait les options de login depuis la réponse booking de
+ * getsigninfields/ (CustomFields.Clients). Le même parseur reste compatible
+ * avec la réponse account-login, sans que le booking ait besoin de l'appeler.
  */
 export function extractSpainLoginTypes(payload: unknown): SpainLoginType[] {
   const root = payload as {
@@ -33,4 +36,9 @@ export function extractSpainLoginTypes(payload: unknown): SpainLoginType[] {
       .map((field) => typeof field.input_text === "string" ? field.input_text.trim() : "")
       .filter((value) => value.length > 0),
   )];
+}
+
+export function getSpainBookingLoginType(): SpainLoginType {
+  const configured = process.env.SPAIN_LOGIN_TYPE?.trim();
+  return configured || "document";
 }

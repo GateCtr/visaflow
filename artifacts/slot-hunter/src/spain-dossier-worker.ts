@@ -34,13 +34,12 @@ import {
   makeDirectHeaders,
   CALL_DIRECT_NETWORK_ERROR,
   CALL_DIRECT_HTTP_OVERLOAD,
-  discoverSigninAccountLoginTypes,
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
   type SpainBookingResult,
 } from "./spain-http-booking.js";
-import type { SpainLoginType } from "./spain-login-types.js";
+import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
@@ -2029,13 +2028,13 @@ export async function runDossierWorker(
               await sleep(200);
               continue;
             }
-            // ── signin/ — types fournis par le formulaire dynamique du portail ─
-            const loginTypes = await discoverSigninAccountLoginTypes(ds, tag);
-            if (loginTypes.length === 0) {
-              log("WARN", `${tag} getsigninaccountfields/ → aucune valeur logintype exploitable — skip slot`);
-              await sleep(200);
-              continue;
-            }
+            // ── signin/ — type extrait de la réponse booking getsigninfields/ ─
+            // Cette réponse contient CustomFields.Clients comme le formulaire
+            // account-login, mais l'appel reste dans le flux booking.
+            const discoveredLoginTypes = extractSpainLoginTypes(gsfPayload);
+            const loginTypes = discoveredLoginTypes.length > 0
+              ? discoveredLoginTypes
+              : [getSpainBookingLoginType()];
             let signinLogintype: SpainLoginType = loginTypes[0];
             let signinRaw: unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD = null;
             for (let loginTypeIndex = 0; loginTypeIndex < loginTypes.length; loginTypeIndex++) {
