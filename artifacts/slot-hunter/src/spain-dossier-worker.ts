@@ -37,7 +37,7 @@ import {
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
-  solveHCaptcha,
+  solveSpainHcaptcha,
   HCAPTCHA_SITEKEY,
   type SpainBookingResult,
 } from "./spain-http-booking.js";
@@ -2043,8 +2043,8 @@ export async function runDossierWorker(
             // Sitekey détecté dynamiquement dans /main/ ; fallback sur le sitekey connu
             // citaconsular.es si l'extraction a échoué (présence détectée sans sitekey).
             const sitekey = phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
-            log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${sitekey.slice(0, 12)}…)…`);
-            const solved = await solveHCaptcha(config.portalUrl.split("#")[0], sitekey);
+            log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${sitekey.slice(0, 12)}…, NoneCap→Anti-Captcha→CapSolver)…`);
+            const solved = await solveSpainHcaptcha(sitekey, config.portalUrl.split("#")[0]);
             if (solved) {
               gctToken = solved;
               log("INFO", `${tag} 🔐 hCaptcha résolu — gct prêt (${gctToken.length} car.)`);

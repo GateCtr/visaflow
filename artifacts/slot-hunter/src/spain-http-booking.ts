@@ -207,6 +207,82 @@ export async function solveHCaptcha(
   }
 }
 
+/**
+ * Anti-Captcha hCaptcha (createTask/getTaskResult, type Proxyless).
+ * Fallback quand NoneCap échoue.
+ */
+async function solveHcaptchaViaAntiCaptchaSpain(apiKey: string, sitekey: string, pageUrl: string): Promise<string | null> {
+  try {
+    const cr = await fetch("https://api.anti-captcha.com/createTask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientKey: apiKey, task: { type: "HCaptchaTaskProxyless", websiteURL: pageUrl, websiteKey: sitekey } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const cd = (await cr.json()) as { errorId: number; taskId?: number; errorDescription?: string };
+    if (cd.errorId !== 0 || !cd.taskId) {
+      console.warn(`[spain-booking] anti-captcha createTask: ${cd.errorDescription ?? cd.errorId}`);
+      return null;
+    }
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3_000));
+      const rr = await fetch("https://api.anti-captcha.com/getTaskResult", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientKey: apiKey, taskId: cd.taskId }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const rd = (await rr.json()) as { status?: string; solution?: { gRecaptchaResponse?: string }; errorDescription?: string };
+      if (rd.status === "ready" && rd.solution?.gRecaptchaResponse) return rd.solution.gRecaptchaResponse;
+      if (rd.errorDescription) { console.warn(`[spain-booking] anti-captcha: ${rd.errorDescription}`); return null; }
+    }
+    return null;
+  } catch (e) {
+    console.warn(`[spain-booking] anti-captcha exception: ${e}`);
+    return null;
+  }
+}
+
+/**
+ * Résout un hCaptcha pour un portail Bookitit citaconsular.es via cascade de services.
+ *
+ * Ordre : NoneCap → Anti-Captcha → CapSolver.
+ * NoneCap est PRIORITAIRE : test terrain (2026-09, Cuba) → NoneCap résout le sitekey
+ * citaconsular.es alors que CapSolver refuse (« We don't support this service »).
+ * Le token obtenu (P1_eyJ…) est accepté par signin/ (validé sur Cuba : signin/ 236B
+ * avec message credentials au lieu de 0B).
+ *
+ * @param sitekey  sitekey hCaptcha détecté dynamiquement dans /main/
+ * @param pageUrl  URL du portail (sans fragment)
+ * @returns token gct, ou null si tous les solveurs échouent
+ */
+export async function solveSpainHcaptcha(sitekey: string, pageUrl: string): Promise<string | null> {
+  const nonecapKey = process.env.NONECAP_API_KEY?.trim() ?? "";
+  const anticaptchaKey = process.env.ANTICAPTCHA_API_KEY?.trim() ?? "";
+  const capsolverKey = process.env.CAPSOLVER_API_KEY?.trim() ?? "";
+
+  // 1. NoneCap (prioritaire — seul à résoudre le sitekey citaconsular.es)
+  if (nonecapKey) {
+    const { solveHcaptchaViaNonecap } = await import("./nonecap.js");
+    const t = await solveHcaptchaViaNonecap(nonecapKey, sitekey, pageUrl, "[spain-booking]");
+    if (t) { console.log(`[spain-booking] ✅ hCaptcha résolu via NoneCap (${t.length} car.)`); return t; }
+    console.warn(`[spain-booking] NoneCap échoué — fallback Anti-Captcha`);
+  }
+  // 2. Anti-Captcha
+  if (anticaptchaKey) {
+    const t = await solveHcaptchaViaAntiCaptchaSpain(anticaptchaKey, sitekey, pageUrl);
+    if (t) { console.log(`[spain-booking] ✅ hCaptcha résolu via Anti-Captcha (${t.length} car.)`); return t; }
+    console.warn(`[spain-booking] Anti-Captcha échoué — fallback CapSolver`);
+  }
+  // 3. CapSolver (dernier recours — refuse souvent ce sitekey)
+  if (capsolverKey) {
+    const t = await solveHCaptcha(pageUrl, sitekey);
+    if (t) { console.log(`[spain-booking] ✅ hCaptcha résolu via CapSolver (${t.length} car.)`); return t; }
+  }
+  console.error(`[spain-booking] ❌ Tous les solveurs hCaptcha ont échoué (NoneCap → Anti-Captcha → CapSolver)`);
+  return null;
+}
+
 // ─── JSONP Caller ───────────────────────────────────────────────────────────
 
 function parseJsonpResponse(text: string): unknown | null {
