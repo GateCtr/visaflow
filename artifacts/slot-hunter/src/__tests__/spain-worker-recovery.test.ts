@@ -129,6 +129,7 @@ function makePhpState(agendaId = "agenda-42"): WorkerPhpState {
     bestServiceName: "Visa",
     allowAppointment: true,
     captchaRequired: false,
+    captchaSitekey: null,
     ds: {} as never,
   };
 }

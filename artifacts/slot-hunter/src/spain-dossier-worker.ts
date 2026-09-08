@@ -88,6 +88,7 @@ import {
 } from "./convexClient.js";
 import { log } from "./scheduler-utils.js";
 import { parseSetCookies, parseSetCookiesFromHeaders } from "./spain-cookie-parser.js";
+import { detectHcaptcha } from "./spain-captcha-detect.js";
 // ── spain-synchronized-scan (task 10.1) : grille d'horloge murale + machine à états ──
 import { createGridResolver, type GridResolver } from "./spain/spain-wallclock-grid.js";
 import { loadGridConfig } from "./spain/spain-grid-config.js";
@@ -648,9 +649,13 @@ export interface WorkerPhpState {
   bestServiceName: string;
   /** Valeur réelle du champ AllowAppointment retourné par getservices/ (null = absent du payload) */
   allowAppointment: boolean | null;
-  /** true si le portail exige un hCaptcha à la soumission (WidgetConfiguration.captcha=1,
-   *  ex. Kinshasa depuis sept. 2026). Dans ce cas, signin/ doit inclure gct=<token hCaptcha>. */
+  /** true si le portail affiche un hCaptcha (détecté DYNAMIQUEMENT dans le HTML /main/,
+   *  PAS via WidgetConfiguration.captcha qui est non fiable — Cuba a captcha=0 mais un
+   *  hCaptcha visible). Dans ce cas, signin/ doit inclure gct=<token hCaptcha>. */
   captchaRequired: boolean;
+  /** Sitekey hCaptcha extrait dynamiquement du /main/ (null si absent). Utilisé pour
+   *  résoudre le hCaptcha via CapSolver. Évite un sitekey codé en dur potentiellement faux. */
+  captchaSitekey: string | null;
   /** DynamicSession partagé — même impit + reqCounter pour tous les appels impit directs */
   ds: DynamicSession;
   /** Trace des appels d'init — transmise dans scanTrace de chaque cycle */
@@ -704,12 +709,15 @@ export async function initPhpState(
   }
   const cfgBytes = JSON.stringify(cfgPayload ?? "").length;
 
-  // Flag captcha du portail : WidgetConfiguration.captcha=1 → hCaptcha requis à la
-  // soumission (ex. Kinshasa depuis sept. 2026). signin/ devra alors inclure gct=<token>.
-  const cfgWidget = (cfgPayload as any)?.WidgetConfiguration ?? (cfgPayload as any)?.widgetConfiguration;
-  const captchaRaw = cfgWidget?.captcha;
-  const captchaRequired = captchaRaw === 1 || captchaRaw === "1";
-  log("INFO", `${tag} 🔧 widgetConfig: captcha=${captchaRaw ?? "?"}${captchaRequired ? " → hCaptcha REQUIS à signin/" : ""}`);
+  // Détection hCaptcha DYNAMIQUE depuis le HTML /main/ (source fiable). Le flag
+  // WidgetConfiguration.captcha est NON fiable : Cuba a captcha=0 mais un hCaptcha
+  // visible. On extrait présence + sitekey du /main/ (data-sitekey=…). Si présent,
+  // signin/ devra inclure gct=<token hCaptcha résolu avec ce sitekey>.
+  const mainHtmlForCaptcha = session.prefetchedMainHtml ?? "";
+  const captchaDetect = detectHcaptcha([{ label: "main", text: mainHtmlForCaptcha }]);
+  const captchaRequired = captchaDetect.present;
+  const captchaSitekey = captchaDetect.sitekey;
+  log("INFO", `${tag} 🔧 hCaptcha: present=${captchaRequired} sitekey=${captchaSitekey ?? "-"}${captchaRequired ? " → gct requis à signin/" : ""}`);
 
   // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
@@ -777,7 +785,7 @@ export async function initPhpState(
 
   return {
     services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName,
-    allowAppointment, captchaRequired, ds,
+    allowAppointment, captchaRequired, captchaSitekey, ds,
     _trace: { cfgBytes, svcBytes, svcStr, agBytes },
   };
 }
@@ -1173,12 +1181,14 @@ export async function refreshSessionAndScan(
   const MAIN_MIN_BYTES = Math.max(1000, Number(process.env.SPAIN_MAIN_MIN_BYTES ?? "50000") || 50000);
   const mainUrl = makeDirectUrl(ds, "main/");
   const mainHeaders = makeDirectHeaders(ds);
+  let capturedMainHtml = "";
   try {
     let mainBody = "";
     let mainOk = false;
     for (let attempt = 0; attempt <= RS_MAX_RETRIES; attempt++) {
       const rm = await fetchRetry(mainUrl, { headers: mainHeaders }, "③ GET /main/");
       mainBody = rm.body;
+      capturedMainHtml = rm.body;
       // Merge Set-Cookie (PHPSESSID peut être renouvelé)
       const newCookies = extractCookies(rm.res.headers as any);
       Object.assign(ds.jar, newCookies);
@@ -1211,10 +1221,11 @@ export async function refreshSessionAndScan(
     log("WARN", `${tag} ④ getwidgetconfigurations/ → erreur réseau`);
     return { status: "proxy_error", errorMessage: "getwidgetconfigurations/ network error", monthTraces: [] };
   }
-  // Flag captcha (hCaptcha requis à signin/ si WidgetConfiguration.captcha=1).
-  const rsWidget = (cfgPayload as any)?.WidgetConfiguration ?? (cfgPayload as any)?.widgetConfiguration;
-  const rsCaptchaRequired = rsWidget?.captcha === 1 || rsWidget?.captcha === "1";
-  if (rsCaptchaRequired) log("INFO", `${tag} 🔧 widgetConfig: captcha=1 → hCaptcha REQUIS à signin/`);
+  // hCaptcha détecté dynamiquement dans le HTML /main/ (source fiable, cf. initPhpState).
+  const rsCaptcha = detectHcaptcha([{ label: "main", text: capturedMainHtml || (session.prefetchedMainHtml ?? "") }]);
+  const rsCaptchaRequired = rsCaptcha.present;
+  const rsCaptchaSitekey = rsCaptcha.sitekey;
+  if (rsCaptchaRequired) log("INFO", `${tag} 🔧 hCaptcha présent (sitekey=${rsCaptchaSitekey ?? "-"}) → gct requis à signin/`);
 
   // 5. getservices/
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
@@ -1279,6 +1290,7 @@ export async function refreshSessionAndScan(
     bestServiceName: bestSvc.serviceName,
     allowAppointment: null,
     captchaRequired: rsCaptchaRequired,
+    captchaSitekey: rsCaptchaSitekey,
     ds,
   };
   return scanDatetimeDirect(phpState, config, tag);
@@ -2024,8 +2036,11 @@ export async function runDossierWorker(
           let gctToken = "";
           const captchaNeeded = phpState?.captchaRequired ?? false;
           if (captchaNeeded) {
-            log("INFO", `${tag} 🔐 Portail exige hCaptcha (captcha=1) — résolution du token gct…`);
-            const solved = await solveHCaptcha(config.portalUrl.split("#")[0], HCAPTCHA_SITEKEY);
+            // Sitekey détecté dynamiquement dans /main/ ; fallback sur le sitekey connu
+            // citaconsular.es si l'extraction a échoué (présence détectée sans sitekey).
+            const sitekey = phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
+            log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${sitekey.slice(0, 12)}…)…`);
+            const solved = await solveHCaptcha(config.portalUrl.split("#")[0], sitekey);
             if (solved) {
               gctToken = solved;
               log("INFO", `${tag} 🔐 hCaptcha résolu — gct prêt (${gctToken.length} car.)`);
