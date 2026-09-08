@@ -717,7 +717,11 @@ export async function initPhpState(
   const captchaDetect = detectHcaptcha([{ label: "main", text: mainHtmlForCaptcha }]);
   const captchaRequired = captchaDetect.present;
   const captchaSitekey = captchaDetect.sitekey;
-  log("INFO", `${tag} 🔧 hCaptcha: present=${captchaRequired} sitekey=${captchaSitekey ?? "-"}${captchaRequired ? " → gct requis à signin/" : ""}`);
+  // Diagnostic : valeur du flag WidgetConfiguration.captcha (le VRAI cfgPayload de
+  // ce 1er appel, valide) — pour comparer au résultat de la détection /main/.
+  const cfgWidgetFlag = (cfgPayload as any)?.WidgetConfiguration?.captcha
+    ?? (cfgPayload as any)?.widgetConfiguration?.captcha;
+  log("INFO", `${tag} 🔧 hCaptcha: present=${captchaRequired} sitekey=${captchaSitekey ?? "-"} | flag WidgetConfiguration.captcha=${cfgWidgetFlag ?? "?"}${captchaRequired ? " → gct requis à signin/" : ""}`);
 
   // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
