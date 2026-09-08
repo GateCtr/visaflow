@@ -1962,6 +1962,42 @@ export async function runDossierWorker(
           }
 
           if (holdingBookingSlot) {
+          // ── ARMEMENT getsigninfields/ — UNE SEULE FOIS pour tout le cycle ──────
+          // DÉCOUVERTE (tests test-signin-sequence.ts sur Bookitit) : getsigninfields/
+          // est RATE-LIMITÉ côté serveur. Le 1er appel réussit (13.8kB) ; les suivants,
+          // en rafale sur les créneaux candidats, renvoient 0B (text/html). L'ancien code
+          // rappelait getsigninfields/ pour CHAQUE candidat → dès le 2ème créneau il
+          // recevait 0B et SKIPPAIT le créneau à tort, alors que signin/ répond encore.
+          //
+          // Correctif : on arme la session avec UN SEUL getsigninfields/ (qui sert aussi
+          // à découvrir les logintypes), puis on appelle signin/ DIRECTEMENT sur chaque
+          // candidat SANS re-appeler getsigninfields/. Prouvé : après 1 getsigninfields/
+          // réussi, signin/ fonctionne sur d'autres créneaux (test étape D).
+          const armDs = scan.ds ?? phpState!.ds;
+          const armSlot = bookingCandidates[0];
+          const armExtra: Record<string, string> = {
+            "services[]": scan.serviceId!,
+            date: armSlot.date,
+            time: armSlot.time,
+            selectedPeople: "1",
+          };
+          if (armSlot.agendaId) armExtra["agendas[]"] = armSlot.agendaId;
+          log("INFO", `${tag} 🔑 getsigninfields/ (armement unique) — PHPSESSID=${armDs.jar.PHPSESSID ? "present" : "absent"}`);
+          const armGsf = await callDirect(armDs, "getsigninfields/", {
+            "services[]": armExtra["services[]"],
+            "agendas[]": armExtra["agendas[]"] ?? "",
+            date: armExtra.date,
+            time: armExtra.time,
+            selectedPeople: armExtra.selectedPeople,
+          }, tag) as any;
+          const armGsfBytes = armGsf && armGsf !== CALL_DIRECT_NETWORK_ERROR && armGsf !== CALL_DIRECT_HTTP_OVERLOAD
+            ? JSON.stringify(armGsf).length : 0;
+          log("INFO", `${tag} 🔑 getsigninfields/ (armement) → ${armGsfBytes}B${armGsfBytes > 0 ? " ✅ session armée" : " ⚠️ 0B — signin/ tenté quand même"}`);
+          // logintypes découverts sur l'armement (réutilisés pour TOUS les candidats).
+          const armedLoginTypes = (armGsf && armGsfBytes > 0)
+            ? (extractSpainLoginTypes(armGsf).length > 0 ? extractSpainLoginTypes(armGsf) : [getSpainBookingLoginType()])
+            : [getSpainBookingLoginType()];
+
           for (const candidate of bookingCandidates) {
             // Hors race seulement : claim atomique anti-collision historique.
             // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
@@ -2009,32 +2045,12 @@ export async function runDossierWorker(
               serviceName: scan.serviceName,
             }).catch(() => {});
 
-            // ── P5 : getsigninfields/ — skip immédiat si 0B (pas de retry en booking) ──
-            const hasGsfPhpsessid = Boolean(ds.jar.PHPSESSID);
-            log("INFO", `${tag} 🔑 getsigninfields/ — PHPSESSID=${hasGsfPhpsessid ? "present" : "absent"}`);
-            const gsfPayload = await callDirect(ds, "getsigninfields/", {
-              "services[]": bookExtra["services[]"],
-              "agendas[]":  bookExtra["agendas[]"] ?? "",
-              date:         bookExtra.date,
-              time:         bookExtra.time,
-              selectedPeople: bookExtra.selectedPeople,
-            }, tag) as any;
-            const gsfBytes = gsfPayload && gsfPayload !== CALL_DIRECT_NETWORK_ERROR && gsfPayload !== CALL_DIRECT_HTTP_OVERLOAD
-              ? JSON.stringify(gsfPayload).length
-              : 0;
-            log("INFO", `${tag} 🔑 getsigninfields/ → ${gsfBytes}B${gsfPayload ? " ✅" : " ❌ 0B — skip slot"}`);
-            if (gsfPayload === null || gsfPayload === CALL_DIRECT_NETWORK_ERROR || gsfPayload === CALL_DIRECT_HTTP_OVERLOAD) {
-              // Serveur surchargé — passer au créneau suivant immédiatement
-              await sleep(200);
-              continue;
-            }
-            // ── signin/ — type extrait de la réponse booking getsigninfields/ ─
-            // Cette réponse contient CustomFields.Clients comme le formulaire
-            // account-login, mais l'appel reste dans le flux booking.
-            const discoveredLoginTypes = extractSpainLoginTypes(gsfPayload);
-            const loginTypes = discoveredLoginTypes.length > 0
-              ? discoveredLoginTypes
-              : [getSpainBookingLoginType()];
+            // ── signin/ DIRECT — PAS de getsigninfields/ par créneau (rate-limité) ──
+            // La session a déjà été armée par le getsigninfields/ unique avant la boucle.
+            // On appelle signin/ directement sur ce candidat, avec les logintypes
+            // découverts à l'armement. Ne JAMAIS re-appeler getsigninfields/ ici : ça
+            // renverrait 0B (rate-limit) et nous ferait abandonner un créneau bookable.
+            const loginTypes = armedLoginTypes;
             let signinLogintype: SpainLoginType = loginTypes[0];
             let signinRaw: unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD = null;
             for (let loginTypeIndex = 0; loginTypeIndex < loginTypes.length; loginTypeIndex++) {
@@ -2209,7 +2225,7 @@ export async function runDossierWorker(
               status: bookResult.status,
               detail: (bookResult.locator ?? bookResult.errorMessage ?? "").slice(0, 80) || undefined,
               ms: bookResult.durationMs,
-              gsfBytes: gsfBytes,
+              gsfBytes: armGsfBytes,
               signinBytes: signinPayload ? JSON.stringify(signinPayload).length : 0,
               bktToken: bktToken ? bktToken.slice(0, 12) + "…" : undefined,
               locator: bookResult.locator || undefined,
