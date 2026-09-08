@@ -258,18 +258,40 @@ export function makeDirectUrl(ds: DynamicSession, endpoint: string, extra?: Reco
 }
 
 /**
- * Headers identiques au dynamic test — X-Requested-With, Accept, Sec-Fetch-*, Cookie.
+ * Headers alignés sur la requête réelle du navigateur Chrome (curl capturé sur le
+ * portail Bookitit). Ajout par rapport à l'ancienne version : Accept-Language,
+ * Accept-Encoding, Priority et le jeu complet de Client Hints Sec-Ch-Ua-*.
+ *
+ * La version majeure de Chrome des Sec-Ch-Ua est DÉRIVÉE du User-Agent réel de la
+ * session (issu du solve CapSolver) pour rester cohérente — un Sec-Ch-Ua qui
+ * contredirait le UA serait un signal d'incohérence pire que leur absence.
  */
 export function makeDirectHeaders(ds: DynamicSession): Record<string, string> {
+  const ua = ds.userAgent;
+  // Version majeure Chrome extraite du UA (ex. "Chrome/151.0.0.0" → "151").
+  const chromeMajor = ua.match(/Chrome\/(\d+)/)?.[1] ?? "150";
+  const secChUa = `"Not;A=Brand";v="8", "Chromium";v="${chromeMajor}"`;
+  // Plateforme dérivée du UA (Windows par défaut, cohérent avec les UA CapSolver).
+  const platform = /Macintosh|Mac OS/i.test(ua)
+    ? '"macOS"'
+    : /Linux/i.test(ua) && !/Android/i.test(ua)
+      ? '"Linux"'
+      : '"Windows"';
   return {
-    "User-Agent":        ds.userAgent,
-    "Accept":            "text/javascript, application/javascript, */*; q=0.01",
-    "X-Requested-With":  "XMLHttpRequest",
-    "Sec-Fetch-Site":    "same-origin",
-    "Sec-Fetch-Mode":    "cors",
-    "Sec-Fetch-Dest":    "empty",
-    "Referer":           ds.widgetUrl,
-    "Cookie":            buildCookieString(ds.jar),
+    "User-Agent":                ua,
+    "Accept":                    "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+    "Accept-Language":           "fr-FR,fr;q=0.9",
+    "Accept-Encoding":           "gzip, deflate, br",
+    "X-Requested-With":          "XMLHttpRequest",
+    "Sec-Ch-Ua":                 secChUa,
+    "Sec-Ch-Ua-Mobile":          "?0",
+    "Sec-Ch-Ua-Platform":        platform,
+    "Sec-Fetch-Site":            "same-origin",
+    "Sec-Fetch-Mode":            "cors",
+    "Sec-Fetch-Dest":            "empty",
+    "Referer":                   ds.widgetUrl,
+    "Priority":                  "u=1, i",
+    "Cookie":                    buildCookieString(ds.jar),
   };
 }
 
