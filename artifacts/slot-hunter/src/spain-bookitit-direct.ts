@@ -538,6 +538,13 @@ function logBookingResponseTrace(
   const contentType = responseHeader(response, "content-type");
   const contentLength = responseHeader(response, "content-length");
   const retryAfter = responseHeader(response, "retry-after");
+  // Aperçu du corps brut : essentiel pour diagnostiquer un "0B" — distingue un vrai
+  // corps vide (HTTP 200 + 0B) d'un challenge CF, d'un HTML d'erreur ou d'un JSONP
+  // d'erreur non parsé. On masque login/password éventuellement reflétés.
+  const bodyPreview = body
+    .slice(0, 300)
+    .replace(/(login|password)=[^&";]*/gi, "$1=[REDACTED]")
+    .replace(/\s+/g, " ");
   console.log(
     `[bookitit-trace] RESPONSE ${endpoint} ` +
     `HTTP=${response.status} ok=${response.ok ? "yes" : "no"} ` +
@@ -548,7 +555,8 @@ function logBookingResponseTrace(
     `shape=${parsed.shape} parsed=${parsed.parsed ? "yes" : "no"} parseError=${parsed.error ?? "-"} ` +
     `date=${requestParams.get("date") ?? "-"} time=${requestParams.get("time") ?? "-"} ` +
     `svc=${requestParams.get("services[]") ?? "-"} ag=${requestParams.get("agendas[]") ?? "-"} ` +
-    `${payloadTraceSummary(parsed.payload)}`,
+    `${payloadTraceSummary(parsed.payload)} ` +
+    `bodyPreview="${bodyPreview}"`,
   );
 }
 
