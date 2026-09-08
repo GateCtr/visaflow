@@ -122,9 +122,9 @@ export interface ExtractedSlotInfo {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const CAPSOLVER_BASE = "https://api.capsolver.com";
-// Sitekey hCaptcha de citaconsular.es (widgets avec captcha=1, ex: LMD/Cuba)
+// Sitekey hCaptcha de citaconsular.es (widgets avec captcha=1, ex: LMD/Cuba, Kinshasa)
 // Confirmé par capture réseau 2026-07-28 (modal Aceptar Cuba → hcaptcha iframe)
-const HCAPTCHA_SITEKEY = "38663b6a-85dc-4346-965e-f066cd8e7d26";
+export const HCAPTCHA_SITEKEY = "38663b6a-85dc-4346-965e-f066cd8e7d26";
 
 // ─── Captcha Solver ─────────────────────────────────────────────────────────
 
@@ -137,7 +137,7 @@ const HCAPTCHA_SITEKEY = "38663b6a-85dc-4346-965e-f066cd8e7d26";
  *   - Kinshasa widget : captcha="0" → gct absent du signin
  *   - LMD/Cuba widget : hCaptcha présent → gct=P1_eyJ... (token hCaptcha)
  */
-async function solveHCaptcha(
+export async function solveHCaptcha(
   pageUrl: string,
   sitekey: string = HCAPTCHA_SITEKEY,
 ): Promise<string | null> {

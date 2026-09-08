@@ -37,6 +37,8 @@ import {
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
+  solveHCaptcha,
+  HCAPTCHA_SITEKEY,
   type SpainBookingResult,
 } from "./spain-http-booking.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
@@ -646,6 +648,9 @@ export interface WorkerPhpState {
   bestServiceName: string;
   /** Valeur réelle du champ AllowAppointment retourné par getservices/ (null = absent du payload) */
   allowAppointment: boolean | null;
+  /** true si le portail exige un hCaptcha à la soumission (WidgetConfiguration.captcha=1,
+   *  ex. Kinshasa depuis sept. 2026). Dans ce cas, signin/ doit inclure gct=<token hCaptcha>. */
+  captchaRequired: boolean;
   /** DynamicSession partagé — même impit + reqCounter pour tous les appels impit directs */
   ds: DynamicSession;
   /** Trace des appels d'init — transmise dans scanTrace de chaque cycle */
@@ -698,6 +703,13 @@ export async function initPhpState(
     return null;
   }
   const cfgBytes = JSON.stringify(cfgPayload ?? "").length;
+
+  // Flag captcha du portail : WidgetConfiguration.captcha=1 → hCaptcha requis à la
+  // soumission (ex. Kinshasa depuis sept. 2026). signin/ devra alors inclure gct=<token>.
+  const cfgWidget = (cfgPayload as any)?.WidgetConfiguration ?? (cfgPayload as any)?.widgetConfiguration;
+  const captchaRaw = cfgWidget?.captcha;
+  const captchaRequired = captchaRaw === 1 || captchaRaw === "1";
+  log("INFO", `${tag} 🔧 widgetConfig: captcha=${captchaRaw ?? "?"}${captchaRequired ? " → hCaptcha REQUIS à signin/" : ""}`);
 
   // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
@@ -765,7 +777,7 @@ export async function initPhpState(
 
   return {
     services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName,
-    allowAppointment, ds,
+    allowAppointment, captchaRequired, ds,
     _trace: { cfgBytes, svcBytes, svcStr, agBytes },
   };
 }
@@ -1199,6 +1211,10 @@ export async function refreshSessionAndScan(
     log("WARN", `${tag} ④ getwidgetconfigurations/ → erreur réseau`);
     return { status: "proxy_error", errorMessage: "getwidgetconfigurations/ network error", monthTraces: [] };
   }
+  // Flag captcha (hCaptcha requis à signin/ si WidgetConfiguration.captcha=1).
+  const rsWidget = (cfgPayload as any)?.WidgetConfiguration ?? (cfgPayload as any)?.widgetConfiguration;
+  const rsCaptchaRequired = rsWidget?.captcha === 1 || rsWidget?.captcha === "1";
+  if (rsCaptchaRequired) log("INFO", `${tag} 🔧 widgetConfig: captcha=1 → hCaptcha REQUIS à signin/`);
 
   // 5. getservices/
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
@@ -1262,6 +1278,7 @@ export async function refreshSessionAndScan(
     bestServiceId: bestSvc.serviceId,
     bestServiceName: bestSvc.serviceName,
     allowAppointment: null,
+    captchaRequired: rsCaptchaRequired,
     ds,
   };
   return scanDatetimeDirect(phpState, config, tag);
@@ -1998,6 +2015,25 @@ export async function runDossierWorker(
             ? (extractSpainLoginTypes(armGsf).length > 0 ? extractSpainLoginTypes(armGsf) : [getSpainBookingLoginType()])
             : [getSpainBookingLoginType()];
 
+          // ── hCaptcha (gct) — UNE SEULE résolution par cycle si le portail l'exige ──
+          // Certains portails (ex. Kinshasa depuis sept. 2026) activent le hCaptcha à la
+          // soumission (WidgetConfiguration.captcha=1). Dans ce cas, signin/ SANS token gct
+          // est rejeté silencieusement (0B) — c'était la cause du signin/ 0B sur Kinshasa
+          // alors que Saopola/Cuba (captcha=0) fonctionnaient. On résout le hCaptcha une
+          // fois (le token gct est réutilisable pour tous les candidats de ce cycle).
+          let gctToken = "";
+          const captchaNeeded = phpState?.captchaRequired ?? false;
+          if (captchaNeeded) {
+            log("INFO", `${tag} 🔐 Portail exige hCaptcha (captcha=1) — résolution du token gct…`);
+            const solved = await solveHCaptcha(config.portalUrl.split("#")[0], HCAPTCHA_SITEKEY);
+            if (solved) {
+              gctToken = solved;
+              log("INFO", `${tag} 🔐 hCaptcha résolu — gct prêt (${gctToken.length} car.)`);
+            } else {
+              log("WARN", `${tag} 🔐 hCaptcha NON résolu — signin/ tenté sans gct (échouera probablement)`);
+            }
+          }
+
           for (const candidate of bookingCandidates) {
             // Hors race seulement : claim atomique anti-collision historique.
             // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
@@ -2066,6 +2102,9 @@ export async function runDossierWorker(
                 login:     config.login,
                 password:  config.password,
                 comments:  "",
+                // gct = token hCaptcha (vide si le portail n'exige pas de captcha).
+                // Requis par les portails avec WidgetConfiguration.captcha=1 (ex. Kinshasa).
+                gct:       gctToken,
               });
 
               if (
@@ -2143,6 +2182,9 @@ export async function runDossierWorker(
                 comments:       "",
                 client_signin:  "true",
                 event_created:  "true",
+                // gct propagé aussi à summary/ (le token hCaptcha peut être revalidé
+                // à la création effective du RDV sur les portails captcha=1).
+                gct:            gctToken,
               };
 
               let summaryPayload: any = null;
