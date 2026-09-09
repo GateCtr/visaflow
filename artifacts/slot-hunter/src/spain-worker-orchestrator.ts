@@ -48,6 +48,8 @@ import { log } from "./scheduler-utils.js";
 import { loadGridConfig, type GridConfig, type WorkerRuntimeState } from "./spain/spain-grid-config.js";
 import { createReservePool, type ReservePoolManager } from "./spain/spain-reserve-pool.js";
 import { createPreflightController, type PreflightController } from "./spain/spain-preflight-controller.js";
+// Pré-résolution hCaptcha par dossier : token gct dédié pré-résolu pendant HH:12→13.
+import { prewarmAllDossiers, hasRegisteredDossiers } from "./spain-hcaptcha-prewarm.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -230,6 +232,11 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
    */
   let preflightDoneForWindowKey: number | null = null;
 
+  // ── Pré-résolution hCaptcha ────────────────────────────────────────────────────
+  // Garde anti-chevauchement : évite d'empiler plusieurs vagues de pré-résolution non
+  // attendues (le module a aussi une garde `solving` par dossier).
+  let hcaptchaPrewarmInFlight = false;
+
   // ── Boucle principale ─────────────────────────────────────────────────────────
   let iteration = 0;
   try {
@@ -408,6 +415,32 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
           `[SPAIN-ORCH] Itération #${iteration} — workers actifs: ${active.length > 0 ? active.join(", ") : "aucun"} | ` +
             `cadence commune: ${cadenceCount} | dossiers Convex: ${dossiers.length}`,
         );
+      }
+
+      // 5.5 Pré-résolution hCaptcha PAR DOSSIER (fenêtre HH:12→25). Résout en parallèle
+      //     un token gct DÉDIÉ à chaque dossier qui exige un hCaptcha (auto-découvert
+      //     par les workers via registerDossierCaptcha), pour qu'il soit prêt et frais
+      //     au pic HH:13-14. Le worker consomme SON token → il enchaîne getsigninfields/
+      //     puis signin/ sans les ~10-15 s de résolution NoneCap dans le chemin critique.
+      //     Fire-and-forget : ne bloque JAMAIS la boucle. Idempotent (garde solving par
+      //     dossier + garde anti-chevauchement ici). Ne tourne que si des dossiers actifs
+      //     sont enregistrés comme ayant un hCaptcha requis.
+      {
+        const activeDossierIds = dossiers.map((d) => d.id);
+        if (
+          isInHcaptchaPrewarmPhase(gridConfig) &&
+          hasRegisteredDossiers(activeDossierIds) &&
+          !hcaptchaPrewarmInFlight
+        ) {
+          hcaptchaPrewarmInFlight = true;
+          void prewarmAllDossiers(activeDossierIds)
+            .catch((err) => {
+              log("WARN", `[SPAIN-ORCH] 🔥 pré-résolution hCaptcha échouée (non fatal): ${err instanceof Error ? err.message : String(err)}`);
+            })
+            .finally(() => {
+              hcaptchaPrewarmInFlight = false;
+            });
+        }
       }
 
       // 6. Attendre le prochain poll ou qu'un worker se termine
@@ -666,6 +699,21 @@ function isInScanWindow(): boolean {
   const now = new Date();
   const minInHour = now.getMinutes() + now.getSeconds() / 60;
   return minInHour >= WINDOW_START_MIN && minInHour < WINDOW_START_MIN + WINDOW_DURATION_MIN;
+}
+
+/**
+ * Retourne true si on est dans la fenêtre de PRÉ-RÉSOLUTION hCaptcha :
+ * [huntStartMin - 1, windowEndMin[ (soit HH:12→25 avec les défauts). On démarre 1 min
+ * avant huntStartMin pour que les tokens gct dédiés par dossier soient résolus EN
+ * PARALLÈLE et déjà FRAIS quand les créneaux apparaissent (HH:13-14). Le module de
+ * pré-résolution rafraîchit ensuite les tokens qui vieillissent tant qu'on reste dans
+ * cette fenêtre (un token hCaptcha vit ~120 s).
+ */
+function isInHcaptchaPrewarmPhase(gridConfig: GridConfig): boolean {
+  const now = new Date();
+  const minInHour = now.getMinutes() + now.getSeconds() / 60;
+  const start = Math.max(0, gridConfig.huntStartMin - 1);
+  return minInHour >= start && minInHour < gridConfig.windowEndMin;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

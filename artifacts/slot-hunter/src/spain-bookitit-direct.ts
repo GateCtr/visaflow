@@ -598,6 +598,23 @@ function logBookingResponseTrace(
  *  infinis tout en laissant le temps au serveur de répondre sous forte charge). */
 const CALL_DIRECT_TIMEOUT_MS = 120_000;
 
+/**
+ * Timeout SPÉCIFIQUE à signin/ (240s, > défaut 120s). Dans les logs de prod, signin/
+ * atteignait NOTRE timeout de 120s (TimeoutError: 120000 ms exceeded) : on coupait la
+ * requête AVANT que le serveur Bookitit ait répondu, sans jamais savoir s'il aurait
+ * fini par confirmer (booking OK / slot pris) après ce délai. On allonge donc le
+ * timeout de signin/ pour LAISSER le serveur aller au bout et OBSERVER sa vraie réponse
+ * en prod. De plus, signin/ n'est PAS retenté sur TimeoutError (cf. isSigninEndpoint
+ * dans le catch) : une seule tentative longue, pour voir la réponse réelle sans bruit
+ * de retries qui relanceraient le même gct sur le même créneau. Valeur définitive à
+ * décider une fois la latence réelle connue. */
+const SIGNIN_TIMEOUT_MS = 240_000;
+
+/** Résout le timeout à appliquer selon l'endpoint (signin/ allongé, autres 120s). */
+function timeoutForEndpoint(endpoint: string): number {
+  return endpoint === "signin/" ? SIGNIN_TIMEOUT_MS : CALL_DIRECT_TIMEOUT_MS;
+}
+
 /** Codes HTTP transitoires : surcharge, rate limit ou connexion interrompue. */
 const RETRYABLE_HTTP_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 /**
@@ -644,12 +661,13 @@ export async function callDirect(
 ): Promise<unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD> {
   const url = makeDirectUrl(ds, endpoint, extra);
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
+  const timeoutMs = timeoutForEndpoint(endpoint);
 
   for (let attempt = 0; attempt <= CALL_DIRECT_MAX_RETRIES; attempt++) {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
-      timeout = setTimeout(() => controller.abort(), CALL_DIRECT_TIMEOUT_MS);
+      timeout = setTimeout(() => controller.abort(), timeoutMs);
       // Le flow de booking réutilise le même jar, en le mettant à jour si
       // Bookitit renouvelle PHPSESSID via Set-Cookie.
       const headers = makeDirectHeaders(ds);
@@ -687,6 +705,16 @@ export async function callDirect(
       return parsed.payload;
     } catch (e) {
       if (timeout) clearTimeout(timeout);
+      // signin/ : PAS de retry sur timeout/abort (option d'observation). On a laissé
+      // 240s au serveur ; s'il n'a pas répondu, retenter relancerait le MÊME gct sur le
+      // MÊME créneau et masquerait la réalité. On renvoie directement le sentinel réseau
+      // pour que le worker traite l'absence de réponse sans empiler des tentatives longues.
+      const isTimeoutErr =
+        e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+      if (endpoint === "signin/" && isTimeoutErr) {
+        console.warn(`${prefix} ${endpoint} → timeout (${timeoutMs}ms) sans réponse serveur — pas de retry (observation)`);
+        return CALL_DIRECT_NETWORK_ERROR;
+      }
       // Retry sur erreur réseau (TLS corrompue, proxy timeout, CONNECT cassé)
       if (attempt < CALL_DIRECT_MAX_RETRIES) {
         const backoff = retryBackoffMs(attempt);

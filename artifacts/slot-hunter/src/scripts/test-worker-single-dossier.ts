@@ -25,6 +25,8 @@ import { initDecodoPool } from "../spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "../convexClient.js";
 import { runDossierWorker, type SpainDossierConfig } from "../spain-dossier-worker.js";
 import { CUBA_LMD_PORTAL_URL, SAOPOLO_PORTAL_URL } from "../spain-portals.js";
+import { registerDossierCaptcha, prewarmAllDossiers } from "../spain-hcaptcha-prewarm.js";
+import { HCAPTCHA_SITEKEY } from "../spain-http-booking.js";
 
 const T0 = Date.now();
 function ts(): string { return `+${((Date.now() - T0) / 1000).toFixed(1)}s`; }
@@ -150,6 +152,20 @@ async function main() {
     L("INFO", `  applicationId: ${config.applicationId}`);
     L("INFO", `  Autres dossiers disponibles: ${spainJobs.slice(1).map(j => j.applicantName).join(", ") || "(aucun)"}`);
   }
+
+  // ── 2.5 Pré-résolution hCaptcha (appel du VRAI code prod) ───────────────────
+  // On appelle directement les fonctions exportées du module de pré-résolution, comme
+  // l'orchestrateur le fait en prod pendant HH:12→13 : enregistrement du dossier puis
+  // prewarmAllDossiers (résolution parallèle). Le worker consommera ensuite le token
+  // dédié via takeDossierToken (log "hCaptcha pré-résolu (dossier) — 0 s"). Aucune
+  // logique réécrite ici : on invoque le code prod tel quel pour observer s'il marche.
+  L("STEP", "2.5 — Pré-résolution hCaptcha (code prod : registerDossierCaptcha + prewarmAllDossiers)");
+  registerDossierCaptcha(config.id, HCAPTCHA_SITEKEY, config.portalUrl);
+  const prewarmT0 = Date.now();
+  const freshCount = await prewarmAllDossiers([config.id]);
+  const prewarmMs = Date.now() - prewarmT0;
+  L(freshCount > 0 ? "OK" : "WARN",
+    `prewarmAllDossiers → ${freshCount} token(s) frais en ${(prewarmMs / 1000).toFixed(1)}s`);
 
   // ── 3. Lancer runDossierWorker ──────────────────────────────────────────────
   L("STEP", "3 — runDossierWorker (nouveau flux dynamic)");

@@ -42,6 +42,7 @@ import {
   type SpainBookingResult,
 } from "./spain-http-booking.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
+import { registerDossierCaptcha, takeDossierToken } from "./spain-hcaptcha-prewarm.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
@@ -722,6 +723,11 @@ export async function initPhpState(
   const cfgWidgetFlag = (cfgPayload as any)?.WidgetConfiguration?.captcha
     ?? (cfgPayload as any)?.widgetConfiguration?.captcha;
   log("INFO", `${tag} 🔧 hCaptcha: present=${captchaRequired} sitekey=${captchaSitekey ?? "-"} | flag WidgetConfiguration.captcha=${cfgWidgetFlag ?? "?"}${captchaRequired ? " → gct requis à signin/" : ""}`);
+  // Enregistre ce dossier pour la pré-résolution hCaptcha (l'orchestrateur pré-résout
+  // en parallèle un token gct DÉDIÉ par dossier pendant HH:12→13, prêt au pic HH:13-14).
+  if (captchaRequired) {
+    registerDossierCaptcha(config.id, captchaSitekey || HCAPTCHA_SITEKEY, config.portalUrl.split("#")[0]);
+  }
 
   // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
@@ -1229,7 +1235,10 @@ export async function refreshSessionAndScan(
   const rsCaptcha = detectHcaptcha([{ label: "main", text: capturedMainHtml || (session.prefetchedMainHtml ?? "") }]);
   const rsCaptchaRequired = rsCaptcha.present;
   const rsCaptchaSitekey = rsCaptcha.sitekey;
-  if (rsCaptchaRequired) log("INFO", `${tag} 🔧 hCaptcha présent (sitekey=${rsCaptchaSitekey ?? "-"}) → gct requis à signin/`);
+  if (rsCaptchaRequired) {
+    log("INFO", `${tag} 🔧 hCaptcha présent (sitekey=${rsCaptchaSitekey ?? "-"}) → gct requis à signin/`);
+    registerDossierCaptcha(config.id, rsCaptchaSitekey || HCAPTCHA_SITEKEY, config.portalUrl.split("#")[0]);
+  }
 
   // 5. getservices/
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
@@ -2043,13 +2052,25 @@ export async function runDossierWorker(
             // Sitekey détecté dynamiquement dans /main/ ; fallback sur le sitekey connu
             // citaconsular.es si l'extraction a échoué (présence détectée sans sitekey).
             const sitekey = phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
-            log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${sitekey.slice(0, 12)}…, NoneCap→Anti-Captcha→CapSolver)…`);
-            const solved = await solveSpainHcaptcha(sitekey, config.portalUrl.split("#")[0]);
-            if (solved) {
-              gctToken = solved;
-              log("INFO", `${tag} 🔐 hCaptcha résolu — gct prêt (${gctToken.length} car.)`);
+
+            // ── Token pré-résolu DÉDIÉ à ce dossier (0 s dans le chemin critique) ──
+            // L'orchestrateur pré-résout en parallèle un token gct par dossier pendant
+            // HH:12→13. Si le token dédié de ce dossier est frais, on l'utilise direct
+            // et on enchaîne signin/ sans attendre les ~10-15 s de NoneCap au pic.
+            const prewarmed = takeDossierToken(config.id);
+            if (prewarmed) {
+              gctToken = prewarmed;
+              log("INFO", `${tag} 🔐 hCaptcha pré-résolu (dossier) — gct prêt (${gctToken.length} car., 0 s)`);
             } else {
-              log("WARN", `${tag} 🔐 hCaptcha NON résolu — signin/ tenté sans gct (échouera probablement)`);
+              // Pas de token pré-résolu frais → résolution à chaud (fallback historique).
+              log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${sitekey.slice(0, 12)}…, NoneCap→Anti-Captcha→CapSolver)…`);
+              const solved = await solveSpainHcaptcha(sitekey, config.portalUrl.split("#")[0]);
+              if (solved) {
+                gctToken = solved;
+                log("INFO", `${tag} 🔐 hCaptcha résolu — gct prêt (${gctToken.length} car.)`);
+              } else {
+                log("WARN", `${tag} 🔐 hCaptcha NON résolu — signin/ tenté sans gct (échouera probablement)`);
+              }
             }
           }
 
