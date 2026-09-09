@@ -74,6 +74,12 @@ const RESTART_AFTER_ERROR_MS = ((): number => {
 /** Renouvellement du lock Redis (doit être < TTL lock = 50 s) */
 const LOCK_RENEWAL_MS = 30_000;
 
+/** Intervalle FIXE de rafraîchissement du pool de tokens hCaptcha pré-résolus (ms).
+ *  20 s garantit qu'un token régénéré dès 30 s d'âge (REFRESH_AT_AGE_MS côté module)
+ *  reste toujours largement sous sa durée de vie (~120 s) au moment du service, sans
+ *  dépendre de la cadence variable de la boucle orchestrateur. */
+const HCAPTCHA_PREWARM_INTERVAL_MS = 20_000;
+
 /**
  * Fenêtre de publication des créneaux Bookitit.
  * Le portail publie généralement vers la 13ème-14ème minute de chaque heure.
@@ -232,10 +238,29 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
    */
   let preflightDoneForWindowKey: number | null = null;
 
-  // ── Pré-résolution hCaptcha ────────────────────────────────────────────────────
-  // Garde anti-chevauchement : évite d'empiler plusieurs vagues de pré-résolution non
-  // attendues (le module a aussi une garde `solving` par dossier).
+  // ── Pré-résolution hCaptcha : timer DÉDIÉ (indépendant de la cadence de la boucle) ──
+  // Un token hCaptcha vit ~120 s. Pour garantir qu'il reste toujours FRAIS au pic
+  // (HH:13-14), on rafraîchit à intervalle FIXE (HCAPTCHA_PREWARM_INTERVAL_MS) via un
+  // setInterval dédié, plutôt que de dépendre de la cadence variable de la boucle
+  // principale (qui pouvait laisser un token vieillir jusqu'à ~120 s si aucun worker ne
+  // se terminait). Le timer ne fait quelque chose que pendant la fenêtre HH:12→25 et
+  // uniquement si des dossiers actifs sont enregistrés comme ayant un hCaptcha requis.
+  // `latestActiveDossierIds` est mise à jour par la boucle à chaque poll Convex.
+  let latestActiveDossierIds: string[] = [];
   let hcaptchaPrewarmInFlight = false;
+  const hcaptchaPrewarmTimer = setInterval(() => {
+    if (hcaptchaPrewarmInFlight) return;
+    if (!isInHcaptchaPrewarmPhase(gridConfig)) return;
+    if (!hasRegisteredDossiers(latestActiveDossierIds)) return;
+    hcaptchaPrewarmInFlight = true;
+    void prewarmAllDossiers(latestActiveDossierIds)
+      .catch((err) => {
+        log("WARN", `[SPAIN-ORCH] 🔥 pré-résolution hCaptcha échouée (non fatal): ${err instanceof Error ? err.message : String(err)}`);
+      })
+      .finally(() => {
+        hcaptchaPrewarmInFlight = false;
+      });
+  }, HCAPTCHA_PREWARM_INTERVAL_MS);
 
   // ── Boucle principale ─────────────────────────────────────────────────────────
   let iteration = 0;
@@ -417,31 +442,11 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         );
       }
 
-      // 5.5 Pré-résolution hCaptcha PAR DOSSIER (fenêtre HH:12→25). Résout en parallèle
-      //     un token gct DÉDIÉ à chaque dossier qui exige un hCaptcha (auto-découvert
-      //     par les workers via registerDossierCaptcha), pour qu'il soit prêt et frais
-      //     au pic HH:13-14. Le worker consomme SON token → il enchaîne getsigninfields/
-      //     puis signin/ sans les ~10-15 s de résolution NoneCap dans le chemin critique.
-      //     Fire-and-forget : ne bloque JAMAIS la boucle. Idempotent (garde solving par
-      //     dossier + garde anti-chevauchement ici). Ne tourne que si des dossiers actifs
-      //     sont enregistrés comme ayant un hCaptcha requis.
-      {
-        const activeDossierIds = dossiers.map((d) => d.id);
-        if (
-          isInHcaptchaPrewarmPhase(gridConfig) &&
-          hasRegisteredDossiers(activeDossierIds) &&
-          !hcaptchaPrewarmInFlight
-        ) {
-          hcaptchaPrewarmInFlight = true;
-          void prewarmAllDossiers(activeDossierIds)
-            .catch((err) => {
-              log("WARN", `[SPAIN-ORCH] 🔥 pré-résolution hCaptcha échouée (non fatal): ${err instanceof Error ? err.message : String(err)}`);
-            })
-            .finally(() => {
-              hcaptchaPrewarmInFlight = false;
-            });
-        }
-      }
+      // 5.5 Pré-résolution hCaptcha : on tient à jour la liste des dossiers actifs
+      //     consommée par le timer DÉDIÉ (hcaptchaPrewarmTimer). Le refresh lui-même
+      //     tourne à intervalle FIXE dans ce timer (indépendant de la cadence de cette
+      //     boucle), pour garantir un token toujours frais au pic HH:13-14.
+      latestActiveDossierIds = dossiers.map((d) => d.id);
 
       // 6. Attendre le prochain poll ou qu'un worker se termine
       // IMPORTANT : quand workers est vide, waitForAnyWorker() retourne une Promise
@@ -470,6 +475,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
     }
   } finally {
     clearInterval(lockRenewalTimer);
+    clearInterval(hcaptchaPrewarmTimer);
     stopAllKeepAlives();
     if (lockHeld) {
       await releaseSpainScannerLock().catch(() => {});
