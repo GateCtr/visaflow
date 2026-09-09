@@ -421,6 +421,17 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
       "Identifiants incorrects",
     )).toBe(false);
   });
+
+  it("préserve un échec HTTP transitoire comme surcharge, pas comme 0B", () => {
+    expect(worker.shouldFallbackAfterSignin(
+      "signin_failed",
+      "signin/ → HTTP transitoire non résolue après retries",
+    )).toBe(true);
+    expect(worker.shouldFallbackAfterSignin(
+      "signin_failed",
+      "signin/ → réponse vide",
+    )).toBe(false);
+  });
 });
 
 describe("scan annulations mercredi–samedi — arrêt multi-mois", () => {

@@ -34,6 +34,7 @@ import {
   makeDirectHeaders,
   CALL_DIRECT_NETWORK_ERROR,
   CALL_DIRECT_HTTP_OVERLOAD,
+  CALL_DIRECT_RETRY_REFRESH_FAILED,
   type DynamicSession,
 } from "./spain-bookitit-direct.js";
 import {
@@ -323,7 +324,12 @@ export function shouldFallbackAfterSignin(
   status: SpainBookingResult["status"],
   errorMessage?: string,
 ): boolean {
-  return status === "signin_failed" && (errorMessage ?? "").includes("0B");
+  const message = errorMessage ?? "";
+  return status === "signin_failed" && (
+    message.includes("0B")
+    || message.includes("HTTP transitoire")
+    || message.includes("refresh hCaptcha")
+  );
 }
 
 /**
@@ -2048,10 +2054,10 @@ export async function runDossierWorker(
           // fois (le token gct est réutilisable pour tous les candidats de ce cycle).
           let gctToken = "";
           const captchaNeeded = phpState?.captchaRequired ?? false;
+          const signinCaptchaSitekey = phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
           if (captchaNeeded) {
             // Sitekey détecté dynamiquement dans /main/ ; fallback sur le sitekey connu
             // citaconsular.es si l'extraction a échoué (présence détectée sans sitekey).
-            const sitekey = phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
 
             // ── Token pré-résolu DÉDIÉ à ce dossier (0 s dans le chemin critique) ──
             // L'orchestrateur pré-résout en parallèle un token gct par dossier pendant
@@ -2063,8 +2069,8 @@ export async function runDossierWorker(
               log("INFO", `${tag} 🔐 hCaptcha pré-résolu (dossier) — gct prêt (${gctToken.length} car., 0 s)`);
             } else {
               // Pas de token pré-résolu frais → résolution à chaud (fallback historique).
-              log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${sitekey.slice(0, 12)}…, NoneCap→Anti-Captcha→CapSolver)…`);
-              const solved = await solveSpainHcaptcha(sitekey, config.portalUrl.split("#")[0]);
+              log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${signinCaptchaSitekey.slice(0, 12)}…, NoneCap→Anti-Captcha→CapSolver)…`);
+              const solved = await solveSpainHcaptcha(signinCaptchaSitekey, config.portalUrl.split("#")[0]);
               if (solved) {
                 gctToken = solved;
                 log("INFO", `${tag} 🔐 hCaptcha résolu — gct prêt (${gctToken.length} car.)`);
@@ -2145,11 +2151,26 @@ export async function runDossierWorker(
                 // gct = token hCaptcha (vide si le portail n'exige pas de captcha).
                 // Requis par les portails avec WidgetConfiguration.captcha=1 (ex. Kinshasa).
                 gct:       gctToken,
+              }, undefined, {
+                refreshParamsForRetry: async ({ extra: currentExtra }) => {
+                  // Un 504 peut avoir consommé le token côté Bookitit avant que la
+                  // passerelle ne réponde. Ne jamais rejouer le même gct sur retry.
+                  if (!captchaNeeded) return { ...currentExtra };
+                  const refreshed = await solveSpainHcaptcha(signinCaptchaSitekey, config.portalUrl.split("#")[0]);
+                  if (!refreshed) {
+                    log("WARN", `${tag} 🔐 retry signin/ sans nouveau token hCaptcha — abandon sécurisé`);
+                    return null;
+                  }
+                  gctToken = refreshed;
+                  log("INFO", `${tag} 🔐 nouveau token hCaptcha résolu pour retry signin/ (${gctToken.length} car.)`);
+                  return { ...currentExtra, gct: gctToken };
+                },
               });
 
               if (
                 signinRaw === CALL_DIRECT_NETWORK_ERROR ||
-                signinRaw === CALL_DIRECT_HTTP_OVERLOAD
+                signinRaw === CALL_DIRECT_HTTP_OVERLOAD ||
+                signinRaw === CALL_DIRECT_RETRY_REFRESH_FAILED
               ) {
                 break;
               }
@@ -2183,7 +2204,10 @@ export async function runDossierWorker(
             }
 
             const signinPayload: Record<string, unknown> | null =
-              (signinRaw === null || signinRaw === CALL_DIRECT_NETWORK_ERROR || signinRaw === CALL_DIRECT_HTTP_OVERLOAD)
+              (signinRaw === null
+                || signinRaw === CALL_DIRECT_NETWORK_ERROR
+                || signinRaw === CALL_DIRECT_HTTP_OVERLOAD
+                || signinRaw === CALL_DIRECT_RETRY_REFRESH_FAILED)
                 ? null
                 : signinRaw as Record<string, unknown>;
 
@@ -2201,7 +2225,15 @@ export async function runDossierWorker(
             if (!bktToken) {
               const errMsg = signinErrors.length
                 ? signinErrors.map((e) => e.message).join(", ")
-                : (signinPayload ? "signin/ sans bktToken" : "signin/ → 0B");
+                : signinRaw === CALL_DIRECT_HTTP_OVERLOAD
+                  ? "signin/ → HTTP transitoire non résolue après retries"
+                  : signinRaw === CALL_DIRECT_NETWORK_ERROR
+                    ? "signin/ → erreur réseau sans réponse"
+                    : signinRaw === CALL_DIRECT_RETRY_REFRESH_FAILED
+                      ? "signin/ → refresh hCaptcha impossible avant retry"
+                      : signinPayload
+                        ? "signin/ sans bktToken"
+                        : "signin/ → réponse vide";
               log("WARN", `${tag} ❌ signin/ échoué: ${errMsg}`);
               bookResult = { status: "signin_failed", errorMessage: errMsg, durationMs: Date.now() - bookT0 };
             } else {
@@ -2393,20 +2425,13 @@ export async function runDossierWorker(
               continue; // → prochain candidat dans sortedEligible
             }
 
-            // ── signin/ → 0B → slot déjà pris (ou serveur surchargé) → skip immédiat ──
-            // Quand getsigninfields/ a réussi (nonce PHP activé) mais que signin/ retourne
-            // 0B juste après, le serveur signale le plus souvent que le créneau n'existe
-            // plus : un concurrent l'a capturé entre le scan et le booking (fréquent en
-            // mode RACE sur un slot freeSlots=1). Le 0B peut aussi venir d'une surcharge
-            // serveur, mais dans les deux cas il n'y a plus rien à faire sur ce créneau →
-            // on passe immédiatement au suivant.
+            // ── Échec signin/ → fallback sans confondre vide, réseau et surcharge ──
             const isSlotGoneOrOverload = shouldFallbackAfterSignin(
               bookResult.status,
               bookResult.errorMessage,
             );
             if (isSlotGoneOrOverload) {
-              log("INFO", `${tag} ⏭️ signin/ 0B (slot déjà pris ou surcharge) — skip au prochain slot`);
-              // Remonter l'échec 0B à la page Bookings (avant, ce cas n'était jamais reporté).
+              log("INFO", `${tag} ⏭️ ${bookResult.errorMessage} — skip au prochain slot`);
               reportBookingLog({
                 applicationId: config.applicationId,
                 dossierId: config.id,
@@ -2414,7 +2439,7 @@ export async function runDossierWorker(
                 date: slot.date,
                 time: slot.time,
                 status: "failed",
-                reason: "signin/ → 0B (créneau déjà pris ou serveur surchargé)",
+                reason: bookResult.errorMessage ?? "signin/ échoué",
                 serviceName: scan.serviceName,
               }).catch(() => {});
               await sleep(200);

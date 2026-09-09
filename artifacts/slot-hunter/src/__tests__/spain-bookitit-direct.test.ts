@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   callDirect,
+  CALL_DIRECT_HTTP_OVERLOAD,
   parseDirectJsonp,
   type DynamicSession,
 } from "../spain-bookitit-direct.js";
@@ -126,5 +127,75 @@ describe("callDirect — propagation PHPSESSID", () => {
     expect(session.allCookies).toEqual(
       expect.arrayContaining([{ name: "PHPSESSID", value: "rotated-by-gsf" }]),
     );
+  });
+
+  it("rafraîchit les paramètres avant un retry HTTP 504", async () => {
+    const seenUrls: string[] = [];
+    const responses = [
+      new Response("<html>gateway timeout</html>", {
+        status: 504,
+        headers: { "retry-after": "0" },
+      }),
+      new Response("<html>gateway timeout</html>", {
+        status: 504,
+        headers: { "retry-after": "0" },
+      }),
+      new Response(jsonp({ Access: { bktToken: "server-token" } }), { status: 200 }),
+    ];
+    const ds = {
+      impit: {
+        fetch: async (url: string) => {
+          seenUrls.push(url);
+          return responses.shift()!;
+        },
+      },
+      jar: { PHPSESSID: "session" },
+      userAgent: "Mozilla/5.0",
+      jqCallback: "jQuery123",
+      reqCounter: 1,
+      publickey: "publickey",
+      version: "4",
+      widgetUrl: "https://www.citaconsular.es/widget/",
+      srvsrc: "https://www.citaconsular.es",
+      bookititBase: "https://www.citaconsular.es/onlinebookings",
+    } as any as DynamicSession;
+
+    let refreshCount = 0;
+    const result = await callDirect(ds, "signin/", { gct: "old-token", login: "fake" }, undefined, {
+      refreshParamsForRetry: async ({ extra }) => {
+        refreshCount += 1;
+        return { ...extra, gct: `fresh-token-${refreshCount}` };
+      },
+    });
+
+    expect(result).toEqual({ Access: { bktToken: "server-token" } });
+    expect(seenUrls).toHaveLength(3);
+    expect(seenUrls[0]).toContain("gct=old-token");
+    expect(seenUrls[1]).toContain("gct=fresh-token-1");
+    expect(seenUrls[2]).toContain("gct=fresh-token-2");
+    expect(refreshCount).toBe(2);
+  });
+
+  it("retourne le sentinel HTTP après épuisement des retries", async () => {
+    const ds = {
+      impit: {
+        fetch: async () => new Response("<html>gateway timeout</html>", {
+          status: 504,
+          headers: { "retry-after": "0" },
+        }),
+      },
+      jar: { PHPSESSID: "session" },
+      userAgent: "Mozilla/5.0",
+      jqCallback: "jQuery123",
+      reqCounter: 1,
+      publickey: "publickey",
+      version: "4",
+      widgetUrl: "https://www.citaconsular.es/widget/",
+      srvsrc: "https://www.citaconsular.es",
+      bookititBase: "https://www.citaconsular.es/onlinebookings",
+    } as any as DynamicSession;
+
+    const result = await callDirect(ds, "signin/", { gct: "token" });
+    expect(result).toBe(CALL_DIRECT_HTTP_OVERLOAD);
   });
 });

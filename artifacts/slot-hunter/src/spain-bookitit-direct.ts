@@ -618,6 +618,24 @@ function timeoutForEndpoint(endpoint: string): number {
 
 /** Codes HTTP transitoires : surcharge, rate limit ou connexion interrompue. */
 const RETRYABLE_HTTP_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+export interface CallDirectRetryContext {
+  endpoint: string;
+  attempt: number;
+  status: number;
+  extra: Readonly<Record<string, string>>;
+}
+
+export interface CallDirectOptions {
+  /**
+   * Retourne les paramètres à utiliser pour la prochaine tentative HTTP.
+   * Retourner null annule le retry : on ne doit jamais rejouer silencieusement
+   * un token hCaptcha dont le refresh a échoué.
+   */
+  refreshParamsForRetry?: (
+    context: CallDirectRetryContext,
+  ) => Promise<Record<string, string> | null | undefined>;
+}
 /**
  * Nombre de retries sur les statuts transitoires ou erreur réseau.
  * Pendant le pic de publication, le serveur Bookitit crache des 504 pendant
@@ -659,16 +677,24 @@ export async function callDirect(
   endpoint: string,
   extra?: Record<string, string>,
   tag?: string,
-): Promise<unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD> {
-  const url = makeDirectUrl(ds, endpoint, extra);
+  options?: CallDirectOptions,
+): Promise<
+  | unknown
+  | null
+  | typeof CALL_DIRECT_NETWORK_ERROR
+  | typeof CALL_DIRECT_HTTP_OVERLOAD
+  | typeof CALL_DIRECT_RETRY_REFRESH_FAILED
+> {
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
   const timeoutMs = timeoutForEndpoint(endpoint);
+  let requestExtra = extra ? { ...extra } : {};
 
   for (let attempt = 0; attempt <= CALL_DIRECT_MAX_RETRIES; attempt++) {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const url = makeDirectUrl(ds, endpoint, requestExtra);
       // Le flow de booking réutilise le même jar, en le mettant à jour si
       // Bookitit renouvelle PHPSESSID via Set-Cookie.
       const headers = makeDirectHeaders(ds);
@@ -694,6 +720,19 @@ export async function callDirect(
           const backoff = retryAfterMs(res, attempt);
           console.warn(`${prefix} ${endpoint} → HTTP ${res.status} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
           await new Promise((r) => setTimeout(r, backoff));
+          if (options?.refreshParamsForRetry) {
+            const refreshed = await options.refreshParamsForRetry({
+              endpoint,
+              attempt,
+              status: res.status,
+              extra: requestExtra,
+            });
+            if (!refreshed) {
+              console.warn(`${prefix} ${endpoint} → refresh des paramètres de retry impossible — aucune requête ne sera rejouée`);
+              return CALL_DIRECT_RETRY_REFRESH_FAILED;
+            }
+            requestExtra = { ...refreshed };
+          }
           continue;
         }
         if (RETRYABLE_HTTP_CODES.has(res.status)) {
@@ -745,3 +784,10 @@ export const CALL_DIRECT_NETWORK_ERROR: unique symbol = Symbol("CALL_DIRECT_NETW
  * le worker conserve son identité et retente le cycle sans rotation IP.
  */
 export const CALL_DIRECT_HTTP_OVERLOAD: unique symbol = Symbol("CALL_DIRECT_HTTP_OVERLOAD");
+
+/**
+ * Sentinel retourné quand un callback de retry n'a pas pu produire un nouveau
+ * paramètre sensible (notamment un nouveau token hCaptcha). Il ne faut jamais
+ * retenter avec l'ancien payload dans ce cas.
+ */
+export const CALL_DIRECT_RETRY_REFRESH_FAILED: unique symbol = Symbol("CALL_DIRECT_RETRY_REFRESH_FAILED");

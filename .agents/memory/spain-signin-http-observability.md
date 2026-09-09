@@ -16,3 +16,9 @@ For captcha-protected booking, never log `gct` or any other token-bearing query 
 **Why:** A publication race produced simultaneous 504 HTML responses for several workers while `getsigninfields/` and cookies remained stable. Replaying the same one-use token during retries can add a token failure, but cannot be inferred from the 504 alone.
 
 **How to apply:** Record status, body shape, fingerprints, retry hints, and token age without token values. Treat the first fresh-token attempt separately from later retries, and do not classify a final HTTP overload sentinel as a literal empty body.
+
+When a transient `signin/` response is retried, refresh any one-use captcha token immediately before the next request; if refresh fails, abort that retry instead of replaying the old token. Keep HTTP-transient exhaustion, network failure, genuine empty body, and business payload-without-token as separate worker outcomes.
+
+**Why:** A 504 only proves that an intermediary or server did not complete the response in time. The original request may already have consumed the captcha token or booking attempt, so replaying its payload can create a second, misleading failure.
+
+**How to apply:** Let `callDirect()` rebuild the URL from refreshed parameters per attempt. In the worker, preserve the HTTP-overload sentinel in `errorMessage` and booking reports; reserve `0B`/empty wording for an actually empty successful response.
