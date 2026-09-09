@@ -920,13 +920,11 @@ export async function scanDatetimeDirect(
     if (slots.length > 0) {
       allSlots.push(...slots);
       consecutiveEmpty = 0;
-      if (shouldStopMonthlyScanAfterSlots(now, slots.length)) {
-        log(
-          "INFO",
-          `${tag}   ⚡ Annulations mercredi–samedi : ${slots.length} créneau(x) trouvé(s) dans ${monthLabel} — arrêt multi-mois, booking immédiat`,
-        );
-        break;
-      }
+      // Bouclier « arrêt au 1er mois avec créneaux » (mercredi–samedi) RETIRÉ :
+      // il faisait foncer tous les workers sur le premier créneau trouvé (souvent
+      // freeSlots=1) → collisions + busyslot. On reprend le scan complet des deux mois
+      // comme avant : on accumule tous les créneaux, la condition d'arrêt normale
+      // (relativeOffset >= 2 + globalMaxDays) borne le scan.
     } else if (!isNetworkError && !isServerOverload) {
       consecutiveEmpty++;
     }
