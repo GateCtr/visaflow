@@ -304,6 +304,7 @@ const BOOKING_TRACE_REDACTED_KEYS = new Set([
   "srvsrc",
   "login",
   "password",
+  "gct",
   "bktToken",
   "comments",
   "_",
