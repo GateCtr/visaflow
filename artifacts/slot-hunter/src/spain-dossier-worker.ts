@@ -175,6 +175,16 @@ export interface WorkerResult {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
+/** Seuil de proxy_error CONSÉCUTIFS avant de rotationner l'IP (le 1er échec avec CF
+ *  frais est absorbé par une réinit PHPSESSID sur la même IP). 2 = tolère un hoquet
+ *  isolé, rotationne si l'échec persiste. */
+const PROXY_ERROR_ROTATE_THRESHOLD = 2;
+
+/** Marge de fraîcheur du cf_clearance (ms) au-delà de laquelle on considère l'IP
+ *  « saine » et on évite de la jeter sur un proxy_error isolé (5 min). En dessous,
+ *  le CF est trop proche de l'expiration → autant rotationner tout de suite. */
+const PROXY_ERROR_CF_FRESH_MIN_MS = 5 * 60_000;
+
 /** Fenêtre de surveillance par dossier (25 min) — alignée TTL cf_clearance */
 const WORKER_WINDOW_MS = ((): number => {
   const v = Number(process.env.SPAIN_WORKER_WINDOW_MIN ?? "25");
@@ -1623,6 +1633,14 @@ export async function runDossierWorker(
   // (contrat MS_UNTIL_NEXT_TICK_ERROR, Requirements 1.7 / 2.5).
   let lastGridWaitMs = grid.effectiveTickMs("hunt", false);
 
+  // Compteur de proxy_error CONSÉCUTIFS. Un getservices/ à 200+body vide (hoquet serveur
+  // ponctuel) était classé proxy_error → rotation IP immédiate, jetant une IP dont le CF
+  // était encore frais (observé : 91 min restantes) + désynchronisation + re-solve. On
+  // tolère désormais le 1er proxy_error si le CF est frais (réinit PHPSESSID sur la MÊME
+  // IP, comme session_dead) ; on ne rotationne que si l'échec PERSISTE (2e consécutif) ou
+  // si le CF est réellement mort. Remis à 0 sur tout cycle réussi (found/not_found).
+  let consecutiveProxyErrors = 0;
+
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
@@ -1703,16 +1721,54 @@ export async function runDossierWorker(
         emitDiscoveryEvents(scan.slots, scan.serviceId, scan.serviceName, config);
       }
 
+      // Tout cycle qui n'est PAS un proxy_error rompt la série d'échecs consécutifs
+      // (found/not_found/server_overload/session_dead/cf_expired) → compteur remis à 0.
+      if (scan.status !== "proxy_error") {
+        consecutiveProxyErrors = 0;
+      }
+
       if (scan.status === "proxy_error") {
         // Échec de l'ensemble fermé (classify → proxy_dead) → état RECOVERING.
-        // NB : la récupération est faite EN LIGNE (synchrone) par le handler existant
-        // ci-dessous, qui reste la source de vérité éprouvée. On NE double-récupère PAS
-        // via enterRecoveryAsync ici pour éviter deux rotations concurrentes ; on met
-        // seulement rt.state à jour pour la grille/observabilité (task 10.1).
         rt.state = "RECOVERING";
-        // Proxy CONNECT cassé — toutes les requêtes datetime/ ont échoué en réseau.
-        // Déclencher une rotation IP et réinitialiser la session PHP.
-        log("WARN", `${tag} 🔄 proxy_error — rotation IP + réinit session`);
+        consecutiveProxyErrors++;
+
+        // ── Garde-fous anti-rotation intempestive ─────────────────────────────────
+        // Un proxy_error peut venir d'un vrai proxy mort OU d'un hoquet serveur ponctuel
+        // (ex. getservices/ → HTTP 200 body vide). Jeter l'IP au 1er hoquet gaspille une
+        // IP au CF encore frais, désynchronise le worker (re-solve long) et force une
+        // re-résolution hCaptcha. On rotationne donc SEULEMENT si :
+        //   • l'échec PERSISTE (≥ PROXY_ERROR_ROTATE_THRESHOLD consécutifs), OU
+        //   • le CF de l'IP courante est réellement mort/proche expiration.
+        // Sinon : réinit PHPSESSID sur la MÊME IP (comme session_dead) → CF frais préservé,
+        // pas de re-solve, pas de désynchronisation.
+        const cfFreshMs = session.expiresAt - Date.now();
+        const cfIsFresh = cfFreshMs > PROXY_ERROR_CF_FRESH_MIN_MS;
+        const shouldRotate =
+          consecutiveProxyErrors >= PROXY_ERROR_ROTATE_THRESHOLD || !cfIsFresh;
+
+        if (!shouldRotate) {
+          // 1er proxy_error avec CF frais → réinit PHPSESSID sur la même IP (pas de rotation).
+          log(
+            "WARN",
+            `${tag} 🔁 proxy_error #${consecutiveProxyErrors} — CF frais (${Math.round(cfFreshMs / 60_000)}min) → réinit PHPSESSID même IP (pas de rotation)`,
+          );
+          phpState = await initPhpState(session, config, tag);
+          if (!phpState) {
+            log("WARN", `${tag} ❌ Réinit PHP échouée (même IP) après proxy_error — exit worker`);
+            workerResult = { dossierId: config.id, status: "error", errorMessage: "proxy_error: réinit PHP impossible (même IP)" };
+            return workerResult;
+          }
+          updatePhpTrace();
+          rt.phpState = phpState;
+          transition(rt, "recovered");
+          continue; // Repartir sur la même IP, nouveau PHPSESSID
+        }
+
+        // Rotation justifiée : échec persistant OU CF mort.
+        log(
+          "WARN",
+          `${tag} 🔄 proxy_error #${consecutiveProxyErrors} — rotation IP + réinit session (CF ${cfIsFresh ? "frais mais échec persistant" : `mort/proche exp: ${Math.round(cfFreshMs / 60_000)}min`})`,
+        );
         const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "proxy_error");
         if (!newProxy) {
           log("WARN", `${tag} ❌ Rotation impossible — pool épuisé, exit worker`);
@@ -1729,6 +1785,7 @@ export async function runDossierWorker(
         }
         updatePhpTrace();
         // Récupération synchrone réussie → resynchroniser rt et revenir ARMED.
+        consecutiveProxyErrors = 0; // rotation effectuée → compteur remis à 0
         rt.proxyUrl = proxyUrl;
         rt.session = session;
         rt.phpState = phpState;
