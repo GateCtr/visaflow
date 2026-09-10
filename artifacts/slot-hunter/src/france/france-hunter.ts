@@ -637,9 +637,10 @@ async function handlePublication(
 
   const result = await runBookingFlow(http, bookingCtx);
   if (result.success) {
-    console.log(
-      `[franceHunter] Booking réussi (Job ${job.id}) : ${result.qrCodes?.length ?? 0} qrCode(s).`,
-    );
+    const confirmation = result.acceptedWithoutQr
+      ? "accepté sans qrCode (confirmation email)"
+      : `${result.qrCodes?.length ?? 0} qrCode(s)`;
+    console.log(`[franceHunter] Booking réussi (Job ${job.id}) : ${confirmation}.`);
     return "slot_found";
   }
 

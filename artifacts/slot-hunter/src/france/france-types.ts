@@ -228,6 +228,11 @@ export interface SlotPublication {
 export interface BookingResult {
   success: boolean;
   qrCodes?: unknown[];
+  /**
+   * Le portail a accepté le POST final (HTTP 2xx) sans renvoyer de qrCodes.
+   * Ce cas est confirmé live : la réservation existe et l'email est envoyé.
+   */
+  acceptedWithoutQr?: boolean;
   /** stepType ayant échoué. */
   failedStep?: string;
   failedStepIndex?: number;

@@ -10,7 +10,7 @@
  *   - `validateContact`      — Property 23 (bornes du contact).
  *   - `validateMotif`        — Property 24 (appartenance à la liste).
  *   - `buildReservations`    — Property 26 (structure des reservations).
- *   - `interpretBookingResponse` — Property 27 (succès ssi qrCodes non vide).
+ *   - `interpretBookingResponse` — extraction stricte des qrCodes lorsqu'ils existent.
  *
  * Le flux réseau `runBookingFlow` (persistance des 6 étapes + POST
  * reservations/family) est implémenté séparément (task 10.4).
@@ -330,9 +330,9 @@ export function interpretBookingResponse(res: unknown): BookingResult {
 //      false / échec (Req 10.3), en remontant `failedStep` + `failedStepIndex`.
 //   4. `POST /team/{teamId}/reservations/family` avec Turnstile #2 dans le champ
 //      `captcha` + `x-csrf-token` (géré par le client sur POST) (Req 10.9).
-//   5. Interprétation via `interpretBookingResponse` : échec (qrCodes
-//      absent/vide) → `{success:false}`, session préservée, AUCUNE nouvelle
-//      tentative automatique (Req 10.11, 10.12).
+//   5. Interprétation via `interpretBookingResponse`. Un HTTP 2xx sans qrCodes
+//      reste un succès accepté : confirmé live par réception de l'email. Cette
+//      classification empêche une seconde réservation automatique.
 
 import type { FranceHttpClient } from "./france-http.js";
 import { maskSecret } from "./france-http.js";
@@ -550,9 +550,9 @@ export function buildBookingSteps(ctx: BookingContext): StepDefinition[] {
  *      failedStep, failedStepIndex, error }` (Req 10.3).
  *   3. `POST reservations/family` avec `captcha = ctx.captchaToken`,
  *      `language = "fr"` et `x-csrf-token` géré par le client (Req 10.9).
- *   4. Interprète la réponse via `interpretBookingResponse`. En cas d'échec
- *      (qrCodes absent/vide), la session est préservée et AUCUNE nouvelle
- *      tentative automatique n'est effectuée (Req 10.11, 10.12).
+ *   4. Interprète la réponse via `interpretBookingResponse`. Un HTTP 2xx sans
+ *      qrCodes est accepté comme succès sans QR, car le portail peut créer la
+ *      réservation et envoyer l'email avec un body vide/non documenté.
  *
  * Aucune donnée sensible (token, PII) n'est journalisée en clair : les valeurs
  * sensibles passent par `maskSecret`.
@@ -696,11 +696,14 @@ export async function runBookingFlow(
 
     const result = interpretBookingResponse(res.body);
     if (!result.success) {
-      // qrCodes absent/vide → échec, session préservée, pas de retry auto.
-      console.error(
-        `[franceHunter] Booking échoué (${result.error ?? "qrCodes absent ou vide"}) — session préservée, aucune nouvelle tentative automatique.`,
+      // Confirmé live le 2026-09-10 : le portail peut répondre HTTP 2xx sans
+      // data.qrCodes tout en créant réellement le rendez-vous et en envoyant
+      // l'email. Ne jamais rejouer automatiquement, au risque d'un doublon.
+      console.log(
+        "[franceHunter] Booking accepté par le portail (HTTP 2xx sans qrCodes) — " +
+          "confirmation envoyée par email, aucune nouvelle tentative automatique.",
       );
-      return result;
+      return { success: true, acceptedWithoutQr: true };
     }
 
     console.log(

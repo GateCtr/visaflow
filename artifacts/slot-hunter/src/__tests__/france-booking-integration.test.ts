@@ -332,10 +332,10 @@ describe("runBookingFlow — intégration (mocks) — task 10.6", () => {
     expect(stub.posts).toHaveLength(0);
   });
 
-  // ─── Scénario 4 : qrCodes absent → échec, session préservée, pas de retry ──
+  // ─── Scénario 4 : HTTP 2xx sans qrCodes → accepté, sans retry ──────────────
   // Validates: Requirements 10.12
 
-  it("qrCodes absent dans la réponse finale → booking échoué, un seul envoi final", async () => {
+  it("qrCodes absent dans une réponse HTTP 2xx → booking accepté, un seul envoi final", async () => {
     const stub = makeStub(BASE_AUTH, (path) => {
       if (path === STEP_PATH) {
         return { kind: "result", value: okResult() };
@@ -346,8 +346,9 @@ describe("runBookingFlow — intégration (mocks) — task 10.6", () => {
 
     const result = await runBookingFlow(stub, validContext());
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("qrCodes");
+    expect(result.success).toBe(true);
+    expect(result.acceptedWithoutQr).toBe(true);
+    expect(result.error).toBeUndefined();
 
     // Les 5 étapes de formulaire ont bien été persistées (welcome + motif exclus).
     expect(stub.posts.filter((p) => p.path === STEP_PATH)).toHaveLength(5);
@@ -356,14 +357,15 @@ describe("runBookingFlow — intégration (mocks) — task 10.6", () => {
     const familyCalls = stub.posts.filter((p) => p.path === FAMILY_PATH);
     expect(familyCalls).toHaveLength(1);
 
-    // Log d'échec avec préservation de session / pas de retry auto.
-    const errorSpy = vi.mocked(console.error);
-    const logged = errorSpy.mock.calls.map((args) => args.join(" ")).join("\n");
+    // Log explicite d'acceptation sans QR / pas de retry auto.
+    const logSpy = vi.mocked(console.log);
+    const logged = logSpy.mock.calls.map((args) => args.join(" ")).join("\n");
     expect(logged).toContain("[franceHunter]");
-    expect(logged).toContain("session préservée");
+    expect(logged).toContain("accepté par le portail");
+    expect(logged).toContain("aucune nouvelle tentative");
   });
 
-  it("qrCodes vide ([]) dans la réponse finale → booking échoué (aucune nouvelle tentative)", async () => {
+  it("qrCodes vide ([]) dans une réponse HTTP 2xx → booking accepté sans QR", async () => {
     const stub = makeStub(BASE_AUTH, (path) => {
       if (path === STEP_PATH) {
         return { kind: "result", value: okResult() };
@@ -373,7 +375,8 @@ describe("runBookingFlow — intégration (mocks) — task 10.6", () => {
 
     const result = await runBookingFlow(stub, validContext());
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.acceptedWithoutQr).toBe(true);
     expect(stub.posts.filter((p) => p.path === FAMILY_PATH)).toHaveLength(1);
   });
 
