@@ -266,9 +266,9 @@ export const EMBASSIES_SEO: EmbassySEO[] = [
     appointmentOnly: true,
     website: "https://www.exteriores.gob.es/Embajadas/kinshasa",
     mapsQuery: "Boulevard Colonel Tshatshi 37 Gombe Kinshasa Ambassade Espagne",
-    title: "Ambassade d'Espagne à Kinshasa — Adresse, horaires & contact | Joventy",
-    metaDescription: "Adresse, téléphone et horaires de l'Ambassade d'Espagne à Kinshasa (Boulevard Colonel Tshatshi nº 37, Gombe). Procédure officielle de visa Espagne via email puis citaconsular.es, avec Joventy.",
-    h1: "Ambassade d'Espagne à Kinshasa — Adresse, horaires & contact",
+     title: "Ambassade d'Espagne à Kinshasa : adresse et contact | Joventy",
+     metaDescription: "Ambassade d'Espagne à Kinshasa : adresse, téléphone, email et horaires à Gombe. Vérifiez les coordonnées officielles avant votre démarche de visa.",
+     h1: "Ambassade d'Espagne à Kinshasa : adresse et contact",
     intro: "L'Ambassade d'Espagne, seule représentation diplomatique espagnole en République Démocratique du Congo, se trouve Boulevard Colonel Tshatshi nº 37, à Gombe, Kinshasa. Pour un visa Espagne, la procédure officielle passe par une inscription par email auprès de l'ambassade, puis une réservation sur citaconsular.es. Cette page vous donne les coordonnées exactes et le cadre de rendez-vous, tandis que notre guide dédié détaille la procédure complète.",
     practicalInfo: [
       "L'ambassade est établie depuis 1969 et reste la seule représentation espagnole en RDC",
@@ -276,11 +276,11 @@ export const EMBASSIES_SEO: EmbassySEO[] = [
       "Tous les rendez-vous se prennent exclusivement par email ou téléphone au préalable",
       "Un passeport valide et un dossier complet sont exigés avant toute prise de rendez-vous",
     ],
-    visaNote: "Le visa Espagne se demande via l'Ambassade d'Espagne, avec inscription par email puis réservation sur citaconsular.es. Joventy prépare votre dossier complet, suit les délais de réponse et réserve le créneau dès réception des identifiants.",
+     visaNote: "Le visa Espagne se demande via l'Ambassade d'Espagne : chaque demandeur envoie personnellement son email, puis réserve sur citaconsular.es. Joventy prépare votre dossier, aide à vérifier l'email et peut surveiller les créneaux après réception des identifiants.",
     faqs: [
       { q: "Où se trouve l'Ambassade d'Espagne à Kinshasa ?", a: "L'ambassade se situe Boulevard Colonel Tshatshi nº 37, commune de Gombe à Kinshasa." },
       { q: "L'Espagne passe-t-elle par le CEV à Kinshasa ?", a: "Non. L'Espagne ne traite pas ses visas via le CEV. La procédure passe directement par l'Ambassade d'Espagne, avec inscription par email puis réservation sur citaconsular.es." },
-      { q: "Joventy peut-il m'aider pour le rendez-vous visa Espagne ?", a: "Oui. Joventy envoie l'email d'inscription, suit la réponse de l'ambassade et réserve le créneau sur citaconsular.es dès réception des identifiants." },
+       { q: "Joventy peut-il m'aider pour le rendez-vous visa Espagne ?", a: "Oui. Chaque demandeur doit envoyer personnellement l'email d'inscription. Joventy peut aider à le préparer et le vérifier, suivre la réponse de l'ambassade et surveiller les créneaux sur citaconsular.es après réception des identifiants." },
     ],
   },
   {

@@ -177,12 +177,12 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     destinationKey: "spain",
     emoji: "🇪🇸",
     name: "Espagne",
-    title: "Créneau Visa Espagne Kinshasa 2026 — citaconsular.es géré par Joventy | Joventy",
+    title: "Créneau visa Espagne à Kinshasa : réservation | Joventy",
     metaDescription:
-      "Rendez-vous visa Espagne depuis Kinshasa 2026 : Joventy envoie l'email d'inscription à l'ambassade et réserve votre créneau sur citaconsular.es. 350 $ payés uniquement après obtention — aucun acompte.",
-    h1: "Créneau Visa Espagne depuis Kinshasa — Email ambassade + citaconsular.es géré par Joventy",
+      "Réservez votre créneau visa Espagne à Kinshasa après l'inscription personnelle et la réception de vos accès. Service Joventy à 350 USD, payable après résultat.",
+    h1: "Créneau visa Espagne à Kinshasa : réservation",
     accroche:
-      "L'Espagne gère ses rendez-vous visa directement via son ambassade à Kinshasa — pas par le système commun des pays Schengen. La procédure est en deux étapes : inscription par email à l'ambassade, puis prise de créneau sur citaconsular.es avec votre numéro de passeport et mot de passe. Joventy prend en charge l'intégralité de ce processus. Vous ne payez que quand le rendez-vous est confirmé.",
+      "L'Espagne gère ses rendez-vous visa directement via son ambassade à Kinshasa — pas par le système commun des pays Schengen. Chaque demandeur envoie personnellement son email à l'ambassade, puis réserve sur citaconsular.es avec son numéro de passeport et son mot de passe. Joventy aide à préparer l'email et peut surveiller les créneaux après réception des accès. Vous ne payez que quand le rendez-vous est confirmé.",
     urgency:
       "Les créneaux sur citaconsular.es sont pris en moins de 2 minutes dès leur ouverture.",
     stats: [
@@ -199,17 +199,17 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         icon: "📧",
-        title: "Joventy envoie l'email d'inscription à l'ambassade",
-        desc: "Joventy contacte emb.kinshasa.citasvis@maec.es en votre nom avec objet 'RENDEZ-VOUS VISA EST' et les pièces jointes requises. L'ambassade répond sous 1 à 14 jours avec vos identifiants citaconsular (numéro de passeport + mot de passe).",
+        title: "Préparez votre email d'inscription",
+        desc: "Chaque demandeur contacte personnellement emb.kinshasa.citasvis@maec.es avec l'objet 'RENDEZ-VOUS VISA EST' et les pièces jointes requises. Joventy peut aider à vérifier l'email. L'ambassade répond sous 1 à 14 jours avec vos identifiants citaconsular (numéro de passeport + mot de passe).",
       },
       {
         icon: "✅",
-        title: "Notre système réserve sur citaconsular.es → vous payez 350 $",
-        desc: "Dès réception des identifiants, notre système prend le premier créneau disponible sur citaconsular.es. Vous recevez la confirmation par WhatsApp — c'est à ce moment seulement que vous réglez 350 $ via M-Pesa.",
+        title: "Surveillez votre créneau sur citaconsular.es → vous payez 350 $",
+        desc: "Dès réception des identifiants, Joventy peut surveiller les créneaux disponibles sur citaconsular.es et vous aider à réserver. Vous recevez la confirmation par WhatsApp — c'est à ce moment seulement que vous réglez 350 $ via M-Pesa.",
       },
     ],
     included: [
-      "Envoi de l'email d'inscription à emb.kinshasa.citasvis@maec.es en votre nom",
+      "Aide à la préparation et à la vérification de l'email que vous envoyez personnellement à emb.kinshasa.citasvis@maec.es",
       "Surveillance continue du système citaconsular.es dès réception des identifiants",
       "Capture du premier créneau disponible",
       "Notification WhatsApp immédiate à la confirmation du rendez-vous",
@@ -219,15 +219,15 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     faqs: [
       {
         q: "L'Espagne passe-t-elle par le système commun Schengen pour les visas depuis Kinshasa ?",
-        a: "Non. Contrairement à la France, la Belgique ou l'Allemagne (visa Schengen court séjour), l'Espagne gère ses rendez-vous visa directement via son ambassade à Kinshasa. La prise de rendez-vous passe d'abord par un email à emb.kinshasa.citasvis@maec.es, puis par une réservation sur le portail officiel citaconsular.es avec votre numéro de passeport et mot de passe. Joventy gère ces deux étapes pour vous.",
+         a: "Non. Contrairement à la France, la Belgique ou l'Allemagne (visa Schengen court séjour), l'Espagne gère ses rendez-vous visa directement via son ambassade à Kinshasa. Chaque demandeur envoie d'abord personnellement un email à emb.kinshasa.citasvis@maec.es, puis réserve sur le portail officiel citaconsular.es avec son numéro de passeport et son mot de passe. Joventy peut aider à préparer l'email et surveiller les créneaux.",
       },
       {
         q: "Combien de temps l'ambassade d'Espagne prend-elle pour répondre à l'email d'inscription ?",
-        a: "En général, l'ambassade d'Espagne à Kinshasa répond sous 1 à 14 jours ouvrables. Le délai varie selon la période et la charge de l'ambassade. Joventy vous tient informé dès réception de la réponse et enchaîne immédiatement avec la prise de créneau sur citaconsular.es.",
+         a: "En général, l'ambassade d'Espagne à Kinshasa répond sous 1 à 14 jours ouvrables. Le délai varie selon la période et la charge de l'ambassade. Joventy vous aide à suivre la réponse et peut surveiller les créneaux sur citaconsular.es après réception de vos identifiants.",
       },
       {
         q: "Que doit contenir l'email envoyé à emb.kinshasa.citasvis@maec.es ?",
-        a: "L'objet de l'email doit être 'RENDEZ-VOUS VISA EST'. Le corps doit inclure NOM PRÉNOM, numéro de passeport, date de voyage et la mention 'EST'. Les pièces jointes requises sont : une photo tenant le passeport, le formulaire de candidature, la réservation de vol, et une assurance Schengen d'au moins 30 000 €. La taille totale doit rester sous 1 Mo. Joventy rédige et envoie cet email en votre nom.",
+         a: "L'objet de l'email doit être 'RENDEZ-VOUS VISA EST'. Le corps doit inclure NOM PRÉNOM, numéro de passeport, date de voyage et la mention 'EST'. Les pièces jointes requises sont : une photo tenant le passeport, le formulaire de candidature, la réservation de vol, et une assurance Schengen d'au moins 30 000 €. La taille totale doit rester sous 1 Mo. Chaque demandeur envoie personnellement cet email ; Joventy peut aider à le préparer et le vérifier.",
       },
       {
         q: "Combien coûte le rendez-vous visa Espagne avec Joventy ?",
@@ -235,7 +235,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         q: "Que faire si l'ambassade refuse ou ignore l'email d'inscription ?",
-        a: "Si l'ambassade ne répond pas après 14 jours, Joventy renvoie l'email. Si l'email est refusé (pièces non conformes), Joventy analyse le motif et prépare un second envoi corrigé. Ce ré-envoi est inclus dans le service sans frais supplémentaires.",
+         a: "N'envoyez pas de deuxième email avant 14 jours. Après ce délai, vous pouvez renvoyer votre email si nécessaire. Joventy peut vous aider à analyser les pièces et à préparer un nouvel envoi conforme.",
       },
       {
         q: "Est-ce que le créneau Espagne permet un visa Schengen valable dans toute l'Europe ?",

@@ -23,35 +23,42 @@ function write(filePath: string, html: string) {
   fs.writeFileSync(filePath, html, "utf-8");
 }
 
+function writeRoute(route: string, html: string) {
+  const routePath = route.replace(/^\/+|\/+$/g, "");
+  if (!routePath) {
+    write(path.join(DIST, "index.html"), html);
+    return;
+  }
+
+  write(path.join(DIST, routePath, "index.html"), html);
+}
+
 console.log("🔧 Pre-rendering pages…\n");
 
 for (const dest of DESTINATIONS_SEO) {
   const html = injectSeoMeta(template, `/${dest.slug}`);
-  write(path.join(DIST, `${dest.slug}.html`), html);
+  writeRoute(`/${dest.slug}`, html);
   console.log(`  ✓ /${dest.slug}`);
   count++;
 }
 
 for (const embassy of EMBASSIES_SEO) {
   const html = injectSeoMeta(template, `/${embassy.slug}`);
-  write(path.join(DIST, `${embassy.slug}.html`), html);
+  writeRoute(`/${embassy.slug}`, html);
   console.log(`  ✓ /${embassy.slug}`);
   count++;
 }
 
-const guidesDir = path.join(DIST, "guides");
-fs.mkdirSync(guidesDir, { recursive: true });
-
 for (const guide of getAllGuides()) {
   const html = injectSeoMeta(template, `/guides/${guide.slug}`);
-  write(path.join(guidesDir, `${guide.slug}.html`), html);
+  writeRoute(`/guides/${guide.slug}`, html);
   console.log(`  ✓ /guides/${guide.slug}`);
   count++;
 }
 
 for (const page of CRENEAUX_PAGES) {
   const html = injectSeoMeta(template, `/${page.slug}`);
-  write(path.join(DIST, `${page.slug}.html`), html);
+  writeRoute(`/${page.slug}`, html);
   console.log(`  ✓ /${page.slug}`);
   count++;
 }
@@ -66,11 +73,12 @@ const staticRoutes = [
   "/confidentialite",
   "/conditions",
   "/remboursement",
+  "/alerte-espagne",
+  "/alerte-schengen",
 ];
 
 for (const route of staticRoutes) {
-  const slug = route === "/" ? "index" : route.slice(1);
-  write(path.join(DIST, `${slug}.html`), injectSeoMeta(template, route));
+  writeRoute(route, injectSeoMeta(template, route));
   console.log(`  ✓ ${route}`);
   count++;
 }

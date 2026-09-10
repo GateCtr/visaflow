@@ -190,7 +190,7 @@ function getPackageInfo(
       return {
         label: "Créneau Ambassade",
         tagline: "Rendez-vous uniquement",
-        description: "Vous avez reçu vos identifiants citaconsular.es de l'ambassade ? Joventy surveille le portail Bookitit et verrouille votre créneau dès qu'une place se libère.",
+        description: "Vous avez reçu vos identifiants citaconsular.es de l'ambassade ? Joventy surveille le portail officiel et vous aide à réserver votre créneau dès qu'une place se libère.",
         slotNote: "Prérequis : inscription préalable par email à emb.kinshasa.citasvis@maec.es (objet : RENDEZ-VOUS VISA EST) pour obtenir vos identifiants. Les frais officiels sont payés directement à l'ambassade le jour du rendez-vous.",
       };
     }

@@ -412,10 +412,10 @@ export default function DestinationPage() {
               <div className="flex-1">
                 <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
-                  Votre dossier est prêt ? Joventy envoie l'email + prend votre créneau — 350 $ après résultat
+                  Votre dossier est prêt ? Joventy vous aide à préparer l'email + surveille votre créneau — 350 $ après résultat
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Joventy envoie l'email d'inscription à emb.kinshasa.citasvis@maec.es en votre nom, puis réserve votre créneau sur citaconsular.es dès que l'ambassade répond. Aucun acompte — 350 $ payés uniquement après confirmation.
+                  Chaque demandeur envoie personnellement l'email d'inscription à emb.kinshasa.citasvis@maec.es ; Joventy aide à le préparer puis surveille les créneaux sur citaconsular.es après réception des identifiants. Aucun acompte — 350 $ payés uniquement après confirmation.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link href="/creneaux-visa-espagne-kinshasa">

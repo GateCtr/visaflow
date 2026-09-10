@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useMutation } from "convex/react";
+import { Helmet } from "react-helmet-async";
 import { api } from "@convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -155,6 +156,44 @@ export default function AlerteEspagne() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>Alerte rendez-vous Espagne sur WhatsApp | Joventy</title>
+        <meta name="description" content="Recevez sur WhatsApp les alertes de créneaux visa Espagne à Kinshasa pour 10 USD. Réservez vous-même avec vos accès, sans abonnement ni garantie de délai." />
+        <link rel="canonical" href="https://joventy.cd/alerte-espagne" />
+        <meta property="og:title" content="Alerte rendez-vous Espagne sur WhatsApp | Joventy" />
+        <meta property="og:description" content="Recevez sur WhatsApp les alertes de créneaux visa Espagne à Kinshasa pour 10 USD. Réservez vous-même avec vos accès, sans abonnement ni garantie de délai." />
+        <meta property="og:url" content="https://joventy.cd/alerte-espagne" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Alerte rendez-vous Espagne sur WhatsApp | Joventy" />
+        <meta name="twitter:description" content="Recevez sur WhatsApp les alertes de créneaux visa Espagne à Kinshasa pour 10 USD. Réservez vous-même avec vos accès, sans abonnement ni garantie de délai." />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Service",
+          name: "Alerte rendez-vous Espagne sur WhatsApp",
+          description: "Alertes autonomes de créneaux visa Espagne à Kinshasa.",
+          url: "https://joventy.cd/alerte-espagne",
+          provider: { "@id": "https://joventy.cd/#organization" },
+          offers: { "@type": "Offer", price: "10", priceCurrency: "USD" },
+        })}</script>
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: OBJECTIONS.map((item) => ({
+            "@type": "Question",
+            name: item.q,
+            acceptedAnswer: { "@type": "Answer", text: item.a },
+          })),
+        })}</script>
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+            { "@type": "ListItem", position: 2, name: "Alerte rendez-vous Espagne", item: "https://joventy.cd/alerte-espagne" },
+          ],
+        })}</script>
+      </Helmet>
       <Navbar />
 
       {/* ═══════════════════════════════════════════════════════ HERO ═══ */}
@@ -172,9 +211,8 @@ export default function AlerteEspagne() {
           </div>
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight mb-6">
-            Arrêtez de surveiller<br />
-            <span className="text-secondary">citaconsular.es</span><br />
-            toute la journée.
+            Alerte rendez-vous Espagne<br />
+            <span className="text-secondary">sur WhatsApp</span>
           </h1>
 
           <p className="text-xl text-blue-200 leading-relaxed mb-4 max-w-2xl mx-auto">

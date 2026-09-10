@@ -272,7 +272,7 @@ export const VISA_PRICING = {
       { key: "invitation_letter", label: "Lettre d'invitation / convocation (si applicable)", required: false },
       { key: "civil_status", label: "Acte de naissance / acte de mariage (Visa D long séjour)", required: false },
     ],
-    embassyAddress: "Ambassade d'Espagne — Avenue des Trois Z, Kinshasa-Gombe",
+    embassyAddress: "Ambassade d'Espagne — Boulevard Colonel Tshatshi nº 37, Gombe, Kinshasa",
     embassyEmail: "emb.kinshasa.citasvis@maec.es",
     embassyEmailSubject: "RENDEZ-VOUS VISA EST",
     trackingUrl: "https://sutramiteconsular.maec.es/Home.aspx",

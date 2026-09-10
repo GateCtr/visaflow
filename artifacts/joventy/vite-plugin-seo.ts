@@ -198,8 +198,61 @@ function buildCreneauxSchemas(page: (typeof CRENEAUX_PAGES)[0], url: string): st
   ].join("\n");
 }
 
+function buildAlertSchemas(url: string): string {
+  const description = "Recevez sur WhatsApp les alertes de créneaux visa Espagne à Kinshasa pour 10 USD. Réservez vous-même avec vos accès, sans abonnement ni garantie de délai.";
+  const faq = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "Et si je n'arrive toujours pas à prendre le créneau ?",
+        acceptedAnswer: { "@type": "Answer", text: "L'alerte aide à repérer une disponibilité, mais ne garantit pas un rendez-vous. Vous réservez vous-même avec vos accès." },
+      },
+    ],
+  });
+  const service = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: "Alerte rendez-vous Espagne sur WhatsApp",
+    description,
+    url,
+    provider: { "@id": "https://joventy.cd/#organization" },
+    offers: { "@type": "Offer", price: "10", priceCurrency: "USD" },
+  });
+  const breadcrumb = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil", item: "https://joventy.cd/" },
+      { "@type": "ListItem", position: 2, name: "Alerte rendez-vous Espagne", item: url },
+    ],
+  });
+  return [
+    `<script type="application/ld+json">${service}</script>`,
+    `<script type="application/ld+json">${faq}</script>`,
+    `<script type="application/ld+json">${breadcrumb}</script>`,
+  ].join("\n");
+}
+
 export function injectSeoMeta(html: string, pathname: string): string {
   const clean = pathname.split("?")[0].replace(/\/$/, "") || "/";
+  if (clean === "/alerte-espagne") {
+    const title = "Alerte rendez-vous Espagne sur WhatsApp | Joventy";
+    const description = "Recevez sur WhatsApp les alertes de créneaux visa Espagne à Kinshasa pour 10 USD. Réservez vous-même avec vos accès, sans abonnement ni garantie de délai.";
+    const url = "https://joventy.cd/alerte-espagne";
+    const schemas = buildAlertSchemas(url);
+    return html
+      .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`)
+      .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(description)}"`)
+      .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
+      .replace(/<meta property="og:title" content="[^"]*"/, `<meta property="og:title" content="${esc(title)}"`)
+      .replace(/<meta property="og:description" content="[^"]*"/, `<meta property="og:description" content="${esc(description)}"`)
+      .replace(/<meta property="og:url" content="[^"]*"/, `<meta property="og:url" content="${url}"`)
+      .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${esc(title)}"`)
+      .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${esc(description)}"`)
+      .replace("</head>", `${schemas}\n</head>`);
+  }
 
   if (clean === "/methodologie-sources") {
     const title = "Méthodologie et sources visa | Joventy";
@@ -321,7 +374,7 @@ export function seoMetaInjectPlugin(): Plugin {
         const isSemanticRoute =
           /^\/visa-/.test(pathname) || /^\/guides\//.test(pathname) ||
           /^\/e-visa-/.test(pathname) || /^\/ambassade/.test(pathname) ||
-          /^\/creneaux-/.test(pathname);
+          /^\/creneaux-/.test(pathname) || /^\/alerte-/.test(pathname);
 
         if (!isHtmlRoute || !isSemanticRoute) return next();
 
