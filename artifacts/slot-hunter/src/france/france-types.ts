@@ -49,6 +49,17 @@ export interface FranceServiceTarget {
 }
 
 /**
+ * Objet service/zone exact renvoyé par `GET /team/slug/{slug}` dans
+ * `reservations_shop_availabilty`. Les champs additionnels sont conservés
+ * sans les interpréter afin de renvoyer au booking la ressource complète.
+ */
+export interface FranceServiceZone {
+  _id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+/**
  * Configuration France portée par le Job (aucun identifiant codé en dur) —
  * Requirements 14.1, 14.2.
  */
@@ -151,8 +162,10 @@ export interface ServiceForApi {
   name?: string;
   /** Nombre de créneaux pour ce service. */
   numberOfSlots?: number;
-  /** Zone (== service dans ce portail) : { _id }. */
-  zone?: { _id: string };
+  /** Identifiant de zone utilisé par le store du portail. */
+  zone_id?: string;
+  /** Objet zone complet issu de `reservations_shop_availabilty`. */
+  zone?: FranceServiceZone;
   /** slotValue cochés (auto-cochés pour 1 demandeur). */
   checkboxesSlots?: string[];
   customFieldsAreValid?: boolean;
@@ -315,6 +328,8 @@ export interface BookingContext {
   sessionId: string;
   /** Service cible (id + nom). */
   service: FranceServiceTarget;
+  /** Objet complet du service/zone renvoyé par la résolution du consulat. */
+  serviceZone: FranceServiceZone;
   /** Contact principal validé. */
   contact: BookingContact;
   /**

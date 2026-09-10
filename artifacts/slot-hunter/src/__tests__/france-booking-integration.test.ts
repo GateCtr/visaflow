@@ -179,6 +179,12 @@ function validContext(overrides: Partial<BookingContext> = {}): BookingContext {
     slot: validSlot(),
     captchaToken: "turnstile-booking-token",
     ...overrides,
+    serviceZone: overrides.serviceZone ?? {
+      _id: "svc-1",
+      name: SERVICE_NAME,
+      custom_fields: [{ key: "54cfd964c63f3386" }],
+      openings: [],
+    },
   };
 }
 

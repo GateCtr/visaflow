@@ -295,7 +295,15 @@ describe("France — orchestration + routage dispatcher (mocks) — task 12.4", 
     vi.mocked(createFranceHttpClient).mockReturnValue(
       {} as ReturnType<typeof createFranceHttpClient>,
     );
-    vi.mocked(resolveTeam).mockResolvedValue({ teamId: TEAM_ID });
+    vi.mocked(resolveTeam).mockResolvedValue({
+      teamId: TEAM_ID,
+      serviceZone: {
+        _id: "service-id",
+        name: "Visas",
+        custom_fields: [],
+        openings: [],
+      },
+    });
     vi.mocked(solveFranceTurnstile).mockResolvedValue("turnstile-token");
     vi.mocked(openSession).mockResolvedValue(makeSession());
     vi.mocked(shouldRenewSession).mockReturnValue(false);
@@ -405,6 +413,17 @@ describe("France — orchestration + routage dispatcher (mocks) — task 12.4", 
         expect.any(String),
       );
       expect(runBookingFlow).toHaveBeenCalledTimes(1);
+      expect(runBookingFlow).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          serviceZone: expect.objectContaining({
+            _id: "service-id",
+            name: "Visas",
+            custom_fields: [],
+            openings: [],
+          }),
+        }),
+      );
     });
 
     it("publication détectée sans autoBook → \"slot_found\" sans booking", async () => {

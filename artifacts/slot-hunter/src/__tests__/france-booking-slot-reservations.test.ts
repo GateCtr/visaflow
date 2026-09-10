@@ -106,6 +106,12 @@ const bookingContext: fc.Arbitrary<BookingContext> = fc.record({
   teamId: fc.string({ minLength: 1, maxLength: 24 }),
   sessionId: fc.string({ minLength: 1, maxLength: 36 }),
   service: serviceTarget,
+  serviceZone: fc.constant({
+    _id: "service-zone-id",
+    name: "Service Zone",
+    custom_fields: [{ key: "54cfd964c63f3386" }],
+    openings: [{ day: 1 }],
+  }),
   contact: bookingContact,
   motifKey: fc.constant("54cfd964c63f3386"),
   motif: franceMotif,
@@ -217,6 +223,8 @@ describe("Property 26 — buildReservations (france-booking.ts)", () => {
         expect(reservations.mainUser.services).toHaveLength(1);
 
         const service = reservations.mainUser.services[0];
+        expect(service.zone_id).toBe(ctx.serviceZone._id);
+        expect(service.zone).toEqual(ctx.serviceZone);
 
         // customFields présents, avec la clé motif et la valeur du contexte.
         expect(Array.isArray(service.customFields)).toBe(true);

@@ -24,6 +24,7 @@ import type { FranceHttpClient } from "../src/france/france-http.js";
 const TEST_CONSULATE_SLUG = "ambassade-de-france-a-kinshasa";
 const TEST_SERVICE_NAME =
   "ADF - Demande d'inscription au Registre, de CNI/ passeport/déclaration de vol ou perte de documents";
+const TEST_SERVICE_ID = "6346e242c47b29722d5f5f4e";
 const TEST_DAY = "2026-09-08";
 
 async function main(): Promise<void> {
@@ -47,7 +48,7 @@ async function main(): Promise<void> {
   );
 
   console.log("[probe] resolveTeam…");
-  const team = await resolveTeam(http, TEST_CONSULATE_SLUG);
+  const team = await resolveTeam(http, TEST_CONSULATE_SLUG, TEST_SERVICE_ID);
   if (team === null) {
     console.error("[probe] resolveTeam échoué.");
     process.exit(1);
@@ -55,6 +56,11 @@ async function main(): Promise<void> {
   }
   const teamId = team.teamId;
   console.log(`[probe] teamId=${teamId}`);
+  console.log(
+    `[probe] serviceZone=${team.serviceZone._id} ` +
+      `nameMatch=${team.serviceZone.name === TEST_SERVICE_NAME ? "yes" : "no"} ` +
+      `keys=${Object.keys(team.serviceZone).sort().join("|")}`,
+  );
 
   console.log("[probe] Turnstile (session)…");
   const token = await solveFranceTurnstile(

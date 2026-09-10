@@ -302,7 +302,7 @@ async function main(): Promise<void> {
 
   // --- 3. Résolution du consulat → teamId ------------------------------------
   step("resolveTeam", `GET /team/slug/${consulateSlug}?lang=fr`);
-  const team = await resolveTeam(http, consulateSlug);
+  const team = await resolveTeam(http, consulateSlug, service.serviceId);
   if (team === null) {
     fail("resolveTeam", `teamId introuvable pour le slug « ${consulateSlug} ».`);
     process.exit(1);
@@ -469,6 +469,7 @@ async function main(): Promise<void> {
     teamId: team.teamId,
     sessionId: session.sessionId,
     service,
+    serviceZone: team.serviceZone,
     contact: bookingContact,
     motifKey: TEST_MOTIF_KEY,
     motif: bookingMotif,

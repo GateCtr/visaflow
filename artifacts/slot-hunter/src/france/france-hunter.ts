@@ -414,7 +414,7 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
 
     // --- 5. Résolution du consulat → teamId -------------------------------
     await humanGap();
-    const team = await resolveTeam(http, config.consulateSlug);
+    const team = await resolveTeam(http, config.consulateSlug, config.service.serviceId);
     if (team === null) {
       console.error(
         `[franceHunter] Résolution du consulat échouée (Job ${job.id}, ` +
@@ -422,7 +422,7 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
       );
       return "error";
     }
-    const { teamId } = team;
+    const { teamId, serviceZone } = team;
 
     // --- 6. Turnstile #1 (session) + ouverture de session -----------------
     // URL RÉELLE de la page RDV du consulat (où vit le widget Turnstile). Le
@@ -530,6 +530,7 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
             job,
             config,
             teamId,
+             serviceZone,
             session.sessionId,
             scan.publication,
             capsolverApiKey,
@@ -577,6 +578,7 @@ async function handlePublication(
   job: HunterJob,
   config: FranceJobConfig,
   teamId: string,
+  serviceZone: BookingContext["serviceZone"],
   sessionId: string,
   publication: SlotPublication,
   capsolverApiKey: string,
@@ -625,6 +627,7 @@ async function handlePublication(
     teamId,
     sessionId,
     service: config.service,
+    serviceZone,
     contact: config.contact,
     motifKey: config.motifKey,
     motif: config.motif,

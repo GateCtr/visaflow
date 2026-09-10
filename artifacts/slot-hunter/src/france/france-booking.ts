@@ -262,7 +262,8 @@ export function buildReservations(
           _id: ctx.service.serviceId,
           name: ctx.service.serviceName,
           numberOfSlots: 1,
-          zone: { _id: ctx.service.serviceId },
+           zone_id: ctx.serviceZone._id,
+           zone: ctx.serviceZone,
           checkboxesSlots: [ctx.slot.slotValue],
           customFieldsAreValid: true,
           antsNumberIsValid: true,
@@ -447,7 +448,13 @@ export function buildBookingSteps(ctx: BookingContext): StepDefinition[] {
 
   const valueByStep: Record<BookingStepType, unknown> = {
     services: {
-      services: [{ _id: ctx.service.serviceId, name: ctx.service.serviceName, numberOfSlots: 1 }],
+      services: [{
+        _id: ctx.service.serviceId,
+        name: ctx.service.serviceName,
+        numberOfSlots: 1,
+        zone_id: ctx.serviceZone._id,
+        zone: ctx.serviceZone,
+      }],
       numberOfApplicants: 1,
     },
     "important-info": { readInformations: true },
@@ -497,7 +504,8 @@ export function buildBookingSteps(ctx: BookingContext): StepDefinition[] {
           _id: ctx.service.serviceId,
           name: ctx.service.serviceName,
           numberOfSlots: 1,
-          zone: { _id: ctx.service.serviceId },
+           zone_id: ctx.serviceZone._id,
+           zone: ctx.serviceZone,
           slots: [
             {
               time: ctx.slot.time,
@@ -605,7 +613,6 @@ export async function runBookingFlow(
           }],
         };
         const dynRes = await http.post<unknown>(dynPath, dynBody);
-        console.log(`[DIAG] update-dynamic-steps → status=${dynRes.status} ok=${dynRes.ok} body=${JSON.stringify(dynRes.body).slice(0, 400)}`);
         if (!dynRes.ok) {
           console.error(
             `[franceHunter] Booking interrompu : update-dynamic-steps échoué (HTTP ${dynRes.status}) — reservations/family NON envoyé.`,
@@ -630,7 +637,6 @@ export async function runBookingFlow(
         body.dynamicStepIndex = step.dynamicStepIndex;
       }
       const res = await http.post<unknown>(stepPath, body);
-      console.log(`[DIAG] update-step-value(${step.stepType}, stepIndex=${step.stepIndex}, dynIdx=${step.dynamicStepIndex ?? "-"}) → status=${res.status} ok=${res.ok} body=${JSON.stringify(res.body).slice(0, 400)}`);
 
       // Statut d'erreur (≥ 400) ou échec normalisé → interruption SANS envoi
       // final (Req 10.3). `sessionError`/`teapot` impliquent déjà `ok=false`.
@@ -676,10 +682,7 @@ export async function runBookingFlow(
       `[franceHunter] 6 étapes persistées, envoi reservations/family (team=${maskSecret(ctx.teamId)}, session=${maskSecret(ctx.sessionId)}, captcha=${maskSecret(ctx.captchaToken)}).`,
     );
 
-    console.log(`[DIAG] AVANT POST family path=${familyPath} bodyLen=${JSON.stringify(body).length}`);
-    console.log(`[DIAG] family body=${JSON.stringify(body).slice(0, 1200)}`);
     const res = await http.post<unknown>(familyPath, body);
-    console.log(`[DIAG] APRES POST family → status=${res.status} ok=${res.ok} sessionError=${res.sessionError} body=${JSON.stringify(res.body).slice(0, 600)}`);
 
     // --- 4. Interprétation de la réponse (Req 10.11, 10.12) ---------------
     if (!res.ok) {

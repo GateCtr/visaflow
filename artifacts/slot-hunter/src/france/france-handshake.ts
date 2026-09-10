@@ -36,7 +36,7 @@ import {
   maskSecret,
   type FranceHttpClient,
 } from "./france-http.js";
-import type { FranceAuthState } from "./france-types.js";
+import type { FranceAuthState, FranceServiceZone } from "./france-types.js";
 
 // ---------------------------------------------------------------------------
 // Constantes de headers (clés en minuscules — normalisées par le client HTTP)
@@ -232,10 +232,35 @@ export async function performHandshake(proxyUrl: string): Promise<FranceAuthStat
  * @param slug Slug du consulat, ex. `ambassade-de-france-a-kinshasa`.
  * @returns `{ teamId }` si résolu et valide, `null` sinon.
  */
+function extractServiceZone(body: unknown, serviceId: string): FranceServiceZone | null {
+  if (typeof body !== "object" || body === null) return null;
+  const zones = (body as Record<string, unknown>).reservations_shop_availabilty;
+  if (!Array.isArray(zones)) return null;
+
+  for (const candidate of zones) {
+    if (typeof candidate !== "object" || candidate === null) continue;
+    const record = candidate as Record<string, unknown>;
+    if (record._id === serviceId && typeof record.name === "string" && record.name.length > 0) {
+      return { ...record, _id: serviceId, name: record.name };
+    }
+  }
+  return null;
+}
+
+export function resolveTeam(
+  http: FranceHttpClient,
+  slug: string,
+): Promise<{ teamId: string } | null>;
+export function resolveTeam(
+  http: FranceHttpClient,
+  slug: string,
+  serviceId: string,
+): Promise<{ teamId: string; serviceZone: FranceServiceZone } | null>;
 export async function resolveTeam(
   http: FranceHttpClient,
   slug: string,
-): Promise<{ teamId: string } | null> {
+  serviceId?: string,
+): Promise<{ teamId: string; serviceZone?: FranceServiceZone } | null> {
   const path = `/team/slug/${encodeURIComponent(slug)}`;
   try {
     const result = await http.get<unknown>(path, { query: { lang: "fr" } });
@@ -255,7 +280,18 @@ export async function resolveTeam(
       return null;
     }
 
-    return { teamId };
+    if (serviceId === undefined) return { teamId };
+
+    const serviceZone = extractServiceZone(result.body, serviceId);
+    if (serviceZone === null) {
+      console.error(
+        `[franceHunter] Service/zone absent de reservations_shop_availabilty ` +
+          `(slug=${slug}, serviceId=${serviceId}).`,
+      );
+      return null;
+    }
+
+    return { teamId, serviceZone };
   } catch (error) {
     console.error(
       `[franceHunter] Erreur lors de la résolution du consulat (slug=${slug}):`,

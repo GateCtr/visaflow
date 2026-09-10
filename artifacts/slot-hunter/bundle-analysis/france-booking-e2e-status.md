@@ -1,6 +1,6 @@
 # France (consulat.gouv.fr / Troov) — Statut du booking E2E
 
-> Dernière mise à jour : 2026-09-02
+> Dernière mise à jour : 2026-09-09
 > Cible de test : ADF Kinshasa, contact `encoraplus@gmail.com` (test, à annuler manuellement).
 > Mode : `npx tsx scripts/france-live-diagnostic.ts --no-proxy --book` (code de prod exécuté directement).
 
@@ -14,9 +14,10 @@ final renvoie systématiquement :
 {"message":"ERROR_ADD_GROUPPED_RESERVATION","description":"The resource referenced by request does not exists","code":404}
 ```
 
-La cause exacte de ce 404 métier **n'est pas encore identifiée**. Le body envoyé
-est structurellement conforme au bundle. Reste une divergence probable sur la
-forme de l'objet `service` (`zone` / `zone_id`) — piste principale à creuser.
+Ce 404 est le dernier résultat live connu. La divergence principale identifiée
+sur la forme de l'objet `service` (`zone` / `zone_id`) est maintenant corrigée
+dans le code et validée par tests + sonde live en lecture seule. Il reste à
+confirmer le résultat par un nouveau booking réel contrôlé.
 
 ## Ce qui fonctionne (validé live)
 
@@ -60,21 +61,31 @@ forme de l'objet `service` (`zone` / `zone_id`) — piste principale à creuser.
 - **Jour même** (`2026-09-02`) renvoie `[]` (plus réservable) alors qu'un jour futur (`2026-09-08`) renvoie 9 créneaux. Le diagnostic choisit désormais un **jour futur**. Mais le 404 persiste même sur jour futur (`2026-09-03`).
 - La session fraîche a `servicesStep.value.services = []` : le portail remplit ce tableau côté client depuis `reservations_shop_availabilty` avant de persister.
 
-## Piste principale restante (NON résolue)
+## Correction principale implémentée — validation booking live restante
 
 **Forme de l'objet `service` dans le body family.** Indices bundle :
 - `SET_SERVICES_STEP_APPLICANTS_PER_SERVICE` filtre par **`service.zone_id`** (pas `_id`).
 - `setupServiceForApi(t)` lit **`t.zone.custom_fields`** → le service porte un objet **`zone` complet** (avec `custom_fields`, `openings`, etc.), pas juste `{_id}`.
 
-Actuellement on envoie `service = {_id, name, numberOfSlots, zone:{_id}, ...}`.
-Il manque probablement :
-- `zone_id` (en plus ou à la place de `_id`),
-- l'objet **`zone` complet** issu de `team.reservations_shop_availabilty[serviceId]`.
+Le code conserve désormais l'objet **`zone` complet** issu de
+`team.reservations_shop_availabilty`, filtré sur `serviceId`, depuis
+`resolveTeam()` jusqu'au `BookingContext`.
 
-**Prochaine action concrète** : faire porter au `BookingContext` l'objet `zone`
-complet (récupéré via `GET /team/slug/{slug}` → `reservations_shop_availabilty`
-filtré sur `serviceId`) et l'injecter tel quel dans `service.zone` +
-`service.zone_id` du body family (et éventuellement du servicesStep/slotsStep).
+Il injecte ensuite `service.zone_id` et `service.zone` complet dans
+`servicesStep`, `mainContactDetailsStep` et le body final
+`reservations/family`.
+
+Validation effectuée :
+- la sonde live retrouve le service ADF exact ;
+- l'objet contient notamment `custom_fields`, `openings`, les limites de
+  session, les réglages calendrier et les paramètres de réservation ;
+- 24 suites France passent, soit 175 tests ;
+- le typecheck ne signale aucune erreur France (il reste uniquement l'erreur
+  préexistante de résolution de `@messagebird/sdk`).
+
+**Prochaine action concrète** : lors d'un créneau de test contrôlé, exécuter le
+diagnostic booking réel et vérifier si `reservations/family` dépasse le 404
+`ERROR_ADD_GROUPPED_RESERVATION`. Ne pas relancer automatiquement le POST final.
 
 ## Autres pistes secondaires (si la principale échoue)
 

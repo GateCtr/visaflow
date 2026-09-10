@@ -132,6 +132,12 @@ const validContext: fc.Arbitrary<BookingContext> = fc.record({
   teamId: hexId,
   sessionId: hexId,
   service: validService,
+  serviceZone: fc.constant({
+    _id: "service-zone-id",
+    name: "Service Zone",
+    custom_fields: [{ key: "54cfd964c63f3386" }],
+    openings: [],
+  }),
   contact: validContact,
   motifKey: fc.constant("54cfd964c63f3386"),
   motif: validMotif,
@@ -144,6 +150,7 @@ const validContext: fc.Arbitrary<BookingContext> = fc.record({
 interface RecordedStep {
   readonly stepType: unknown;
   readonly stepIndex: unknown;
+  readonly value: unknown;
 }
 
 interface StepRecorder {
@@ -154,10 +161,10 @@ interface StepRecorder {
 /** Lit `{ key, stepIndex }` d'un corps `update-step-value` typé `unknown`. */
 function readStepBody(body: unknown): RecordedStep {
   if (typeof body !== "object" || body === null) {
-    return { stepType: undefined, stepIndex: undefined };
+    return { stepType: undefined, stepIndex: undefined, value: undefined };
   }
-  const record = body as { key?: unknown; stepIndex?: unknown };
-  return { stepType: record.key, stepIndex: record.stepIndex };
+  const record = body as { key?: unknown; stepIndex?: unknown; value?: unknown };
+  return { stepType: record.key, stepIndex: record.stepIndex, value: record.value };
 }
 
 function okResult<T>(bodyValue: T): FranceHttpResult<T> {
@@ -261,6 +268,22 @@ describe("Property 22 — ordre des étapes persistées (runBookingFlow, http mo
         recorded.forEach((step, position) => {
           expect(step.stepIndex).toBe(position);
         });
+
+        const servicesStep = recorded.find((step) => step.stepType === "servicesStep");
+        expect(servicesStep?.value).toEqual(expect.objectContaining({
+          services: [expect.objectContaining({
+            zone_id: ctx.serviceZone._id,
+            zone: ctx.serviceZone,
+          })],
+        }));
+
+        const contactStep = recorded.find((step) => step.stepType === "mainContactDetailsStep");
+        expect(contactStep?.value).toEqual(expect.objectContaining({
+          services: [expect.objectContaining({
+            zone_id: ctx.serviceZone._id,
+            zone: ctx.serviceZone,
+          })],
+        }));
       }),
       { numRuns: NUM_RUNS },
     );

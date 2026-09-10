@@ -789,7 +789,7 @@ function toResult<T>(res: {
   sessionError: boolean;
   teapot: boolean;
 }): FranceHttpResult<T> {
-  const parsed = (safeJsonParse(res.rawBody) as T | null); // DIAG: parse même en échec pour voir le message 404
+  const parsed = res.ok ? (safeJsonParse(res.rawBody) as T | null) : null;
   return {
     status: res.status,
     ok: res.ok,

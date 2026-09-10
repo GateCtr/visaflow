@@ -297,6 +297,76 @@ describe("resolveTeam — Scénario C : slug introuvable → abandon + log [fran
     expect(opts?.query).toEqual({ lang: "fr" });
   });
 
+  it("conserve l'objet service/zone complet demandé pour le booking", async () => {
+    const serviceZone = {
+      _id: "service-adf",
+      name: "ADF",
+      custom_fields: [{ key: "motif" }],
+      openings: [{ day: 1 }],
+    };
+    const { client } = makeHttpClientReturning({
+      status: 200,
+      ok: true,
+      body: {
+        teamId: "team-999",
+        reservations_shop_availabilty: [serviceZone],
+      },
+      sessionError: false,
+      teapot: false,
+    });
+
+    const resolved = await resolveTeam(
+      client,
+      "ambassade-de-france-a-kinshasa",
+      "service-adf",
+    );
+
+    expect(resolved).toEqual({ teamId: "team-999", serviceZone });
+  });
+
+  it("sélectionne exactement le service demandé parmi plusieurs zones", async () => {
+    const requestedZone = {
+      _id: "service-target",
+      name: "Visas",
+      custom_fields: [{ key: "visa-motif" }],
+    };
+    const { client } = makeHttpClientReturning({
+      status: 200,
+      ok: true,
+      body: {
+        teamId: "team-999",
+        reservations_shop_availabilty: [
+          { _id: "service-other", name: "État civil", custom_fields: [] },
+          requestedZone,
+        ],
+      },
+      sessionError: false,
+      teapot: false,
+    });
+
+    const resolved = await resolveTeam(client, "kinshasa", "service-target");
+    expect(resolved?.serviceZone).toEqual(requestedZone);
+  });
+
+  it("refuse une équipe valide quand le service demandé est absent", async () => {
+    const { client } = makeHttpClientReturning({
+      status: 200,
+      ok: true,
+      body: {
+        teamId: "team-999",
+        reservations_shop_availabilty: [
+          { _id: "service-other", name: "État civil" },
+        ],
+      },
+      sessionError: false,
+      teapot: false,
+    });
+
+    const resolved = await resolveTeam(client, "kinshasa", "service-missing");
+    expect(resolved).toBeNull();
+    expect(errorSpy.mock.calls.flat().join(" ")).toContain("service-missing");
+  });
+
   it("retourne null et journalise [franceHunter] + slug quand le statut est HTTP >= 400", async () => {
     const slug = "consulat-inexistant";
     const { client } = makeHttpClientReturning({
