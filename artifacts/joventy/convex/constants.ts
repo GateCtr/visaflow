@@ -644,7 +644,7 @@ export const SERVICE_PACKAGES = {
     tagline: "Dossier prêt",
     description: "Votre dossier est prêt et vos pièces rassemblées ? Joventy se concentre uniquement sur l'obtention d'un créneau de rendez-vous consulaire.",
     hasSuccessFee: true,
-    availableFor: ["usa", "canada", "uk", "switzerland", "turkey", "schengen", "spain", "germany", "brazil"] as const,
+    availableFor: ["usa", "canada", "uk", "switzerland", "schengen", "france", "spain", "germany"] as const,
   },
   dossier_only: {
     key: "dossier_only" as const,

@@ -59,6 +59,18 @@ const CRENEAU_DESTINATIONS = [
     ],
   },
   {
+    id: "france",
+    name: "France",
+    flag: "🇫🇷",
+    desc: "Ambassade de France à Kinshasa — portail consulat.gouv.fr",
+    visaTypes: [
+      "ADF — Passeport, CNI, registre ou déclaration de perte",
+      "ADF — Dépôt des légalisations",
+      "État civil",
+      "Visas",
+    ],
+  },
+  {
     id: "spain",
     name: "Espagne",
     flag: "🇪🇸",
@@ -78,20 +90,6 @@ const CRENEAU_DESTINATIONS = [
     flag: "🇨🇭",
     desc: "Centre VFS Global Suisse — Kinshasa",
     visaTypes: ["Visa C — Tourisme / Affaires (Schengen)", "Visa C — Études court séjour"],
-  },
-  {
-    id: "turkey",
-    name: "Turquie",
-    flag: "🇹🇷",
-    desc: "Centre VFS Global Turquie — Kinshasa",
-    visaTypes: VISA_PRICING.turkey.visaTypes,
-  },
-  {
-    id: "brazil",
-    name: "Brésil",
-    flag: "🇧🇷",
-    desc: "Ambassade du Brésil — Kinshasa",
-    visaTypes: ["Visa Tourisme", "Visa Affaires", "Visa Études"],
   },
 ] as const;
 
