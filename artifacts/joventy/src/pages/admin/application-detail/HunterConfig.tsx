@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bot, Play, Pause, Trash2, Eye, Loader2, Link, RotateCcw } from "lucide-react";
 import { formatDate } from "@/lib/format";
+import {
+  FRANCE_CONSULATE_SLUG,
+  FRANCE_SERVICES,
+} from "./france-hunter-options";
 
 interface HunterConfigData {
   embassyUsername: string;
@@ -52,6 +56,21 @@ interface HunterConfigData {
   groupSize?: number;
   // CEV — annulation automatique si limite Overview atteinte
   cevAutoCancelOnLimitReached?: boolean;
+  // France Territorial
+  franceConsulateSlug?: string;
+  franceServiceId?: string;
+  franceServiceName?: string;
+  franceContactFirstname?: string;
+  franceContactLastname?: string;
+  franceContactEmail?: string;
+  franceContactMobile?: string;
+  franceBirthMonth?: number;
+  franceBirthDay?: number;
+  franceBirthYear?: number;
+  franceMotifKey?: string;
+  franceMotif?: string;
+  franceAutoBook?: boolean;
+  franceScanIntervalMs?: number;
 }
 
 interface Props {
@@ -114,6 +133,16 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
   const [cevAutoCancel, setCevAutoCancel] = useState(false);
   // Spain priority index
   const [spainPriorityIndex, setSpainPriorityIndex] = useState("");
+  // France Territorial
+  const [franceServiceId, setFranceServiceId] = useState("");
+  const [franceMotif, setFranceMotif] = useState("");
+  const [franceFirstname, setFranceFirstname] = useState("");
+  const [franceLastname, setFranceLastname] = useState("");
+  const [franceEmail, setFranceEmail] = useState("");
+  const [franceMobile, setFranceMobile] = useState("");
+  const [franceBirthdate, setFranceBirthdate] = useState("");
+  const [franceAutoBook, setFranceAutoBook] = useState(false);
+  const [franceScanIntervalSec, setFranceScanIntervalSec] = useState("30");
   // Visa Class (meute)
   const [visaClassInput, setVisaClassInput] = useState(broadcastVisaClass ?? "");
   const [savingVisaClass, setSavingVisaClass] = useState(false);
@@ -164,6 +193,25 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
       setCevAutoCancel(hc.cevAutoCancelOnLimitReached ?? false);
       // Spain priority
       setSpainPriorityIndex((hc as { spainPriorityIndex?: number }).spainPriorityIndex != null ? String((hc as { spainPriorityIndex?: number }).spainPriorityIndex) : "");
+      setFranceServiceId(hc.franceServiceId ?? "");
+      setFranceMotif(hc.franceMotif ?? "");
+      setFranceFirstname(hc.franceContactFirstname ?? "");
+      setFranceLastname(hc.franceContactLastname ?? "");
+      setFranceEmail(hc.franceContactEmail ?? "");
+      setFranceMobile(hc.franceContactMobile ?? "");
+      setFranceAutoBook(hc.franceAutoBook ?? false);
+      setFranceScanIntervalSec(String((hc.franceScanIntervalMs ?? 30_000) / 1000));
+      if (
+        hc.franceBirthYear !== undefined &&
+        hc.franceBirthMonth !== undefined &&
+        hc.franceBirthDay !== undefined
+      ) {
+        setFranceBirthdate(
+          `${String(hc.franceBirthYear).padStart(4, "0")}-${String(hc.franceBirthMonth + 1).padStart(2, "0")}-${String(hc.franceBirthDay).padStart(2, "0")}`,
+        );
+      } else {
+        setFranceBirthdate("");
+      }
     }
   }, [hc]);
 
@@ -176,12 +224,30 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
 
   const handleSave = async () => {
     const isGermany = destination === "germany";
-    if (!username.trim()) { toast({ variant: "destructive", title: "Identifiant requis" }); return; }
-    if (!isGermany && !password.trim()) { toast({ variant: "destructive", title: "Identifiant et mot de passe requis" }); return; }
+    const isFrance = destination === "france";
+    const franceService = FRANCE_SERVICES.find((service) => service.id === franceServiceId);
+    if (!isFrance && !username.trim()) { toast({ variant: "destructive", title: "Identifiant requis" }); return; }
+    if (!isFrance && !isGermany && !password.trim()) { toast({ variant: "destructive", title: "Identifiant et mot de passe requis" }); return; }
+    if (isFrance) {
+      if (!franceService) {
+        toast({ variant: "destructive", title: "Service France requis" });
+        return;
+      }
+      if (!franceFirstname.trim() || !franceLastname.trim() || !franceEmail.trim() || !franceMobile.trim() || !franceBirthdate) {
+        toast({ variant: "destructive", title: "Contact France incomplet" });
+        return;
+      }
+      if (franceService.motifs.length > 0 && !franceMotif) {
+        toast({ variant: "destructive", title: "Motif France requis" });
+        return;
+      }
+    }
+    const [franceBirthYear, franceBirthMonthOneBased, franceBirthDay] =
+      franceBirthdate ? franceBirthdate.split("-").map(Number) : [];
     setSaving(true);
     try {
       await setHunterConfig({
-        applicationId: appId, embassyUsername: username, embassyPassword: password.trim() || "N/A", isActive: active,
+        applicationId: appId, embassyUsername: isFrance ? "N/A" : username, embassyPassword: isFrance ? "N/A" : (password.trim() || "N/A"), isActive: active,
         twoCaptchaApiKey: captchaKey || undefined, slotDateFrom: slotDateFrom || undefined, slotDateDeadline: slotDateDeadline || undefined,
         vowintAppId: vowintAppId || undefined, scheduleUrl: scheduleUrl || undefined,
         portalApplicationId: portalApplicationId || undefined,
@@ -206,6 +272,21 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         cevAutoCancelOnLimitReached: cevAutoCancel,
         // Spain priority index
         spainPriorityIndex: spainPriorityIndex !== "" ? Number(spainPriorityIndex) : undefined,
+        // France Territorial
+        franceConsulateSlug: isFrance ? FRANCE_CONSULATE_SLUG : undefined,
+        franceServiceId: isFrance ? franceService?.id : undefined,
+        franceServiceName: isFrance ? franceService?.name : undefined,
+        franceContactFirstname: isFrance ? franceFirstname.trim() : undefined,
+        franceContactLastname: isFrance ? franceLastname.trim() : undefined,
+        franceContactEmail: isFrance ? franceEmail.trim() : undefined,
+        franceContactMobile: isFrance ? franceMobile.trim() : undefined,
+        franceBirthMonth: isFrance && franceBirthMonthOneBased ? franceBirthMonthOneBased - 1 : undefined,
+        franceBirthDay: isFrance ? franceBirthDay : undefined,
+        franceBirthYear: isFrance ? franceBirthYear : undefined,
+        franceMotifKey: isFrance ? (franceService?.motifKey ?? "") : undefined,
+        franceMotif: isFrance ? franceMotif : undefined,
+        franceAutoBook: isFrance ? franceAutoBook : undefined,
+        franceScanIntervalMs: isFrance ? Math.max(15, Number(franceScanIntervalSec) || 30) * 1000 : undefined,
       });
       // Sauvegarder aussi le canal visa si modifié (destination USA uniquement)
       if (destination === "usa" && visaClassInput && visaClassInput !== (broadcastVisaClass ?? "")) {
@@ -265,7 +346,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
 
       <div className="p-6 space-y-5">
         {/* Credentials */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {destination !== "france" && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={destination === "germany" ? "Email applicant (RK-Termin)" : "Identifiant portail"}>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="email@exemple.com" className="h-9 bg-slate-50/80 text-sm" />
           </Field>
@@ -277,7 +358,7 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
               </button>
             </div>
           </Field>
-        </div>
+        </div>}
 
         {/* Captcha service - destination-specific */}
         {destination === "usa" && (
@@ -318,10 +399,10 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         )}
 
         {/* Date range */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {destination !== "france" && <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Date minimum"><Input type="date" value={slotDateFrom} onChange={(e) => setSlotDateFrom(e.target.value)} className="h-9 bg-slate-50/80 text-sm" /></Field>
           <Field label="Date limite"><Input type="date" value={slotDateDeadline} onChange={(e) => setSlotDateDeadline(e.target.value)} className="h-9 bg-slate-50/80 text-sm" /></Field>
-        </div>
+        </div>}
 
         {/* Group booking (Spain / Germany / Schengen) */}
         {(destination === "spain" || destination === "germany" || destination === "schengen") && (
@@ -346,6 +427,70 @@ export function HunterConfig({ appId, hunterConfig: hc, destination, broadcastVi
         )}
 
         {/* Destination-specific */}
+        {destination === "france" && (
+          <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100/80 space-y-4">
+            <div>
+              <p className="text-[11px] text-blue-800 uppercase font-bold tracking-wide">France Territorial — Kinshasa</p>
+              <p className="text-[10px] text-slate-600 mt-1">Configuration du scanner consulat.gouv.fr. La session et les jetons restent temporaires dans le worker.</p>
+            </div>
+
+            <Field label="Service">
+              <select
+                value={franceServiceId}
+                onChange={(event) => {
+                  setFranceServiceId(event.target.value);
+                  setFranceMotif("");
+                }}
+                className="w-full h-9 px-2 text-sm border rounded-md bg-white border-slate-200"
+              >
+                <option value="">— Choisir un service —</option>
+                {FRANCE_SERVICES.map((service) => (
+                  <option key={service.id} value={service.id}>{service.name}</option>
+                ))}
+              </select>
+            </Field>
+
+            {(() => {
+              const selected = FRANCE_SERVICES.find((service) => service.id === franceServiceId);
+              if (!selected) return null;
+              if (selected.motifs.length === 0) {
+                return <p className="text-[11px] text-slate-500">Ce service ne demande aucun motif supplémentaire.</p>;
+              }
+              return (
+                <Field label="Motif exact du rendez-vous">
+                  <select
+                    value={franceMotif}
+                    onChange={(event) => setFranceMotif(event.target.value)}
+                    className="w-full h-9 px-2 text-sm border rounded-md bg-white border-slate-200"
+                  >
+                    <option value="">— Choisir un motif —</option>
+                    {selected.motifs.map((motif) => (
+                      <option key={motif} value={motif}>{motif.trim()}</option>
+                    ))}
+                  </select>
+                </Field>
+              );
+            })()}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Prénom"><Input value={franceFirstname} onChange={(e) => setFranceFirstname(e.target.value)} className="h-9 bg-white text-sm" /></Field>
+              <Field label="Nom"><Input value={franceLastname} onChange={(e) => setFranceLastname(e.target.value)} className="h-9 bg-white text-sm" /></Field>
+              <Field label="Email de confirmation"><Input type="email" value={franceEmail} onChange={(e) => setFranceEmail(e.target.value)} className="h-9 bg-white text-sm" /></Field>
+              <Field label="Téléphone"><Input value={franceMobile} onChange={(e) => setFranceMobile(e.target.value)} className="h-9 bg-white text-sm" /></Field>
+              <Field label="Date de naissance"><Input type="date" value={franceBirthdate} onChange={(e) => setFranceBirthdate(e.target.value)} className="h-9 bg-white text-sm" /></Field>
+              <Field label="Intervalle entre cycles (secondes)">
+                <Input type="number" min={15} max={3600} value={franceScanIntervalSec} onChange={(e) => setFranceScanIntervalSec(e.target.value)} className="h-9 bg-white text-sm font-mono" />
+              </Field>
+            </div>
+
+            <Toggle label="Réserver automatiquement le premier créneau" checked={franceAutoBook} onChange={setFranceAutoBook} />
+            {franceAutoBook && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Le premier créneau disponible sera réservé et l’email de confirmation sera envoyé au contact ci-dessus.
+              </p>
+            )}
+          </div>
+        )}
         {(destination === "spain" || destination === "espagne") && (
           <Field label="Priorité (index P4)">
             <div className="flex items-center gap-2">

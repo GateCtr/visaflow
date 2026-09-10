@@ -221,10 +221,10 @@ export function buildReservations(
 ): ReservationsFamilyBody["reservations"] {
   // Clé + valeur du motif SPÉCIFIQUES au service (bundle setupServiceForApi :
   // customFields dérivés de zone.custom_fields). Portées par le contexte.
-  const motifField: CustomField = {
-    key: ctx.motifKey,
-    values: [ctx.motif],
-  };
+  const customFields: CustomField[] =
+    ctx.motifKey.trim() && ctx.motif.trim()
+      ? [{ key: ctx.motifKey, values: [ctx.motif] }]
+      : [];
 
   // birthdate → OBJET { month (0-indexé), day, year } : le bundle `setupUserForApi`
   // convertit la string du formulaire en objet dayjs AVANT l'envoi family.
@@ -267,7 +267,7 @@ export function buildReservations(
           checkboxesSlots: [ctx.slot.slotValue],
           customFieldsAreValid: true,
           antsNumberIsValid: true,
-          customFields: [motifField],
+          customFields,
           slotsToKeep: [slotToKeep],
         },
       ],
@@ -430,10 +430,10 @@ export const BOOKING_STEP_ORDER: readonly BookingStepType[] = [
  * l'ordre et le `stepIndex` sont contractuels (Property 22).
  */
 export function buildBookingSteps(ctx: BookingContext): StepDefinition[] {
-  const motifField: CustomField = {
-    key: ctx.motifKey,
-    values: [ctx.motif],
-  };
+  const motifFields: CustomField[] =
+    ctx.motifKey.trim() && ctx.motif.trim()
+      ? [{ key: ctx.motifKey, values: [ctx.motif] }]
+      : [];
 
   // Valeurs validées live 2026-09-01. `servicesStep` attend
   // `{services:[{_id,name,numberOfSlots}], numberOfApplicants}` ;
@@ -518,13 +518,15 @@ export function buildBookingSteps(ctx: BookingContext): StepDefinition[] {
             },
           ],
           checkboxesSlots: [ctx.slot.slotValue],
-          customFields: { [ctx.motifKey]: [ctx.motif] },
+          customFields: ctx.motifKey
+            ? { [ctx.motifKey]: [ctx.motif] }
+            : {},
           customFieldsAreValid: true,
           antsNumberIsValid: true,
         },
       ],
     },
-    motif: [motifField],
+    motif: motifFields,
     confirmation: {},
   };
 
@@ -572,9 +574,12 @@ export async function runBookingFlow(
   // Le motif et sa clé sont SPÉCIFIQUES au service (custom_fields du service dans
   // team.reservations_shop_availabilty). La validation « valeur ∈ valeurs du
   // service » doit se faire en amont (construction du contexte). Ici on vérifie
-  // seulement la présence de la clé + valeur (le custom field Motif est required).
-  if (ctx.motifKey.trim().length === 0 || ctx.motif.trim().length === 0) {
-    const error = `Motif ou clé de motif manquant (motifKey="${ctx.motifKey}", motif="${ctx.motif}")`;
+  // seulement que clé et valeur sont fournies ensemble. Certains services
+  // (notamment Légalisations) n'ont aucun custom field de motif.
+  const hasMotifKey = ctx.motifKey.trim().length > 0;
+  const hasMotif = ctx.motif.trim().length > 0;
+  if (hasMotifKey !== hasMotif) {
+    const error = "Motif : la clé et la valeur doivent être fournies ensemble";
     console.error(`[franceHunter] Booking interrompu (motif invalide) — ${error}`);
     return { success: false, error };
   }

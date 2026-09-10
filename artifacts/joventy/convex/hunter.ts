@@ -69,6 +69,21 @@ export const setHunterConfig = mutation({
     cevAutoCancelOnLimitReached: v.optional(v.boolean()),
     // Priorité d'index pour la distribution P4 Espagne (0 = premier choix de slot)
     spainPriorityIndex: v.optional(v.number()),
+    // France Territorial
+    franceConsulateSlug: v.optional(v.string()),
+    franceServiceId: v.optional(v.string()),
+    franceServiceName: v.optional(v.string()),
+    franceContactFirstname: v.optional(v.string()),
+    franceContactLastname: v.optional(v.string()),
+    franceContactEmail: v.optional(v.string()),
+    franceContactMobile: v.optional(v.string()),
+    franceBirthMonth: v.optional(v.number()),
+    franceBirthDay: v.optional(v.number()),
+    franceBirthYear: v.optional(v.number()),
+    franceMotifKey: v.optional(v.string()),
+    franceMotif: v.optional(v.string()),
+    franceAutoBook: v.optional(v.boolean()),
+    franceScanIntervalMs: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -106,6 +121,20 @@ export const setHunterConfig = mutation({
       cevDossierDeadlines?: string;
       cevUseProxy?: boolean;
       cevScanIntervalSec?: number;
+      franceConsulateSlug?: string;
+      franceServiceId?: string;
+      franceServiceName?: string;
+      franceContactFirstname?: string;
+      franceContactLastname?: string;
+      franceContactEmail?: string;
+      franceContactMobile?: string;
+      franceBirthMonth?: number;
+      franceBirthDay?: number;
+      franceBirthYear?: number;
+      franceMotifKey?: string;
+      franceMotif?: string;
+      franceAutoBook?: boolean;
+      franceScanIntervalMs?: number;
     } }).hunterConfig;
 
     const existingFull = existing as (typeof existing & {
@@ -169,6 +198,21 @@ export const setHunterConfig = mutation({
         cevAutoCancelOnLimitReached: args.cevAutoCancelOnLimitReached ?? (existing as any)?.cevAutoCancelOnLimitReached ?? undefined,
         // Spain priority index (0 est valide → ne pas utiliser ?? qui ignorerait 0)
         spainPriorityIndex: args.spainPriorityIndex !== undefined ? args.spainPriorityIndex : (existing as any)?.spainPriorityIndex,
+        // France Territorial — valeurs explicites du service/contact sélectionnés dans l'admin
+        franceConsulateSlug: args.franceConsulateSlug?.trim() || existing?.franceConsulateSlug,
+        franceServiceId: args.franceServiceId?.trim() || existing?.franceServiceId,
+        franceServiceName: args.franceServiceName?.trim() || existing?.franceServiceName,
+        franceContactFirstname: args.franceContactFirstname?.trim() || existing?.franceContactFirstname,
+        franceContactLastname: args.franceContactLastname?.trim() || existing?.franceContactLastname,
+        franceContactEmail: args.franceContactEmail?.trim() || existing?.franceContactEmail,
+        franceContactMobile: args.franceContactMobile?.trim() || existing?.franceContactMobile,
+        franceBirthMonth: args.franceBirthMonth ?? existing?.franceBirthMonth,
+        franceBirthDay: args.franceBirthDay ?? existing?.franceBirthDay,
+        franceBirthYear: args.franceBirthYear ?? existing?.franceBirthYear,
+        franceMotifKey: args.franceMotifKey !== undefined ? args.franceMotifKey : existing?.franceMotifKey,
+        franceMotif: args.franceMotif !== undefined ? args.franceMotif : existing?.franceMotif,
+        franceAutoBook: args.franceAutoBook ?? existing?.franceAutoBook ?? false,
+        franceScanIntervalMs: args.franceScanIntervalMs ?? existing?.franceScanIntervalMs ?? 30_000,
       },
       updatedAt: Date.now(),
     });
@@ -493,6 +537,7 @@ export const recordHeartbeat = internalMutation({
       v.literal("captcha"),
       v.literal("error"),
       v.literal("payment_required"),
+      v.literal("slot_found"),
     ),
     errorMessage: v.optional(v.string()),
     shouldPause: v.optional(v.boolean()),

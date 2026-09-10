@@ -37,7 +37,12 @@
  * Requirements couverts : 9.3, 11.1, 11.2, 11.3, 11.4, 13.2, 13.3, 14.3.
  */
 
-import type { HunterJob } from "../convexClient.js";
+import {
+  reportSlotDiscovery,
+  reportSlotFound,
+  sendHeartbeat,
+  type HunterJob,
+} from "../convexClient.js";
 import type { SessionResult } from "../usaPortal/types.js";
 import { proxyPool } from "../browser.js";
 
@@ -216,8 +221,8 @@ export function mapJobToFranceConfig(job: HunterJob): FranceJobConfig | null {
   const consulateSlug = readString(view.franceConsulateSlug);
   const serviceId = readString(view.franceServiceId);
   const serviceName = readString(view.franceServiceName);
-  const motifRaw = readString(view.franceMotif);
-  const motifKey = readString(view.franceMotifKey);
+  const motifRaw = readString(view.franceMotif) ?? "";
+  const motifKey = readString(view.franceMotifKey) ?? "";
 
   const firstname = readString(view.franceContactFirstname);
   const lastname = readString(view.franceContactLastname);
@@ -231,8 +236,6 @@ export function mapJobToFranceConfig(job: HunterJob): FranceJobConfig | null {
   if (consulateSlug === undefined) missing.push("franceConsulateSlug");
   if (serviceId === undefined) missing.push("franceServiceId");
   if (serviceName === undefined) missing.push("franceServiceName");
-  if (motifRaw === undefined) missing.push("franceMotif");
-  if (motifKey === undefined) missing.push("franceMotifKey");
   if (firstname === undefined) missing.push("franceContactFirstname");
   if (lastname === undefined) missing.push("franceContactLastname");
   if (email === undefined) missing.push("franceContactEmail");
@@ -245,8 +248,6 @@ export function mapJobToFranceConfig(job: HunterJob): FranceJobConfig | null {
     consulateSlug === undefined ||
     serviceId === undefined ||
     serviceName === undefined ||
-    motifRaw === undefined ||
-    motifKey === undefined ||
     firstname === undefined ||
     lastname === undefined ||
     email === undefined ||
@@ -583,19 +584,43 @@ async function handlePublication(
   publication: SlotPublication,
   capsolverApiKey: string,
 ): Promise<SessionResult> {
+  const firstSlot: FranceSlot | undefined = publication.slots[0];
+
   // Pas de réservation automatique : une publication suffit à signaler un slot.
   if (!config.autoBook) {
     console.log(
       `[franceHunter] Publication trouvée mais autoBook désactivé (Job ${job.id}) — ` +
         `signalement "slot_found" sans réservation.`,
     );
+    if (firstSlot !== undefined) {
+      reportSlotDiscovery({
+        applicationId: job.id,
+        destination: "france",
+        office: config.service.serviceName,
+        dateFound: publication.day,
+        timeFound: firstSlot.time,
+        outcome: "captured",
+        reason: "auto_booking_disabled",
+        mode: "schedule",
+      });
+    }
+    try {
+      await sendHeartbeat({
+          applicationId: job.id,
+          result: "slot_found",
+        });
+    } catch (error) {
+      console.error(
+        `[franceHunter] Signalement Convex du créneau échoué (Job ${job.id}) :`,
+        error instanceof Error ? error.message : error,
+      );
+    }
     return "slot_found";
   }
 
   // Choix du premier créneau du jour publié (le cas "exclude_days_retraction"
   // n'expose pas de créneaux directement : sans slot exploitable, on signale
   // tout de même la publication comme un slot trouvé).
-  const firstSlot: FranceSlot | undefined = publication.slots[0];
   if (firstSlot === undefined) {
     console.log(
       `[franceHunter] Publication sans créneau exploitable (Job ${job.id}, raison=${publication.reason}) — ` +
@@ -641,6 +666,23 @@ async function handlePublication(
       ? "accepté sans qrCode (confirmation email)"
       : `${result.qrCodes?.length ?? 0} qrCode(s)`;
     console.log(`[franceHunter] Booking réussi (Job ${job.id}) : ${confirmation}.`);
+    try {
+      await reportSlotFound({
+        applicationId: job.id,
+        date: publication.day,
+        time: firstSlot.time,
+        location: `Kinshasa — ${config.service.serviceName}`,
+        confirmationCode: result.acceptedWithoutQr
+          ? "Réservation acceptée — confirmation envoyée par email"
+          : undefined,
+      });
+    } catch (error) {
+      // Ne jamais retenter la réservation quand le portail l'a acceptée.
+      console.error(
+        `[franceHunter] Booking accepté mais signalement Convex échoué (Job ${job.id}) :`,
+        error instanceof Error ? error.message : error,
+      );
+    }
     return "slot_found";
   }
 

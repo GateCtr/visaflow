@@ -886,6 +886,20 @@ async function main(): Promise<void> {
       log("ERROR", `[${due.applicantName}] Erreur session non capturée: ${err}`);
     }
 
+    if (due.destination === "france" && result !== "slot_found") {
+      try {
+        await sendHeartbeat({
+          applicationId: due.id,
+          result: result === "error" ? "error" : "not_found",
+          errorMessage: result === "error"
+            ? "Le cycle France a échoué ; consulter les logs techniques du hunter."
+            : undefined,
+        });
+      } catch (heartbeatError) {
+        log("WARN", `[${due.applicantName}] Heartbeat France échoué: ${heartbeatError}`);
+      }
+    }
+
     await handleResult(due, result);
 
     if (result !== "slot_found") {

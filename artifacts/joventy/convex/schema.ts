@@ -138,6 +138,22 @@ const hunterConfig = v.object({
   // Un dossier avec spainPriorityIndex=0 obtient le premier choix de slot (date la plus proche).
   // Les dossiers sans index sont placés après ceux qui en ont un, par tri alphabétique ID.
   spainPriorityIndex: v.optional(v.number()),
+  // ── France Territorial (consulat.gouv.fr / Troov) ──────────────────────────
+  franceConsulateSlug: v.optional(v.string()),
+  franceServiceId: v.optional(v.string()),
+  franceServiceName: v.optional(v.string()),
+  franceContactFirstname: v.optional(v.string()),
+  franceContactLastname: v.optional(v.string()),
+  franceContactEmail: v.optional(v.string()),
+  franceContactMobile: v.optional(v.string()),
+  /** Mois de naissance indexé à partir de zéro, comme attendu par le portail. */
+  franceBirthMonth: v.optional(v.number()),
+  franceBirthDay: v.optional(v.number()),
+  franceBirthYear: v.optional(v.number()),
+  franceMotifKey: v.optional(v.string()),
+  franceMotif: v.optional(v.string()),
+  franceAutoBook: v.optional(v.boolean()),
+  franceScanIntervalMs: v.optional(v.number()),
 });
 
 export default defineSchema({

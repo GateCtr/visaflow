@@ -108,6 +108,21 @@ export interface HunterJob {
     cevSiphonedValidUntil?: number;
     /** Active l'annulation automatique du RDV existant quand la limite Overview Cas 2 est atteinte */
     cevAutoCancelOnLimitReached?: boolean;
+    // France Territorial (consulat.gouv.fr)
+    franceConsulateSlug?: string;
+    franceServiceId?: string;
+    franceServiceName?: string;
+    franceContactFirstname?: string;
+    franceContactLastname?: string;
+    franceContactEmail?: string;
+    franceContactMobile?: string;
+    franceBirthMonth?: number;
+    franceBirthDay?: number;
+    franceBirthYear?: number;
+    franceMotifKey?: string;
+    franceMotif?: string;
+    franceAutoBook?: boolean;
+    franceScanIntervalMs?: number;
   };
   spainOtpConfig?: {
     channel: "email" | "sms" | "manual";
