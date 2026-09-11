@@ -964,7 +964,7 @@ interface SpainScanTraceData {
     count: number;
     names?: string;
   };
-  agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string }>;
+  agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string; agendaConfirmed?: boolean }>;
   datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
   bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number; gsfBytes?: number; signinBytes?: number; bktToken?: string; locator?: string }>;
   /** Durée réelle du cycle de scan (ms) */
@@ -1260,6 +1260,12 @@ function SpainScanTraceBlock({ scanTrace }: { scanTrace: string }) {
                 {trace.agendas.map((a, i) => (
                   <p key={i} className={`text-[9px] ${a.ok ? "text-slate-600" : "text-red-500"}`}>
                     {a.serviceName} #{a.serviceId} — {a.bytes}B{a.agendaId ? ` · ${a.agendaId}` : ""}
+                    {a.agendaId && a.agendaConfirmed === false && (
+                      <span className="ml-1 text-amber-600 font-semibold">(fallback)</span>
+                    )}
+                    {a.agendaId && a.agendaConfirmed === true && (
+                      <span className="ml-1 text-emerald-600">(rendu)</span>
+                    )}
                   </p>
                 ))}
               </div>

@@ -657,7 +657,7 @@ interface WorkerSpainTrace {
     bytes: number; ok: boolean; count: number; names?: string;
     allowAppointment?: boolean; serviceContainer?: boolean; dialogConfirm?: boolean;
   };
-  agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string }>;
+  agendas: Array<{ serviceId: string; serviceName: string; bytes: number; ok: boolean; agendaId?: string; agendaConfirmed?: boolean }>;
   datetimes: Array<{ serviceId: string; serviceName: string; month: string; bytes: number; slots: number; ok: boolean }>;
   bookings: Array<{ applicant: string; status: string; detail?: string; ms?: number; gsfBytes?: number; signinBytes?: number; bktToken?: string; locator?: string }>;
   ipRotations: number;
@@ -1711,6 +1711,9 @@ export async function runDossierWorker(
       bytes: phpState._trace.agBytes,
       ok: phpState.agendaId !== "" || phpState._trace.agBytes > 10,
       agendaId: phpState.agendaId || undefined,
+      // Distingue agenda RENDU par getagendas/ (confirmé) d'un agenda injecté par FALLBACK
+      // (getagendas/ vide, agendaId connu en dur). Un agenda à 2B + confirmed=false = fallback.
+      agendaConfirmed: phpState.agendaConfirmed,
     }];
   }
 
@@ -1735,6 +1738,7 @@ export async function runDossierWorker(
       bytes: phpState._trace.agBytes,
       ok: phpState.agendaId !== "" || phpState._trace.agBytes > 10,
       agendaId: phpState.agendaId || undefined,
+      agendaConfirmed: phpState.agendaConfirmed,
     }];
   }
 
