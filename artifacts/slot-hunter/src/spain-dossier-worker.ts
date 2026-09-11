@@ -267,6 +267,14 @@ const DATETIME_PARALLEL_MONTHS = ((): number => {
   return Math.max(1, Math.min(4, Number.isFinite(v) ? Math.round(v) : 2));
 })();
 
+/** Nombre de retries immédiats de la vague datetime/ quand l'agenda est CONFIRMÉ (getagendas
+ *  a répondu) mais que TOUS les mois datetime/ renvoient 0B (vide tronqué serveur). On retente
+ *  la vague complète jusqu'à N fois avant d'abandonner (→ session_dead/not_found). Défaut 3. */
+const DATETIME_ALLZERO_MAX_RETRIES = ((): number => {
+  const v = Number(process.env.SPAIN_DATETIME_ALLZERO_MAX_RETRIES ?? "3");
+  return Math.max(1, Math.min(5, Number.isFinite(v) ? Math.round(v) : 3));
+})();
+
 /** Nombre de mois à scanner via datetime/ (mois courant + N suivants) */
 const DATETIME_MONTHS_AHEAD = ((): number => {
   const v = Number(process.env.SPAIN_DATETIME_MONTHS_AHEAD ?? "4");
@@ -935,6 +943,60 @@ export async function scanDatetimeDirect(
   // dans l'ordre des mois, pour rester déterministes (pas de mutation concurrente).
   const monthResults = await Promise.all(parallelOffsets.map((off) => scanOneMonth(off)));
   monthsChecked = monthResults.length;
+
+  // ── RETRY CIBLÉ sur 0B d'un mois (faux négatif serveur) ───────────────────────
+  // Cas observé en prod (Cuba/São Paulo) : datetime/ renvoie parfois 0B sur un mois
+  // alors qu'il a des créneaux (réponse serveur tronquée, ~2B, pas une vraie absence).
+  // Signal fiable : si AU MOINS UN mois a RÉPONDU proprement (JSONP valide, payload
+  // non-null, avec ou sans créneaux), alors le serveur/session est sain → tout AUTRE mois
+  // en 0B est une anomalie (tronqué), PAS « pas de créneau ». On retente UNE fois,
+  // immédiatement, CHAQUE mois en 0B — peu importe sa position (1er ou 2e).
+  // Ne se déclenche PAS si TOUS les mois sont en 0B (cas Kinshasa « vraiment aucun
+  // créneau » : aucun mois n'a répondu → pas de retry inutile).
+  const anyResponded = monthResults.some(
+    (r) => !r.isHttpNull && !r.isNetworkError && !r.isServerOverload,
+  );
+  if (anyResponded) {
+    for (let i = 0; i < monthResults.length; i++) {
+      if (monthResults[i].isHttpNull) {
+        const off = parallelOffsets[i];
+        log("INFO", `${tag}   ↻ ${monthResults[i].monthLabel}: 0B alors qu'un autre mois a répondu — retry immédiat du mois`);
+        const retried = await scanOneMonth(off);
+        // On garde le retry seulement s'il apporte du mieux (a répondu ou trouvé des slots).
+        if (!retried.isHttpNull || retried.slots.length > 0) {
+          monthResults[i] = retried;
+          log("INFO", `${tag}   ↻ ${retried.monthLabel}: retry → ${retried.slots.length > 0 ? retried.slots.length + " créneau(x)" : retried.isHttpNull ? "0 (0B persistant)" : "0 (vide)"}`);
+        }
+      }
+    }
+  }
+
+  // ── RETRY VAGUE COMPLÈTE : agenda CONFIRMÉ mais TOUS les mois datetime en 0B ───
+  // On n'atteint scanDatetimeDirect QUE si getagendas/ a rendu l'agenda (sinon
+  // refreshSessionAndScan sort en not_found avant). Donc arriver ici = agenda ouvert.
+  // Si malgré ça datetime/ renvoie 0B sur TOUS les mois, c'est suspect : l'agenda est
+  // ouvert (donc il DEVRAIT y avoir des créneaux) mais le serveur renvoie du vide tronqué.
+  // Plutôt que de conclure session_dead (réinit PHPSESSID, lourd) ou not_found, on retente
+  // la vague datetime IMMÉDIATEMENT, jusqu'à DATETIME_ALLZERO_MAX_RETRIES fois. Si toujours
+  // 0B partout après ça → on laisse la suite trancher (session_dead/not_found).
+  const allZero = (rs: typeof monthResults): boolean =>
+    rs.length > 0 && rs.every((r) => r.isHttpNull);
+  if (phpState.agendaId && allZero(monthResults)) {
+    for (let attempt = 1; attempt <= DATETIME_ALLZERO_MAX_RETRIES; attempt++) {
+      log("INFO", `${tag}   ↻↻ agenda ouvert mais TOUS les mois datetime 0B — retry vague ${attempt}/${DATETIME_ALLZERO_MAX_RETRIES} (immédiat)`);
+      const retryWave = await Promise.all(parallelOffsets.map((off) => scanOneMonth(off)));
+      if (!allZero(retryWave)) {
+        // Au moins un mois a répondu → on adopte cette vague et on sort.
+        for (let i = 0; i < monthResults.length; i++) monthResults[i] = retryWave[i];
+        const found = retryWave.reduce((n, r) => n + r.slots.length, 0);
+        log("INFO", `${tag}   ↻↻ retry vague ${attempt} → ${found > 0 ? found + " créneau(x)" : "réponse OK (0 créneau)"}`);
+        break;
+      }
+      if (attempt === DATETIME_ALLZERO_MAX_RETRIES) {
+        log("WARN", `${tag}   ↻↻ toujours 0B partout après ${DATETIME_ALLZERO_MAX_RETRIES} retries — abandon (suite: session_dead/not_found)`);
+      }
+    }
+  }
 
   for (const r of monthResults) {
     if (r.isNetworkError) networkErrorCount++;
