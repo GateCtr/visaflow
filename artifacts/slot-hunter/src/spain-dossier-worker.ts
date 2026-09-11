@@ -986,7 +986,8 @@ export async function scanDatetimeDirect(
 
   // Cas 2 — Session PHP morte : agenda présent mais datetime/ retourne 0B HTTP sur tous les mois.
   // Si agendaId est absent le serveur retourne 0B normalement → pas de faux positif.
-  // Si agendaId est présent le serveur DOIT retourner du JSONP valide → 0B = session expirée.
+  // Si agendaId est présent (confirmé par getagendas/) le serveur DOIT retourner du JSONP
+  // valide → 0B = session expirée.
   if (monthsChecked >= 2 && phpState.agendaId && httpNullCount === monthsChecked) {
     log("WARN", `${tag}   ⚠️ Session PHP morte — agendaId présent mais ${httpNullCount}/${monthsChecked} mois → 0B HTTP → réinit PHPSESSID`);
     return {
@@ -1202,37 +1203,59 @@ export async function refreshSessionAndScan(
   const mainUrl = makeDirectUrl(ds, "main/");
   const mainHeaders = makeDirectHeaders(ds);
   let capturedMainHtml = "";
-  try {
-    let mainBody = "";
-    let mainOk = false;
-    for (let attempt = 0; attempt <= RS_MAX_RETRIES; attempt++) {
-      const rm = await fetchRetry(mainUrl, { headers: mainHeaders }, "③ GET /main/");
-      mainBody = rm.body;
-      capturedMainHtml = rm.body;
-      // Merge Set-Cookie (PHPSESSID peut être renouvelé)
-      const newCookies = extractCookies(rm.res.headers as any);
-      Object.assign(ds.jar, newCookies);
-      if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
-      if (mainBody.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
-      // Réponse tronquée (0B ou 6kB = surcharge PHP) → retry sur la même IP
-      if (attempt < RS_MAX_RETRIES) {
-        const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
-        log("WARN", `${tag} ⏳ ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué, surcharge PHP) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
-        await new Promise((r) => setTimeout(r, backoff));
-      }
-    }
-    if (!mainOk) {
-      log("WARN", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué après retries) → server_overload`);
-      return { status: "server_overload", errorMessage: `/main/ ${mainBody.length}B tronqué`, monthTraces: [] };
-    }
-    log("INFO", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB ✅`);
-  } catch (e) {
-    log("WARN", `${tag} ③ /main/ → erreur: ${e}`);
-    return { status: "proxy_error", errorMessage: `/main/: ${e}`, monthTraces: [] };
-  }
 
-  // 4. getwidgetconfigurations/
-  const cfgPayload = await callDirect(ds, "getwidgetconfigurations/", undefined, tag);
+  // ── main // config EN PARALLÈLE (validé 6/6) ──────────────────────────────────
+  // getwidgetconfigurations/ (config) ne dépend QUE du PHPSESSID (posé au POST token),
+  // pas de /main/. On lance donc main (avec sa boucle de retry troncature) ET config
+  // ENSEMBLE. Le PHPSESSID ne se renouvelant jamais via Set-Cookie (prouvé), aucun risque
+  // de race sur le jar partagé. Gain ~1s/cycle. On traite ensuite les résultats dans
+  // l'ordre : main d'abord (échec main = session cassée → server_overload/proxy_error),
+  // puis config.
+  type MainResult =
+    | { ok: true; html: string }
+    | { ok: false; status: "server_overload" | "proxy_error"; msg: string };
+  const runMain = async (): Promise<MainResult> => {
+    try {
+      let mainBody = "";
+      let mainOk = false;
+      for (let attempt = 0; attempt <= RS_MAX_RETRIES; attempt++) {
+        const rm = await fetchRetry(mainUrl, { headers: mainHeaders }, "③ GET /main/");
+        mainBody = rm.body;
+        const newCookies = extractCookies(rm.res.headers as any);
+        Object.assign(ds.jar, newCookies);
+        if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
+        if (mainBody.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
+        if (attempt < RS_MAX_RETRIES) {
+          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
+          log("WARN", `${tag} ⏳ ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué, surcharge PHP) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+        }
+      }
+      if (!mainOk) {
+        log("WARN", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué après retries) → server_overload`);
+        return { ok: false, status: "server_overload", msg: `/main/ ${mainBody.length}B tronqué` };
+      }
+      log("INFO", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB ✅`);
+      return { ok: true, html: mainBody };
+    } catch (e) {
+      log("WARN", `${tag} ③ /main/ → erreur: ${e}`);
+      return { ok: false, status: "proxy_error", msg: `/main/: ${e}` };
+    }
+  };
+
+  // Lancement parallèle main + config.
+  const [mainResult, cfgPayload] = await Promise.all([
+    runMain(),
+    callDirect(ds, "getwidgetconfigurations/", undefined, tag),
+  ]);
+
+  // Traiter main d'abord (session cassée = échec bloquant).
+  if (!mainResult.ok) {
+    return { status: mainResult.status, errorMessage: mainResult.msg, monthTraces: [] };
+  }
+  capturedMainHtml = mainResult.html;
+
+  // 4. getwidgetconfigurations/ (résultat du Promise.all)
   if (cfgPayload === CALL_DIRECT_HTTP_OVERLOAD) {
     log("WARN", `${tag} ④ getwidgetconfigurations/ → surcharge HTTP → server_overload`);
     return { status: "server_overload", errorMessage: "getwidgetconfigurations/ HTTP overload", monthTraces: [] };
@@ -1250,7 +1273,7 @@ export async function refreshSessionAndScan(
     registerDossierCaptcha(config.id, rsCaptchaSitekey || HCAPTCHA_SITEKEY, config.portalUrl.split("#")[0]);
   }
 
-  // 5. getservices/
+  // 5. getservices/ (séquentiel — obligatoire avant getagendas/)
   const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
   if (svcPayload === CALL_DIRECT_HTTP_OVERLOAD) {
     log("WARN", `${tag} ⑤ getservices/ → surcharge HTTP → server_overload`);
@@ -1260,27 +1283,21 @@ export async function refreshSessionAndScan(
     log("WARN", `${tag} ⑤ getservices/ → erreur réseau`);
     return { status: "proxy_error", errorMessage: "getservices/ network error", monthTraces: [] };
   }
-  const rawServices: Array<{ id: string; name: string }> =
-    svcPayload?.Services ?? svcPayload?.services ?? [];
-  const services = rawServices.filter((s) => s?.id).map((s) => ({
-    serviceId: String(s.id),
-    serviceName: (s.name ?? "").replace(/<[^>]*>/g, "").trim(),
-  }));
+  const rawServices: Array<{ id: string; name: string }> = svcPayload?.Services ?? svcPayload?.services ?? [];
+  const services = rawServices.filter((s) => s?.id).map((s) => ({ serviceId: String(s.id), serviceName: (s.name ?? "").replace(/<[^>]*>/g, "").trim() }));
   if (services.length === 0) {
-    // getservices/ → 0B/0 services = payload vide après retries callDirect. Ce n'est PAS
-    // une erreur fatale : c'est le signe d'un proxy mort ou d'une surcharge serveur.
-    // → proxy_error (rotation IP + réinit session) au lieu de error (qui tuerait le worker).
     log("WARN", `${tag} ⑤ getservices/ → 0 services (${JSON.stringify(svcPayload ?? "").length}B) → proxy_error (rotation)`);
     return { status: "proxy_error", errorMessage: "getservices/ 0 services (proxy mort/surcharge)", monthTraces: [] };
   }
   const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
   log("INFO", `${tag} ⑤ svc=${services.length} → "${bestSvc.serviceName.slice(0, 25)}" (${bestSvc.serviceId})`);
 
-  // 6. getagendas/
-  const agPayload = await callDirect(ds, "getagendas/", {
-    "services[]": bestSvc.serviceId,
-    selectedPeople: "1",
-  }, tag) as any;
+  // 6. getagendas/ (séquentiel APRÈS services/). C'est getagendas/ qui JUGE la présence
+  // de créneau : agenda rendu = créneau présent → datetime/ ; agenda vide = pas de créneau
+  // → not_found. Le parallélisme services//agendas a été RETIRÉ : quand getagendas/ partait
+  // en parallèle et répondait vide, datetime/ n'était PAS armé et renvoyait 0B → on ratait
+  // des créneaux réels (prouvé sur São Paulo). getagendas/ DOIT être terminé et confirmé.
+  const agPayload = await callDirect(ds, "getagendas/", { "services[]": bestSvc.serviceId, selectedPeople: "1" }, tag) as any;
   if (agPayload === CALL_DIRECT_HTTP_OVERLOAD) {
     log("WARN", `${tag} ⑥ getagendas/ → surcharge HTTP → server_overload`);
     return { status: "server_overload", errorMessage: "getagendas/ HTTP overload", monthTraces: [] };
@@ -1291,9 +1308,8 @@ export async function refreshSessionAndScan(
   }
   const rawAgendas: Array<{ id: string }> = agPayload?.Agendas ?? agPayload?.agendas ?? [];
   const agendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
-
   if (!agendaId) {
-    // Pas de créneau — comportement attendu quand le portail est fermé
+    // Agenda vide = pas de créneau (jugement sur getagendas/, comportement Kinshasa).
     log("INFO", `${tag} ⑥ agenda=(vide) — pas de créneau`);
     return {
       status: "not_found",
@@ -1302,7 +1318,6 @@ export async function refreshSessionAndScan(
       monthTraces: [{ month: "ag", bytes: JSON.stringify(agPayload ?? "").length, slots: 0, ok: true }],
     };
   }
-
   log("INFO", `${tag} ⑥ agenda=${agendaId} ✅ → datetime/`);
 
   // 7. datetime/ (multi-mois) — réutilise scanDatetimeDirect avec le phpState frais
