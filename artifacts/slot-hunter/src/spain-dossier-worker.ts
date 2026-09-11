@@ -1699,6 +1699,11 @@ export async function runDossierWorker(
       count: phpState.services.length,
       names: phpState.services.map((s) => s.serviceName).filter(Boolean).join(", "),
       allowAppointment: phpState.allowAppointment ?? undefined,
+      // Reprise des signaux /main/ pour lecture rapide dans l'historique (mêmes valeurs
+      // que workerTrace.main — getservices/ ne produit pas ces marqueurs, ils viennent
+      // du HTML /main/). Évite l'affichage trompeur "n/a" sur la ligne service.
+      serviceContainer: mainSigs.serviceContainer,
+      dialogConfirm: mainSigs.dialogConfirm,
     };
     workerTrace.agendas = [{
       serviceId: phpState.bestServiceId,
@@ -1720,6 +1725,9 @@ export async function runDossierWorker(
       count: phpState.services.length,
       names: phpState.services.map((s) => s.serviceName).filter(Boolean).join(", "),
       allowAppointment: phpState.allowAppointment ?? undefined,
+      // Reprise des signaux /main/ (idem workerTrace.main) — cohérence d'affichage.
+      serviceContainer: mainSigs.serviceContainer,
+      dialogConfirm: mainSigs.dialogConfirm,
     };
     workerTrace.agendas = [{
       serviceId: phpState.bestServiceId,
