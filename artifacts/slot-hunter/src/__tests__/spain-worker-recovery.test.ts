@@ -125,6 +125,7 @@ function makePhpState(agendaId = "agenda-42"): WorkerPhpState {
   return {
     services: [{ serviceId: "svc-1", serviceName: "Visa" }],
     agendaId,
+    agendaConfirmed: true,
     bestServiceId: "svc-1",
     bestServiceName: "Visa",
     allowAppointment: true,

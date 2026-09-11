@@ -147,3 +147,31 @@ export function formatPortalUrlForLog(url: string): string {
   }
   return url.length > 100 ? `${url.slice(0, 100)}…` : url;
 }
+
+// ─── IDs connus par portail (parallélisme services // agendas) ─────────────────
+/**
+ * Identifiants Bookitit connus en dur, indexés par widgetKey. Utilisés pour lancer
+ * getservices/ // getagendas/ EN PARALLÈLE : getservices/ est toujours rendu (avec ou
+ * sans créneaux), et comme on connaît le serviceId, on peut passer ce serviceId à
+ * getagendas/ dès le départ → getagendas/ ne dépend plus de l'ordre d'appel. L'agendaId
+ * sert de FALLBACK si getagendas/ (parallèle) répond vide alors qu'il y a des créneaux
+ * (race). Validé sur São Paulo / Cuba / Kinshasa (script diagnostic test-parallel-svc-agenda).
+ */
+const KNOWN_PORTAL_IDS: Record<string, { serviceId: string; agendaId: string }> = {
+  [KINSHASA_WIDGET_KEY]: { serviceId: KINSHASA_DEFAULT_SERVICE_ID, agendaId: KINSHASA_DEFAULT_AGENDA_ID },
+  [SAOPOLO_WIDGET_KEY]:  { serviceId: SAOPOLO_DEFAULT_SERVICE_ID,  agendaId: SAOPOLO_DEFAULT_AGENDA_ID },
+  [CUBA_LMD_WIDGET_KEY]: { serviceId: CUBA_LMD_DEFAULT_SERVICE_ID, agendaId: CUBA_LMD_DEFAULT_AGENDA_ID },
+};
+
+/**
+ * Retourne les IDs Bookitit connus (serviceId + agendaId) pour un portail, ou null si
+ * le portail est inconnu. Un portail inconnu doit rester en mode séquentiel classique
+ * (getservices/ → getagendas/ → datetime/), le parallélisme n'étant sûr que si l'on
+ * peut passer le serviceId connu à getagendas/.
+ *
+ * @param portalUrl - URL complète du widget citaconsular.es
+ */
+export function getKnownIdsForPortal(portalUrl: string): { serviceId: string; agendaId: string } | null {
+  const key = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$|#)/i)?.[1] ?? "";
+  return KNOWN_PORTAL_IDS[key] ?? null;
+}

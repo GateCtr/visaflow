@@ -43,6 +43,7 @@ import {
   type SpainBookingResult,
 } from "./spain-http-booking.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
+import { getKnownIdsForPortal } from "./spain-portals.js";
 import { registerDossierCaptcha, takeDossierToken } from "./spain-hcaptcha-prewarm.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
@@ -680,6 +681,12 @@ function parseMainSignals(html: string) {
 export interface WorkerPhpState {
   services: Array<{ serviceId: string; serviceName: string }>;
   agendaId: string;
+  /** true si l'agendaId a été CONFIRMÉ par getagendas/ (le serveur l'a rendu). false si
+   *  l'agendaId provient du FALLBACK connu en dur (getagendas/ a répondu vide sous
+   *  parallélisme). Décisif pour la classification datetime/ 0B : session_dead ne se
+   *  déclenche QUE si l'agenda est confirmé ; si forcé (fallback), 0B partout = not_found
+   *  (l'agenda n'est simplement pas servi → pas de créneau, PAS une session morte). */
+  agendaConfirmed: boolean;
   bestServiceId: string;
   bestServiceName: string;
   /** Valeur réelle du champ AllowAppointment retourné par getservices/ (null = absent du payload) */
@@ -763,8 +770,21 @@ export async function initPhpState(
     registerDossierCaptcha(config.id, captchaSitekey || HCAPTCHA_SITEKEY, config.portalUrl.split("#")[0]);
   }
 
-  // 2. getservices/ — une seule réponse par PHPSESSID (règle identique à getagendas/)
-  const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
+  // 2-3. getservices/ // getagendas/ — parallèle si IDs connus, séquentiel sinon.
+  // Portail à IDs connus : getservices/ toujours rendu + serviceId connu passé à
+  // getagendas/ → lancés ensemble (gain ~1.6s). getagendas/ vide sous parallélisme →
+  // fallback agendaId connu (agendaConfirmed=false). Portail inconnu → séquentiel.
+  const known = getKnownIdsForPortal(config.portalUrl.split("#")[0]);
+  let agPayloadEarly: any = undefined;
+  let svcPayload: any;
+  if (known) {
+    [svcPayload, agPayloadEarly] = await Promise.all([
+      callDirect(ds, "getservices/", undefined, tag),
+      callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag),
+    ]);
+  } else {
+    svcPayload = await callDirect(ds, "getservices/", undefined, tag);
+  }
   if (svcPayload === CALL_DIRECT_HTTP_OVERLOAD) {
     phpInitFailureBySession.set(session, "server_overload");
     return null;
@@ -804,13 +824,12 @@ export async function initPhpState(
 
   // Prioriser un service avec nom non-vide (comme test-bookitit-dynamic.ts l.195)
   const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
-  log("INFO", `${tag} 🎯 PHP init: ${services.length} service(s) → cible "${bestSvc.serviceName}" (${bestSvc.serviceId})`);
+  log("INFO", `${tag} 🎯 PHP init: ${services.length} service(s) → cible "${bestSvc.serviceName}" (${bestSvc.serviceId})${known ? " [// agendas]" : ""}`);
 
-  // 3. getagendas/ — une seule réponse par PHPSESSID (Règle §9)
-  const agPayload = await callDirect(ds, "getagendas/", {
-    "services[]": bestSvc.serviceId,
-    selectedPeople: "1",
-  }, tag) as any;
+  // 3. getagendas/ — parallèle (déjà lancé) si IDs connus, sinon séquentiel maintenant.
+  const agPayload: any = known
+    ? agPayloadEarly
+    : await callDirect(ds, "getagendas/", { "services[]": bestSvc.serviceId, selectedPeople: "1" }, tag);
   if (agPayload === CALL_DIRECT_HTTP_OVERLOAD) {
     phpInitFailureBySession.set(session, "server_overload");
     return null;
@@ -822,13 +841,21 @@ export async function initPhpState(
 
   const rawAgendas: Array<{ id: string }> =
     agPayload?.Agendas ?? agPayload?.agendas ?? [];
-  const agendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
+  const confirmedAgendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
   const agBytes = JSON.stringify(agPayload ?? "").length;
 
-  log("INFO", `${tag} ✅ PHP init OK — agenda=${agendaId || "(vide)"} | cycles suivants: datetime/ direct`);
+  // Fallback agendaId connu si getagendas/ vide sous parallélisme (agendaConfirmed=false).
+  let agendaId = confirmedAgendaId;
+  let agendaConfirmed = confirmedAgendaId !== "";
+  if (!agendaConfirmed && known) {
+    agendaId = known.agendaId;
+    log("INFO", `${tag} ✅ PHP init OK — agenda=(vide)→fallback ${agendaId} [non confirmé] | cycles suivants: datetime/ direct`);
+  } else {
+    log("INFO", `${tag} ✅ PHP init OK — agenda=${agendaId || "(vide)"} | cycles suivants: datetime/ direct`);
+  }
 
   return {
-    services, agendaId, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName,
+    services, agendaId, agendaConfirmed, bestServiceId: bestSvc.serviceId, bestServiceName: bestSvc.serviceName,
     allowAppointment, captchaRequired, captchaSitekey, ds,
     _trace: { cfgBytes, svcBytes, svcStr, agBytes },
   };
@@ -972,16 +999,17 @@ export async function scanDatetimeDirect(
   }
 
   // ── RETRY VAGUE COMPLÈTE : agenda CONFIRMÉ mais TOUS les mois datetime en 0B ───
-  // On n'atteint scanDatetimeDirect QUE si getagendas/ a rendu l'agenda (sinon
-  // refreshSessionAndScan sort en not_found avant). Donc arriver ici = agenda ouvert.
-  // Si malgré ça datetime/ renvoie 0B sur TOUS les mois, c'est suspect : l'agenda est
-  // ouvert (donc il DEVRAIT y avoir des créneaux) mais le serveur renvoie du vide tronqué.
-  // Plutôt que de conclure session_dead (réinit PHPSESSID, lourd) ou not_found, on retente
-  // la vague datetime IMMÉDIATEMENT, jusqu'à DATETIME_ALLZERO_MAX_RETRIES fois. Si toujours
-  // 0B partout après ça → on laisse la suite trancher (session_dead/not_found).
+  // Ne se déclenche QUE si l'agenda est CONFIRMÉ par getagendas/ (agendaConfirmed). Dans ce
+  // cas, l'agenda est réellement ouvert → il DEVRAIT y avoir des créneaux → 0B partout est
+  // suspect (vide tronqué serveur). Plutôt que de conclure session_dead (réinit PHPSESSID,
+  // lourd), on retente la vague datetime IMMÉDIATEMENT, jusqu'à DATETIME_ALLZERO_MAX_RETRIES
+  // fois. Si toujours 0B partout après ça → session_dead.
+  // Si l'agenda est FORCÉ par fallback (agendaConfirmed=false, getagendas/ a répondu vide),
+  // on NE retente PAS : 0B partout = l'agenda n'est pas servi = pas de créneau = not_found
+  // (cas Kinshasa). Retenter serait inutile et coûteux.
   const allZero = (rs: typeof monthResults): boolean =>
     rs.length > 0 && rs.every((r) => r.isHttpNull);
-  if (phpState.agendaId && allZero(monthResults)) {
+  if (phpState.agendaConfirmed && phpState.agendaId && allZero(monthResults)) {
     for (let attempt = 1; attempt <= DATETIME_ALLZERO_MAX_RETRIES; attempt++) {
       log("INFO", `${tag}   ↻↻ agenda ouvert mais TOUS les mois datetime 0B — retry vague ${attempt}/${DATETIME_ALLZERO_MAX_RETRIES} (immédiat)`);
       const retryWave = await Promise.all(parallelOffsets.map((off) => scanOneMonth(off)));
@@ -1046,11 +1074,13 @@ export async function scanDatetimeDirect(
     };
   }
 
-  // Cas 2 — Session PHP morte : agenda présent mais datetime/ retourne 0B HTTP sur tous les mois.
-  // Si agendaId est absent le serveur retourne 0B normalement → pas de faux positif.
-  // Si agendaId est présent (confirmé par getagendas/) le serveur DOIT retourner du JSONP
-  // valide → 0B = session expirée.
-  if (monthsChecked >= 2 && phpState.agendaId && httpNullCount === monthsChecked) {
+  // Cas 2 — Session PHP morte : agenda CONFIRMÉ par getagendas/ mais datetime/ retourne 0B
+  // HTTP sur tous les mois. La condition exige agendaConfirmed (PAS seulement agendaId
+  // présent) : si l'agenda vient du FALLBACK dur (getagendas/ vide, agendaConfirmed=false),
+  // 0B partout = l'agenda n'est pas servi = pas de créneau → not_found (géré plus bas via
+  // allSlots.length === 0), PAS session_dead. Ça évite une réinit PHPSESSID inutile sur les
+  // portails sans créneau du moment (cas Kinshasa, prouvé par script diagnostic).
+  if (monthsChecked >= 2 && phpState.agendaConfirmed && phpState.agendaId && httpNullCount === monthsChecked) {
     log("WARN", `${tag}   ⚠️ Session PHP morte — agendaId présent mais ${httpNullCount}/${monthsChecked} mois → 0B HTTP → réinit PHPSESSID`);
     return {
       status: "session_dead",
@@ -1335,8 +1365,31 @@ export async function refreshSessionAndScan(
     registerDossierCaptcha(config.id, rsCaptchaSitekey || HCAPTCHA_SITEKEY, config.portalUrl.split("#")[0]);
   }
 
-  // 5. getservices/ (séquentiel — obligatoire avant getagendas/)
-  const svcPayload = await callDirect(ds, "getservices/", undefined, tag) as any;
+  // ── 5-6. getservices/ // getagendas/ ─────────────────────────────────────────
+  // Portail à IDs CONNUS (serviceId + agendaId en dur) : on lance getservices/ ET
+  // getagendas/ EN PARALLÈLE. getservices/ est TOUJOURS rendu (avec ou sans créneau),
+  // et comme on connaît le serviceId, on le passe à getagendas/ dès le départ → getagendas/
+  // ne dépend plus de l'ordre d'appel ni de la réponse de getservices/. Gain ~1.6s/cycle
+  // (validé São Paulo/Cuba/Kinshasa via script diagnostic). Si getagendas/ répond quand
+  // même vide (race), on utilise l'agendaId connu en FALLBACK et on laisse datetime/ trancher
+  // (agendaConfirmed=false → 0B partout = not_found, PAS session_dead).
+  // Portail INCONNU : on retombe sur le séquentiel classique getservices/ → getagendas/
+  // (le parallélisme n'est sûr que si l'on peut passer le serviceId connu à getagendas/).
+  const known = getKnownIdsForPortal(config.portalUrl.split("#")[0]);
+
+  let svcPayload: any;
+  let agPayload: any;
+  if (known) {
+    [svcPayload, agPayload] = await Promise.all([
+      callDirect(ds, "getservices/", undefined, tag),
+      callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag),
+    ]);
+  } else {
+    // Séquentiel : getservices/ d'abord, puis getagendas/ avec le serviceId découvert.
+    svcPayload = await callDirect(ds, "getservices/", undefined, tag);
+  }
+
+  // getservices/ : toujours rendu → 0 services / sentinel = proxy mort ou surcharge.
   if (svcPayload === CALL_DIRECT_HTTP_OVERLOAD) {
     log("WARN", `${tag} ⑤ getservices/ → surcharge HTTP → server_overload`);
     return { status: "server_overload", errorMessage: "getservices/ HTTP overload", monthTraces: [] };
@@ -1352,14 +1405,14 @@ export async function refreshSessionAndScan(
     return { status: "proxy_error", errorMessage: "getservices/ 0 services (proxy mort/surcharge)", monthTraces: [] };
   }
   const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
-  log("INFO", `${tag} ⑤ svc=${services.length} → "${bestSvc.serviceName.slice(0, 25)}" (${bestSvc.serviceId})`);
+  log("INFO", `${tag} ⑤ svc=${services.length} → "${bestSvc.serviceName.slice(0, 25)}" (${bestSvc.serviceId})${known ? " [// agendas]" : ""}`);
 
-  // 6. getagendas/ (séquentiel APRÈS services/). C'est getagendas/ qui JUGE la présence
-  // de créneau : agenda rendu = créneau présent → datetime/ ; agenda vide = pas de créneau
-  // → not_found. Le parallélisme services//agendas a été RETIRÉ : quand getagendas/ partait
-  // en parallèle et répondait vide, datetime/ n'était PAS armé et renvoyait 0B → on ratait
-  // des créneaux réels (prouvé sur São Paulo). getagendas/ DOIT être terminé et confirmé.
-  const agPayload = await callDirect(ds, "getagendas/", { "services[]": bestSvc.serviceId, selectedPeople: "1" }, tag) as any;
+  // Portail inconnu : getagendas/ maintenant, séquentiellement, avec le serviceId découvert.
+  if (!known) {
+    agPayload = await callDirect(ds, "getagendas/", { "services[]": bestSvc.serviceId, selectedPeople: "1" }, tag);
+  }
+
+  // getagendas/ : sentinels = surcharge/réseau (jamais une absence de créneau).
   if (agPayload === CALL_DIRECT_HTTP_OVERLOAD) {
     log("WARN", `${tag} ⑥ getagendas/ → surcharge HTTP → server_overload`);
     return { status: "server_overload", errorMessage: "getagendas/ HTTP overload", monthTraces: [] };
@@ -1369,23 +1422,36 @@ export async function refreshSessionAndScan(
     return { status: "proxy_error", errorMessage: "getagendas/ network error", monthTraces: [] };
   }
   const rawAgendas: Array<{ id: string }> = agPayload?.Agendas ?? agPayload?.agendas ?? [];
-  const agendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
-  if (!agendaId) {
-    // Agenda vide = pas de créneau (jugement sur getagendas/, comportement Kinshasa).
-    log("INFO", `${tag} ⑥ agenda=(vide) — pas de créneau`);
-    return {
-      status: "not_found",
-      serviceId: bestSvc.serviceId,
-      serviceName: bestSvc.serviceName,
-      monthTraces: [{ month: "ag", bytes: JSON.stringify(agPayload ?? "").length, slots: 0, ok: true }],
-    };
+  const confirmedAgendaId = rawAgendas.find((a) => a?.id)?.id ?? "";
+
+  // Résolution de l'agenda + du flag agendaConfirmed.
+  let agendaId = confirmedAgendaId;
+  let agendaConfirmed = confirmedAgendaId !== "";
+  if (!agendaConfirmed) {
+    if (known) {
+      // getagendas/ vide sous parallélisme : FALLBACK agendaId connu. datetime/ tranchera
+      // (agendaConfirmed=false → 0B partout = not_found, créneaux réels = found).
+      agendaId = known.agendaId;
+      log("INFO", `${tag} ⑥ agenda=(vide) → fallback ${agendaId} [non confirmé] → datetime/`);
+    } else {
+      // Portail inconnu + agenda vide = pas de créneau (jugement getagendas/, cf. Kinshasa).
+      log("INFO", `${tag} ⑥ agenda=(vide) — pas de créneau`);
+      return {
+        status: "not_found",
+        serviceId: bestSvc.serviceId,
+        serviceName: bestSvc.serviceName,
+        monthTraces: [{ month: "ag", bytes: JSON.stringify(agPayload ?? "").length, slots: 0, ok: true }],
+      };
+    }
+  } else {
+    log("INFO", `${tag} ⑥ agenda=${agendaId} ✅ → datetime/`);
   }
-  log("INFO", `${tag} ⑥ agenda=${agendaId} ✅ → datetime/`);
 
   // 7. datetime/ (multi-mois) — réutilise scanDatetimeDirect avec le phpState frais
   const phpState: WorkerPhpState = {
     services,
     agendaId,
+    agendaConfirmed,
     bestServiceId: bestSvc.serviceId,
     bestServiceName: bestSvc.serviceName,
     allowAppointment: null,
