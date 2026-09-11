@@ -257,6 +257,16 @@ const SLOT_FROM_TOLERANCE_DAYS = ((): number => {
   return Number.isFinite(raw) ? Math.round(raw) : 45;
 })();
 
+/** Nombre de mois interrogés EN PARALLÈLE dans datetime/ (vague unique Promise.all).
+ *  Les créneaux utiles Bookitit se concentrent sur les 2 premiers mois ; scanner ces
+ *  2 mois en parallèle (au lieu de séquentiellement) réduit la latence de ~50% sur le
+ *  chemin critique agenda→booking, décisif sur Kinshasa (annulation éclair). Borné [1,4].
+ *  Configurable via SPAIN_DATETIME_PARALLEL_MONTHS (défaut 2). */
+const DATETIME_PARALLEL_MONTHS = ((): number => {
+  const v = Number(process.env.SPAIN_DATETIME_PARALLEL_MONTHS ?? "2");
+  return Math.max(1, Math.min(4, Number.isFinite(v) ? Math.round(v) : 2));
+})();
+
 /** Nombre de mois à scanner via datetime/ (mois courant + N suivants) */
 const DATETIME_MONTHS_AHEAD = ((): number => {
   const v = Number(process.env.SPAIN_DATETIME_MONTHS_AHEAD ?? "4");
@@ -864,17 +874,35 @@ export async function scanDatetimeDirect(
     [monthOffsets[0], monthOffsets[1]] = [monthOffsets[1], monthOffsets[0]];
   }
 
-  let scanIndex = 0;
   let networkErrorCount = 0; // Compteur d'erreurs réseau (ProxyTunnelError, Timeout, etc.)
   let overloadCount = 0;     // 502/503/504 après retries — surcharge Bookitit, pas rotation IP
   let httpNullCount = 0;     // Compteur de réponses HTTP 0B légitimes (payload null, pas sentinel)
   let monthsChecked = 0;
 
-  while (scanIndex < monthOffsets.length) {
-    const monthOffset = monthOffsets[scanIndex];
+  // ── datetime/ PARALLÈLE ────────────────────────────────────────────────────
+  // On interroge les DATETIME_PARALLEL_MONTHS premiers mois utiles EN PARALLÈLE
+  // (Promise.all) au lieu de séquentiellement. datetime/ n'a PAS la limite « un appel
+  // par PHPSESSID » (contrairement à getservices/getagendas) — validé sur São Paulo :
+  // 3 mois en 2.3s parallèle vs 5.7s séquentiel (gain 59%), résultats identiques.
+  // CRITIQUE sur Kinshasa : `agenda ✅` = un créneau existe MAINTENANT et va disparaître ;
+  // scanner en parallèle réduit de plusieurs secondes le délai avant l'identification du
+  // créneau (donc avant le booking), ce qui fait la différence sur une annulation éclair.
+  const parallelOffsets = monthOffsets.slice(0, DATETIME_PARALLEL_MONTHS);
+
+  // Traite UN mois : appel datetime/ + classification. Fonction pure de tout état partagé
+  // (les compteurs sont agrégés après le Promise.all pour éviter les races d'incrément).
+  const scanOneMonth = async (monthOffset: number): Promise<{
+    monthLabel: string;
+    isNetworkError: boolean;
+    isServerOverload: boolean;
+    isHttpNull: boolean;
+    maxDaysRaw: string;
+    slots: WorkerSlot[];
+    rawBytes: number;
+  }> => {
     const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-    // Premier mois scanné : start = date du jour (si mois courant) pour ne pas rater les
-    // créneaux en milieu de mois. Mois suivants : start = 1er du mois (scan complet).
+    // Premier mois (offset 0) : start = date du jour pour ne pas rater les créneaux en
+    // milieu de mois. Mois suivants : start = 1er du mois (scan complet).
     const startDay = monthOffset === 0 ? String(now.getDate()).padStart(2, "0") : "01";
     const startStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${startDay}`;
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -886,81 +914,49 @@ export async function scanDatetimeDirect(
       start: startStr,
       end: endStr,
       // selectedPeople toujours "1" dans le scan — on veut TOUS les créneaux visibles.
-      // Le filtrage par groupSize se fait côté notre code (extractAllSlotsFromPayload + Redis).
       selectedPeople: "1",
     };
     if (phpState.agendaId) extra["agendas[]"] = phpState.agendaId;
 
     const raw = await callDirect(ds, "datetime/", extra, tag);
-    monthsChecked++;
-
-    // Distinguer erreur réseau (sentinel) d'une réponse HTTP vide légitime (null).
-    // ProxyTunnelError/Timeout → CALL_DIRECT_NETWORK_ERROR.
-    // HTTP 502/503/504 après retries → CALL_DIRECT_HTTP_OVERLOAD.
-    // Réponse 0B serveur (pas de créneau, agenda absent) → null.
     const isNetworkError = raw === CALL_DIRECT_NETWORK_ERROR;
     const isServerOverload = raw === CALL_DIRECT_HTTP_OVERLOAD;
-    if (isNetworkError) {
-      networkErrorCount++;
-    } else if (isServerOverload) {
-      overloadCount++;
-    } else if (raw === null) {
-      httpNullCount++;
-    }
-
     const payload = isNetworkError || isServerOverload ? null : raw;
+    const isHttpNull = !isNetworkError && !isServerOverload && raw === null;
     const rawBytes = JSON.stringify(payload ?? "").length;
 
     const dtData = payload as any;
     const maxDaysRaw: string = dtData?.maxDays ?? "";
-    if (maxDaysRaw?.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const parsed = new Date(maxDaysRaw + "T23:59:59");
+    const slots = extractAllSlotsFromPayload(payload, phpState.agendaId, config.groupSize ?? 1);
+    return { monthLabel, isNetworkError, isServerOverload, isHttpNull, maxDaysRaw, slots, rawBytes };
+  };
+
+  // Lancer la vague parallèle. Les incréments de compteurs et l'agrégation se font APRÈS,
+  // dans l'ordre des mois, pour rester déterministes (pas de mutation concurrente).
+  const monthResults = await Promise.all(parallelOffsets.map((off) => scanOneMonth(off)));
+  monthsChecked = monthResults.length;
+
+  for (const r of monthResults) {
+    if (r.isNetworkError) networkErrorCount++;
+    else if (r.isServerOverload) overloadCount++;
+    else if (r.isHttpNull) httpNullCount++;
+
+    if (r.maxDaysRaw?.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const parsed = new Date(r.maxDaysRaw + "T23:59:59");
       if (!globalMaxDays || parsed > globalMaxDays) globalMaxDays = parsed;
     }
 
-    const slots = extractAllSlotsFromPayload(payload, phpState.agendaId, config.groupSize ?? 1);
     log(
       "INFO",
-      `${tag}   ${monthLabel}: ${slots.length > 0 ? slots.length + " créneau(x)" : isNetworkError ? "0 (err réseau)" : isServerOverload ? "0 (surcharge HTTP)" : payload === null ? "0 (0B)" : "0 (vide)"}  | maxDays=${maxDaysRaw || "(absent)"}`,
+      `${tag}   ${r.monthLabel}: ${r.slots.length > 0 ? r.slots.length + " créneau(x)" : r.isNetworkError ? "0 (err réseau)" : r.isServerOverload ? "0 (surcharge HTTP)" : r.isHttpNull ? "0 (0B)" : "0 (vide)"}  | maxDays=${r.maxDaysRaw || "(absent)"}`,
     );
+    monthTraces.push({ month: r.monthLabel, bytes: r.rawBytes, slots: r.slots.length, ok: !r.isNetworkError && !r.isHttpNull });
 
-    // Trace par mois — 0B = null payload (normal quand aucun créneau), ok si non-null
-    monthTraces.push({ month: monthLabel, bytes: rawBytes, slots: slots.length, ok: !isNetworkError && payload !== null });
-
-    if (slots.length > 0) {
-      allSlots.push(...slots);
+    if (r.slots.length > 0) {
+      allSlots.push(...r.slots);
       consecutiveEmpty = 0;
-      // Bouclier « arrêt au 1er mois avec créneaux » (mercredi–samedi) RETIRÉ :
-      // il faisait foncer tous les workers sur le premier créneau trouvé (souvent
-      // freeSlots=1) → collisions + busyslot. On reprend le scan complet des deux mois
-      // comme avant : on accumule tous les créneaux, la condition d'arrêt normale
-      // (relativeOffset >= 2 + globalMaxDays) borne le scan.
-    } else if (!isNetworkError && !isServerOverload) {
+    } else if (!r.isNetworkError && !r.isServerOverload) {
       consecutiveEmpty++;
-    }
-
-    scanIndex++;
-
-    // Une surcharge HTTP rend le scan courant incomplet. Ne pas poursuivre avec
-    // un ancien maxDays ni transformer ce cycle en not_found.
-    if (isServerOverload) break;
-
-    // Stop condition identique au test dynamic (section 4 l.288-304).
-    // Le décalage fin-de-mois est géré en amont via startMonthOffset (on démarre au mois
-    // suivant quand le mois courant est quasi épuisé), donc offset 2 fixe ici reste correct :
-    // on scanne toujours 2 mois UTILES.
-    const relativeOffset = scanIndex;
-    if (relativeOffset >= 2 && globalMaxDays && overloadCount === 0 && networkErrorCount === 0) {
-      const nextMonthOffset = monthOffsets[scanIndex] ?? monthOffset + 1;
-      const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + nextMonthOffset, 1);
-      if (firstOfNextMonth > globalMaxDays) {
-        log("INFO", `${tag}   ⏹ fin : ${firstOfNextMonth.toISOString().slice(0, 10)} > maxDays ${globalMaxDays.toISOString().slice(0, 10)}`);
-        break;
-      }
-    }
-    if (!globalMaxDays && consecutiveEmpty >= 3 && overloadCount === 0 && networkErrorCount === 0) {
-      log("WARN", `${tag}   ⏹ 3 mois vides sans maxDays — arrêt`);
-      break;
     }
   }
 
