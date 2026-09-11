@@ -30,6 +30,9 @@ export const KINSHASA_CALENDAR_PUBLISH_DAYS = 36;
  */
 export const KINSHASA_DEFAULT_SERVICE_ID = "bkt1181774";
 
+/** Agenda Bookitit connu du portail Kinshasa (observé en prod). Documentation/diagnostic. */
+export const KINSHASA_DEFAULT_AGENDA_ID = "bkt391787";
+
 // ─── São Paulo (Brésil — "Saopolo") ──────────────────────────────────────────
 /** URL complète du widget Bookitit pour le portail São Paulo. */
 export const SAOPOLO_PORTAL_URL =
@@ -41,6 +44,9 @@ export const SAOPOLO_WIDGET_KEY = "2d01502f12dc08400e22aea87fb00ae34";
 /** Service Pasaportes São Paulo (validé 2026-08-11). */
 export const SAOPOLO_DEFAULT_SERVICE_ID = "bkt853215";
 
+/** Agenda Bookitit connu du portail São Paulo (observé en prod). */
+export const SAOPOLO_DEFAULT_AGENDA_ID = "bkt301070";
+
 // ─── Cuba / La Habana (LMD) ──────────────────────────────────────────────────
 /** URL complète du widget Bookitit pour le portail Cuba (La Habana / LMD). */
 export const CUBA_LMD_PORTAL_URL =
@@ -48,6 +54,10 @@ export const CUBA_LMD_PORTAL_URL =
 
 /** Clé Bookitit extraite de l'URL (publickey / widgetId) — portail Cuba LMD. */
 export const CUBA_LMD_WIDGET_KEY = "28330379fc95acafd31ee9e8938c278ff";
+
+/** Service + agenda Bookitit connus du portail Cuba LMD (observés en prod : test cuba). */
+export const CUBA_LMD_DEFAULT_SERVICE_ID = "bkt897578";
+export const CUBA_LMD_DEFAULT_AGENDA_ID = "bkt316096";
 
 // ─── Cameroun (Yaoundé) ───────────────────────────────────────────────────────
 /** Clé Bookitit — portail Cameroun. */

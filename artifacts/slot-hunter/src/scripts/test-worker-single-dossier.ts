@@ -24,7 +24,7 @@ import { initSpainRedis } from "../spain-redis-persistence.js";
 import { initDecodoPool } from "../spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "../convexClient.js";
 import { runDossierWorker, type SpainDossierConfig } from "../spain-dossier-worker.js";
-import { CUBA_LMD_PORTAL_URL, SAOPOLO_PORTAL_URL } from "../spain-portals.js";
+import { CUBA_LMD_PORTAL_URL, SAOPOLO_PORTAL_URL, KINSHASA_PORTAL_URL } from "../spain-portals.js";
 import { registerDossierCaptcha, prewarmAllDossiers } from "../spain-hcaptcha-prewarm.js";
 import { HCAPTCHA_SITEKEY } from "../spain-http-booking.js";
 
@@ -36,9 +36,10 @@ function L(level: string, msg: string) {
 }
 
 const ARG = process.argv[2]?.toLowerCase() ?? "";
-const CUBA_MODE    = ARG === "cuba";
-const SAOPOLO_MODE = ARG === "saopolo";
-const NAME_FILTER  = (CUBA_MODE || SAOPOLO_MODE) ? "" : ARG;
+const CUBA_MODE     = ARG === "cuba";
+const SAOPOLO_MODE  = ARG === "saopolo";
+const KINSHASA_MODE = ARG === "kinshasa";
+const NAME_FILTER  = (CUBA_MODE || SAOPOLO_MODE || KINSHASA_MODE) ? "" : ARG;
 
 async function main() {
   L("STEP", "=== test-worker-single-dossier.ts ===");
@@ -63,7 +64,26 @@ async function main() {
   // ── 2. Construire le config du dossier cible ───────────────────────────────
   let config: SpainDossierConfig;
 
-  if (CUBA_MODE) {
+  if (KINSHASA_MODE) {
+    // Mode Kinshasa : portail hardcodé, credentials factices. Sert à observer le
+    // comportement datetime/ en chemin rapide QUAND IL N'Y A PAS DE CRÉNEAU (agenda
+    // connu forcé) : renvoie-t-il "vide" (JSONP 0 slot → not_found) ou "0B" (null →
+    // risque session_dead) ? C'est le cas à sécuriser.
+    L("STEP", "2 — Mode Kinshasa (portail hardcodé, proxy CSV)");
+    config = {
+      id:            "test-kinshasa-001",
+      applicantName: "TEST KINSHASA",
+      visaType:      "visa",
+      login:         "TESTLOGIN",
+      password:      "TESTPASSWORD",
+      applicationId: "test-kinshasa-001",
+      otpChannel:    "email",
+      portalUrl:     KINSHASA_PORTAL_URL,
+      groupSize:     1,
+    };
+    L("OK", `Portal : ${KINSHASA_PORTAL_URL}`);
+    L("INFO", "Proxy  : pool CSV (es.decodo.com)");
+  } else if (CUBA_MODE) {
     // Mode Cuba : portail hardcodé, credentials factices (on teste PHP init seulement)
     L("STEP", "2 — Mode Cuba (portail hardcodé, proxy CSV)");
     config = {
