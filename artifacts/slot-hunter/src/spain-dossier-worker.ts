@@ -803,11 +803,27 @@ export async function initPhpState(
   let svcPayload: any;
   if (known) {
     const serviceStartedAt = Date.now();
-    const servicePromise = callDirect(ds, "getservices/", undefined, tag);
+    const servicePromise = (async () => {
+      const requestStartedAt = Date.now();
+      const payload = await callDirect(ds, "getservices/", undefined, tag);
+      log(
+        "INFO",
+        `${tag} ② getservices/ response après ${Date.now() - requestStartedAt}ms ` +
+          `(${payload === null ? "0B" : payload === CALL_DIRECT_NETWORK_ERROR ? "network_error" : payload === CALL_DIRECT_HTTP_OVERLOAD ? "http_overload" : "payload"})`,
+      );
+      return payload;
+    })();
     const agendaPromise = (async () => {
       await sleep(AGENDA_START_DELAY_MS);
       log("INFO", `${tag} ③ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (délai cible ${AGENDA_START_DELAY_MS}ms)`);
-      return callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
+      const requestStartedAt = Date.now();
+      const payload = await callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
+      log(
+        "INFO",
+        `${tag} ③ getagendas/ response après ${Date.now() - requestStartedAt}ms ` +
+          `(${payload === null ? "0B" : payload === CALL_DIRECT_NETWORK_ERROR ? "network_error" : payload === CALL_DIRECT_HTTP_OVERLOAD ? "http_overload" : "payload"})`,
+      );
+      return payload;
     })();
     [svcPayload, agPayloadEarly] = await Promise.all([servicePromise, agendaPromise]);
   } else {
@@ -986,7 +1002,13 @@ export async function scanDatetimeDirect(
     };
     if (phpState.agendaId) extra["agendas[]"] = phpState.agendaId;
 
+    const requestStartedAt = Date.now();
     const raw = await callDirect(ds, "datetime/", extra, tag);
+    log(
+      "INFO",
+      `${tag}   datetime ${monthLabel}: response après ${Date.now() - requestStartedAt}ms ` +
+        `(${raw === null ? "0B" : raw === CALL_DIRECT_NETWORK_ERROR ? "network_error" : raw === CALL_DIRECT_HTTP_OVERLOAD ? "http_overload" : "payload"})`,
+    );
     const isNetworkError = raw === CALL_DIRECT_NETWORK_ERROR;
     const isServerOverload = raw === CALL_DIRECT_HTTP_OVERLOAD;
     const payload = isNetworkError || isServerOverload ? null : raw;
@@ -1435,11 +1457,27 @@ export async function refreshSessionAndScan(
   let agPayload: any;
   if (known) {
     const serviceStartedAt = Date.now();
-    const servicePromise = callDirect(ds, "getservices/", undefined, tag);
+    const servicePromise = (async () => {
+      const requestStartedAt = Date.now();
+      const payload = await callDirect(ds, "getservices/", undefined, tag);
+      log(
+        "INFO",
+        `${tag} ⑤ getservices/ response après ${Date.now() - requestStartedAt}ms ` +
+          `(${payload === null ? "0B" : payload === CALL_DIRECT_NETWORK_ERROR ? "network_error" : payload === CALL_DIRECT_HTTP_OVERLOAD ? "http_overload" : "payload"})`,
+      );
+      return payload;
+    })();
     const agendaPromise = (async () => {
       await sleep(AGENDA_START_DELAY_MS);
       log("INFO", `${tag} ⑥ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (délai cible ${AGENDA_START_DELAY_MS}ms)`);
-      return callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
+      const requestStartedAt = Date.now();
+      const payload = await callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
+      log(
+        "INFO",
+        `${tag} ⑥ getagendas/ response après ${Date.now() - requestStartedAt}ms ` +
+          `(${payload === null ? "0B" : payload === CALL_DIRECT_NETWORK_ERROR ? "network_error" : payload === CALL_DIRECT_HTTP_OVERLOAD ? "http_overload" : "payload"})`,
+      );
+      return payload;
     })();
     [svcPayload, agPayload] = await Promise.all([servicePromise, agendaPromise]);
   } else {
