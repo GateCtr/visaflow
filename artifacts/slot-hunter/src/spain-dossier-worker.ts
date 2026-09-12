@@ -268,6 +268,22 @@ const DATETIME_PARALLEL_MONTHS = ((): number => {
   return Math.max(1, Math.min(4, Number.isFinite(v) ? Math.round(v) : 2));
 })();
 
+/** Délai positif avant getagendas/ pour les portails connus.
+ * getservices/ part immédiatement ; getagendas/ reste parallèle mais laisse au serveur
+ * le temps de recevoir et d'initialiser le service. Borné [0,5s], défaut 2s. */
+const AGENDA_START_DELAY_MS = ((): number => {
+  const v = Number(process.env.SPAIN_AGENDA_START_DELAY_MS ?? "2000");
+  return Math.max(0, Math.min(5_000, Number.isFinite(v) ? Math.round(v) : 2_000));
+})();
+
+/** Jitter cumulé entre les requêtes datetime/ de la première vague parallèle.
+ * Le premier mois part immédiatement ; les suivants sont décalés de quelques dizaines
+ * à quelques centaines de ms. Les retries 0B restent immédiats. Borné [0,1s]. */
+const DATETIME_MONTH_JITTER_MAX_MS = ((): number => {
+  const v = Number(process.env.SPAIN_DATETIME_MONTH_JITTER_MAX_MS ?? "200");
+  return Math.max(0, Math.min(1_000, Number.isFinite(v) ? Math.round(v) : 200));
+})();
+
 /** Nombre de retries immédiats de la vague datetime/ quand l'agenda est CONFIRMÉ (getagendas
  *  a répondu) mais que TOUS les mois datetime/ renvoient 0B (vide tronqué serveur). On retente
  *  la vague complète jusqu'à N fois avant d'abandonner (→ session_dead/not_found). Défaut 3. */
@@ -786,10 +802,14 @@ export async function initPhpState(
   let agPayloadEarly: any = undefined;
   let svcPayload: any;
   if (known) {
-    [svcPayload, agPayloadEarly] = await Promise.all([
-      callDirect(ds, "getservices/", undefined, tag),
-      callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag),
-    ]);
+    const serviceStartedAt = Date.now();
+    const servicePromise = callDirect(ds, "getservices/", undefined, tag);
+    const agendaPromise = (async () => {
+      await sleep(AGENDA_START_DELAY_MS);
+      log("INFO", `${tag} ③ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (délai cible ${AGENDA_START_DELAY_MS}ms)`);
+      return callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
+    })();
+    [svcPayload, agPayloadEarly] = await Promise.all([servicePromise, agendaPromise]);
   } else {
     svcPayload = await callDirect(ds, "getservices/", undefined, tag);
   }
@@ -934,7 +954,7 @@ export async function scanDatetimeDirect(
 
   // Traite UN mois : appel datetime/ + classification. Fonction pure de tout état partagé
   // (les compteurs sont agrégés après le Promise.all pour éviter les races d'incrément).
-  const scanOneMonth = async (monthOffset: number): Promise<{
+  const scanOneMonth = async (monthOffset: number, startDelayMs = 0): Promise<{
     monthLabel: string;
     isNetworkError: boolean;
     isServerOverload: boolean;
@@ -951,6 +971,11 @@ export async function scanDatetimeDirect(
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const endStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+    if (startDelayMs > 0) {
+      await sleep(startDelayMs);
+      log("INFO", `${tag}   datetime ${monthLabel}: jitter ${startDelayMs}ms avant dispatch`);
+    }
 
     const extra: Record<string, string> = {
       "services[]": phpState.bestServiceId,
@@ -976,7 +1001,18 @@ export async function scanDatetimeDirect(
 
   // Lancer la vague parallèle. Les incréments de compteurs et l'agrégation se font APRÈS,
   // dans l'ordre des mois, pour rester déterministes (pas de mutation concurrente).
-  const monthResults = await Promise.all(parallelOffsets.map((off) => scanOneMonth(off)));
+  const monthResults = await Promise.all(
+    parallelOffsets.map((off, index) => {
+      if (index === 0 || DATETIME_MONTH_JITTER_MAX_MS === 0) {
+        return scanOneMonth(off);
+      }
+      const baseDelay = Math.min(DATETIME_MONTH_JITTER_MAX_MS, index * 75);
+      const randomJitter = Math.floor(
+        Math.random() * (Math.min(50, DATETIME_MONTH_JITTER_MAX_MS - baseDelay) + 1),
+      );
+      return scanOneMonth(off, baseDelay + randomJitter);
+    }),
+  );
   monthsChecked = monthResults.length;
 
   // ── RETRY CIBLÉ sur 0B d'un mois (faux négatif serveur) ───────────────────────
@@ -1386,13 +1422,11 @@ export async function refreshSessionAndScan(
   }
 
   // ── 5-6. getservices/ // getagendas/ ─────────────────────────────────────────
-  // Portail à IDs CONNUS (serviceId + agendaId en dur) : on lance getservices/ ET
-  // getagendas/ EN PARALLÈLE. getservices/ est TOUJOURS rendu (avec ou sans créneau),
-  // et comme on connaît le serviceId, on le passe à getagendas/ dès le départ → getagendas/
-  // ne dépend plus de l'ordre d'appel ni de la réponse de getservices/. Gain ~1.6s/cycle
-  // (validé São Paulo/Cuba/Kinshasa via script diagnostic). Si getagendas/ répond quand
-  // même vide (race), on utilise l'agendaId connu en FALLBACK et on laisse datetime/ trancher
-  // (agendaConfirmed=false → 0B partout = not_found, PAS session_dead).
+  // Portail à IDs CONNUS : getservices/ part immédiatement ; getagendas/ part après
+  // un court délai positif. Les deux restent parallèles, mais ce délai réduit la course
+  // d'initialisation côté Bookitit sans payer le coût du séquentiel complet. Si
+  // getagendas/ répond quand même vide, on utilise l'agendaId connu en FALLBACK et on
+  // laisse datetime/ trancher (agendaConfirmed=false → 0B partout = not_found).
   // Portail INCONNU : on retombe sur le séquentiel classique getservices/ → getagendas/
   // (le parallélisme n'est sûr que si l'on peut passer le serviceId connu à getagendas/).
   const known = getKnownIdsForPortal(config.portalUrl.split("#")[0]);
@@ -1400,10 +1434,14 @@ export async function refreshSessionAndScan(
   let svcPayload: any;
   let agPayload: any;
   if (known) {
-    [svcPayload, agPayload] = await Promise.all([
-      callDirect(ds, "getservices/", undefined, tag),
-      callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag),
-    ]);
+    const serviceStartedAt = Date.now();
+    const servicePromise = callDirect(ds, "getservices/", undefined, tag);
+    const agendaPromise = (async () => {
+      await sleep(AGENDA_START_DELAY_MS);
+      log("INFO", `${tag} ⑥ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (délai cible ${AGENDA_START_DELAY_MS}ms)`);
+      return callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
+    })();
+    [svcPayload, agPayload] = await Promise.all([servicePromise, agendaPromise]);
   } else {
     // Séquentiel : getservices/ d'abord, puis getagendas/ avec le serviceId découvert.
     svcPayload = await callDirect(ds, "getservices/", undefined, tag);
