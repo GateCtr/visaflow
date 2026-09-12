@@ -276,6 +276,14 @@ const DATETIME_ALLZERO_MAX_RETRIES = ((): number => {
   return Math.max(1, Math.min(5, Number.isFinite(v) ? Math.round(v) : 3));
 })();
 
+/** Nombre de retries ciblés pour chaque mois datetime/ qui renvoie 0B alors
+ * qu'un autre mois a répondu correctement. Défaut : 3 retries après la requête
+ * initiale, soit jusqu'à 4 requêtes au total pour ce mois. */
+const DATETIME_MONTH_ZERO_MAX_RETRIES = ((): number => {
+  const v = Number(process.env.SPAIN_DATETIME_MONTH_ZERO_MAX_RETRIES ?? "3");
+  return Math.max(1, Math.min(5, Number.isFinite(v) ? Math.round(v) : 3));
+})();
+
 /** Nombre de mois à scanner via datetime/ (mois courant + N suivants) */
 const DATETIME_MONTHS_AHEAD = ((): number => {
   const v = Number(process.env.SPAIN_DATETIME_MONTHS_AHEAD ?? "4");
@@ -976,8 +984,9 @@ export async function scanDatetimeDirect(
   // alors qu'il a des créneaux (réponse serveur tronquée, ~2B, pas une vraie absence).
   // Signal fiable : si AU MOINS UN mois a RÉPONDU proprement (JSONP valide, payload
   // non-null, avec ou sans créneaux), alors le serveur/session est sain → tout AUTRE mois
-  // en 0B est une anomalie (tronqué), PAS « pas de créneau ». On retente UNE fois,
-  // immédiatement, CHAQUE mois en 0B — peu importe sa position (1er ou 2e).
+  // en 0B est une anomalie (tronqué), PAS « pas de créneau ». On retente jusqu'à
+  // DATETIME_MONTH_ZERO_MAX_RETRIES fois, immédiatement, CHAQUE mois en 0B — peu
+  // importe sa position (1er ou 2e).
   // Ne se déclenche PAS si TOUS les mois sont en 0B (cas Kinshasa « vraiment aucun
   // créneau » : aucun mois n'a répondu → pas de retry inutile).
   const anyResponded = monthResults.some(
@@ -987,12 +996,23 @@ export async function scanDatetimeDirect(
     for (let i = 0; i < monthResults.length; i++) {
       if (monthResults[i].isHttpNull) {
         const off = parallelOffsets[i];
-        log("INFO", `${tag}   ↻ ${monthResults[i].monthLabel}: 0B alors qu'un autre mois a répondu — retry immédiat du mois`);
-        const retried = await scanOneMonth(off);
-        // On garde le retry seulement s'il apporte du mieux (a répondu ou trouvé des slots).
-        if (!retried.isHttpNull || retried.slots.length > 0) {
+        for (let attempt = 1; attempt <= DATETIME_MONTH_ZERO_MAX_RETRIES; attempt++) {
+          log(
+            "INFO",
+            `${tag}   ↻ ${monthResults[i].monthLabel}: 0B alors qu'un autre mois a répondu — ` +
+              `retry ${attempt}/${DATETIME_MONTH_ZERO_MAX_RETRIES}`,
+          );
+          const retried = await scanOneMonth(off);
           monthResults[i] = retried;
-          log("INFO", `${tag}   ↻ ${retried.monthLabel}: retry → ${retried.slots.length > 0 ? retried.slots.length + " créneau(x)" : retried.isHttpNull ? "0 (0B persistant)" : "0 (vide)"}`);
+          log(
+            "INFO",
+            `${tag}   ↻ ${retried.monthLabel}: retry ${attempt}/${DATETIME_MONTH_ZERO_MAX_RETRIES} → ` +
+              `${retried.slots.length > 0 ? retried.slots.length + " créneau(x)" : retried.isHttpNull ? "0 (0B persistant)" : "0 (vide)"}`,
+          );
+          // Une réponse valide suffit : ne pas consommer les retries restants.
+          if (!retried.isHttpNull) {
+            break;
+          }
         }
       }
     }
@@ -1905,9 +1925,39 @@ export async function runDossierWorker(
           );
           phpState = await initPhpState(session, config, tag);
           if (!phpState) {
-            log("WARN", `${tag} ❌ Réinit PHP échouée (même IP) après proxy_error — exit worker`);
-            workerResult = { dossierId: config.id, status: "error", errorMessage: "proxy_error: réinit PHP impossible (même IP)" };
-            return workerResult;
+            // La CF est encore fraîche, mais l'identité PHP de cette IP est
+            // inutilisable. Une nouvelle tentative sur la même IP reproduirait
+            // le problème : rotationner immédiatement avec la séquence complète
+            // (nouvelle IP + TLS/CF + PHPSESSID).
+            log("WARN", `${tag} ❌ Réinit PHP échouée (même IP) après proxy_error — rotation IP immédiate`);
+            const newProxy = await rotateWorkerIp(session, proxyUrl, config, capsolverKey, tag, "proxy_error");
+            if (!newProxy) {
+              log("WARN", `${tag} ❌ Rotation impossible après échec de réinit — exit worker`);
+              workerResult = {
+                dossierId: config.id,
+                status: "error",
+                errorMessage: "proxy_error: réinit PHP impossible et rotation IP échouée",
+              };
+              return workerResult;
+            }
+            proxyUrl = newProxy;
+            phpState = await initPhpState(session, config, tag);
+            if (!phpState) {
+              log("WARN", `${tag} ❌ Réinit PHP échouée après rotation — exit worker`);
+              workerResult = {
+                dossierId: config.id,
+                status: "error",
+                errorMessage: "proxy_error: réinit PHP impossible après rotation",
+              };
+              return workerResult;
+            }
+            updatePhpTrace();
+            consecutiveProxyErrors = 0;
+            rt.proxyUrl = proxyUrl;
+            rt.session = session;
+            rt.phpState = phpState;
+            transition(rt, "recovered");
+            continue;
           }
           updatePhpTrace();
           rt.phpState = phpState;
