@@ -1529,7 +1529,8 @@ export async function refreshSessionAndScan(
 
   // ── 5-6. getservices/ // getagendas/ ─────────────────────────────────────────
   // Portail à IDs CONNUS : getservices/ part immédiatement ; getagendas/ part après
-  // un court délai positif. Les deux restent parallèles, mais ce délai réduit la course
+  // un jitter très court. Les deux restent réellement parallèles, avec seulement une
+  // légère désynchronisation pour éviter un départ systématiquement simultané.
   // d'initialisation côté Bookitit sans payer le coût du séquentiel complet. Si
   // getagendas/ répond quand même vide, on utilise l'agendaId connu en FALLBACK et on
   // laisse datetime/ trancher (agendaConfirmed=false → 0B partout = not_found).
