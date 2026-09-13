@@ -1581,13 +1581,31 @@ export async function refreshSessionAndScan(
   }
   if (svcPayload === CALL_DIRECT_NETWORK_ERROR) {
     log("WARN", `${tag} ⑤ getservices/ → erreur réseau`);
-    return { status: "proxy_error", errorMessage: "getservices/ network error", monthTraces: [] };
+    return {
+      status: "proxy_error",
+      errorMessage: "getservices/ network error",
+      forceProxyRotation: true,
+      monthTraces: [],
+    };
   }
   const rawServices: Array<{ id: string; name: string }> = svcPayload?.Services ?? svcPayload?.services ?? [];
   const services = rawServices.filter((s) => s?.id).map((s) => ({ serviceId: String(s.id), serviceName: (s.name ?? "").replace(/<[^>]*>/g, "").trim() }));
   if (services.length === 0) {
-    log("WARN", `${tag} ⑤ getservices/ → 0 services (${JSON.stringify(svcPayload ?? "").length}B) → proxy_error (rotation)`);
-    return { status: "proxy_error", errorMessage: "getservices/ 0 services (proxy mort/surcharge)", monthTraces: [] };
+    const emptyBody = svcPayload === null;
+    log(
+      "WARN",
+      `${tag} ⑤ getservices/ → 0 services (${JSON.stringify(svcPayload ?? "").length}B) ` +
+        `→ proxy_error (rotation immédiate${emptyBody ? ", body 0B" : ""})`,
+    );
+    return {
+      status: "proxy_error",
+      errorMessage: "getservices/ 0 services (proxy mort/surcharge)",
+      // getservices/ est l'étape d'initialisation de l'identité PHP. Quand elle
+      // renvoie 0B/0 service, recréer un PHPSESSID sur la même IP ne répare pas
+      // la cause observée (cas Mr Bertin 5) : changer d'IP immédiatement.
+      forceProxyRotation: true,
+      monthTraces: [],
+    };
   }
   const bestSvc = services.find((s) => s.serviceName.length > 0) ?? services[0];
   log("INFO", `${tag} ⑤ svc=${services.length} → "${bestSvc.serviceName.slice(0, 25)}" (${bestSvc.serviceId})${known ? " [// agendas]" : ""}`);
