@@ -21,8 +21,10 @@
  *
  * Le portail citaconsular a rejeté silencieusement des tentatives avec un token âgé
  * d'environ 29 s. Même si le TTL théorique hCaptcha est plus long, on ne remet donc
- * au worker qu'un token âgé de moins de 20 s. Au-delà, il est jeté et le worker
- * résout un token à chaud.
+ * au worker qu'un token âgé de moins de 20 s. Au-delà, il est jeté.
+ *
+ * Dès qu'un dossier voit un créneau, un burst de trois tokens est préparé en parallèle :
+ * le premier sert au candidat immédiat et les suivants sont disponibles pour les fallbacks.
  *
  * Contraintes de codage : strict mode, aucun `any`, types de retour explicites, logs
  * préfixés `[spain-hcaptcha-prewarm]`, secrets exclusivement via env (jamais journalisés).
@@ -33,24 +35,24 @@ import { solveSpainHcaptcha } from "./spain-http-booking.js";
 /** Âge maximal accepté par citaconsular au moment du signin/ (marge sous le seuil observé). */
 const FRESH_TTL_MS = 20_000;
 
-/**
- * Seuil de rafraîchissement (ms). Il est aligné sur l'âge maximal accepté : un token
- * ne doit jamais être servi pendant qu'un rafraîchissement est déjà nécessaire.
- */
-const REFRESH_AT_AGE_MS = FRESH_TTL_MS;
+/** Nombre de tokens gardés en réserve après la première détection d'un créneau. */
+const BURST_TOKEN_TARGET = 3;
 
-/** Sitekey/URL + token pré-résolu d'un dossier. */
+interface DossierCaptchaToken {
+  token: string;
+  solvedAtMs: number;
+}
+
+/** Sitekey/URL + tokens pré-résolus d'un dossier. */
 interface DossierCaptcha {
   /** Sitekey hCaptcha détecté pour ce dossier (dynamique via /main/). */
   sitekey: string;
   /** URL de page portail normalisée (sans fragment). */
   pageUrl: string;
-  /** Token gct pré-résolu (undefined tant que non résolu). */
-  token?: string;
-  /** Instant de résolution du token courant (ms epoch). */
-  solvedAtMs: number;
-  /** true tant qu'une résolution est en cours pour ce dossier (anti-concurrence). */
-  solving: boolean;
+  /** Tokens gct pré-résolus, chacun consommable par une seule requête signin/. */
+  tokens: DossierCaptchaToken[];
+  /** Nombre de résolutions en cours pour ce dossier (anti-concurrence). */
+  solving: number;
   /** true dès qu'un créneau a été détecté au moins une fois sur ce dossier (monotone).
    *  Utilisé pour la coupure conditionnelle : après HH:HCAPTCHA_PREWARM_CUTOFF_MIN, on
    *  n'entretient plus le token que des dossiers ayant vu un créneau (re-bookings), et on
@@ -66,9 +68,21 @@ function normalizePageUrl(pageUrl: string): string {
   return pageUrl.split("#")[0];
 }
 
-/** true si le token du dossier est frais (présent et dans le TTL). */
-function hasFreshToken(entry: DossierCaptcha, nowMs: number): boolean {
-  return entry.token !== undefined && nowMs - entry.solvedAtMs < FRESH_TTL_MS;
+/** Retire les tokens trop vieux et retourne le nombre encore disponibles. */
+function pruneExpiredTokens(entry: DossierCaptcha, dossierId: string, nowMs: number): number {
+  const fresh: DossierCaptchaToken[] = [];
+  for (const item of entry.tokens) {
+    const ageMs = Math.max(0, nowMs - item.solvedAtMs);
+    if (ageMs < FRESH_TTL_MS) {
+      fresh.push(item);
+    } else {
+      console.log(
+        `[spain-hcaptcha-prewarm] 🗑️ token périmé écarté pour le dossier ${dossierId} (âge ${(ageMs / 1000).toFixed(1)}s)`,
+      );
+    }
+  }
+  entry.tokens = fresh;
+  return fresh.length;
 }
 
 /**
@@ -85,7 +99,7 @@ export function registerDossierCaptcha(dossierId: string, sitekey: string, pageU
   const normUrl = normalizePageUrl(pageUrl);
   const existing = dossiers.get(dossierId);
   if (existing === undefined) {
-    dossiers.set(dossierId, { sitekey, pageUrl: normUrl, solvedAtMs: 0, solving: false, slotEverSeen: false });
+    dossiers.set(dossierId, { sitekey, pageUrl: normUrl, tokens: [], solving: 0, slotEverSeen: false });
     console.log(
       `[spain-hcaptcha-prewarm] 📌 dossier ${dossierId} enregistré (sitekey=${sitekey.slice(0, 8)}…, url=…${normUrl.slice(-24)})`,
     );
@@ -108,7 +122,10 @@ export function registerDossierCaptcha(dossierId: string, sitekey: string, pageU
  */
 export function markDossierSlotSeen(dossierId: string): void {
   const entry = dossiers.get(dossierId);
-  if (entry !== undefined) entry.slotEverSeen = true;
+  if (entry === undefined || entry.slotEverSeen) return;
+  entry.slotEverSeen = true;
+  // Démarre le burst sans bloquer le worker qui vient de détecter le créneau.
+  void prewarmOne(entry, dossierId);
 }
 
 /**
@@ -124,64 +141,50 @@ export function takeDossierToken(dossierId: string): string | null {
   if (entry === undefined) return null;
 
   const nowMs = Date.now();
-  if (!hasFreshToken(entry, nowMs)) {
-    if (entry.token !== undefined) {
-      const ageMs = Math.max(0, nowMs - entry.solvedAtMs);
-      console.log(
-        `[spain-hcaptcha-prewarm] 🗑️ token périmé écarté pour le dossier ${dossierId} (âge ${(ageMs / 1000).toFixed(1)}s)`,
-      );
-      entry.token = undefined;
-      entry.solvedAtMs = 0;
-    }
-    return null;
-  }
-
-  const token = entry.token as string;
-  const ageMs = nowMs - entry.solvedAtMs;
-  // Consommer : on retire le token pour éviter toute réutilisation. Une nouvelle
-  // pré-résolution le régénérera au prochain passage de prewarmAllDossiers.
-  entry.token = undefined;
-  entry.solvedAtMs = 0;
+  pruneExpiredTokens(entry, dossierId, nowMs);
+  const item = entry.tokens.shift();
+  if (item === undefined) return null;
+  const ageMs = nowMs - item.solvedAtMs;
   console.log(
-    `[spain-hcaptcha-prewarm] ✅ token servi au dossier ${dossierId} (âge ${(ageMs / 1000).toFixed(1)}s, ${token.length} car.)`,
+    `[spain-hcaptcha-prewarm] ✅ token servi au dossier ${dossierId} (âge ${(ageMs / 1000).toFixed(1)}s, ${item.token.length} car.)`,
   );
-  return token;
+  return item.token;
 }
 
 /**
- * Résout (ou rafraîchit) le token d'UN dossier si nécessaire. Ne résout pas si un
- * token frais existe encore et n'a pas atteint le seuil de rafraîchissement, ou si
- * une résolution est déjà en cours pour ce dossier. Ne lève jamais.
+ * Remplit la réserve d'UN dossier si nécessaire. Les résolutions manquantes sont
+ * lancées en parallèle pour que les candidats suivants n'attendent pas NoneCap.
+ * Ne lève jamais.
  */
 async function prewarmOne(entry: DossierCaptcha, dossierId: string): Promise<void> {
-  if (entry.solving) return;
-
   const nowMs = Date.now();
-  const ageMs = nowMs - entry.solvedAtMs;
-  const needsSolve =
-    entry.token === undefined || ageMs >= REFRESH_AT_AGE_MS || ageMs >= FRESH_TTL_MS;
-  if (!needsSolve) return;
+  const freshCount = pruneExpiredTokens(entry, dossierId, nowMs);
+  const target = entry.slotEverSeen ? BURST_TOKEN_TARGET : 1;
+  const missing = target - freshCount - entry.solving;
+  if (missing <= 0) return;
 
-  entry.solving = true;
-  const t0 = Date.now();
-  try {
-    const token = await solveSpainHcaptcha(entry.sitekey, entry.pageUrl);
-    if (token) {
-      entry.token = token;
-      entry.solvedAtMs = Date.now();
-      console.log(
-        `[spain-hcaptcha-prewarm] 🔥 dossier ${dossierId} — token prêt (${token.length} car., ${((Date.now() - t0) / 1000).toFixed(1)}s)`,
+  entry.solving += missing;
+  const solves = Array.from({ length: missing }, async (): Promise<void> => {
+    const t0 = Date.now();
+    try {
+      const token = await solveSpainHcaptcha(entry.sitekey, entry.pageUrl);
+      if (token) {
+        entry.tokens.push({ token, solvedAtMs: Date.now() });
+        console.log(
+          `[spain-hcaptcha-prewarm] 🔥 dossier ${dossierId} — token prêt (${token.length} car., ${((Date.now() - t0) / 1000).toFixed(1)}s; réserve=${entry.tokens.length})`,
+        );
+      } else {
+        console.warn(`[spain-hcaptcha-prewarm] ⚠️ dossier ${dossierId} — résolution vide (fallback à chaud au booking)`);
+      }
+    } catch (err) {
+      console.warn(
+        `[spain-hcaptcha-prewarm] ⚠️ dossier ${dossierId} — résolution échouée (non fatal): ${err instanceof Error ? err.message : String(err)}`,
       );
-    } else {
-      console.warn(`[spain-hcaptcha-prewarm] ⚠️ dossier ${dossierId} — résolution vide (fallback à chaud au booking)`);
+    } finally {
+      entry.solving--;
     }
-  } catch (err) {
-    console.warn(
-      `[spain-hcaptcha-prewarm] ⚠️ dossier ${dossierId} — résolution échouée (non fatal): ${err instanceof Error ? err.message : String(err)}`,
-    );
-  } finally {
-    entry.solving = false;
-  }
+  });
+  await Promise.allSettled(solves);
 }
 
 /**
@@ -224,7 +227,9 @@ export async function prewarmAllDossiers(
   const nowMs = Date.now();
   let fresh = 0;
   for (const [dossierId, entry] of dossiers) {
-    if (active.has(dossierId) && hasFreshToken(entry, nowMs)) fresh++;
+    if (active.has(dossierId)) {
+      fresh += pruneExpiredTokens(entry, dossierId, nowMs);
+    }
   }
   return fresh;
 }
