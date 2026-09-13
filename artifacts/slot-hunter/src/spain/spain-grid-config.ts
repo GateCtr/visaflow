@@ -98,14 +98,13 @@ const MINUTE_MIN = 0;
 const MINUTE_MAX = 59;
 
 /** Valeurs par défaut (Requirements 11.2, 11.3, 11.4, 11.6, 11.9). */
-// huntTickMs = 6 s. Mesures prod réelles : un cycle de scan nominal (main → getservices
-// → getagendas → datetime, CF déjà en cache donc cf↩0.0s) dure ~2.6–3.4 s. 6 s laisse
-// ~3 s de marge (absorbe un scan lent occasionnel) tout en scannant 2× plus souvent que
-// l'ancien 10 s → on voit un créneau publié jusqu'à 6 s plus tôt = avance décisive sur un
-// concurrent externe. 6 divise 60 → fronts alignés pile sur :00,06,12,18,24,30,36,42,48,54.
-const DEFAULT_HUNT_TICK_MS = 6_000;
+// huntTickMs = 10 s. Le cycle Kinshasa recrée une PHPSESSID et refait
+// main → getservices → getagendas → datetime à chaque passage. Un tick de 6 s
+// faisait rater un front dès qu'un cycle dépassait 6 s ; 10 s laisse une marge
+// réaliste tout en conservant des fronts communs.
+const DEFAULT_HUNT_TICK_MS = 10_000;
 const DEFAULT_LATE_TICK_MS = 60_000;
-// jitterPct = 0.02 (±120 ms à 6 s). Chaque worker a une IP/session/PHPSESSID distincts →
+// jitterPct = 0.02 (±200 ms à 10 s). Chaque worker a une IP/session/PHPSESSID distincts →
 // aucune raison anti-détection de les désynchroniser entre eux ; on veut au contraire qu'ils
 // frappent quasi ensemble sur le même front de grille. Jitter quasi nul = synchronisation.
 const DEFAULT_JITTER_PCT = 0.02;

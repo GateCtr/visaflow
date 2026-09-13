@@ -1978,6 +1978,10 @@ export async function runDossierWorker(
   // sentinelle d'erreur (-1), afin de ne jamais replanifier sur une valeur invalide
   // (contrat MS_UNTIL_NEXT_TICK_ERROR, Requirements 1.7 / 2.5).
   let lastGridWaitMs = grid.effectiveTickMs("hunt", false);
+  // Un scan de rattrapage maximum entre deux fronts. Il est réservé à la phase
+  // de chasse et permet à un worker lent de sonder immédiatement si le prochain
+  // front est encore loin, puis de revenir sur la grille au passage suivant.
+  let catchUpUsedSinceLastFront = false;
 
   // Compteur de proxy_error CONSÉCUTIFS. Un getservices/ à 200+body vide (hoquet serveur
   // ponctuel) était classé proxy_error → rotation IP immédiate, jetant une IP dont le CF
@@ -2026,6 +2030,8 @@ export async function runDossierWorker(
     // V2 : si un autre worker a posé le flag sommeil → (DÉSACTIVÉ — les annulations arrivent à tout moment)
     // if (cycleCount > 1 && await shouldSleepAfterSlots()) { ... }
 
+    let scheduleCatchUp = false;
+
     try {
       // ── Header de cycle — visible pour chaque dossier en cours de scan ─────────
       const winRemain = Math.round((windowEnd - Date.now()) / 60_000);
@@ -2056,6 +2062,7 @@ export async function runDossierWorker(
           scan.forceProxyRotation = true;
         }
       }
+      scheduleCatchUp = scan.status === "not_found";
 
       // ── spain-synchronized-scan (task 10.1) : tri strict + pilotage machine à états ──
       // On classe le résultat pour piloter rt.state et la planification de grille.
@@ -3076,6 +3083,33 @@ export async function runDossierWorker(
     const wait = nextWait < 0 ? lastGridWaitMs : nextWait;
     if (nextWait >= 0) lastGridWaitMs = nextWait;
 
+    // ── RATTRAPAGE BORNE ─────────────────────────────────────────────────────
+    // Un cycle lent peut finir juste après un front et sinon attendre presque
+    // tout le tick. Pendant la chasse, lancer au plus un scan immédiat si plus
+    // de la moitié du tick reste à attendre. Le rattrapage est explicitement
+    // hors grille, avec un petit jitter, puis le prochain cycle se recale sur
+    // le front absolu. Il ne s'applique pas aux erreurs/récupérations ni à la
+    // phase late volontairement ralentie.
+    const catchUpThreshold = Math.max(1_000, Math.floor(tick / 2));
+    if (
+      scheduleCatchUp &&
+      phase === "hunt" &&
+      !catchUpUsedSinceLastFront &&
+      wait > catchUpThreshold &&
+      shouldScheduleWake(nowMs, windowEnd)
+    ) {
+      catchUpUsedSinceLastFront = true;
+      const catchUpJitterMs = Math.abs(Math.trunc(rt.gridSeed)) % 501;
+      log(
+        "INFO",
+        `${tag} ⚡ rattrapage hors grille — wait=${wait}ms ` +
+          `(seuil=${catchUpThreshold}ms, jitter=${catchUpJitterMs}ms), ` +
+          `prochain front conservé`,
+      );
+      if (catchUpJitterMs > 0) await sleep(catchUpJitterMs);
+      continue;
+    }
+
     // État de réveil observable (worker id + front visé). rt.lastScanAtMs est posé en
     // début de cycle SCANNING (diagnostic de dérive).
     const wakeAtMs = nowMs + wait;
@@ -3087,6 +3121,9 @@ export async function runDossierWorker(
     // Plafonner : ne planifier aucun réveil au-delà de windowEnd (aucun scan hors fenêtre).
     if (shouldScheduleWake(wakeAtMs, windowEnd)) {
       await sleep(wait);
+      // Le sommeil jusqu'au front clôt la période de rattrapage et réarme le
+      // droit à un seul rattrapage pour la prochaine période.
+      catchUpUsedSinceLastFront = false;
     }
   }
 
