@@ -17,6 +17,11 @@ Traiter 0B comme session morte déclenche rotation IP + nouveau solve CapSolver 
 - La vraie mort de session se détecte à `initWorkerSession` (probe /main/ échoue) ou `initPhpState` (getservices/ → 0 services).
 - Les cycles avec 0B sont logués `⏸ Cycle N: aucun créneau — next` et le worker continue jusqu'à la fin de la fenêtre de 25 min.
 - Décision : suppression complète de `allMonthsDead`, `consecutiveDeadCycles`, `MAX_DEAD_CYCLES_BEFORE_ROTATE` et de `rotateWorkerIp` depuis la boucle de scan.
+- Exception : si tous les mois sont 0B et qu'un burst de créneaux très récent est confirmé par un autre worker du même portail, traiter le résultat comme une anomalie proxy/session et faire tourner l'IP immédiatement.
+
+**Why:** Un 0B isolé est normal sur Kinshasa, mais l'analyse de la publication du 31 août 2026 a montré qu'un dossier pouvait recevoir 0B pendant que d'autres dossiers du même portail voyaient et réservaient des créneaux. La preuve inter-workers évite de confondre ces deux situations.
+
+**How to apply:** Publier un signal Redis court lorsqu'un worker trouve des créneaux. Pour un `0B` sur tous les mois, attendre brièvement ce signal avant de conclure `not_found`; s'il existe, bypasser la tolérance du premier `proxy_error` et changer de proxy sans réinitialisation PHP sur la même IP.
 
 ## Distinction callDirect → null
 

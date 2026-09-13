@@ -74,6 +74,9 @@ import {
   saveWorkerProxyIdentity,
   getWorkerProxyIdentity,
   deleteWorkerProxyIdentity,
+  publishBurstSignal,
+  checkBurstFlag,
+  isSpainRedisReady,
   tryAcquireBookingSlot,
   releaseBookingSlot,
   MAX_CONCURRENT_BOOKERS,
@@ -185,6 +188,18 @@ const PROXY_ERROR_ROTATE_THRESHOLD = 2;
  *  « saine » et on évite de la jeter sur un proxy_error isolé (5 min). En dessous,
  *  le CF est trop proche de l'expiration → autant rotationner tout de suite. */
 const PROXY_ERROR_CF_FRESH_MIN_MS = 5 * 60_000;
+
+/**
+ * Temps maximum pendant lequel un worker `not_found` attend une confirmation
+ * d'un autre worker du même portail. Cette attente ne s'applique qu'à un
+ * `datetime/` 0B sur tous les mois, jamais à une réponse vide normale.
+ */
+const PEER_BURST_CONFIRM_WAIT_MS = (() => {
+  const v = Number(process.env.SPAIN_PEER_BURST_CONFIRM_WAIT_MS ?? "6000");
+  return Math.max(1_000, Math.min(15_000, Number.isFinite(v) ? Math.round(v) : 6_000));
+})();
+const PEER_BURST_POLL_MS = 400;
+const PEER_BURST_MAX_AGE_SEC = 20;
 
 /** Fenêtre de surveillance par dossier (25 min) — alignée TTL cf_clearance */
 const WORKER_WINDOW_MS = ((): number => {
@@ -670,6 +685,52 @@ export interface WorkerScanResult {
   ds?: import("./spain-bookitit-direct.js").DynamicSession;
   /** Trace par mois — bytes/slots/ok pour chaque appel datetime/ */
   monthTraces?: Array<{ month: string; bytes: number; slots: number; ok: boolean }>;
+  /**
+   * Le résultat vide a été contredit par un burst récent d'un autre worker
+   * sur le même portail. Ce flag bypass le seuil de tolérance proxy_error :
+   * la rotation est immédiate.
+   */
+  forceProxyRotation?: boolean;
+}
+
+/**
+ * Un `datetime/` qui renvoie 0B partout n'est pas automatiquement une panne :
+ * sur un agenda fallback, cela peut réellement signifier qu'il n'y a aucun
+ * créneau. Cette fonction reconnaît uniquement la forme « toutes les réponses
+ * sont HTTP-null/vides », sans confondre avec un payload JSON vide valide.
+ */
+function hasAllDatetimeHttpNulls(scan: WorkerScanResult): boolean {
+  const traces = scan.monthTraces;
+  return Boolean(
+    traces &&
+      traces.length >= 2 &&
+      traces.every((trace) => trace.slots === 0 && !trace.ok && trace.bytes <= 2),
+  );
+}
+
+/**
+ * Attend un signal court indiquant qu'un autre dossier vient de voir des
+ * créneaux sur le même portail. Le signal Redis est volontairement récent :
+ * un burst vieux de plusieurs cycles ne doit pas provoquer une rotation.
+ */
+async function waitForPeerBurst(
+  portalUrl: string,
+  tag: string,
+): Promise<boolean> {
+  if (!isSpainRedisReady()) return false;
+
+  const deadline = Date.now() + PEER_BURST_CONFIRM_WAIT_MS;
+  while (Date.now() < deadline) {
+    if (await checkBurstFlag(portalUrl, PEER_BURST_MAX_AGE_SEC)) {
+      log(
+        "WARN",
+        `${tag} 🔎 0B confirmé par burst peer récent → anomalie proxy/session`,
+      );
+      return true;
+    }
+    await sleep(PEER_BURST_POLL_MS);
+  }
+  return false;
 }
 
 /**
@@ -1973,6 +2034,18 @@ export async function runDossierWorker(
       const scan = await refreshSessionAndScan(session, config, tag);
       log("INFO", `${tag} 📊 Cycle ${cycleCount} scan=${scan.status} | cfClearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
 
+      // Un `datetime/` 0B sur tous les mois est ambigu quand l'agenda vient du
+      // fallback. Attendre brièvement une confirmation inter-workers permet de
+      // distinguer un vrai agenda vide d'une anomalie proxy/session.
+      if (scan.status === "not_found" && hasAllDatetimeHttpNulls(scan)) {
+        const peerBurstConfirmed = await waitForPeerBurst(config.portalUrl, tag);
+        if (peerBurstConfirmed) {
+          scan.status = "proxy_error";
+          scan.errorMessage = "datetime/ 0B contredit par burst peer récent";
+          scan.forceProxyRotation = true;
+        }
+      }
+
       // ── spain-synchronized-scan (task 10.1) : tri strict + pilotage machine à états ──
       // On classe le résultat pour piloter rt.state et la planification de grille.
       // `found` est un SUCCÈS traité dans la branche `scan.status === "found"` plus bas ;
@@ -1993,6 +2066,9 @@ export async function runDossierWorker(
 
       // ── Reporting découverte (fire-and-forget, indépendant de l'éligibilité) ──
       if (scan.slots && scan.slots.length > 0) {
+        // Signal court partagé avec les workers dont toutes les réponses
+        // datetime/ sont 0B.
+        void publishBurstSignal(config.portalUrl, scan.slots.length);
         emitDiscoveryEvents(scan.slots, scan.serviceId, scan.serviceName, config);
       }
 
@@ -2019,7 +2095,9 @@ export async function runDossierWorker(
         const cfFreshMs = session.expiresAt - Date.now();
         const cfIsFresh = cfFreshMs > PROXY_ERROR_CF_FRESH_MIN_MS;
         const shouldRotate =
-          consecutiveProxyErrors >= PROXY_ERROR_ROTATE_THRESHOLD || !cfIsFresh;
+          scan.forceProxyRotation === true ||
+          consecutiveProxyErrors >= PROXY_ERROR_ROTATE_THRESHOLD ||
+          !cfIsFresh;
 
         if (!shouldRotate) {
           // 1er proxy_error avec CF frais → réinit PHPSESSID sur la même IP (pas de rotation).
@@ -2069,7 +2147,14 @@ export async function runDossierWorker(
           continue; // Repartir sur la même IP, nouveau PHPSESSID
         }
 
-        // Rotation justifiée : échec persistant OU CF mort.
+        if (scan.forceProxyRotation) {
+          log(
+            "WARN",
+            `${tag} 🔄 Burst peer confirmé — rotation IP immédiate sans réinit PHP sur la même IP`,
+          );
+        }
+
+        // Rotation justifiée : burst peer confirmé, échec persistant OU CF mort.
         log(
           "WARN",
           `${tag} 🔄 proxy_error #${consecutiveProxyErrors} — rotation IP + réinit session (CF ${cfIsFresh ? "frais mais échec persistant" : `mort/proche exp: ${Math.round(cfFreshMs / 60_000)}min`})`,

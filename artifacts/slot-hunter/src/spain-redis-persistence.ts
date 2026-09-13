@@ -1311,7 +1311,10 @@ export async function publishBurstSignal(portalUrl: string, slotsCount: number):
  * Retourne true si un burst a été signalé dans les 2 dernières minutes.
  * Utilisé par les workers meute qui n'ont pas reçu le PUB/SUB (démarrage tardif).
  */
-export async function checkBurstFlag(portalUrl: string): Promise<boolean> {
+export async function checkBurstFlag(
+  portalUrl: string,
+  maxAgeSec = REDIS_BURST_FLAG_TTL_SEC,
+): Promise<boolean> {
   if (!redisReady || !redisClient) return false;
 
   const key = portalUrlToKey(portalUrl);
@@ -1321,8 +1324,9 @@ export async function checkBurstFlag(portalUrl: string): Promise<boolean> {
     const val = await redisClient.get(flagKey);
     if (!val) return false;
     const parsed = JSON.parse(val) as { ts: number; slots: number };
-    // Signal valide si < 2 min
-    return Date.now() - parsed.ts < REDIS_BURST_FLAG_TTL_SEC * 1000;
+    // Signal valide si inférieur à la fenêtre demandée. Les workers utilisent
+    // une fenêtre courte pour distinguer un burst actuel d'un ancien signal.
+    return Date.now() - parsed.ts < maxAgeSec * 1000;
   } catch {
     return false;
   }
