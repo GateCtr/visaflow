@@ -16,6 +16,7 @@ Traiter 0B comme session morte déclenche rotation IP + nouveau solve CapSolver 
 - Ne jamais déclencher de rotation/réinit PHP sur 0B de datetime/ seul.
 - La vraie mort de session se détecte à `initWorkerSession` (probe /main/ échoue) ou `initPhpState` (getservices/ → 0 services).
 - `getservices/` → 0B/0 service ou erreur réseau est une anomalie d'initialisation et force une rotation IP immédiate; ne pas appliquer la tolérance du premier `proxy_error`.
+- Pour `session_dead`, tenter d'abord une nouvelle PHPSESSID sur la même IP; si `initPhpState` échoue encore, faire une rotation IP complète puis réinitialiser PHP avant d'abandonner le worker.
 - Les cycles avec 0B sont logués `⏸ Cycle N: aucun créneau — next` et le worker continue jusqu'à la fin de la fenêtre de 25 min.
 - Décision : suppression complète de `allMonthsDead`, `consecutiveDeadCycles`, `MAX_DEAD_CYCLES_BEFORE_ROTATE` et de `rotateWorkerIp` depuis la boucle de scan.
 - Exception : si tous les mois sont 0B et qu'un burst de créneaux très récent est confirmé par un autre worker du même portail, traiter le résultat comme une anomalie proxy/session et faire tourner l'IP immédiatement.
