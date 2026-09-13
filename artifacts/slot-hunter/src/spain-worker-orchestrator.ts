@@ -49,7 +49,7 @@ import { loadGridConfig, type GridConfig, type WorkerRuntimeState } from "./spai
 import { createReservePool, type ReservePoolManager } from "./spain/spain-reserve-pool.js";
 import { createPreflightController, type PreflightController } from "./spain/spain-preflight-controller.js";
 // Pré-résolution hCaptcha par dossier : token gct dédié pré-résolu pendant HH:12→13.
-import { prewarmAllDossiers, hasRegisteredDossiers } from "./spain-hcaptcha-prewarm.js";
+import { prewarmAllDossiers, hasRegisteredDossiers, hasSlotSeenDossiers } from "./spain-hcaptcha-prewarm.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -79,6 +79,16 @@ const LOCK_RENEWAL_MS = 30_000;
  *  reste toujours largement sous sa durée de vie (~120 s) au moment du service, sans
  *  dépendre de la cadence variable de la boucle orchestrateur. */
 const HCAPTCHA_PREWARM_INTERVAL_MS = 20_000;
+
+/** Minute-dans-l'heure à partir de laquelle la pré-résolution hCaptcha devient
+ *  CONDITIONNELLE : au-delà, on n'entretient plus le token QUE des dossiers ayant vu
+ *  un créneau (slotEverSeen). Les créneaux Espagne apparaissent généralement à HH:13-14 ;
+ *  passé HH:16 un dossier toujours vide n'a quasi aucune chance → on arrête de gaspiller
+ *  des solves payants sur lui. Override via SPAIN_HCAPTCHA_PREWARM_CUTOFF_MIN (défaut 16). */
+const HCAPTCHA_PREWARM_CUTOFF_MIN = ((): number => {
+  const v = Number(process.env.SPAIN_HCAPTCHA_PREWARM_CUTOFF_MIN ?? "16");
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 16));
+})();
 
 /**
  * Fenêtre de publication des créneaux Bookitit.
@@ -252,8 +262,17 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
     if (hcaptchaPrewarmInFlight) return;
     if (!isInHcaptchaPrewarmPhase(gridConfig)) return;
     if (!hasRegisteredDossiers(latestActiveDossierIds)) return;
+    // ── Coupure conditionnelle post-cutoff (anti-gaspillage tokens) ──────────────
+    // Avant HH:HCAPTCHA_PREWARM_CUTOFF_MIN : pré-résolution normale (tous les dossiers
+    // hCaptcha) pour couvrir le pic HH:13-14. Après le cutoff : on n'entretient plus que
+    // les dossiers ayant vu un créneau (slotEverSeen). Si AUCUN dossier n'a vu de créneau
+    // après le cutoff → plus rien à entretenir → on ne lance rien (0 solve gaspillé).
+    const afterCutoff = isAfterHcaptchaPrewarmCutoff();
+    if (afterCutoff && !hasSlotSeenDossiers(latestActiveDossierIds)) {
+      return; // aucun créneau vu passé le cutoff → stop pré-résolution
+    }
     hcaptchaPrewarmInFlight = true;
-    void prewarmAllDossiers(latestActiveDossierIds)
+    void prewarmAllDossiers(latestActiveDossierIds, afterCutoff)
       .catch((err) => {
         log("WARN", `[SPAIN-ORCH] 🔥 pré-résolution hCaptcha échouée (non fatal): ${err instanceof Error ? err.message : String(err)}`);
       })
@@ -720,6 +739,17 @@ function isInHcaptchaPrewarmPhase(gridConfig: GridConfig): boolean {
   const minInHour = now.getMinutes() + now.getSeconds() / 60;
   const start = Math.max(0, gridConfig.huntStartMin - 1);
   return minInHour >= start && minInHour < gridConfig.windowEndMin;
+}
+
+/**
+ * Retourne true si on a dépassé le cutoff de pré-résolution (HH:HCAPTCHA_PREWARM_CUTOFF_MIN).
+ * Au-delà, la pré-résolution devient conditionnelle : seuls les dossiers ayant vu un créneau
+ * (slotEverSeen) sont entretenus. Les dossiers restés vides cessent de consommer des solves.
+ */
+function isAfterHcaptchaPrewarmCutoff(): boolean {
+  const now = new Date();
+  const minInHour = now.getMinutes() + now.getSeconds() / 60;
+  return minInHour >= HCAPTCHA_PREWARM_CUTOFF_MIN;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

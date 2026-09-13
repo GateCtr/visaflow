@@ -53,6 +53,11 @@ interface DossierCaptcha {
   solvedAtMs: number;
   /** true tant qu'une résolution est en cours pour ce dossier (anti-concurrence). */
   solving: boolean;
+  /** true dès qu'un créneau a été détecté au moins une fois sur ce dossier (monotone).
+   *  Utilisé pour la coupure conditionnelle : après HH:HCAPTCHA_PREWARM_CUTOFF_MIN, on
+   *  n'entretient plus le token que des dossiers ayant vu un créneau (re-bookings), et on
+   *  arrête de gaspiller des solves sur les dossiers restés vides (agenda/datetime 0B). */
+  slotEverSeen: boolean;
 }
 
 /** Registre par dossierId. Peuplé par les workers (registerDossierCaptcha). */
@@ -82,7 +87,7 @@ export function registerDossierCaptcha(dossierId: string, sitekey: string, pageU
   const normUrl = normalizePageUrl(pageUrl);
   const existing = dossiers.get(dossierId);
   if (existing === undefined) {
-    dossiers.set(dossierId, { sitekey, pageUrl: normUrl, solvedAtMs: 0, solving: false });
+    dossiers.set(dossierId, { sitekey, pageUrl: normUrl, solvedAtMs: 0, solving: false, slotEverSeen: false });
     console.log(
       `[spain-hcaptcha-prewarm] 📌 dossier ${dossierId} enregistré (sitekey=${sitekey.slice(0, 8)}…, url=…${normUrl.slice(-24)})`,
     );
@@ -91,6 +96,21 @@ export function registerDossierCaptcha(dossierId: string, sitekey: string, pageU
     existing.sitekey = sitekey;
     existing.pageUrl = normUrl;
   }
+}
+
+/**
+ * Marque un dossier comme ayant vu un créneau au moins une fois (monotone : jamais
+ * remis à false). Appelé par le worker dès que `slotEverSeen` passe true. Sert à la
+ * coupure conditionnelle post-cutoff : après HH:HCAPTCHA_PREWARM_CUTOFF_MIN, seuls les
+ * dossiers marqués continuent d'entretenir leur token (re-bookings) ; les dossiers
+ * restés vides ne consomment plus de solves. Sans effet si le dossier n'est pas encore
+ * enregistré (le worker appelle registerDossierCaptcha avant, à la détection hCaptcha).
+ *
+ * @param dossierId identifiant du dossier.
+ */
+export function markDossierSlotSeen(dossierId: string): void {
+  const entry = dossiers.get(dossierId);
+  if (entry !== undefined) entry.slotEverSeen = true;
 }
 
 /**
@@ -168,14 +188,27 @@ async function prewarmOne(entry: DossierCaptcha, dossierId: string): Promise<voi
  * enregistrés comme ayant un hCaptcha requis → zéro solve gaspillé sur les portails
  * sans captcha.
  *
+ * COUPURE CONDITIONNELLE (anti-gaspillage) : si `onlySlotSeen` est true (l'orchestrateur
+ * l'active après HH:HCAPTCHA_PREWARM_CUTOFF_MIN), on ne pré-résout QUE les dossiers ayant
+ * déjà vu un créneau (`slotEverSeen`). Les créneaux Espagne apparaissent généralement à
+ * HH:13-14 ; passé HH:16, un dossier toujours vide (agenda/datetime 0B) n'a quasi aucune
+ * chance de trouver → inutile de continuer à résoudre son captcha jusqu'à HH:25. Les
+ * dossiers qui ONT vu un créneau restent entretenus (re-bookings / annulations tardives).
+ *
  * @param activeDossierIds identifiants des dossiers actifs à considérer.
+ * @param onlySlotSeen si true, ne pré-résout que les dossiers ayant vu un créneau.
  * @returns nombre de dossiers ayant un token frais après l'opération.
  */
-export async function prewarmAllDossiers(activeDossierIds: readonly string[]): Promise<number> {
+export async function prewarmAllDossiers(
+  activeDossierIds: readonly string[],
+  onlySlotSeen = false,
+): Promise<number> {
   const active = new Set(activeDossierIds);
   const tasks: Array<Promise<void>> = [];
   for (const [dossierId, entry] of dossiers) {
     if (!active.has(dossierId)) continue;
+    // Après le cutoff : sauter les dossiers restés vides (jamais vu de créneau).
+    if (onlySlotSeen && !entry.slotEverSeen) continue;
     tasks.push(prewarmOne(entry, dossierId));
   }
   if (tasks.length === 0) return 0;
@@ -194,6 +227,17 @@ export async function prewarmAllDossiers(activeDossierIds: readonly string[]): P
 export function hasRegisteredDossiers(activeDossierIds: readonly string[]): boolean {
   for (const id of activeDossierIds) {
     if (dossiers.has(id)) return true;
+  }
+  return false;
+}
+
+/** true si au moins un dossier actif enregistré a DÉJÀ VU un créneau (slotEverSeen).
+ *  Utilisé par l'orchestrateur après le cutoff : si aucun dossier n'a vu de créneau,
+ *  le timer de pré-résolution peut s'arrêter complètement (plus rien à entretenir). */
+export function hasSlotSeenDossiers(activeDossierIds: readonly string[]): boolean {
+  for (const id of activeDossierIds) {
+    const entry = dossiers.get(id);
+    if (entry !== undefined && entry.slotEverSeen) return true;
   }
   return false;
 }

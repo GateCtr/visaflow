@@ -44,7 +44,7 @@ import {
 } from "./spain-http-booking.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
 import { getKnownIdsForPortal } from "./spain-portals.js";
-import { registerDossierCaptcha, takeDossierToken } from "./spain-hcaptcha-prewarm.js";
+import { registerDossierCaptcha, takeDossierToken, markDossierSlotSeen } from "./spain-hcaptcha-prewarm.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
@@ -2165,6 +2165,10 @@ export async function runDossierWorker(
         // ici on garantit uniquement la monotonie du drapeau.
         if (markSlotSeen(rt, scan.slots)) {
           log("INFO", `${tag} 👁️ slotEverSeen=true (créneau avec capacité libre détecté)`);
+          // Signale au module de pré-résolution hCaptcha que ce dossier a vu un créneau :
+          // après le cutoff HH:16, seuls ces dossiers continueront d'entretenir leur token
+          // (re-bookings), les dossiers restés vides cessent de consommer des solves.
+          markDossierSlotSeen(config.id);
         }
 
         // ── spain-synchronized-scan (task 10.2) : publication du snapshot (Req 9.2/9.6) ──
