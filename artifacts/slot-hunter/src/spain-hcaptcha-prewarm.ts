@@ -19,9 +19,10 @@
  * consiste donc à résoudre, pour chaque dossier, un token qui lui est RÉSERVÉ (isolé),
  * afin d'éviter tout partage.
  *
- * TTL : un token hCaptcha vit ~120 s côté serveur. On considère un token « frais »
- * pendant FRESH_TTL_MS (marge à 100 s) et on le rafraîchit s'il vieillit alors qu'on
- * est encore dans la fenêtre de pré-résolution (le pic peut glisser au-delà de HH:13).
+ * Le portail citaconsular a rejeté silencieusement des tentatives avec un token âgé
+ * d'environ 29 s. Même si le TTL théorique hCaptcha est plus long, on ne remet donc
+ * au worker qu'un token âgé de moins de 20 s. Au-delà, il est jeté et le worker
+ * résout un token à chaud.
  *
  * Contraintes de codage : strict mode, aucun `any`, types de retour explicites, logs
  * préfixés `[spain-hcaptcha-prewarm]`, secrets exclusivement via env (jamais journalisés).
@@ -29,17 +30,14 @@
 
 import { solveSpainHcaptcha } from "./spain-http-booking.js";
 
-/** Durée de fraîcheur d'un token (ms). hCaptcha vit ~120 s → marge de sécurité à 100 s. */
-const FRESH_TTL_MS = 100_000;
+/** Âge maximal accepté par citaconsular au moment du signin/ (marge sous le seuil observé). */
+const FRESH_TTL_MS = 20_000;
 
 /**
- * Seuil de rafraîchissement (ms) : si un token frais dépasse cet âge, on le re-résout
- * de manière proactive pendant la fenêtre de pré-résolution. Réglé à 30 s pour que
- * l'âge du token AU MOMENT DU SERVICE reste bas (~0-40 s selon la cadence de la boucle
- * orchestrateur), bien en dessous de la durée de vie hCaptcha (~120 s) → marge maximale
- * de validité serveur au signin/.
+ * Seuil de rafraîchissement (ms). Il est aligné sur l'âge maximal accepté : un token
+ * ne doit jamais être servi pendant qu'un rafraîchissement est déjà nécessaire.
  */
-const REFRESH_AT_AGE_MS = 30_000;
+const REFRESH_AT_AGE_MS = FRESH_TTL_MS;
 
 /** Sitekey/URL + token pré-résolu d'un dossier. */
 interface DossierCaptcha {
@@ -127,6 +125,14 @@ export function takeDossierToken(dossierId: string): string | null {
 
   const nowMs = Date.now();
   if (!hasFreshToken(entry, nowMs)) {
+    if (entry.token !== undefined) {
+      const ageMs = Math.max(0, nowMs - entry.solvedAtMs);
+      console.log(
+        `[spain-hcaptcha-prewarm] 🗑️ token périmé écarté pour le dossier ${dossierId} (âge ${(ageMs / 1000).toFixed(1)}s)`,
+      );
+      entry.token = undefined;
+      entry.solvedAtMs = 0;
+    }
     return null;
   }
 

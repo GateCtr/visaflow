@@ -75,8 +75,7 @@ const RESTART_AFTER_ERROR_MS = ((): number => {
 const LOCK_RENEWAL_MS = 30_000;
 
 /** Intervalle FIXE de rafraîchissement du pool de tokens hCaptcha pré-résolus (ms).
- *  20 s garantit qu'un token régénéré dès 30 s d'âge (REFRESH_AT_AGE_MS côté module)
- *  reste toujours largement sous sa durée de vie (~120 s) au moment du service, sans
+ *  20 s aligne le tick sur l'âge maximal accepté par citaconsular côté module, sans
  *  dépendre de la cadence variable de la boucle orchestrateur. */
 const HCAPTCHA_PREWARM_INTERVAL_MS = 20_000;
 

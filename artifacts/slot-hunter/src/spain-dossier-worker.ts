@@ -2591,39 +2591,12 @@ export async function runDossierWorker(
             ? (extractSpainLoginTypes(armGsf).length > 0 ? extractSpainLoginTypes(armGsf) : [getSpainBookingLoginType()])
             : [getSpainBookingLoginType()];
 
-          // ── hCaptcha (gct) — UNE SEULE résolution par cycle si le portail l'exige ──
+          // ── hCaptcha (gct) — un token à usage unique par tentative signin/ ──────
           // Certains portails (ex. Kinshasa depuis sept. 2026) activent le hCaptcha à la
-          // soumission (WidgetConfiguration.captcha=1). Dans ce cas, signin/ SANS token gct
-          // est rejeté silencieusement (0B) — c'était la cause du signin/ 0B sur Kinshasa
-          // alors que Saopola/Cuba (captcha=0) fonctionnaient. On résout le hCaptcha une
-          // fois (le token gct est réutilisable pour tous les candidats de ce cycle).
-          let gctToken = "";
+          // soumission (WidgetConfiguration.captcha=1). Un token gct est consommable par
+          // un seul signin/ : ne jamais conserver celui d'un candidat pour le suivant.
           const captchaNeeded = phpState?.captchaRequired ?? false;
           const signinCaptchaSitekey = phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
-          if (captchaNeeded) {
-            // Sitekey détecté dynamiquement dans /main/ ; fallback sur le sitekey connu
-            // citaconsular.es si l'extraction a échoué (présence détectée sans sitekey).
-
-            // ── Token pré-résolu DÉDIÉ à ce dossier (0 s dans le chemin critique) ──
-            // L'orchestrateur pré-résout en parallèle un token gct par dossier pendant
-            // HH:12→13. Si le token dédié de ce dossier est frais, on l'utilise direct
-            // et on enchaîne signin/ sans attendre les ~10-15 s de NoneCap au pic.
-            const prewarmed = takeDossierToken(config.id);
-            if (prewarmed) {
-              gctToken = prewarmed;
-              log("INFO", `${tag} 🔐 hCaptcha pré-résolu (dossier) — gct prêt (${gctToken.length} car., 0 s)`);
-            } else {
-              // Pas de token pré-résolu frais → résolution à chaud (fallback historique).
-              log("INFO", `${tag} 🔐 Portail affiche hCaptcha — résolution du token gct (sitekey=${signinCaptchaSitekey.slice(0, 12)}…, NoneCap→Anti-Captcha→CapSolver)…`);
-              const solved = await solveSpainHcaptcha(signinCaptchaSitekey, config.portalUrl.split("#")[0]);
-              if (solved) {
-                gctToken = solved;
-                log("INFO", `${tag} 🔐 hCaptcha résolu — gct prêt (${gctToken.length} car.)`);
-              } else {
-                log("WARN", `${tag} 🔐 hCaptcha NON résolu — signin/ tenté sans gct (échouera probablement)`);
-              }
-            }
-          }
 
           // Si l'armement getsigninfields/ est resté 0B après les cycles de ré-armement,
           // la session est morte (§9) → tout signin/ renverra 0B. On saute la boucle de
@@ -2686,9 +2659,29 @@ export async function runDossierWorker(
             const loginTypes = armedLoginTypes;
             let signinLogintype: SpainLoginType = loginTypes[0];
             let signinRaw: unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD = null;
+            let gctToken = "";
             for (let loginTypeIndex = 0; loginTypeIndex < loginTypes.length; loginTypeIndex++) {
               const candidateLoginType = loginTypes[loginTypeIndex];
               signinLogintype = candidateLoginType;
+              gctToken = "";
+              if (captchaNeeded) {
+                // Un token pré-résolu ne sert qu'à UNE requête signin/. S'il est trop
+                // vieux, takeDossierToken() le jette et on résout à chaud.
+                const prewarmed = takeDossierToken(config.id);
+                if (prewarmed) {
+                  gctToken = prewarmed;
+                  log("INFO", `${tag} 🔐 hCaptcha pré-résolu utilisé pour signin/ (${gctToken.length} car.)`);
+                } else {
+                  log("INFO", `${tag} 🔐 hCaptcha — résolution d'un token neuf pour signin/ (sitekey=${signinCaptchaSitekey.slice(0, 12)}…, NoneCap→Anti-Captcha→CapSolver)…`);
+                  const solved = await solveSpainHcaptcha(signinCaptchaSitekey, config.portalUrl.split("#")[0]);
+                  if (solved) {
+                    gctToken = solved;
+                    log("INFO", `${tag} 🔐 hCaptcha neuf prêt pour signin/ (${gctToken.length} car.)`);
+                  } else {
+                    log("WARN", `${tag} 🔐 hCaptcha NON résolu — signin/ tenté sans gct (échouera probablement)`);
+                  }
+                }
+              }
               log(
                 "INFO",
                 `${tag} 🔑 signin/ (${candidateLoginType})${loginTypeIndex > 0 ? " — fallback" : ""}…`,
