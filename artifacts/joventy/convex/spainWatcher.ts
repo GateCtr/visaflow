@@ -5,6 +5,24 @@ import { internal } from "./_generated/api";
 const WATCHER_KEY = "default";
 const MAX_SCANS = 200;
 
+/**
+ * Throttle du patch du singleton `spainWatcher` dans internalRecordScan.
+ *
+ * PROBLÈME résolu : avec N dossiers actifs (ex. 18), chaque worker appelle
+ * internalRecordScan à chaque cycle et patchait le MÊME document singleton
+ * (lastScanAt/lastResult). N écritures concurrentes sur un seul document →
+ * conflits OCC (« Documents ... changed while this mutation was being run »)
+ * que Convex ne peut pas résoudre par retry → erreurs 422 + perte de télémétrie.
+ *
+ * FIX : on ne patche le singleton QUE si (a) le dernier patch date de plus de
+ * SINGLETON_PATCH_THROTTLE_MS, OU (b) l'événement est important (found/error qu'on
+ * veut toujours refléter dans le dashboard). L'INSERT du scan (historique par
+ * dossier, sans conflit car chaque insert crée un doc unique) reste inconditionnel.
+ * Ça réduit d'un facteur ~N×(cycles) le nombre d'écritures concurrentes sur le
+ * singleton → les rares collisions restantes sont résolues par le retry Convex.
+ */
+const SINGLETON_PATCH_THROTTLE_MS = 5_000;
+
 // ─── Auth helpers (même pattern que admin.ts) ─────────────────────────────────
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -238,49 +256,59 @@ export const internalRecordScan = internalMutation({
       scanTrace: args.scanTrace,
     });
 
-    // Prune old scans (keep last MAX_SCANS)
-    const old = await ctx.db
-      .query("spainWatcherScans")
-      .withIndex("by_ts")
-      .order("asc")
-      .take(1000);
-    if (old.length > MAX_SCANS) {
-      const toDelete = old.slice(0, old.length - MAX_SCANS);
-      for (const scan of toDelete) {
-        await ctx.db.delete(scan._id);
-      }
-    }
-
-    // Update watcher singleton
+    // Update watcher singleton — THROTTLÉ pour éviter les conflits OCC (voir constante).
+    // On ne patche que si un événement important (found/error) OU si le dernier patch
+    // date d'assez longtemps. Sinon on saute le patch (l'insert du scan suffit à
+    // l'historique). Le prune est fait UNIQUEMENT quand on patche, pour ne pas
+    // ajouter de contention sur spainWatcherScans à chaque cycle de chaque worker.
     if (watcher) {
-      const consecutiveErrors =
-        args.status === "error"
-          ? (watcher.consecutiveErrors ?? 0) + 1
-          : 0;
+      const isImportant = args.status === "found" || args.status === "error";
+      const sinceLastPatch = now - (watcher.updatedAt ?? 0);
+      const shouldPatch = isImportant || sinceLastPatch >= SINGLETON_PATCH_THROTTLE_MS;
 
-      await ctx.db.patch(watcher._id, {
-        lastScanAt: now,
-        lastResult: args.status,
-        lastSlotInfo: args.slotInfo,
-        consecutiveErrors,
-        updatedAt: now,
-      });
+      if (shouldPatch) {
+        const consecutiveErrors =
+          args.status === "error"
+            ? (watcher.consecutiveErrors ?? 0) + 1
+            : 0;
 
-      // Send email alert if slot found — cooldown 30 min pour éviter le spam
-      const ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
-      const lastAlert = watcher.lastAlertSentAt ?? 0;
-      const cooldownOk = now - lastAlert > ALERT_COOLDOWN_MS;
-      if (args.status === "found" && watcher.adminEmail && cooldownOk) {
-        await ctx.db.patch(watcher._id, { lastAlertSentAt: now });
-        await ctx.scheduler.runAfter(0, internal.spainWatcher.internalSendWatcherAlert, {
-          adminEmail: watcher.adminEmail,
-          slotInfo: args.slotInfo ?? "Créneau disponible",
-          portalUrl: watcher.portalUrl,
-          screenshotStorageId: args.screenshotStorageId,
-          detectedSlots: args.detectedSlots,
-          dossierName: args.dossierName,
-          serviceName: args.detectedServices,
+        await ctx.db.patch(watcher._id, {
+          lastScanAt: now,
+          lastResult: args.status,
+          lastSlotInfo: args.slotInfo,
+          consecutiveErrors,
+          updatedAt: now,
         });
+
+        // Prune old scans (keep last MAX_SCANS) — throttlé avec le patch singleton.
+        const old = await ctx.db
+          .query("spainWatcherScans")
+          .withIndex("by_ts")
+          .order("asc")
+          .take(1000);
+        if (old.length > MAX_SCANS) {
+          const toDelete = old.slice(0, old.length - MAX_SCANS);
+          for (const scan of toDelete) {
+            await ctx.db.delete(scan._id);
+          }
+        }
+
+        // Send email alert if slot found — cooldown 30 min pour éviter le spam
+        const ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+        const lastAlert = watcher.lastAlertSentAt ?? 0;
+        const cooldownOk = now - lastAlert > ALERT_COOLDOWN_MS;
+        if (args.status === "found" && watcher.adminEmail && cooldownOk) {
+          await ctx.db.patch(watcher._id, { lastAlertSentAt: now });
+          await ctx.scheduler.runAfter(0, internal.spainWatcher.internalSendWatcherAlert, {
+            adminEmail: watcher.adminEmail,
+            slotInfo: args.slotInfo ?? "Créneau disponible",
+            portalUrl: watcher.portalUrl,
+            screenshotStorageId: args.screenshotStorageId,
+            detectedSlots: args.detectedSlots,
+            dossierName: args.dossierName,
+            serviceName: args.detectedServices,
+          });
+        }
       }
     }
   },
