@@ -2233,14 +2233,49 @@ export async function runDossierWorker(
 
       if (scan.status === "session_dead") {
         // Session PHP morte (agendaId présent mais datetime/ retourne 0B sur tous les mois).
-        // Le proxy est sain — pas de rotation IP. Réinit PHPSESSID uniquement.
+        // Le proxy est présumé sain : on tente d'abord une réinit PHPSESSID sur la
+        // même IP. Si cette réinit échoue aussi, l'IP/session est probablement
+        // réellement dégradée : rotation complète avant d'abandonner le worker.
         rt.state = "RECOVERING"; // classify → session_dead (ensemble fermé) ; recovery inline
         log("WARN", `${tag} 🔄 session_dead — réinit PHPSESSID (proxy conservé)`);
         phpState = await initPhpState(session, config, tag);
         if (!phpState) {
-          log("WARN", `${tag} ❌ Réinit PHP échouée après session_dead — exit worker`);
-          workerResult = { dossierId: config.id, status: "error", errorMessage: "session_dead: réinit PHP impossible" };
-          return workerResult;
+          log("WARN", `${tag} ❌ Réinit PHP échouée après session_dead — rotation IP immédiate`);
+          const newProxy = await rotateWorkerIp(
+            session,
+            proxyUrl,
+            config,
+            capsolverKey,
+            tag,
+            "session-dead",
+          );
+          if (!newProxy) {
+            log("WARN", `${tag} ❌ Rotation impossible après session_dead — exit worker`);
+            workerResult = {
+              dossierId: config.id,
+              status: "error",
+              errorMessage: "session_dead: réinit PHP impossible et rotation IP échouée",
+            };
+            return workerResult;
+          }
+          proxyUrl = newProxy;
+          phpState = await initPhpState(session, config, tag);
+          if (!phpState) {
+            log("WARN", `${tag} ❌ Réinit PHP échouée après rotation session_dead — exit worker`);
+            workerResult = {
+              dossierId: config.id,
+              status: "error",
+              errorMessage: "session_dead: réinit PHP impossible après rotation",
+            };
+            return workerResult;
+          }
+          updatePhpTrace();
+          rt.proxyUrl = proxyUrl;
+          rt.session = session;
+          rt.phpState = phpState;
+          transition(rt, "recovered");
+          log("INFO", `${tag} ✅ session_dead récupéré après rotation IP — reprise du scan`);
+          continue;
         }
         updatePhpTrace();
         // Récupération synchrone réussie → resynchroniser rt et revenir ARMED.
@@ -3194,9 +3229,14 @@ async function rotateWorkerIp(
   config: SpainDossierConfig,
   capsolverKey: string,
   tag: string,
-  reason: "main-0b-rotation" | "proxy_error" = "main-0b-rotation",
+  reason: "main-0b-rotation" | "proxy_error" | "session-dead" = "main-0b-rotation",
 ): Promise<string | null> {
-  const reasonLabel = reason === "proxy_error" ? "proxy_error (CONNECT cassé)" : "/main/ 0B";
+  const reasonLabel =
+    reason === "proxy_error"
+      ? "proxy_error (CONNECT cassé)"
+      : reason === "session-dead"
+        ? "session_dead (réinit PHP échouée)"
+        : "/main/ 0B";
   log("WARN", `${tag} 🔄 Rotation IP (${reasonLabel}) — libération ${maskProxy(currentProxyUrl)} …`);
 
   // 1. Libérer l'IP courante et la blacklister
