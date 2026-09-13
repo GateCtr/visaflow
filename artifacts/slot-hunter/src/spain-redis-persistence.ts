@@ -774,7 +774,9 @@ const REDIS_SPAIN_DECODO_TTL_SEC = 24 * 60 * 60; // 24h
 export interface SerializableDecodoPoolState {
   /** Index courant dans le pool (prochaine IP à utiliser) */
   rotationIndex: number;
-  /** IPs blacklistées → timestamp du flagging (ms). Clé = URL complète du proxy. */
+  /** IPs blacklistées → timestamp du flagging (ms). Clé = "host:port" (identité exit IP,
+   *  robuste au format du username sticky). Les anciennes clés au format URL complète
+   *  expirent par TTL sans effet. */
   blacklistedIps: Record<string, number>;
   savedAt: number;
   /**

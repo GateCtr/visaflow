@@ -152,17 +152,22 @@ function getPool(): string[] {
  */
 function baseProxyUrl(url: string): string {
   // On N'UTILISE PAS new URL().toString() : il ajoute un "/" final absent des entrées
-  // du pool (→ indexOf = -1 → "[?/N]") et rejette les ports Decodo > 65535. On normalise
-  // par regex sur la chaîne brute, en retirant TOUS les suffixes sticky connus :
-  //   -session-XXXX-sessionduration-NN   (format complet)
-  //   -sessionduration-NN                (format court, sans -session-XXXX)
-  //   -sessionid-XXXX                    (rotation legacy DECODO_PROXY_URL)
+  // du pool (→ indexOf = -1 → "[?/N]") et rejette les ports Decodo > 65535.
+  //
+  // CLÉ : les entrées du pool CSV CONTIENNENT "-sessionduration-NN" (ex.
+  //   user-sp4e4cx19x-sessionduration-60). Ce segment fait partie de l'IDENTITÉ DE BASE
+  //   et NE DOIT PAS être retiré (sinon la base normalisée ne matche plus le pool → "?").
+  //   Seul le segment VARIABLE "-session-{sid}" (ajouté dynamiquement par addStickySession)
+  //   doit être retiré. Même logique que stripStickySession côté worker.
   // Le retrait porte uniquement sur le username (entre "//" et le premier ":").
   try {
     const stripSticky = (s: string): string =>
       s
-        .replace(/-session-[^-:@]+-sessionduration-\d+/g, "")
-        .replace(/-sessionduration-\d+/g, "")
+        // Sticky complet : ...-session-{sid}-sessionduration-60 → ...-sessionduration-60
+        .replace(/-session-[^-:@]+(?=-sessionduration-)/g, "")
+        // Sticky sans sessionduration : ...-session-{sid} en fin de username → retiré
+        .replace(/-session-[^-:@]+$/g, "")
+        // Rotation legacy DECODO_PROXY_URL : -sessionid-{id}
         .replace(/-sessionid-[^-:@]+/g, "");
     // Applique le nettoyage uniquement sur la portion username (avant le premier ":")
     // pour ne pas toucher au host/port/password. Format: scheme://user:pass@host:port
@@ -178,15 +183,35 @@ function baseProxyUrl(url: string): string {
   }
 }
 
+/** Extrait "host:port" d'une URL proxy — identité RÉELLE de l'exit IP Decodo (le
+ *  username/password/sticky n'affectent pas l'exit IP, seul le port virtuel compte).
+ *  Sert à retrouver l'index dans le pool de façon robuste, indépendamment du format
+ *  du username (présence ou non de -sessionduration-NN / -session-{sid}). */
+function proxyHostPort(url: string): string {
+  const m = url.match(/@([^/@]+)(?:\/|$)/);
+  return m ? m[1] : url;
+}
+
+/** Trouve l'index d'une URL dans le pool par host:port (robuste au format username).
+ *  Retourne -1 si absente. */
+function findPoolIndexByHostPort(url: string, pool: string[]): number {
+  const target = proxyHostPort(url);
+  for (let i = 0; i < pool.length; i++) {
+    if (proxyHostPort(pool[i]) === target) return i;
+  }
+  return -1;
+}
+
 /** Vérifie si une URL est actuellement blacklistée (TTL expirés auto-purgés).
  *  Normalise les URLs sticky avant le lookup (même base IP → même entrée blacklist). */
 export function isDecodoIpBlacklisted(url: string): boolean { return isBlacklisted(url); }
 function isBlacklisted(url: string): boolean {
-  const base = baseProxyUrl(url);
-  const ts = _blacklistedIps.get(base);
+  // Clé = host:port (identité exit IP), robuste au format du username sticky.
+  const key = proxyHostPort(url);
+  const ts = _blacklistedIps.get(key);
   if (ts === undefined) return false;
   if (Date.now() - ts > getBlacklistTtlMs()) {
-    _blacklistedIps.delete(base); // auto-expire en mémoire
+    _blacklistedIps.delete(key); // auto-expire en mémoire
     return false;
   }
   return true;
@@ -341,18 +366,19 @@ export function flagDecodoIp(url: string | undefined, reason: string): void {
   const pool = getPool();
   if (pool.length <= 1) return; // inutile si pool d'une seule IP
 
-  // Normaliser vers l'URL de base (sans suffix sticky) pour :
-  //   1. Trouver l'index réel dans le pool (pool ne contient pas les URLs sticky)
-  //   2. Stocker dans la blacklist par base URL → toute future sticky de la même IP sera bloquée
-  const base = baseProxyUrl(url);
+  // Clé de blacklist ET recherche d'index par host:port (identité exit IP réelle),
+  // robuste au format du username sticky (-sessionduration-NN / -session-{sid} présents
+  // ou non selon le chemin d'appel). Corrige le "[?/N]" et garantit qu'une IP morte
+  // reste bloquée quelle que soit sa forme d'URL.
+  const key = proxyHostPort(url);
   const ttlMin = Math.round(getBlacklistTtlMs() / 60_000);
-  const masked = base.replace(/:([^:@]+)@/, ":***@");
-  const ipIdx = pool.indexOf(base);
+  const masked = baseProxyUrl(url).replace(/:([^:@]+)@/, ":***@");
+  const ipIdx = findPoolIndexByHostPort(url, pool);
   const idxLabel = ipIdx >= 0 ? `[${ipIdx + 1}/${pool.length}]` : `[?/${pool.length}]`;
   console.warn(
     `[spain-decodo] 🚫 IP blacklistée ${idxLabel} (${reason}, TTL ${ttlMin}min) — ${masked.slice(0, 60)}`,
   );
-  _blacklistedIps.set(base, Date.now());
+  _blacklistedIps.set(key, Date.now());
   syncDecodoPoolStateToRedis(_index, _blacklistedIps, computePoolFingerprint(pool));
 }
 
