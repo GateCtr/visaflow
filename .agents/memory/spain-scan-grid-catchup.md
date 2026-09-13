@@ -5,7 +5,7 @@ description: Cadence rule for Kinshasa workers whose mandatory PHP session refre
 
 ## Rule
 
-Kinshasa workers recreate the PHP session and run the full portal cycle on every scan. Use a 10-second hunt grid rather than a 6-second grid, launch known-portal `getservices/` and `getagendas/` in parallel with only a 0–200 ms desynchronizing jitter, and allow at most one bounded out-of-grid catch-up after a no-slot scan when more than half the next tick remains. The worker must then rejoin the next absolute grid front.
+Kinshasa workers recreate the PHP session and run the full portal cycle on every scan. Use a 10-second hunt grid rather than a 6-second grid, launch known-portal `getservices/` immediately and `getagendas/` after a conservative fixed 2-second offset, and allow at most one bounded out-of-grid catch-up after a no-slot scan when more than half the next tick remains. The worker must then rejoin the next absolute grid front.
 
 **Why:** A 6-second grid systematically caused 7–8 second scans to miss every other front. Waiting for a later front wasted the opportunity to observe a slot that appeared between the scan and that front, while unrestricted immediate retries could create a tight loop and a portal burst.
 
