@@ -278,12 +278,12 @@ const DATETIME_PARALLEL_MONTHS = ((): number => {
   return Math.max(1, Math.min(4, Number.isFinite(v) ? Math.round(v) : 2));
 })();
 
-/** Délai positif avant getagendas/ pour les portails connus.
- * getservices/ part immédiatement ; getagendas/ reste parallèle mais laisse au serveur
- * le temps de recevoir et d'initialiser le service. Borné [0,5s], défaut 1,5s. */
-const AGENDA_START_DELAY_MS = ((): number => {
-  const v = Number(process.env.SPAIN_AGENDA_START_DELAY_MS ?? "1500");
-  return Math.max(0, Math.min(5_000, Number.isFinite(v) ? Math.round(v) : 1_500));
+/** Petit jitter avant getagendas/ pour les portails connus.
+ * getservices/ et getagendas/ restent réellement parallèles ; le jitter [0,max]
+ * évite seulement un départ systématiquement simultané. Borné [0,1s], défaut 200ms. */
+const AGENDA_START_JITTER_MAX_MS = ((): number => {
+  const v = Number(process.env.SPAIN_AGENDA_START_JITTER_MAX_MS ?? "200");
+  return Math.max(0, Math.min(1_000, Number.isFinite(v) ? Math.round(v) : 200));
 })();
 
 /** Jitter cumulé entre les requêtes datetime/ de la première vague parallèle.
@@ -877,8 +877,11 @@ export async function initPhpState(
       return payload;
     })();
     const agendaPromise = (async () => {
-      await sleep(AGENDA_START_DELAY_MS);
-      log("INFO", `${tag} ③ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (délai cible ${AGENDA_START_DELAY_MS}ms)`);
+      const startDelayMs = AGENDA_START_JITTER_MAX_MS === 0
+        ? 0
+        : Math.floor(Math.random() * (AGENDA_START_JITTER_MAX_MS + 1));
+      await sleep(startDelayMs);
+      log("INFO", `${tag} ③ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (jitter ${startDelayMs}ms)`);
       const requestStartedAt = Date.now();
       const payload = await callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
       log(
@@ -1549,8 +1552,11 @@ export async function refreshSessionAndScan(
       return payload;
     })();
     const agendaPromise = (async () => {
-      await sleep(AGENDA_START_DELAY_MS);
-      log("INFO", `${tag} ⑥ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (délai cible ${AGENDA_START_DELAY_MS}ms)`);
+      const startDelayMs = AGENDA_START_JITTER_MAX_MS === 0
+        ? 0
+        : Math.floor(Math.random() * (AGENDA_START_JITTER_MAX_MS + 1));
+      await sleep(startDelayMs);
+      log("INFO", `${tag} ⑥ getagendas/ dispatch après ${Date.now() - serviceStartedAt}ms (jitter ${startDelayMs}ms)`);
       const requestStartedAt = Date.now();
       const payload = await callDirect(ds, "getagendas/", { "services[]": known.serviceId, selectedPeople: "1" }, tag);
       log(
