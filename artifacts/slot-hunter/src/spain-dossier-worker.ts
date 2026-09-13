@@ -3027,24 +3027,44 @@ async function rotateWorkerIp(
     await deleteLastStickyForDossier(config.id).catch(() => {});
   }
 
-  // 2. Nouvelle IP + initWorkerSession complète (même séquence que l'init initiale)
+  // 2. Nouvelle IP + initWorkerSession complète (même séquence que l'init initiale).
+  // PERSÉVÉRANCE : on essaie jusqu'à ROTATE_MAX_ATTEMPTS IP différentes. Sur un range
+  // Decodo dégradé (502 CONNECT / 0B / CF 403 en cascade), une SEULE tentative retombe
+  // souvent sur une IP voisine tout aussi mauvaise → le worker mourait prématurément.
+  // Chaque IP qui échoue est blacklistée + libérée, puis on prend la suivante (pickDedicatedProxy
+  // saute déjà les IP blacklistées). On s'arrête au 1er succès, ou si le pool est épuisé,
+  // ou après ROTATE_MAX_ATTEMPTS échecs. Configurable via SPAIN_ROTATE_MAX_ATTEMPTS (défaut 3).
   const portalUrl = config.portalUrl.split("#")[0];
+  const ROTATE_MAX_ATTEMPTS = Math.max(1, Math.min(10, Number(process.env.SPAIN_ROTATE_MAX_ATTEMPTS ?? "3") || 3));
 
-  const newProxy = await pickDedicatedProxy(config.id, tag, stripStickySession(currentProxyUrl));
-  if (!newProxy) {
-    log("WARN", `${tag} ❌ Rotation impossible — pool Decodo épuisé`);
-    return null;
-  }
+  let stickyNewProxy = "";
+  let stickyId = "";
+  let result: Awaited<ReturnType<typeof initWorkerSession>> = null;
+  let excludeBase = stripStickySession(currentProxyUrl);
 
-  const stickyId = Math.random().toString(36).slice(2, 10);
-  const stickyNewProxy = addStickySession(newProxy, stickyId);
-  log("INFO", `${tag} 🔄 Nouvelle IP : ${maskProxy(stickyNewProxy)} (sid=${stickyId})`);
+  for (let attempt = 1; attempt <= ROTATE_MAX_ATTEMPTS; attempt++) {
+    const newProxy = await pickDedicatedProxy(config.id, tag, excludeBase);
+    if (!newProxy) {
+      log("WARN", `${tag} ❌ Rotation impossible — pool Decodo épuisé (tentative ${attempt}/${ROTATE_MAX_ATTEMPTS})`);
+      return null;
+    }
 
-  const result = await initWorkerSession(stickyNewProxy, portalUrl, capsolverKey);
-  if (!result) {
-    log("WARN", `${tag} ❌ initWorkerSession échoué sur nouvelle IP — libération`);
+    stickyId = Math.random().toString(36).slice(2, 10);
+    stickyNewProxy = addStickySession(newProxy, stickyId);
+    log("INFO", `${tag} 🔄 Nouvelle IP (${attempt}/${ROTATE_MAX_ATTEMPTS}) : ${maskProxy(stickyNewProxy)} (sid=${stickyId})`);
+
+    result = await initWorkerSession(stickyNewProxy, portalUrl, capsolverKey);
+    if (result) break; // succès → sortie de boucle
+
+    // Échec sur cette IP : blacklist + libère, exclut cette base et tente la suivante.
+    log("WARN", `${tag} ⚠️ initWorkerSession échoué sur IP ${attempt}/${ROTATE_MAX_ATTEMPTS} — blacklist + IP suivante`);
     flagDecodoIp(newProxy, "rotation-init-session-failed");
     await releaseWorkerIp(newProxy, config.id).catch(() => {});
+    excludeBase = stripStickySession(newProxy);
+  }
+
+  if (!result) {
+    log("WARN", `${tag} ❌ Rotation impossible — ${ROTATE_MAX_ATTEMPTS} IP essayées sans succès (range dégradé ?)`);
     return null;
   }
 

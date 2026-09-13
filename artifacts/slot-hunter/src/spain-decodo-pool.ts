@@ -151,12 +151,28 @@ function getPool(): string[] {
  *   - La blacklist clé = sticky URL → une autre sticky du même proxy n'est pas bloquée
  */
 function baseProxyUrl(url: string): string {
+  // On N'UTILISE PAS new URL().toString() : il ajoute un "/" final absent des entrées
+  // du pool (→ indexOf = -1 → "[?/N]") et rejette les ports Decodo > 65535. On normalise
+  // par regex sur la chaîne brute, en retirant TOUS les suffixes sticky connus :
+  //   -session-XXXX-sessionduration-NN   (format complet)
+  //   -sessionduration-NN                (format court, sans -session-XXXX)
+  //   -sessionid-XXXX                    (rotation legacy DECODO_PROXY_URL)
+  // Le retrait porte uniquement sur le username (entre "//" et le premier ":").
   try {
-    const u = new URL(url);
-    const user = decodeURIComponent(u.username);
-    const baseUser = user.replace(/-session-[^-]+-sessionduration-\d+/g, "");
-    u.username = encodeURIComponent(baseUser);
-    return u.toString();
+    const stripSticky = (s: string): string =>
+      s
+        .replace(/-session-[^-:@]+-sessionduration-\d+/g, "")
+        .replace(/-sessionduration-\d+/g, "")
+        .replace(/-sessionid-[^-:@]+/g, "");
+    // Applique le nettoyage uniquement sur la portion username (avant le premier ":")
+    // pour ne pas toucher au host/port/password. Format: scheme://user:pass@host:port
+    const m = url.match(/^([a-z]+:\/\/)([^:@/]+)(.*)$/i);
+    if (m) {
+      const [, scheme, user, rest] = m;
+      // On retire aussi un éventuel "/" final que d'anciennes normalisations auraient laissé.
+      return `${scheme}${stripSticky(user)}${rest}`.replace(/\/+$/, "");
+    }
+    return url.replace(/\/+$/, "");
   } catch {
     return url;
   }
