@@ -280,10 +280,10 @@ const DATETIME_PARALLEL_MONTHS = ((): number => {
 
 /** Délai positif avant getagendas/ pour les portails connus.
  * getservices/ part immédiatement ; getagendas/ reste parallèle mais laisse au serveur
- * le temps de recevoir et d'initialiser le service. Borné [0,5s], défaut 2s. */
+ * le temps de recevoir et d'initialiser le service. Borné [0,5s], défaut 1,5s. */
 const AGENDA_START_DELAY_MS = ((): number => {
-  const v = Number(process.env.SPAIN_AGENDA_START_DELAY_MS ?? "2000");
-  return Math.max(0, Math.min(5_000, Number.isFinite(v) ? Math.round(v) : 2_000));
+  const v = Number(process.env.SPAIN_AGENDA_START_DELAY_MS ?? "1500");
+  return Math.max(0, Math.min(5_000, Number.isFinite(v) ? Math.round(v) : 1_500));
 })();
 
 /** Jitter cumulé entre les requêtes datetime/ de la première vague parallèle.
