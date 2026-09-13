@@ -194,11 +194,6 @@ const PROXY_ERROR_CF_FRESH_MIN_MS = 5 * 60_000;
  * d'un autre worker du même portail. Cette attente ne s'applique qu'à un
  * `datetime/` 0B sur tous les mois, jamais à une réponse vide normale.
  */
-const PEER_BURST_CONFIRM_WAIT_MS = (() => {
-  const v = Number(process.env.SPAIN_PEER_BURST_CONFIRM_WAIT_MS ?? "6000");
-  return Math.max(1_000, Math.min(15_000, Number.isFinite(v) ? Math.round(v) : 6_000));
-})();
-const PEER_BURST_POLL_MS = 400;
 const PEER_BURST_MAX_AGE_SEC = 20;
 
 /** Fenêtre de surveillance par dossier (25 min) — alignée TTL cf_clearance */
@@ -709,28 +704,25 @@ function hasAllDatetimeHttpNulls(scan: WorkerScanResult): boolean {
 }
 
 /**
- * Attend un signal court indiquant qu'un autre dossier vient de voir des
- * créneaux sur le même portail. Le signal Redis est volontairement récent :
- * un burst vieux de plusieurs cycles ne doit pas provoquer une rotation.
+ * Vérifie immédiatement si un autre dossier vient de voir des créneaux sur le
+ * même portail. Il ne faut pas attendre ici : sur Kinshasa, datetime/ → 0B est
+ * le résultat normal lorsqu'il n'y a aucun créneau. Un burst vieux de plusieurs
+ * cycles ne doit pas provoquer une rotation.
  */
-async function waitForPeerBurst(
+async function hasRecentPeerBurst(
   portalUrl: string,
   tag: string,
 ): Promise<boolean> {
   if (!isSpainRedisReady()) return false;
 
-  const deadline = Date.now() + PEER_BURST_CONFIRM_WAIT_MS;
-  while (Date.now() < deadline) {
-    if (await checkBurstFlag(portalUrl, PEER_BURST_MAX_AGE_SEC)) {
-      log(
-        "WARN",
-        `${tag} 🔎 0B confirmé par burst peer récent → anomalie proxy/session`,
-      );
-      return true;
-    }
-    await sleep(PEER_BURST_POLL_MS);
+  const confirmed = await checkBurstFlag(portalUrl, PEER_BURST_MAX_AGE_SEC);
+  if (confirmed) {
+    log(
+      "WARN",
+      `${tag} 🔎 0B contredit par un burst peer récent → anomalie proxy/session`,
+    );
   }
-  return false;
+  return confirmed;
 }
 
 /**
@@ -2052,11 +2044,12 @@ export async function runDossierWorker(
       const scan = await refreshSessionAndScan(session, config, tag);
       log("INFO", `${tag} 📊 Cycle ${cycleCount} scan=${scan.status} | cfClearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
 
-      // Un `datetime/` 0B sur tous les mois est ambigu quand l'agenda vient du
-      // fallback. Attendre brièvement une confirmation inter-workers permet de
-      // distinguer un vrai agenda vide d'une anomalie proxy/session.
+      // Sur Kinshasa, `datetime/` 0B sur tous les mois est le résultat normal
+      // quand l'agenda fallback n'a aucun créneau. Conclure immédiatement
+      // `not_found`; vérifier seulement si Redis contient DÉJÀ un burst peer
+      // récent qui contredit ce résultat. Aucun délai de polling n'est ajouté.
       if (scan.status === "not_found" && hasAllDatetimeHttpNulls(scan)) {
-        const peerBurstConfirmed = await waitForPeerBurst(config.portalUrl, tag);
+        const peerBurstConfirmed = await hasRecentPeerBurst(config.portalUrl, tag);
         if (peerBurstConfirmed) {
           scan.status = "proxy_error";
           scan.errorMessage = "datetime/ 0B contredit par burst peer récent";

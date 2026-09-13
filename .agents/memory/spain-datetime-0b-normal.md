@@ -23,7 +23,7 @@ Traiter 0B comme session morte déclenche rotation IP + nouveau solve CapSolver 
 
 **Why:** Un 0B isolé est normal sur Kinshasa, mais l'analyse de la publication du 31 août 2026 a montré qu'un dossier pouvait recevoir 0B pendant que d'autres dossiers du même portail voyaient et réservaient des créneaux. La preuve inter-workers évite de confondre ces deux situations.
 
-**How to apply:** Publier un signal Redis court lorsqu'un worker trouve des créneaux. Pour un `0B` sur tous les mois, attendre brièvement ce signal avant de conclure `not_found`; s'il existe, bypasser la tolérance du premier `proxy_error` et changer de proxy sans réinitialisation PHP sur la même IP.
+**How to apply:** Publier un signal Redis court lorsqu'un worker trouve des créneaux. Pour un `0B` sur tous les mois, vérifier ce signal immédiatement sans polling bloquant; en son absence, conclure `not_found`, et s'il existe déjà, bypasser la tolérance du premier `proxy_error` et changer de proxy sans réinitialisation PHP sur la même IP.
 
 ## Distinction callDirect → null
 
