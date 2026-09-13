@@ -1040,39 +1040,57 @@ export async function scanDatetimeDirect(
   // ── RETRY CIBLÉ sur 0B d'un mois (faux négatif serveur) ───────────────────────
   // Cas observé en prod (Cuba/São Paulo) : datetime/ renvoie parfois 0B sur un mois
   // alors qu'il a des créneaux (réponse serveur tronquée, ~2B, pas une vraie absence).
-  // Signal fiable : si AU MOINS UN mois a RÉPONDU proprement (JSONP valide, payload
-  // non-null, avec ou sans créneaux), alors le serveur/session est sain → tout AUTRE mois
-  // en 0B est une anomalie (tronqué), PAS « pas de créneau ». On retente jusqu'à
-  // DATETIME_MONTH_ZERO_MAX_RETRIES fois, immédiatement, CHAQUE mois en 0B — peu
-  // importe sa position (1er ou 2e).
-  // Ne se déclenche PAS si TOUS les mois sont en 0B (cas Kinshasa « vraiment aucun
-  // créneau » : aucun mois n'a répondu → pas de retry inutile).
+  // Signal fiable : si AU MOINS UN mois a RÉPONDU proprement, tout AUTRE mois en 0B est
+  // une anomalie (tronqué) qui pourrait cacher des créneaux → on retente.
+  //
+  // MAIS priorité à la VITESSE au pic (compétition féroce, stock limité) :
+  //   1) Si UN mois a DÉJÀ des créneaux bookables → on NE retente PLUS aucun 0B : on file
+  //      directement au booking. Retenter ferait perdre la course (observé prod : Elie a
+  //      perdu ~14s sur 3 retries du mois courant en 0B pendant que 2026-10 avait déjà 13
+  //      créneaux → arrivé trop tard au signin/ → tous ses créneaux déjà pris → 0B).
+  //   2) Jours de PUBLICATION (dim/lun/mar Kinshasa) : le portail publie le mois+1 ; le
+  //      mois COURANT (offset 0) n'a que des annulations résiduelles. On NE retente donc
+  //      PAS le mois courant en 0B ces jours-là (c'est normal qu'il soit vide, on ne perd
+  //      pas de temps là). Les autres mois (offset > 0) restent retentés.
+  // Le retry ne garde donc son sens QUE quand AUCUN mois n'a encore de créneau (le 0B
+  // pourrait cacher les seuls créneaux disponibles).
   const anyResponded = monthResults.some(
     (r) => !r.isHttpNull && !r.isNetworkError && !r.isServerOverload,
   );
-  if (anyResponded) {
+  const anySlotsFound = monthResults.some((r) => r.slots.length > 0);
+  if (anyResponded && !anySlotsFound) {
     for (let i = 0; i < monthResults.length; i++) {
-      if (monthResults[i].isHttpNull) {
-        const off = parallelOffsets[i];
-        for (let attempt = 1; attempt <= DATETIME_MONTH_ZERO_MAX_RETRIES; attempt++) {
-          log(
-            "INFO",
-            `${tag}   ↻ ${monthResults[i].monthLabel}: 0B alors qu'un autre mois a répondu — ` +
-              `retry ${attempt}/${DATETIME_MONTH_ZERO_MAX_RETRIES}`,
-          );
-          const retried = await scanOneMonth(off);
-          monthResults[i] = retried;
-          log(
-            "INFO",
-            `${tag}   ↻ ${retried.monthLabel}: retry ${attempt}/${DATETIME_MONTH_ZERO_MAX_RETRIES} → ` +
-              `${retried.slots.length > 0 ? retried.slots.length + " créneau(x)" : retried.isHttpNull ? "0 (0B persistant)" : "0 (vide)"}`,
-          );
-          // Une réponse valide suffit : ne pas consommer les retries restants.
-          if (!retried.isHttpNull) {
-            break;
-          }
-        }
+      if (!monthResults[i].isHttpNull) continue;
+      const off = parallelOffsets[i];
+      // Jour de publication + mois courant (offset 0) : ne pas retenter (vide attendu).
+      if (isPublicationDay && off === 0) {
+        log("INFO", `${tag}   ↻ ${monthResults[i].monthLabel}: 0B mois courant un jour de publication (dim/lun/mar) — pas de retry (vide attendu)`);
+        continue;
       }
+      for (let attempt = 1; attempt <= DATETIME_MONTH_ZERO_MAX_RETRIES; attempt++) {
+        log(
+          "INFO",
+          `${tag}   ↻ ${monthResults[i].monthLabel}: 0B alors qu'un autre mois a répondu — ` +
+            `retry ${attempt}/${DATETIME_MONTH_ZERO_MAX_RETRIES}`,
+        );
+        const retried = await scanOneMonth(off);
+        monthResults[i] = retried;
+        log(
+          "INFO",
+          `${tag}   ↻ ${retried.monthLabel}: retry ${attempt}/${DATETIME_MONTH_ZERO_MAX_RETRIES} → ` +
+            `${retried.slots.length > 0 ? retried.slots.length + " créneau(x)" : retried.isHttpNull ? "0 (0B persistant)" : "0 (vide)"}`,
+        );
+        // Une réponse valide suffit : ne pas consommer les retries restants.
+        if (!retried.isHttpNull) {
+          break;
+        }
+        // Si ce retry a fait apparaître des créneaux sur CE mois, inutile de continuer
+        // à retenter d'éventuels autres mois 0B : on a de quoi booker → priorité vitesse.
+        if (retried.slots.length > 0) break;
+      }
+      // Dès qu'un mois a produit des créneaux (via retry), on arrête de traiter les autres
+      // mois 0B pour filer au booking au plus vite.
+      if (monthResults.some((r) => r.slots.length > 0)) break;
     }
   }
 
