@@ -22,8 +22,8 @@ import type { GridConfig } from "../spain/spain-grid-config.js";
 const DEFAULTS = {
   huntTickMs: 10_000,
   lateTickMs: 60_000,
-  jitterPct: 0.2,
-  windowStartMin: 5,
+  jitterPct: 0.02,
+  windowStartMin: 3,
   huntStartMin: 13,
   lateStartMin: 17,
   windowEndMin: 25,

@@ -52,4 +52,5 @@
 - [Kinshasa bundle analysis](spain-kinshasa-bundle-analysis.md) — le JS statique est un loader; le contrat signin vient de la réponse dynamique onlinebookings/main.
 - [Spain signin account fields](spain-signinaccount-fields.md) — getsigninaccountfields/ donne les valeurs logintype réelles; Saopolo et Cuba retournent document.
 - [Spain signin HTTP observability](spain-signin-http-observability.md) — compare status, body shape, fingerprints and cookie state without secrets; retry only transient HTTP responses.
+- [Spain scan grid catch-up](spain-scan-grid-catchup.md) — Kinshasa full cycles need a 10s hunt grid plus one bounded catch-up when a no-slot scan misses a front.
 - [France booking success without QR](france-booking-success-without-qr.md) — reservations/family HTTP 2xx may create the booking and email confirmation without returning data.qrCodes.

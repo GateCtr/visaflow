@@ -40,7 +40,7 @@ export type FailureKind =
 
 /** Configuration de la grille d'horloge murale, adossée aux variables d'environnement. */
 export interface GridConfig {
-  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 6000). */
+  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 10000). */
   huntTickMs: number;
   /** Tick de la phase tardive en ms (SPAIN_LATE_TICK_MS, défaut 60000). */
   lateTickMs: number;
