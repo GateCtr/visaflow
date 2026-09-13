@@ -300,6 +300,16 @@ const DATETIME_MONTH_ZERO_MAX_RETRIES = ((): number => {
   return Math.max(1, Math.min(5, Number.isFinite(v) ? Math.round(v) : 3));
 })();
 
+/** Nombre de CYCLES COMPLETS de ré-armement quand getsigninfields/ (armement) répond 0B.
+ *  getsigninfields/ suit la règle §9 (1×/PHPSESSID) : un 0B = session morte → tout signin/
+ *  renverra 0B. La seule issue est de refaire un cycle complet (nouveau PHPSESSID) via
+ *  refreshSessionAndScan puis de ré-armer. Borné pour ne pas boucler si le serveur reste
+ *  en 0B (surcharge). Défaut 2. Configurable via SPAIN_GSF_ARM_RECYCLE_MAX. */
+const GSF_ARM_RECYCLE_MAX = ((): number => {
+  const v = Number(process.env.SPAIN_GSF_ARM_RECYCLE_MAX ?? "2");
+  return Math.max(1, Math.min(4, Number.isFinite(v) ? Math.round(v) : 2));
+})();
+
 /** Nombre de mois à scanner via datetime/ (mois courant + N suivants) */
 const DATETIME_MONTHS_AHEAD = ((): number => {
   const v = Number(process.env.SPAIN_DATETIME_MONTHS_AHEAD ?? "4");
@@ -2375,26 +2385,68 @@ export async function runDossierWorker(
           // à découvrir les logintypes), puis on appelle signin/ DIRECTEMENT sur chaque
           // candidat SANS re-appeler getsigninfields/. Prouvé : après 1 getsigninfields/
           // réussi, signin/ fonctionne sur d'autres créneaux (test étape D).
-          const armDs = scan.ds ?? phpState!.ds;
-          const armSlot = bookingCandidates[0];
-          const armExtra: Record<string, string> = {
-            "services[]": scan.serviceId!,
-            date: armSlot.date,
-            time: armSlot.time,
-            selectedPeople: "1",
+          // `armDs` / `armCandidates` mutables : un armement getsigninfields/ 0B force un
+          // CYCLE COMPLET (nouveau PHPSESSID) et remplace ces références (voir boucle ci-dessous).
+          let armDs = scan.ds ?? phpState!.ds;
+          let armCandidates = bookingCandidates;
+          let armServiceId = scan.serviceId!;
+          const doArmGsf = async (ds: DynamicSession, slot: { date: string; time: string; agendaId?: string }, svcId: string): Promise<any> => {
+            const extra: Record<string, string> = {
+              "services[]": svcId,
+              "agendas[]": slot.agendaId ?? "",
+              date: slot.date,
+              time: slot.time,
+              selectedPeople: "1",
+            };
+            log("INFO", `${tag} 🔑 getsigninfields/ (armement unique) — PHPSESSID=${ds.jar.PHPSESSID ? "present" : "absent"}`);
+            return callDirect(ds, "getsigninfields/", extra, tag) as any;
           };
-          if (armSlot.agendaId) armExtra["agendas[]"] = armSlot.agendaId;
-          log("INFO", `${tag} 🔑 getsigninfields/ (armement unique) — PHPSESSID=${armDs.jar.PHPSESSID ? "present" : "absent"}`);
-          const armGsf = await callDirect(armDs, "getsigninfields/", {
-            "services[]": armExtra["services[]"],
-            "agendas[]": armExtra["agendas[]"] ?? "",
-            date: armExtra.date,
-            time: armExtra.time,
-            selectedPeople: armExtra.selectedPeople,
-          }, tag) as any;
-          const armGsfBytes = armGsf && armGsf !== CALL_DIRECT_NETWORK_ERROR && armGsf !== CALL_DIRECT_HTTP_OVERLOAD
-            ? JSON.stringify(armGsf).length : 0;
-          log("INFO", `${tag} 🔑 getsigninfields/ (armement) → ${armGsfBytes}B${armGsfBytes > 0 ? " ✅ session armée" : " ⚠️ 0B — signin/ tenté quand même"}`);
+          const gsfBytesOf = (g: any): number =>
+            g && g !== CALL_DIRECT_NETWORK_ERROR && g !== CALL_DIRECT_HTTP_OVERLOAD ? JSON.stringify(g).length : 0;
+
+          let armGsf = await doArmGsf(armDs, armCandidates[0], armServiceId);
+          let armGsfBytes = gsfBytesOf(armGsf);
+          log("INFO", `${tag} 🔑 getsigninfields/ (armement) → ${armGsfBytes}B${armGsfBytes > 0 ? " ✅ session armée" : " ⚠️ 0B"}`);
+
+          // ── RE-ARMEMENT PAR CYCLE COMPLET si getsigninfields/ → 0B ────────────────────
+          // getsigninfields/ suit la RÈGLE §9 (une fois par PHPSESSID) : un 0B = session
+          // NON armée côté serveur → TOUS les signin/ suivants renverront 0B (session morte).
+          // Prouvé en prod (Elie : armement 0B → 10+ signin/ 0B en cascade, ~45s gaspillées,
+          // créneaux perdus). Retenter getsigninfields/ sur le MÊME PHPSESSID est inutile
+          // (§9). La seule issue est de refaire un CYCLE COMPLET (nouveau PHPSESSID) via
+          // refreshSessionAndScan, puis de ré-armer. On tente jusqu'à GSF_ARM_RECYCLE_MAX
+          // fois. À chaque re-cycle, on re-vérifie qu'il reste des créneaux éligibles
+          // (sinon les créneaux ont disparu → inutile d'insister).
+          for (let recycle = 1; armGsfBytes === 0 && recycle <= GSF_ARM_RECYCLE_MAX; recycle++) {
+            log("WARN", `${tag} 🔁 armement 0B (session morte §9) — cycle complet ${recycle}/${GSF_ARM_RECYCLE_MAX} pour ré-armer (nouveau PHPSESSID)…`);
+            const reScan = await refreshSessionAndScan(session, config, tag);
+            if (reScan.status !== "found" || !reScan.slots || reScan.slots.length === 0) {
+              log("WARN", `${tag} 🔁 re-cycle ${recycle}: plus de créneau (status=${reScan.status}) — abandon du booking ce cycle`);
+              armGsf = null;
+              armGsfBytes = 0;
+              break;
+            }
+            // Nouveaux créneaux éligibles (fenêtre + capacité) sur la session fraîche.
+            const reEligible = reScan.slots.filter(
+              (s) => isSlotInDateWindow(s.date, config, tag) && s.freeslots > 0,
+            );
+            if (reEligible.length === 0) {
+              log("INFO", `${tag} 🔁 re-cycle ${recycle}: ${reScan.slots.length} créneau(x) mais hors fenêtre — abandon`);
+              armGsf = null;
+              armGsfBytes = 0;
+              break;
+            }
+            const reSorted = [...reEligible].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+            armDs = reScan.ds ?? armDs;
+            armServiceId = reScan.serviceId ?? armServiceId;
+            armCandidates = reSorted;
+            armGsf = await doArmGsf(armDs, armCandidates[0], armServiceId);
+            armGsfBytes = gsfBytesOf(armGsf);
+            log("INFO", `${tag} 🔁 re-cycle ${recycle}: getsigninfields/ → ${armGsfBytes}B${armGsfBytes > 0 ? " ✅ session ré-armée" : " ⚠️ toujours 0B"}`);
+          }
+          if (armGsfBytes === 0) {
+            log("WARN", `${tag} 🚫 armement getsigninfields/ toujours 0B après ${GSF_ARM_RECYCLE_MAX} cycle(s) — signin/ voué à l'échec, on n'insiste pas ce cycle`);
+          }
           // logintypes découverts sur l'armement (réutilisés pour TOUS les candidats).
           const armedLoginTypes = (armGsf && armGsfBytes > 0)
             ? (extractSpainLoginTypes(armGsf).length > 0 ? extractSpainLoginTypes(armGsf) : [getSpainBookingLoginType()])
@@ -2434,7 +2486,12 @@ export async function runDossierWorker(
             }
           }
 
-          for (const candidate of bookingCandidates) {
+          // Si l'armement getsigninfields/ est resté 0B après les cycles de ré-armement,
+          // la session est morte (§9) → tout signin/ renverra 0B. On saute la boucle de
+          // booking pour ne pas gaspiller des signin/ stériles (et des tokens gct). Le worker
+          // re-scannera au prochain front de grille avec un PHPSESSID neuf.
+          const canAttemptSignin = armGsfBytes > 0;
+          for (const candidate of (canAttemptSignin ? armCandidates : [])) {
             // Hors race seulement : claim atomique anti-collision historique.
             // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
             // choisit le gagnant ; les perdants passent immédiatement au suivant.
@@ -2459,11 +2516,12 @@ export async function runDossierWorker(
               `${tag} Cycle ${cycleCount}: ✅ Créneau ${slot.date} ${slot.time} (freeSlots=${slot.freeslots}) — booking en cours…`,
             );
 
-            // ── Booking inline — même session, même PHPSESSID que le scan ────────
+            // ── Booking inline — même session/PHPSESSID que l'armement (armDs, mis à jour
+            // en cas de re-cycle §9). PAS scan.ds : après un ré-armement, scan.ds est périmé.
             const bookT0 = Date.now();
-            const ds = scan.ds ?? phpState!.ds;
+            const ds = armDs;
             const bookExtra: Record<string, string> = {
-              "services[]": scan.serviceId!,
+              "services[]": armServiceId,
               date:          slot.date,
               time:          slot.time,
               selectedPeople: "1",
