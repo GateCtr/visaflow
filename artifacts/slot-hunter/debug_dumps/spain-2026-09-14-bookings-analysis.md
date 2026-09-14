@@ -222,3 +222,14 @@ booking**. Comme les logs fournis s'arrêtent à 10:14:59.091, ils ne permettent
 pas de prouver une activité à la seconde exacte 10:15:00 ; « 6 couvrent les
 2 minutes » signifie donc ici qu'ils sont restés actifs pendant toute la
 fenêtre observable, pas qu'un heartbeat a été enregistré à chaque seconde.
+
+### Correction apportée avec l'information utilisateur
+
+Les fichiers fournis prouvent explicitement le schéma
+`busyslot → fallback → 0B` pour Kaka, Inokoya et Makola. L'utilisateur confirme
+que **Mr Bertin 7 a subi le même schéma**, mais les traces correspondantes ne
+font pas partie des pièces archivées. Le bilan opérationnel est donc **4/4
+dossiers avec ce problème**, avec une preuve documentaire disponible pour
+3/4 et une confirmation utilisateur pour le quatrième. Le passage de Bertin 7
+par Redis et l'épuisement des candidats reste visible dans les extraits déjà
+reçus, mais ne permet pas à lui seul de reconstituer son `0B` de fallback.
