@@ -190,3 +190,35 @@ tentative immédiate, token neuf pour chaque `signin/`, puis candidat suivant
 sur `busyslot` ou réponse vide. Il faut traiter les `0B` comme **état
 inconnu**, pas comme preuve d'une place libre, d'une place prise ou d'un
 captcha invalide.
+
+## Couverture réelle de la fenêtre de deux minutes
+
+La fenêtre analysée est **10:13:00–10:15:00 UTC** (soit 11:13–11:15 à
+Kinshasa/Lagos). À 10:13:21, l'itération #442 indique **11 workers actifs**,
+et les traces d'orchestration montrent encore ces 11 dossiers à 10:14:08.
+
+Cependant, les 11 n'ont pas couvert toute la fenêtre en pratique. Cinq ont
+réussi leur booking puis ont terminé avant 10:14:13 :
+
+- Mr Bertin 5 — 10:13:49 ;
+- Mr Nkumu — 10:14:00 ;
+- TSHAMALA INOKOYA ELIE — 10:14:08 ;
+- Tamba Dimbi Francine — 10:14:09 ;
+- Adelard Benga Numbi — 10:14:13.
+
+Les **6 dossiers restants** ont encore des événements de travail jusqu'à la
+fin observable de l'instantané, entre 10:14:38 et 10:14:59 :
+
+- Mr Bertin 6 bis ;
+- Mr Bertin 7 ;
+- Kaka Di Kaka ;
+- Mokobi Libuku ;
+- Makola Maluengo ;
+- Inokoya Isolitina.
+
+Conclusion opérationnelle : **11 dossiers au total, 6 ont effectivement
+traversé la fenêtre jusqu'à sa dernière trace, et 5 se sont arrêtés après
+booking**. Comme les logs fournis s'arrêtent à 10:14:59.091, ils ne permettent
+pas de prouver une activité à la seconde exacte 10:15:00 ; « 6 couvrent les
+2 minutes » signifie donc ici qu'ils sont restés actifs pendant toute la
+fenêtre observable, pas qu'un heartbeat a été enregistré à chaque seconde.
