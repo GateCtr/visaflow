@@ -6,7 +6,7 @@ Les fichiers sources reçus sont conservés tels quels dans `attached_assets/`.
 Ce rapport contient uniquement l'index et les constats d'analyse ; il ne remplace
 pas les traces originales.
 
-Fenêtre couverte par les pièces reçues : **10:13:03 → 10:14:27 UTC**, principalement
+Fenêtre couverte par les pièces reçues : **10:13:03 → 10:14:59 UTC**, principalement
 les workers Espagne Kinshasa.
 
 ## Sources reçues
@@ -31,6 +31,11 @@ les workers Espagne Kinshasa.
 - `Pasted--spain-hcaptcha-prewarm-token-p-rim-cart-pour-le-dossie_1789386459746.txt`
 - `Pasted--spain-booking-NoneCap-token-52-3s-spain-booking-hCaptc_1789386496499.txt`
 - `Pasted--bookitit-trace-RESPONSE-COOKIES-signin-set-cookie-none_1789386532889.txt`
+- `Pasted-2026-09-14T10-14-27-211Z-INFO-WORKER-MOKOBI-LIBUKU-BENJ_1789386592527.txt`
+- `Pasted--2026-09-14T10-14-33-849Z-INFO-WORKER-MOKOBI-LIBUKU-BEN_1789386639319.txt`
+- `Pasted--bookitit-trace-RESPONSE-COOKIES-signin-set-cookie-none_1789386708553.txt`
+- `Pasted--2026-09-14T10-14-46-433Z-INFO-WORKER-MAKOLA-MALUENGO-G_1789386746197.txt`
+- `Pasted--2026-09-14T10-14-51-136Z-INFO-WORKER-MOKOBI-LIBUKU-BEN_1789386775299.txt`
 
 ## Premiers bookings confirmés dans les sources
 
@@ -101,3 +106,87 @@ Il faudra aussi réconcilier le compteur annoncé de **4 bookings** avec les
 - Compter les dossiers uniques et les créneaux uniques.
 - Vérifier le résultat de `summary/` pour chacun des bookings.
 - Comparer les réponses vides avant et après le rejet des tokens âgés.
+
+## Complément des traces 10:14:27–10:14:59 UTC
+
+### Réconciliation du nombre de bookings
+
+Les nouveaux fichiers n'ajoutent pas de sixième réservation. Ils confirment les
+cinq réservations déjà présentes dans le premier lot :
+
+| Dossier | Heure de confirmation UTC | Créneau reporté | Preuves disponibles |
+|---|---:|---|---|
+| Mr Bertin 5 | 10:13:49 | 2026-10-20 09:15 | `signin/` accepté, puis `Booking confirmé` |
+| Mr Nkumu | 10:14:00 | 2026-10-20 08:30 | `signin/` accepté, puis `Booking confirmé` |
+| TSHAMALA INOKOYA ELIE | 10:14:08 | 2026-10-20 10:30 | `client_signin=true`, `state=1`, report Convex |
+| Tamba Dimbi Francine | 10:14:08 | 2026-10-20 09:00 | `client_signin=true`, gagnant Redis, report Convex |
+| Adelard Benga Numbi | 10:14:13 | 2026-10-20 09:45 | `client_signin=true`, gagnant Redis, report Convex |
+
+Dans les pièces fournies, le bilan vérifiable est donc **5 bookings confirmés**.
+Le chiffre de 4 est probablement un compteur annoncé avant la fin du traitement
+ou un compteur Convex incomplet au moment du message. Les logs montrent aussi
+les cinq dossiers retirés de Convex après les confirmations ; cela ne constitue
+pas à lui seul une preuve de lecture durable en base, mais rend l'hypothèse du
+compteur à 4 obsolète pour cette fenêtre.
+
+### Classification des nouvelles tentatives
+
+- **Courses serveur confirmées : au moins 4 `busyslot` distincts** dans les
+  extraits : Kaka à 08:45, Inokoya à 2026-10-19 09:45, Makola à 10:45 et
+  Mr Bertin 7 à 10:15. Le serveur donne explicitement la cause : le créneau
+  a été sélectionné par une autre personne.
+- **Réponses `signin/` vides : nombreuses, au moins 10 couples
+  dossier/créneau visibles dans les nouveaux extraits**, notamment Kaka
+  (09:00, 09:15, 09:30, 10:00), Inokoya (08:45, 09:00, 09:15, 09:30),
+  Makola (08:30, 11:00, 11:15) et d'autres tentatives intercalées.
+  Ces réponses sont toutes `HTTP=200`, `raw=0B`, `contentType=text/html`,
+  `bodyFp=811c9dc5`, sans erreur JSON ni `busyslot`.
+- **Sessions/réarmement :** le `getsigninfields/` de Mokobi répond `0B`,
+  puis le worker réarme la session avec un nouveau `PHPSESSID`. Ce cas est
+  distinct d'un `signin/` vide : il prouve une session mal armée ou morte,
+  mais pas une invalidité hCaptcha.
+- **Réservation Redis interne :** Mokobi ignore 10:15 et 11:30, puis indique
+  que les 15 créneaux éligibles sont épuisés ; Makola ignore aussi 11:30.
+  La trace de Makola annonce un snapshot de **12 places sur 7 créneaux**.
+  Ces exclusions sont locales et ne sont pas des réponses d'occupation
+  envoyées par Bookitit.
+
+### Le token hCaptcha n'explique pas les `0B`
+
+Les extraits associent des réponses vides à des tokens récents, par exemple :
+
+- Kaka : token servi à **16,7 s**, puis `signin/` vide ;
+- Inokoya : token servi à **15,0 s**, puis `signin/` vide ;
+- Makola : token servi à **12,4 s**, puis `signin/` vide ;
+- Makola : token servi à **18,4 s**, puis `signin/` vide.
+
+À l'inverse, des tokens proches de la limite ont aussi produit des résultats
+normaux : le token à **19,7 s** est associé à une réponse serveur exploitable,
+et les tokens neufs ont produit à la fois `client_signin=true` et `busyslot`.
+La règle des 20 secondes fonctionne donc comme protection contre les tokens
+trop vieux, mais les `0B` restants ne peuvent pas être classés comme des
+échecs hCaptcha sur la seule base de ces traces.
+
+Un autre indice est Kaka : plusieurs tentatives vides partagent le même état
+de cookies observé dans les requêtes (`cf_clearance` et `PHPSESSID` inchangés
+dans l'extrait), alors que le worker continue à recevoir des réponses
+différentes sur d'autres tentatives. Les causes encore compatibles sont le
+portail, le proxy, l'état de session côté Bookitit ou une réponse transitoire
+du service ; aucune n'est démontrée individuellement par le dump.
+
+### Décision sur le fallback
+
+Ces logs ne justifient pas l'ajout d'un `datetime/` avant chaque fallback :
+
+1. `busyslot` est déjà une décision serveur immédiate et le fallback suivant
+   peut partir sans requête supplémentaire ;
+2. les `0B` sont précisément les cas ambigus pour lesquels un `datetime/`
+   supplémentaire peut encore être obsolète au retour ;
+3. les appels observés à `getservices/`, `getagendas/` et `datetime/` prennent
+   parfois plusieurs secondes, ce qui agrandirait la fenêtre de course.
+
+La stratégie à conserver pour cette publication est donc : snapshot frais,
+tentative immédiate, token neuf pour chaque `signin/`, puis candidat suivant
+sur `busyslot` ou réponse vide. Il faut traiter les `0B` comme **état
+inconnu**, pas comme preuve d'une place libre, d'une place prise ou d'un
+captcha invalide.
