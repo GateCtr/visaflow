@@ -2869,6 +2869,11 @@ export async function runDossierWorker(
               };
 
               let summaryPayload: any = null;
+              let summaryFailure:
+                | "empty_body"
+                | "http_overload"
+                | "network_error"
+                | null = null;
               const SUMMARY_MAX_RETRIES = 2;
               for (let summaryAttempt = 0; summaryAttempt <= SUMMARY_MAX_RETRIES; summaryAttempt++) {
                 if (summaryAttempt > 0) {
@@ -2877,19 +2882,36 @@ export async function runDossierWorker(
                   await sleep(backoff);
                 }
                 const raw = await callDirect(ds, "summary/", summaryParams);
-                if (raw === CALL_DIRECT_NETWORK_ERROR || raw === CALL_DIRECT_HTTP_OVERLOAD) {
+                if (raw === CALL_DIRECT_NETWORK_ERROR) {
+                  summaryFailure = "network_error";
                   // Proxy cassé — pas la peine de retry summary/
+                  break;
+                }
+                if (raw === CALL_DIRECT_HTTP_OVERLOAD) {
+                  summaryFailure = "http_overload";
+                  // Surcharge persistante — callDirect() a déjà épuisé ses retries.
                   break;
                 }
                 if (raw !== null) {
                   summaryPayload = raw;
                   break;
                 }
-                // raw === null (HTTP 504/0B) → retry si tentatives restantes
+                summaryFailure = "empty_body";
+                // HTTP 200 + body vide → retry si tentatives restantes.
               }
 
               if (summaryPayload === null) {
-                bookResult = { status: "booking_failed", errorMessage: "summary/ → null après retries", durationMs: Date.now() - bookT0 };
+                const summaryErrorMessage =
+                  summaryFailure === "http_overload"
+                    ? "summary/ → surcharge HTTP transitoire après retries"
+                    : summaryFailure === "network_error"
+                      ? "summary/ → erreur réseau sans réponse"
+                      : "summary/ → body vide après retries";
+                bookResult = {
+                  status: "booking_failed",
+                  errorMessage: summaryErrorMessage,
+                  durationMs: Date.now() - bookT0,
+                };
               } else {
                 // Extraire locator depuis la réponse summary/
                 const eventList: any[] = Array.isArray(summaryPayload?.Event) ? summaryPayload.Event

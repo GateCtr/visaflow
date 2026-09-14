@@ -295,7 +295,7 @@ export function makeDirectHeaders(ds: DynamicSession): Record<string, string> {
   };
 }
 
-const BOOKING_TRACE_ENDPOINTS = new Set(["getsigninfields/", "signin/"]);
+const BOOKING_TRACE_ENDPOINTS = new Set(["getsigninfields/", "signin/", "summary/"]);
 const signinFieldsComparison = new Map<string, { contentFp: string; schemaFp: string }>();
 const BOOKING_TRACE_REDACTED_KEYS = new Set([
   "callback",
