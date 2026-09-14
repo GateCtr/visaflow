@@ -2780,6 +2780,15 @@ export async function runDossierWorker(
                         : "signin/ → réponse vide";
               log("WARN", `${tag} ❌ signin/ échoué: ${errMsg}`);
               bookResult = { status: "signin_failed", errorMessage: errMsg, durationMs: Date.now() - bookT0 };
+            } else if (process.env.SPAIN_TEST_NO_BOOKING === "1") {
+              // Safety guard for isolated test scripts using fake credentials:
+              // observe signin/ and stop before summary/ can create an appointment.
+              log("WARN", `${tag} 🧪 SPAIN_TEST_NO_BOOKING=1 — bktToken reçu, summary/ ignoré (aucun booking ne sera créé)`);
+              bookResult = {
+                status: "booking_failed",
+                errorMessage: "test guard: summary/ skipped after signin/ token",
+                durationMs: Date.now() - bookT0,
+              };
             } else {
               // ── P2 : summary/ avec retry 2× sur 504/null ───────────────────────
               log("INFO", `${tag} 📝 summary/ (type=${signinLogintype}, bktToken: ${bktToken.slice(0, 15)}…)…`);

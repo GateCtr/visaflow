@@ -44,6 +44,10 @@ const NAME_FILTER  = (CUBA_MODE || SAOPOLO_MODE || KINSHASA_MODE) ? "" : ARG;
 async function main() {
   L("STEP", "=== test-worker-single-dossier.ts ===");
   L("INFO", `Window: ${process.env.SPAIN_WORKER_WINDOW_MIN ?? "25"} min | Interval: ${process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "10"} s`);
+  // Hard safety boundary for this test script: signin/ may be observed, but
+  // the production worker must never submit summary/ and create an appointment.
+  process.env.SPAIN_TEST_NO_BOOKING = "1";
+  L("OK", "Safety guard actif : summary/ sera toujours ignoré (aucun booking possible)");
 
   // ── 1. Init Redis + Decodo pool ─────────────────────────────────────────────
   L("STEP", "1 — Init Redis + Decodo pool");
