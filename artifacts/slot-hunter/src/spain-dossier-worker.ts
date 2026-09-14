@@ -435,6 +435,20 @@ export function shouldRefreshAfterSlotTaken(
 }
 
 /**
+ * summary/ est l'étape qui crée effectivement le rendez-vous. Une réponse sans
+ * confirmation invalide donc toute la session de booking : ne pas passer au
+ * candidat suivant avec le même PHPSESSID, et ne jamais rejouer summary/ avec
+ * le même bktToken.
+ */
+export function shouldRefreshAfterSummaryFailure(
+  status: SpainBookingResult["status"],
+  errorMessage?: string,
+): boolean {
+  return status === "booking_failed"
+    && (errorMessage ?? "").toLowerCase().startsWith("summary/");
+}
+
+/**
  * Seuil "assez de places" pour BYPASSER le sémaphore de booking.
  *
  * Le sémaphore (MAX_CONCURRENT_BOOKERS) sert à éviter les réponses 0B du serveur
@@ -2024,7 +2038,7 @@ export async function runDossierWorker(
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
-    let refreshAfterSlotTaken = false;
+    let refreshReason: "slot_taken" | "summary_failed" | null = null;
 
     // ── spain-synchronized-scan (task 10.1) : phase + tick effectif de la grille ──
     // La phase (preflight/hunt/late) dérive de l'horloge murale Europe/Madrid ; le tick
@@ -2846,7 +2860,8 @@ export async function runDossierWorker(
                 durationMs: Date.now() - bookT0,
               };
             } else {
-              // ── P2 : summary/ avec retry 2× sur 504/null ───────────────────────
+              // summary/ crée effectivement le rendez-vous : une seule requête.
+              // Ne jamais rejouer le même bktToken, même après une réponse vide.
               log("INFO", `${tag} 📝 summary/ (type=${signinLogintype}, bktToken: ${bktToken.slice(0, 15)}…)…`);
               const summaryExtra: Record<string, string> = {
                 "services[]": scan.serviceId!,
@@ -2868,51 +2883,27 @@ export async function runDossierWorker(
                 gct:            gctToken,
               };
 
+              const rawSummary = await callDirect(ds, "summary/", summaryParams, undefined, { maxRetries: 0 });
               let summaryPayload: any = null;
-              let summaryFailure:
-                | "empty_body"
-                | "http_overload"
-                | "network_error"
-                | null = null;
-              const SUMMARY_MAX_RETRIES = 2;
-              for (let summaryAttempt = 0; summaryAttempt <= SUMMARY_MAX_RETRIES; summaryAttempt++) {
-                if (summaryAttempt > 0) {
-                  const backoff = 3_000 * summaryAttempt; // 3s, 6s
-                  log("INFO", `${tag} 📝 summary/ retry ${summaryAttempt}/${SUMMARY_MAX_RETRIES} (${backoff}ms)…`);
-                  await sleep(backoff);
-                }
-                const raw = await callDirect(ds, "summary/", summaryParams);
-                if (raw === CALL_DIRECT_NETWORK_ERROR) {
-                  summaryFailure = "network_error";
-                  // Proxy cassé — pas la peine de retry summary/
-                  break;
-                }
-                if (raw === CALL_DIRECT_HTTP_OVERLOAD) {
-                  summaryFailure = "http_overload";
-                  // Surcharge persistante — callDirect() a déjà épuisé ses retries.
-                  break;
-                }
-                if (raw !== null) {
-                  summaryPayload = raw;
-                  break;
-                }
-                summaryFailure = "empty_body";
-                // HTTP 200 + body vide → retry si tentatives restantes.
-              }
-
-              if (summaryPayload === null) {
-                const summaryErrorMessage =
-                  summaryFailure === "http_overload"
-                    ? "summary/ → surcharge HTTP transitoire après retries"
-                    : summaryFailure === "network_error"
-                      ? "summary/ → erreur réseau sans réponse"
-                      : "summary/ → body vide après retries";
+              const summaryErrorMessage =
+                rawSummary === CALL_DIRECT_HTTP_OVERLOAD
+                  ? "summary/ → surcharge HTTP (aucun retry)"
+                  : rawSummary === CALL_DIRECT_NETWORK_ERROR
+                    ? "summary/ → erreur réseau (aucun retry)"
+                    : rawSummary === CALL_DIRECT_RETRY_REFRESH_FAILED
+                      ? "summary/ → refresh paramètre impossible (aucun retry)"
+                      : rawSummary === null
+                        ? "summary/ → body vide (aucun retry)"
+                        : null;
+              if (summaryErrorMessage) {
                 bookResult = {
                   status: "booking_failed",
                   errorMessage: summaryErrorMessage,
                   durationMs: Date.now() - bookT0,
                 };
               } else {
+                summaryPayload = rawSummary;
+
                 // Extraire locator depuis la réponse summary/
                 const eventList: any[] = Array.isArray(summaryPayload?.Event) ? summaryPayload.Event
                   : Array.isArray(summaryPayload) ? summaryPayload
@@ -3028,6 +3019,25 @@ export async function runDossierWorker(
               return workerResult;
             }
 
+            // ── summary/ non confirmé → nouveau cycle/session immédiat ─────────────
+            // summary/ est non idempotent et son bktToken est à usage unique :
+            // aucun fallback ni retry avec la session courante.
+            if (shouldRefreshAfterSummaryFailure(bookResult.status, bookResult.errorMessage)) {
+              log("INFO", `${tag} 🔄 ${bookResult.errorMessage} — abandon de la liste courante, refresh + scan immédiat avec nouveau PHPSESSID`);
+              reportBookingLog({
+                applicationId: config.applicationId,
+                dossierId: config.id,
+                applicantName: config.applicantName,
+                date: slot.date,
+                time: slot.time,
+                status: "failed",
+                reason: bookResult.errorMessage,
+                serviceName: scan.serviceName,
+              }).catch(() => {});
+              refreshReason = "summary_failed";
+              break;
+            }
+
             // ── P1 : "seleccionada por otra persona" → nouveau cycle/session ─────
             // Le serveur dit que ce créneau est pris par un humain/autre agent.
             // Les traces montrent que les fallbacks suivants avec le même PHPSESSID
@@ -3051,7 +3061,7 @@ export async function runDossierWorker(
                 reason: "Créneau pris par un autre (hora ya seleccionada)",
                 serviceName: scan.serviceName,
               }).catch(() => {});
-              refreshAfterSlotTaken = true;
+              refreshReason = "slot_taken";
               break; // → refreshSessionAndScan() complet, puis nouveau tri
             }
 
@@ -3101,8 +3111,10 @@ export async function runDossierWorker(
           if (!bookingSucceeded) {
             log(
               "INFO",
-              refreshAfterSlotTaken
-                ? `${tag} Cycle ${cycleCount}: horaire pris — refresh + scan immédiat avec nouveau PHPSESSID`
+              refreshReason
+                ? refreshReason === "summary_failed"
+                  ? `${tag} Cycle ${cycleCount}: summary/ non confirmé — refresh + scan immédiat avec nouveau PHPSESSID`
+                  : `${tag} Cycle ${cycleCount}: horaire pris — refresh + scan immédiat avec nouveau PHPSESSID`
                 : `${tag} Cycle ${cycleCount}: tous les créneaux éligibles (${sortedEligible.length}) épuisés — next cycle`,
             );
             // V2 : libérer le sémaphore — ce worker n'a pas réussi à booker
@@ -3141,10 +3153,15 @@ export async function runDossierWorker(
       // immédiatement au sommet de la boucle appelle refreshSessionAndScan(),
       // qui recrée le PHPSESSID et reconstruit le snapshot service/agenda/datetime.
       // Aucun délai de grille ni fallback sur l'ancien snapshot ne doit intervenir.
-      if (refreshAfterSlotTaken) {
+      if (refreshReason) {
         transition(rt, "scan_ok");
         if (shouldScheduleWake(Date.now(), windowEnd)) {
-          log("INFO", `${tag} 🔄 Rescan immédiat après horaire pris — nouveaux service/agenda/datetime puis nouveau tri`);
+          log(
+            "INFO",
+            refreshReason === "summary_failed"
+              ? `${tag} 🔄 Rescan immédiat après summary/ non confirmé — nouveaux service/agenda/datetime puis nouveau tri`
+              : `${tag} 🔄 Rescan immédiat après horaire pris — nouveaux service/agenda/datetime puis nouveau tri`,
+          );
           continue;
         }
         break;

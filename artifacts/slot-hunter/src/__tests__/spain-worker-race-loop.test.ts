@@ -455,6 +455,21 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     )).toBe(false);
   });
 
+  it("déclenche un nouveau scan après tout summary/ non confirmé", () => {
+    expect(worker.shouldRefreshAfterSummaryFailure(
+      "booking_failed",
+      "summary/ → body vide (aucun retry)",
+    )).toBe(true);
+    expect(worker.shouldRefreshAfterSummaryFailure(
+      "booking_failed",
+      "summary/ sans locator: {\"Exception\":{}}",
+    )).toBe(true);
+    expect(worker.shouldRefreshAfterSummaryFailure(
+      "signin_failed",
+      "signin/ → réponse vide",
+    )).toBe(false);
+  });
+
   it("préserve un échec HTTP transitoire comme surcharge, pas comme 0B", () => {
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",

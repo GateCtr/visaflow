@@ -628,6 +628,11 @@ export interface CallDirectRetryContext {
 
 export interface CallDirectOptions {
   /**
+   * Nombre maximum de retries internes. `0` force une seule requête.
+   * Utile pour les endpoints non idempotents comme summary/.
+   */
+  maxRetries?: number;
+  /**
    * Retourne les paramètres à utiliser pour la prochaine tentative HTTP.
    * Retourner null annule le retry : on ne doit jamais rejouer silencieusement
    * un token hCaptcha dont le refresh a échoué.
@@ -687,9 +692,12 @@ export async function callDirect(
 > {
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
   const timeoutMs = timeoutForEndpoint(endpoint);
+  const maxRetries = options?.maxRetries === undefined
+    ? CALL_DIRECT_MAX_RETRIES
+    : Math.max(0, Math.round(options.maxRetries));
   let requestExtra = extra ? { ...extra } : {};
 
-  for (let attempt = 0; attempt <= CALL_DIRECT_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
@@ -716,9 +724,9 @@ export async function callDirect(
       if (!res.ok) {
         // Retry uniquement sur les statuts transitoires. Les 4xx métier
         // (400/401/403/404/409/422) restent déterministes et ne sont pas répétés.
-        if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < CALL_DIRECT_MAX_RETRIES) {
+        if (RETRYABLE_HTTP_CODES.has(res.status) && attempt < maxRetries) {
           const backoff = retryAfterMs(res, attempt);
-          console.warn(`${prefix} ${endpoint} → HTTP ${res.status} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
+          console.warn(`${prefix} ${endpoint} → HTTP ${res.status} — retry ${attempt + 1}/${maxRetries} dans ${backoff}ms`);
           await new Promise((r) => setTimeout(r, backoff));
           if (options?.refreshParamsForRetry) {
             const refreshed = await options.refreshParamsForRetry({
@@ -756,9 +764,9 @@ export async function callDirect(
         return CALL_DIRECT_NETWORK_ERROR;
       }
       // Retry sur erreur réseau (TLS corrompue, proxy timeout, CONNECT cassé)
-      if (attempt < CALL_DIRECT_MAX_RETRIES) {
+      if (attempt < maxRetries) {
         const backoff = retryBackoffMs(attempt);
-        console.warn(`${prefix} ${endpoint} → erreur réseau: ${e} — retry ${attempt + 1}/${CALL_DIRECT_MAX_RETRIES} dans ${backoff}ms`);
+        console.warn(`${prefix} ${endpoint} → erreur réseau: ${e} — retry ${attempt + 1}/${maxRetries} dans ${backoff}ms`);
         await new Promise((r) => setTimeout(r, backoff));
         continue;
       }
