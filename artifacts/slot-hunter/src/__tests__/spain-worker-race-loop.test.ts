@@ -415,15 +415,15 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     )).toEqual([false, true, true]);
   });
 
-  it("fait passer une erreur de credentials au fallback du prochain créneau", () => {
+  it("ne confond pas une erreur de credentials avec une race perdue", () => {
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",
       "Identifiants incorrects",
-    )).toBe(true);
+    )).toBe(false);
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",
       "Usuario o contraseña incorrectos",
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it("préserve un échec HTTP transitoire comme surcharge, pas comme 0B", () => {

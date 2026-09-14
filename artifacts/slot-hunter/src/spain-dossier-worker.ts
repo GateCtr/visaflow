@@ -402,7 +402,6 @@ export function shouldFallbackAfterSignin(
     message.includes("0b")
     || message.includes("http transitoire")
     || message.includes("refresh hcaptcha")
-    || message.includes("incorrect")
   );
 }
 
@@ -2923,6 +2922,32 @@ export async function runDossierWorker(
             // n'a été créé : Redis ne bloque jamais une tentative avant Bookitit.
             if (shouldCoordinateBeforeBooking(raceMode)) {
               releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
+            }
+
+            // ── Erreur credentials permanente → sortie immédiate ──────────────────
+            // Une erreur d'identifiants ne dépend pas du créneau : continuer les
+            // fallbacks ne peut pas réussir et consomme inutilement la fenêtre.
+            const isCredentialError = bookResult.status === "signin_failed"
+              && (bookResult.errorMessage ?? "").toLowerCase().includes("incorrect");
+            if (isCredentialError) {
+              log("WARN", `${tag} 🚫 Erreur credentials permanente — arrêt du worker`);
+              reportBookingLog({
+                applicationId: config.applicationId,
+                dossierId: config.id,
+                applicantName: config.applicantName,
+                date: slot.date,
+                time: slot.time,
+                status: "failed",
+                reason: bookResult.errorMessage ?? "Credentials incorrects",
+                serviceName: scan.serviceName,
+              }).catch(() => {});
+              // V2 : libérer le sémaphore (seulement si réellement acquis)
+              if (holdingBookingSlot) {
+                if (usedSemaphore) { await releaseBookingSlot(config.id); usedSemaphore = false; }
+                holdingBookingSlot = false;
+              }
+              workerResult = { dossierId: config.id, status: "error", errorMessage: `signin_failed: ${bookResult.errorMessage}` };
+              return workerResult;
             }
 
             // ── P1 : "seleccionada por otra persona" → continuer au créneau suivant ──
