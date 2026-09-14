@@ -2558,6 +2558,10 @@ export async function runDossierWorker(
           // CYCLE COMPLET (nouveau PHPSESSID) et remplace ces références (voir boucle ci-dessous).
           let armDs = scan.ds ?? phpState!.ds;
           let armCandidates = bookingCandidates;
+          // Le claim Redis doit comparer le snapshot réellement utilisé pour
+          // l'armement, pas l'âge de la requête getsigninfields/. Un re-cycle
+          // remplace ce timestamp avec celui du nouveau snapshot.
+          let snapshotObservedAtMs = raceDetectedAtMs;
           let armServiceId = scan.serviceId!;
           const doArmGsf = async (ds: DynamicSession, slot: { date: string; time: string; agendaId?: string }, svcId: string): Promise<any> => {
             const extra: Record<string, string> = {
@@ -2609,6 +2613,7 @@ export async function runDossierWorker(
             armDs = reScan.ds ?? armDs;
             armServiceId = reScan.serviceId ?? armServiceId;
             armCandidates = reSorted;
+            snapshotObservedAtMs = Date.now();
             const previousRaceMode = raceMode;
             raceMode = isSpainRaceMode(armCandidates.length);
             if (raceMode !== previousRaceMode) {
@@ -2653,16 +2658,22 @@ export async function runDossierWorker(
             // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
             // choisit le gagnant ; les perdants passent immédiatement au suivant.
             if (coordinateBeforeBooking) {
-              const ok = await tryClaimSlot(
+              const claim = await tryClaimSlot(
                 candidate.date,
                 candidate.time,
                 candidate.agendaId ?? "",
                 config.id,
                 groupSize,
                 candidate.freeslots,
+                snapshotObservedAtMs,
               );
-              if (!ok) {
-                log("INFO", `${tag} ${candidate.date} ${candidate.time} → déjà réservé par un autre de nos dossiers (Redis) — prochain créneau…`);
+              if (!claim.acquired) {
+                log(
+                  "INFO",
+                  `${tag} ${candidate.date} ${candidate.time} → claim Redis refusé (${claim.reason}) ` +
+                  `free=${claim.freeSlots} booked=${claim.booked} claims=${claim.claimCount} ` +
+                  `ttl=${claim.ttlSec}s snapshot=${claim.observedAtMs ? new Date(claim.observedAtMs).toISOString() : "inconnu"} — prochain créneau…`,
+                );
                 continue;
               }
             }

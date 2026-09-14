@@ -869,14 +869,36 @@ export async function restoreDecodoPoolStateFromRedis(
 const REDIS_SLOT_CAP_PREFIX = "spain:slot:cap:";
 const REDIS_SLOT_CAP_TTL_SEC = 90; // TTL court — créneaux durent quelques secondes en pratique
 
+export interface SpainSlotClaimResult {
+  acquired: boolean;
+  reason: "acquired" | "already_claimed" | "capacity_exhausted" | "redis_unavailable" | "redis_error";
+  /** Capacité du snapshot le plus récent conservé dans Redis. */
+  freeSlots: number;
+  /** Places actuellement réservées par les claims conservés dans Redis. */
+  booked: number;
+  /** Nombre de dossiers ayant un claim, indépendamment de leur groupSize. */
+  claimCount: number;
+  /** TTL restant de la clé Redis au moment de la décision. */
+  ttlSec: number;
+  /** Horodatage du snapshot qui a fourni freeSlots, en ms epoch. */
+  observedAtMs: number;
+}
+
 /**
  * Tentative atomique de réservation d'une place dans un créneau.
  *
  * Lua script : GET → créer (si absent) ou vérifier capacité restante → SET.
- * Structure valeur : JSON { free: N, booked: M, claimedBy: { dossierId: groupSize } }
+ * Structure valeur : JSON {
+ *   free: N,
+ *   booked: M,
+ *   claimedBy: { dossierId: groupSize },
+ *   observedAtMs: number,
+ * }
  *
- * Retourne true si ce dossier a pu réserver.
- * En cas d'erreur Redis → retourne true (mode dégradé : on laisse tenter).
+ * La capacité n'est remplacée que par un snapshot plus récent. Ainsi un vieux
+ * snapshot avec peu de places ne peut pas masquer une capacité fraîche plus élevée.
+ * En cas d'erreur Redis, le fail-open est conservé : on laisse tenter le booking,
+ * mais le résultat indique explicitement le mode dégradé.
  */
 export async function tryClaimWorkerSlot(
   date: string,
@@ -885,8 +907,21 @@ export async function tryClaimWorkerSlot(
   dossierId: string,
   groupSize: number,
   freeSlots: number,
-): Promise<boolean> {
-  if (!redisReady || !redisClient) return true;
+  observedAtMs: number,
+): Promise<SpainSlotClaimResult> {
+  const degradedResult = (
+    reason: "redis_unavailable" | "redis_error",
+  ): SpainSlotClaimResult => ({
+    acquired: true,
+    reason,
+    freeSlots,
+    booked: 0,
+    claimCount: 0,
+    ttlSec: 0,
+    observedAtMs,
+  });
+
+  if (!redisReady || !redisClient) return degradedResult("redis_unavailable");
 
   const key = `${REDIS_SLOT_CAP_PREFIX}${date}:${time}:${agendaId}`;
   const lua = `
@@ -894,33 +929,94 @@ export async function tryClaimWorkerSlot(
     local dossier = ARGV[1]
     local need    = tonumber(ARGV[2])
     local free    = tonumber(ARGV[3])
-    local ttl     = tonumber(ARGV[4])
+    local observedAtMs = tonumber(ARGV[4])
+    local ttl     = tonumber(ARGV[5])
+
+    local function claimCount(claimedBy)
+      local count = 0
+      if claimedBy then
+        for _ in pairs(claimedBy) do count = count + 1 end
+      end
+      return count
+    end
+
+    local function result(acquired, reason, data, ttlSec)
+      return cjson.encode({
+        acquired=acquired,
+        reason=reason,
+        freeSlots=(data.free or 0),
+        booked=(data.booked or 0),
+        claimCount=claimCount(data.claimedBy),
+        ttlSec=ttlSec,
+        observedAtMs=(data.observedAtMs or 0),
+      })
+    end
+
     local raw     = redis.call("GET", key)
     if raw == false then
-      local val = cjson.encode({free=free, booked=need, claimedBy={[dossier]=need}})
+      local data = {
+        free=free,
+        booked=need,
+        claimedBy={[dossier]=need},
+        observedAtMs=observedAtMs,
+      }
+      local val = cjson.encode(data)
       redis.call("SET", key, val, "EX", ttl)
-      return 1
+      return result(true, "acquired", data, ttl)
     end
     local data = cjson.decode(raw)
-    if data.claimedBy and data.claimedBy[dossier] ~= nil then return 1 end
+
+    -- Redis peut contenir une valeur créée par une version précédente sans
+    -- observedAtMs : elle est considérée comme plus ancienne qu'un snapshot
+    -- horodaté entrant.
+    local storedObservedAtMs = tonumber(data.observedAtMs or 0)
+    if observedAtMs > storedObservedAtMs then
+      data.free = free
+      data.observedAtMs = observedAtMs
+      -- Persister aussi une mise à jour qui n'aboutit pas à un claim.
+      -- Sinon un vieux free resterait en Redis et bloquerait les prochains
+      -- dossiers malgré le snapshot plus récent.
+      redis.call("SET", key, cjson.encode(data), "KEEPTTL")
+    end
+
+    if data.claimedBy and data.claimedBy[dossier] ~= nil then
+      return result(true, "already_claimed", data, redis.call("TTL", key))
+    end
     if (data.booked or 0) + need <= (data.free or free) then
       data.booked = (data.booked or 0) + need
       if not data.claimedBy then data.claimedBy = {} end
       data.claimedBy[dossier] = need
       redis.call("SET", key, cjson.encode(data), "EX", ttl)
-      return 1
+      return result(true, "acquired", data, ttl)
     end
-    return 0
+    -- Ne pas réinitialiser le TTL sur un refus : le prochain snapshot doit
+    -- pouvoir remplacer proprement cette capacité lorsqu'il sera publié.
+    return result(false, "capacity_exhausted", data, redis.call("TTL", key))
   `;
   try {
-    const result = await redisClient.eval(lua, {
+    const rawResult = await redisClient.eval(lua, {
       keys: [key],
-      arguments: [dossierId, String(groupSize), String(freeSlots), String(REDIS_SLOT_CAP_TTL_SEC)],
+      arguments: [
+        dossierId,
+        String(groupSize),
+        String(freeSlots),
+        String(observedAtMs),
+        String(REDIS_SLOT_CAP_TTL_SEC),
+      ],
     });
-    return result === 1;
+    const parsed = JSON.parse(String(rawResult)) as Partial<SpainSlotClaimResult>;
+    return {
+      acquired: parsed.acquired === true,
+      reason: parsed.reason ?? "redis_error",
+      freeSlots: Number(parsed.freeSlots ?? freeSlots),
+      booked: Number(parsed.booked ?? 0),
+      claimCount: Number(parsed.claimCount ?? 0),
+      ttlSec: Number(parsed.ttlSec ?? 0),
+      observedAtMs: Number(parsed.observedAtMs ?? observedAtMs),
+    };
   } catch (e) {
     console.warn(`[spain-redis] tryClaimWorkerSlot: ${e}`);
-    return true; // dégradé
+    return degradedResult("redis_error");
   }
 }
 
