@@ -120,8 +120,7 @@ const DEFAULT_WINDOW_END_MIN = 25;
 
 /**
  * Lit un entier borné depuis une variable d'environnement. Applique le défaut et
- * journalise un avertissement `[spain-grid]` nommant la variable si absent, vide,
- * non numérique, ou hors bornes.
+ * applique la valeur par défaut si absent, vide, non numérique, ou hors bornes.
  */
 function parseIntEnv(
   name: string,
@@ -131,7 +130,6 @@ function parseIntEnv(
   defaultValue: number,
 ): number {
   if (raw === undefined || raw.trim() === "") {
-    console.warn(`[spain-grid] ${name} absent/vide, valeur par défaut appliquée: ${defaultValue}`);
     return defaultValue;
   }
   const parsed = Number(raw);
@@ -150,7 +148,7 @@ function parseIntEnv(
 
 /**
  * Lit un nombre décimal depuis l'environnement, puis le borne dans [min, max].
- * Applique le défaut si absent/vide/non numérique (avec avertissement `[spain-grid]`),
+ * Applique le défaut si absent/vide/non numérique,
  * borne sinon (avec avertissement si hors intervalle).
  */
 function parseFloatBoundedEnv(
@@ -161,7 +159,6 @@ function parseFloatBoundedEnv(
   defaultValue: number,
 ): number {
   if (raw === undefined || raw.trim() === "") {
-    console.warn(`[spain-grid] ${name} absent/vide, valeur par défaut appliquée: ${defaultValue}`);
     return defaultValue;
   }
   const parsed = Number(raw);

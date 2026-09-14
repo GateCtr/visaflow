@@ -31,10 +31,6 @@ import type { LoginConsumedEvent, LoginDeniedEvent } from "./core/types.js";
  * @param hunterApiKey - Clé API Hunter
  */
 export async function initV3(convexSiteUrl?: string, hunterApiKey?: string): Promise<void> {
-  console.log("[v3] ═══════════════════════════════════════════════════════");
-  console.log("[v3] 🚀 Hunter V3 Chasseur — Initialisation...");
-  console.log("[v3] ═══════════════════════════════════════════════════════");
-
   // 1. Restaurer les budgets login depuis Redis
   const restoredBudgets = await initSessionPoolRedis();
   if (restoredBudgets > 0) {
@@ -54,7 +50,6 @@ export async function initV3(convexSiteUrl?: string, hunterApiKey?: string): Pro
           const windows = parseRushWindowsFromBotConfig(data.value);
           if (windows) {
             updateRushWindows(windows);
-            console.log(`[v3] ⏰ Rush windows chargées depuis Convex: ${windows.length} fenêtre(s)`);
           }
         }
       }
@@ -95,12 +90,6 @@ export async function initV3(convexSiteUrl?: string, hunterApiKey?: string): Pro
     }
   });
 
-  console.log("[v3] ✅ Hunter V3 Chasseur initialisé");
-  console.log("[v3]    Budget: 9 logins/jour, rush allocation 4+3+2");
-  console.log("[v3]    Scan: multi-mois (3), orchestrator chrono");
-  console.log("[v3]    Booking: direct + blind cross-account");
-  console.log("[v3]    Proxy: cascade 3-way avec budget protection");
-  console.log("[v3] ═══════════════════════════════════════════════════════");
 }
 
 // ─── Re-exports (pour que l'ancien code puisse importer depuis v3/) ─────────

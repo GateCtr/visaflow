@@ -89,7 +89,6 @@ function parseDecodoPool(): string[] {
   if (existsSync(csvPath)) {
     const urls = parseProxyCsv(csvPath);
     if (urls.length > 0) {
-      console.log(`[spain-decodo] 📄 Pool chargé depuis fichier CSV: ${urls.length} IP(s) (${csvPath})`);
       return urls;
     }
   }
@@ -311,23 +310,10 @@ export async function initDecodoPool(): Promise<void> {
     );
 
     // Avancer l'index jusqu'à une IP non-blacklistée
-    const { idx, allBlacklisted, skipped } = findNextValidIndex(restoredIdx, pool);
-    _index = idx;
-
-    const blacklistCount = _blacklistedIps.size;
-    const source = "Redis";
-    console.log(
-      `[spain-decodo] ♻️ Index restauré (${source}) → [${_index + 1}/${pool.length}]` +
-      (skipped > 0 ? ` (${skipped} IP${skipped > 1 ? "s" : ""} blacklistée${skipped > 1 ? "s" : ""} sautée${skipped > 1 ? "s" : ""})` : "") +
-      (blacklistCount > 0 ? ` | blacklist: ${blacklistCount}/${pool.length} IP${blacklistCount > 1 ? "s" : ""}` : "") +
-      (allBlacklisted ? " ⚠️ POOL ÉPUISÉ — fallback round-robin" : ""),
-    );
+    _index = findNextValidIndex(restoredIdx, pool).idx;
   } else {
     // Fallback : index aléatoire (évite de concentrer le trafic sur l'IP n°1 à chaque restart)
     _index = Math.floor(Math.random() * pool.length);
-    console.log(
-      `[spain-decodo] 🎲 Redis absent/vide — index aléatoire → [${_index + 1}/${pool.length}]`,
-    );
   }
 }
 

@@ -69,7 +69,6 @@ export function initProxyGuard(username: string, proxyUrl: string, exitIp?: stri
     frozen: false,
     expectedExitIp: exitIp,
   });
-  console.log(`[proxy-guard] ✅ Guard initialisé pour ${key.slice(0, 12)}… (IP: ${exitIp ?? "inconnue"})`);
 }
 
 /**

@@ -353,7 +353,6 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
     if (!iproyalToken) missing.push("IPROYAL_API_TOKEN");
     if (!iproyalHash) missing.push("IPROYAL_USER_HASH");
     result.iproyal = { ok: false, message: `Variable(s) manquante(s): ${missing.join(", ")}` };
-    console.log(`[ip-whitelist] ⚠️ IPRoyal: auto-whitelist désactivée (${missing.join(" + ")} absent)`);
   }
 
   // ── BrightData ──────────────────────────────────────────────────────────────
@@ -378,7 +377,6 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
     }
   } else {
     result.brightdata = { ok: false, message: "BRIGHTDATA_API_KEY absent" };
-    console.log(`[ip-whitelist] ⚠️ BrightData: auto-whitelist désactivée (BRIGHTDATA_API_KEY absent)`);
   }
 
   // ── 2Captcha Proxy ─────────────────────────────────────────────────────────

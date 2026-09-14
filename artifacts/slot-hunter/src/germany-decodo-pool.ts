@@ -48,7 +48,6 @@ function parseGermanyDecodoPool(): string[] {
   if (existsSync(csvPath)) {
     const urls = parseProxyCsv(csvPath);
     if (urls.length > 0) {
-      console.log(`[germany-decodo] 📄 Pool chargé depuis fichier CSV: ${urls.length} IP(s) (${csvPath})`);
       return urls;
     }
   }

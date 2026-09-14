@@ -130,7 +130,6 @@ class CevIpPool {
     const providerLabel = this.provider === "soax" 
       ? `SOAX (sessions ${Math.round((parseInt(process.env.SOAX_SESSION_TIME ?? "600") * 60) / 3600)}h, country=${process.env.SOAX_COUNTRY ?? "cd"})`
       : `iProyal (sessions 60min)`;
-    log("INFO", `Pool initialisé: ${poolSize} IPs (${providerLabel})`);
   }
 
   /** Construit l'URL proxy sticky selon le provider actif */

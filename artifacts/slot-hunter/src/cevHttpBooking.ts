@@ -34,7 +34,6 @@ let _discoveredConfig: CevDiscoveredConfig | null = null;
  */
 export function setCevDiscoveredConfig(config: CevDiscoveredConfig): void {
   _discoveredConfig = config;
-  console.log(`[cevHttpBooking] ✅ Config auto-découverte chargée — endpoint=${config.submitEndpoint} successCount=${config.successCount} confirmedAt=${new Date(config.confirmedAt).toISOString()}`);
 }
 
 export function getCevDiscoveredConfig(): CevDiscoveredConfig | null {

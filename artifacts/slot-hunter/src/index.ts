@@ -80,10 +80,7 @@ async function main(): Promise<void> {
   const convexUrl = process.env.CONVEX_SITE_URL;
   const hunterKey = process.env.HUNTER_API_KEY;
 
-  log("INFO", "=== Joventy Hunter démarrage (Joventy Shuffle v2) ===");
-  log("INFO", `Mode: ${dryRun ? "DRY RUN" : "PRODUCTION"}`);
-  log("INFO", `Convex: ${convexUrl ? "configuré" : "MANQUANT"}`);
-  log("INFO", `Hunter API Key: ${hunterKey ? "configurée" : "MANQUANTE"}`);
+  log("INFO", `[hunter] démarré (${dryRun ? "dry-run" : "production"})`);
 
   // Lancer les boucles background
   // ─── MODE CEV : priorité Dossier v3 > Stealth v2 > classique ───
@@ -100,25 +97,11 @@ async function main(): Promise<void> {
 
   // ─── SESSION WORKER (F5 Cookie Siphon) : DESACTIVÉ, capturé par chaque compte!
   if (cevDossierMode || cevStealthMode) {
-    // PAS DE SESSION WORKER — chaque compte capture ses propres cookies!
-    log("INFO", "═══ PAS DE SESSION WORKER (cookies par compte) ═══");
-    log("INFO", "   → Chaque compte capture ses propres cookies F5");
-    log("INFO", "   → Cookies stockés dans hunterConfig de chaque application");
-    
     if (cevDossierMode) {
-      log("INFO", "═══ CEV DOSSIER MODE v3 ACTIF ═══");
-      log("INFO", "   → Multi-comptes via Applications ");
-      log("INFO", "   → Stealth v2 et loops classiques DESACTIVES");
-      log("INFO", "   → Cookies frais capturés par chaque compte, toutes les 30min");
-      log("INFO", "   → Desactiver: bot-config Convex cev_dossier_mode = 0");
       startCevDossierLoop().catch((err) => {
         console.error("[CEV-DOSSIER-v3] Boucle crashée:", err);
       });
     } else if (cevStealthMode) {
-      log("INFO", "═══ CEV STEALTH MODE v2 ACTIF ═══");
-      log("INFO", "   → Loops CEV classiques (setup + polling) DESACTIVES");
-      log("INFO", "   → Strategie: Login → 3 checks (30s) → destroy → sleep 3-4 min → repeat");
-      log("INFO", "   → Desactiver: bot-config Convex cev_stealth_mode = 0");
       startCevStealthLoop().catch((err) => {
         console.error("[CEV-STEALTH] Boucle crashée:", err);
       });
@@ -147,9 +130,6 @@ async function main(): Promise<void> {
     const savedConfig = await loadCevBookingConfig();
     if (savedConfig) {
       setCevDiscoveredConfig(savedConfig);
-      log("INFO", `CEV auto-config chargée ✅ — endpoint=${savedConfig.submitEndpoint} successCount=${savedConfig.successCount}`);
-    } else {
-      log("INFO", "CEV auto-config: aucune config sauvegardée — discovery complète au premier booking");
     }
   } catch (err) {
     log("WARN", `CEV auto-config: chargement échoué (non bloquant) — ${err}`);
@@ -158,65 +138,15 @@ async function main(): Promise<void> {
   // Détection IP + initialisation ProxyPool
   const serverIp = await detectPublicIp();
   if (serverIp) {
-    log("INFO", `IP serveur (Railway): ${serverIp}`);
-
-    const whitelistResult = await autoWhitelistIp(serverIp);
-    if (whitelistResult.iproyal.ok) {
-      log("INFO", `IPRoyal whitelist: ✅ ${whitelistResult.iproyal.message}`);
-    } else {
-      log("WARN", `IPRoyal whitelist: ❌ ${whitelistResult.iproyal.message}`);
-    }
-    if (whitelistResult.twocaptcha.ok) {
-      log("INFO", `2Captcha whitelist: ✅ ${whitelistResult.twocaptcha.message}`);
-    } else {
-      log("WARN", `2Captcha whitelist: ❌ ${whitelistResult.twocaptcha.message}`);
-    }
+    await autoWhitelistIp(serverIp);
 
     if (process.env.TWOCAPTCHA_API_KEY) {
       await proxyPool.initialize(serverIp);
     }
-  } else {
-    log("WARN", "IP serveur: indéterminée (ipify.org inaccessible)");
   }
-
-  const brightdataStatus = process.env.BRIGHTDATA_PROXY_URL ? "BrightData ✅ (CEV belge)" : null;
-  const iproyalStatus    = process.env.IPROYAL_PROXY_URL    ? "iProyal ✅ (Espagne)"      : null;
-  const decodoStatus     = process.env.DECODO_PROXY_URL     ? "Decodo ✅ (Espagne HTTP)"  : null;
-  const fallbackStatus   = proxyPool.isConfigured
-    ? `2captcha gateway ✅ (eu.proxy.2captcha.com:2334 — auth user:pass, region=cd)`
-    : process.env.PROXY_URL
-      ? "statique (PROXY_URL)"
-      : "aucun ⚠️ — IP fixe Railway exposée";
-  const proxyStatus = [brightdataStatus, iproyalStatus, decodoStatus, fallbackStatus].filter(Boolean).join(" | ");
-  log("INFO", `Proxy: ${proxyStatus}`);
-  log("INFO", "Intervalles tier — tres_urgent:5-10m (rush:3-4m)  urgent:15-20m  prioritaire:25-35m  standard:45-60m");
-  log("INFO", `Silence radio: normal ${formatMs(SILENCE_RADIO_MIN_MS)}–${formatMs(SILENCE_RADIO_MAX_MS)} | stagger ${formatMs(SILENCE_RADIO_SAME_TIER_MIN_MS)}–${formatMs(SILENCE_RADIO_SAME_TIER_MAX_MS)} | rush ${formatMs(RUSH_SILENCE_MIN_MS)}–${formatMs(RUSH_SILENCE_MAX_MS)}`);
-  log("INFO", `Rush windows Kinshasa (UTC+1): 00h-02h | 07h-09h | 12h-14h — actif maintenant: ${isRushHour() ? "OUI ⚡" : "non"}`);
-  log("INFO", `Auto-pause après: ${MAX_LOGIN_FAILURES} login_failed consécutifs`);
 
   // ─── Rapport quotidien automatique (23h00 Kinshasa) ────────────────────────
   startDailyReportLoop();
-
-  if (isParallelMode) {
-    log("INFO", `═══════════════════════════════════════════════════════════════`);
-    log("INFO", `🔀 MODE PARALLÈLE DÉTECTÉ (PARALLEL_WATCHER_MODE=1)`);
-    log("INFO", `   → Scheduler séquentiel: CEV + Espagne + bundle check UNIQUEMENT`);
-    log("INFO", `   → Jobs USA: polling délégué au OFC Watcher partagé`);
-    log("INFO", `   → Stagger désactivé (inutile avec watcher centralisé)`);
-    log("INFO", `═══════════════════════════════════════════════════════════════`);
-  }
-
-  // ─── Statut solveurs hCaptcha CEV ────────────────────────────────────────
-  const antiCaptchaKey = process.env.ANTICAPTCHA_API_KEY;
-  const capsolverKey   = process.env.CAPSOLVER_API_KEY;
-  const twoCaptchaKey  = process.env.TWOCAPTCHA_API_KEY;
-  
-  log("INFO", [
-    "CEV hCaptcha solveurs:",
-    antiCaptchaKey ? "AntiCaptcha ✅" : "AntiCaptcha ❌ (ANTICAPTCHA_API_KEY absent — REQUIS pour domaines gov)",
-    capsolverKey   ? "CapSolver ✅ (sitekey gov blacklistée en 2026-04 — peut échouer)" : "CapSolver ❌",
-    twoCaptchaKey  ? "2captcha ✅ (hCaptcha non supporté sur ce compte)" : "2captcha ❌",
-  ].join(" | "));
 
   if (!convexUrl || !hunterKey) {
     log("ERROR", "CONVEX_SITE_URL et HUNTER_API_KEY sont requis — arrêt");
@@ -288,12 +218,6 @@ async function main(): Promise<void> {
   // MODE V3 CHASSEUR
   // ═══════════════════════════════════════════════════════════════════════════
   if (v3Mode) {
-    log("INFO", "═══════════════════════════════════════════════════════════════");
-    log("INFO", "🎯 MODE V3 CHASSEUR ACTIVÉ (v3_mode=1)");
-    log("INFO", "   → runScanSession complet : login → preflight → multi-mois → booking → discovery");
-    log("INFO", "   → Intervalles pilotés par scan-orchestrator (rush/standard/night/burst)");
-    log("INFO", "═══════════════════════════════════════════════════════════════");
-
     let runScanSession: any, getNextScanDecision: any, getCurrentPredictionScore: any, getCompetitionMedianMs: any, resolveAccountRole: any, extractBudgetFromConfig: any, getRemainingLogins: any, tokenCache: any, setUsaSessionProxy: any, getUsaSession: any, pollBlindBookingEvents: any, attemptBlindBooking: any;
     try {
       ({ runScanSession } = await import("./v3/scan/scan-session.js"));
@@ -340,16 +264,6 @@ async function main(): Promise<void> {
         );
 
         if (usaJobs.length === 0) {
-          // DEBUG: Loguer pourquoi aucun job n'est trouvé
-          const allUsaRaw = jobs.filter(j => j.destination === "usa");
-          const reasons = allUsaRaw.map(j => {
-            if (!j.hunterConfig?.isActive) return `${j.applicantName}: inactive`;
-            if (pausedJobs.has(j.id)) return `${j.applicantName}: paused`;
-            if (completedJobs.has(j.id)) return `${j.applicantName}: completed`;
-            if (!j.hunterConfig.embassyUsername) return `${j.applicantName}: no embassyUsername`;
-            return `${j.applicantName}: SHOULD BE ACTIVE (?)`;
-          });
-          log("INFO", `[v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: ${allUsaRaw.length}, raisons: ${reasons.join(" | ")})`);
           await new Promise(r => setTimeout(r, 60_000));
           continue;
         }
@@ -805,47 +719,6 @@ async function main(): Promise<void> {
       const waitMs = getTimeUntilNextDue(jobs);
       const usaExcluded = isParallelMode || isV3Mode;
       const schengenExcluded = cevDossierModeEnabled;
-      const activeCount = jobs.filter((j) =>
-        !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-        !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
-        !(schengenExcluded && j.destination === "schengen") &&
-        !(spainWatcherActive && isSpainDossier(j)) &&
-        !isGermanyDossier(j)
-      ).length;
-
-      if (activeCount === 0) {
-        if (v3Mode) {
-          log("INFO", "Scheduler séquentiel idle — jobs USA gérés par V3 Chasseur — polling dans 90s");
-        } else if (isParallelMode) {
-          log("INFO", "Scheduler séquentiel idle — jobs USA gérés par OFC Watcher — polling dans 90s");
-        } else if (cevDossierModeEnabled && spainWatcherActive) {
-          log("INFO", "Scheduler séquentiel idle — jobs Schengen gérés par CEV Dossier Loop, jobs Espagne gérés par Spain Watcher — polling dans 90s");
-        } else if (cevDossierModeEnabled) {
-          log("INFO", "Scheduler séquentiel idle — jobs Schengen gérés par CEV Dossier Loop — polling dans 90s");
-        } else if (spainWatcherActive) {
-          log("INFO", "Scheduler séquentiel idle — jobs Espagne gérés par Spain Watcher HTTP — polling dans 90s");
-        } else if (jobs.some(j => isGermanyDossier(j) && j.hunterConfig?.isActive)) {
-          log("INFO", "Scheduler séquentiel idle — jobs Allemagne gérés par Germany RK-Termin Loop — polling dans 90s");
-        } else {
-          log("INFO", "Aucun dossier actif — polling dans 90s");
-        }
-      } else {
-        const tierCounts = jobs
-          .filter((j) =>
-            !pausedJobs.has(j.id) && j.hunterConfig?.isActive &&
-            !(usaExcluded && (j.destination === "usa" || (!j.destination || j.destination === ""))) &&
-            !(schengenExcluded && j.destination === "schengen") &&
-            !(spainWatcherActive && isSpainDossier(j)) &&
-            !isGermanyDossier(j)
-          )
-          .reduce<Record<string, number>>((acc, j) => {
-            acc[j.urgencyTier] = (acc[j.urgencyTier] ?? 0) + 1;
-            return acc;
-          }, {});
-        const tierStr = Object.entries(tierCounts).map(([t, n]) => `${n}×${t}`).join(", ");
-        log("INFO", `Aucun dossier dû (${tierStr}) — prochain check dans ${formatMs(waitMs)}`);
-      }
-
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
     }

@@ -94,15 +94,6 @@ export async function startV3Loop(convexUrl: string, hunterKey: string): Promise
     );
 
     if (usaJobs.length === 0) {
-      const allUsaRaw = jobs.filter(j => j.destination === "usa");
-      const reasons = allUsaRaw.map(j => {
-        if (!j.hunterConfig?.isActive) return `${j.applicantName}: inactive`;
-        if (pausedJobs.has(j.id)) return `${j.applicantName}: paused`;
-        if (completedJobs.has(j.id)) return `${j.applicantName}: completed`;
-        if (!j.hunterConfig.embassyUsername) return `${j.applicantName}: no embassyUsername`;
-        return `${j.applicantName}: SHOULD BE ACTIVE (?)`;
-      });
-      log("INFO", `[v3-loop] Aucun dossier USA actif — polling dans 60s (total USA bruts: ${allUsaRaw.length}, raisons: ${reasons.join(" | ")})`);
       await new Promise(r => setTimeout(r, 60_000));
       continue;
     }

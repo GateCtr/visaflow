@@ -175,17 +175,6 @@ export async function restorePoolStateFromRedis(customKey?: string, freshStart: 
       }
     }
 
-    const age = now - parsed.savedAt;
-    const ageMin = Math.round(age / 60_000);
-    console.log(`[cev-redis] ✅ Pool state restauré (sauvé il y a ${ageMin}min, ${parsed.slots.length} dossiers, index=${parsed.currentIndex})`);
-
-    // Log détaillé par dossier
-    for (const slot of parsed.slots) {
-      if (slot.clickTimestamps.length > 0) {
-        console.log(`[cev-redis]   ${slot.vowintRef}: ${slot.clickTimestamps.length} clics actifs, ${slot.totalScans} scans total, ${slot.rateLimitCount} RL`);
-      }
-    }
-
     return parsed;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -244,8 +233,6 @@ export async function restoreVowintSessionFromRedis(email: string): Promise<Seri
       return null;
     }
 
-    const ageMin = Math.round(age / 60_000);
-    console.log(`[cev-redis] ✅ Session VOWINT restaurée: ${email.slice(0, 8)}… (âge: ${ageMin}min, appId: ${parsed.appId.slice(0, 8)}…)`);
     return parsed;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -369,13 +369,6 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
         // Guard fenêtre horaire : ne lancer un worker que si on est dans la fenêtre
         // de publication des créneaux [HH:WINDOW_START_MIN … HH:WINDOW_START_MIN+WINDOW_DURATION_MIN[
         if (!isInScanWindow()) {
-          const waitMs = msUntilNextWindowStart();
-          const nextWakeMin = String(WINDOW_START_MIN).padStart(2, "0");
-          log(
-            "INFO",
-            `[SPAIN-ORCH] ⏰ Hors fenêtre — ${config.applicantName} : prochain scan dans ` +
-            `${Math.round(waitMs / 60_000)}min (HH:${nextWakeMin})`,
-          );
           continue;
         }
 

@@ -902,8 +902,6 @@ class CevDossierPool {
       lastDailyReset: now,
     }));
     this.currentIndex = 0;
-    this.logger.info(`Pool initialisé: ${this.slots.length} dossiers`);
-    this.slots.forEach((s, i) => this.logger.info(`  #${i}: ${s.vowintRef}`));
   }
 
   /** Purge les clics sortis de la fenêtre glissante et retourne ceux restants. */
@@ -1072,7 +1070,6 @@ class CevDossierPool {
     // Si un booking a échoué avant le redémarrage, le dossier doit scanner de nouveau.
     // Si un booking a réussi, le dossier est terminé de toute façon.
 
-    this.logger.info(`Pool restauré depuis Redis (index=${this.currentIndex}, paused=0 — pauses non restaurées)`);
   }
 }
 
@@ -2133,17 +2130,14 @@ async function handleSlotFoundMulti(
 
 export async function startCevDossierLoop(): Promise<void> {
   const logger = createLogger("CEV-DOSSIER-v3");
-  logger.info("═══ CEV Dossier Loop v3 — Multi-comptes via Applications ═══");
 
   // Vérifier si le mode est activé
   const enabled = await getBotConfigValue("cev_dossier_mode");
   if (enabled !== "1") {
-    logger.info("Mode dossier désactivé (cev_dossier_mode != 1) — attente...");
     while (true) {
       await sleep(60_000);
       const check = await getBotConfigValue("cev_dossier_mode");
       if (check === "1") {
-        logger.info("Mode dossier activé → démarrage!");
         break;
       }
     }
@@ -2159,7 +2153,6 @@ export async function startCevDossierLoop(): Promise<void> {
 
   if (cevJobs.length === 0) {
     logger.warn("Aucune application CEV active trouvée (destination=schengen + hunterConfig.isActive=true)");
-    logger.info("Attente configuration...");
     while (true) {
       await sleep(60_000);
       const checkJobs = await getActiveJobs();
@@ -2169,19 +2162,10 @@ export async function startCevDossierLoop(): Promise<void> {
         (j.hunterConfig.cevDossierPool || j.hunterConfig.vowintAppId)
       );
       if (checkCevJobs.length > 0) {
-        logger.info(`Applications CEV trouvées: ${checkCevJobs.length}`);
         break;
       }
     }
   }
-
-  logger.info(`═══ ${cevJobs.length} compte(s) CEV actif(s) ═══`);
-  cevJobs.forEach((job: any, i: number) => {
-    const dossierPool = job.hunterConfig.cevDossierPool || job.hunterConfig.vowintAppId;
-    logger.info(`  Compte #${i + 1}: ${job.applicantName} (${job.id})`);
-    logger.info(`    Dossiers: ${dossierPool}`);
-    logger.info(`    Proxy: ${job.hunterConfig.cevUseProxy ? 'activé' : 'désactivé'}`);
-  });
 
   // ── Index de compte déterministe (accountIndex) ────────────────────────────
   // Tri stable des comptes par id → chaque compte reçoit un index 0-based fixe.
@@ -2206,16 +2190,12 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
   const applicantName = job.applicantName;
   const hunterConfig = job.hunterConfig;
   const logger = createLogger(`CEV-Account:${applicantName}`);
-  logger.info(`  • Index compte: ${accountIndex}/${totalAccounts - 1} (allocation créneaux déterministe)`);
   // Seed déterministe pour le jitter de grille (même valeur à chaque redémarrage).
   const gridSeed = gridSeedFromAccount(String(accountId));
   // Dates limites MAX : par AppId (cevDossierDeadlines CSV) + globale (slotDateDeadline).
   // Résolution au moment du booking : par AppId > globale > aucune limite.
   const dossierDeadlines = parseCevDossierDeadlines(hunterConfig.cevDossierDeadlines);
   const globalDeadline: string | undefined = hunterConfig.slotDateDeadline;
-  if (dossierDeadlines.size > 0 || globalDeadline) {
-    logger.info(`  • Dates limites: ${dossierDeadlines.size} par dossier${globalDeadline ? `, globale=${globalDeadline}` : ""}`);
-  }
   
   // Récupérer les credentials VOWINT depuis hunterConfig
   let vowintEmail = hunterConfig.embassyUsername;
@@ -2227,14 +2207,12 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
   
   if (!dossierPoolStr) {
     // Mode automatique: naviguer vers My Applications pour trouver les dossiers
-    logger.info( "  → Aucun dossier fourni, navigation automatique vers My Applications...");
     try {
       const authResult = await setupCevSessionHttp(vowintEmail, vowintPassword, accountId, accountId);
       if (authResult.success && authResult.sessionCookie) {
         const firstDossier = await resolveFirstAppIdFromMyList(authResult.sessionCookie);
         if (firstDossier) {
           dossiers = [firstDossier];
-          logger.info(`  → Dossier automatique trouvé: ${firstDossier}`);
         } else {
           logger.warn( "  → Aucun dossier trouvé via navigation automatique");
           dossiers = [];
@@ -2258,7 +2236,7 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
     const before = dossiers.length;
     dossiers = dossiers.filter((d: string) => !excluded.has(d));
     if (dossiers.length < before) {
-      logger.info(`  → ${before - dossiers.length} dossier(s) exclu(s) du pool: ${[...excluded].join(", ")}`);
+      logger.info(`  → ${before - dossiers.length} dossier(s) exclu(s) du pool`);
     }
   }
 
@@ -2276,10 +2254,6 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
   // Proxy config (let → peut être rechargé depuis Convex en cours de loop)
   let useProxy = hunterConfig.cevUseProxy ?? await shouldUseProxy();
   
-  logger.info(`═══ Compte: ${applicantName} (${dossiers.length} dossiers) ═══`);
-  logger.info(`  Intervalle: ${intervalSec}s`);
-  logger.info(`  Proxy: ${useProxy ? 'activé' : 'désactivé'}`);
-  
   // ─── Redis: restaurer l'état du pool ────────────────────────────────────────
   await initCevRedis();
   // Restaurer la blacklist Decodo (IP mortes) depuis Redis — survit aux redémarrages.
@@ -2289,9 +2263,6 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
   if (savedPoolState) {
     localPool.restoreState(savedPoolState);
     savedScanCount = savedPoolState.scanCount || 0;
-    logger.info(`Pool state restauré depuis Redis — reprend à index=${savedPoolState.currentIndex}, scanCount=${savedScanCount}`);
-  } else {
-    logger.info( "Pas de pool state en Redis — démarrage frais");
   }
 
   // ─── Restaurer les dossiers déjà bookés (cevCompletedDossiers) depuis Convex ──
@@ -2302,7 +2273,6 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
     for (const ref of completedRefs) {
       pausedDossiers.add(ref);
     }
-    logger.info(`  ✅ ${completedRefs.length} dossier(s) déjà booké(s) restauré(s) en pause: [${completedRefs.join(", ")}]`);
   }
 
   const soaxBaseUrl = process.env.SOAX_PROXY_URL;
@@ -2320,16 +2290,10 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
   /** URL base Decodo réservée en Redis pour ce compte — libérée à l'arrêt du loop. */
   let reservedDecodoBaseUrl: string | undefined;
 
-  logger.info(`Config:`);
-  logger.info(`  • Dossiers: ${localPool.size}`);
-  logger.info(`  • Stratégie: One-Shot (1 clic/réveil, session réutilisée si valide)`);
-  logger.info(`  • Intervalle: ${Math.round(intervalMs / 1000)}s (±jitter log-normal)`);
-
   if (useProxy) {
     // ─── Configure proxy (priorité: Decodo CSV > SOAX > iProyal) ─────────────
     if (hasCevDecodoProxy()) {
       const poolSize = getCevDecodoPoolSize();
-      logger.info(`  • Proxy: Decodo CSV pool (${poolSize} IP(s)) — 1 IP DISTINCTE par compte (index + réservation Redis)`);
 
       // ── Assignation par accountIndex + réservation Redis (façon Spain) ──────
       // On tente d'abord l'IP d'index = accountIndex (0,1,2… → zéro collision entre
@@ -2364,26 +2328,21 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
         accountProxyUrl = decodoUrl;
         process.env.IPROYAL_PROXY_URL = decodoUrl; // compat historique (ex: solveHcaptchaWithProxy)
         resetCevImpitInstances();
-        logger.info(`  • Decodo proxy configuré (sticky): ${decodoUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 70)}…`);
         proxyExitIp = await initCevProxyGuardWithExitIp(decodoUrl, `cev-account-${accountId}`);
       } else {
         logger.warn(`  ⚠️ Pool Decodo vide — connexion directe`);
       }
     } else if (soaxBaseUrl) {
-      logger.info(`  • Proxy: SOAX (sticky Kinshasa)`);
       const soaxStickyUrl = makeCevProxyStickyUrl("soax", undefined, `cev-account-${accountId}`);
       process.env.IPROYAL_PROXY_URL = soaxStickyUrl;
       resetCevImpitInstances();
-      logger.info(`  • SOAX proxy configuré: ${soaxStickyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 60)}…`);
       proxyExitIp = await initCevProxyGuardWithExitIp(soaxStickyUrl, `cev-account-${accountId}`);
     } else if (process.env.IPROYAL_PROXY_URL) {
-      logger.info(`  • Proxy: iProyal (sticky session)`);
       proxyExitIp = await initCevProxyGuardWithExitIp(process.env.IPROYAL_PROXY_URL, `cev-account-${accountId}`);
     } else {
       logger.warn(`  ⚠️ AUCUN PROXY (Decodo CSV, SOAX_PROXY_URL, IPROYAL_PROXY_URL absents) — connexion directe`);
     }
   } else {
-    logger.info(`  • Proxy: Désactivé (mode sans proxy via hunterConfig)`);
     delete process.env.IPROYAL_PROXY_URL;
     resetCevImpitInstances();
   }
@@ -2536,7 +2495,6 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
 
   state.isRunning = true;
   state.startedAt = Date.now();
-  logger.info( "Boucle de scan démarrée");
 
   while (state.isRunning) {
     try {

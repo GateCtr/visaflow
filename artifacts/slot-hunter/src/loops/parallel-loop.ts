@@ -42,7 +42,6 @@ export async function initParallelWatchers(
   );
 
   if (usaJobs.length === 0) {
-    log("INFO", "[parallel] Aucun dossier USA actif — mode legacy uniquement");
     return false;
   }
 

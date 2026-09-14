@@ -316,7 +316,6 @@ export async function detectPublicIp(): Promise<string | null> {
       const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
       const data = await res.json() as { ip?: string };
       if (data.ip) {
-        console.log(`[ProxyPool] Public IP detected: ${data.ip}`);
         return data.ip;
       }
     } catch {

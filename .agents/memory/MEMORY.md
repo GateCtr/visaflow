@@ -55,3 +55,4 @@
 - [Spain scan grid catch-up](spain-scan-grid-catchup.md) — Kinshasa full cycles need a 10s hunt grid plus one bounded catch-up when a no-slot scan misses a front.
 - [France booking success without QR](france-booking-success-without-qr.md) — reservations/family HTTP 2xx may create the booking and email confirmation without returning data.qrCodes.
 - [Spain slot claim freshness](spain-slot-claim-freshness.md) — Redis capacity claims must compare snapshot timestamps and report the stored capacity on refusal.
+- [Slot Hunter operational logging](slot-hunter-logging.md) — keep logs focused on failures, bookings, slots, locks, and meaningful state changes.

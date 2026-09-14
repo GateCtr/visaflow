@@ -801,7 +801,6 @@ export async function setupCevSessionHttp(
           redirect: "manual",
           signal: AbortSignal.timeout(8_000),
         });
-        console.log(`[CEV-TELEMETRY] LogRenderingClientTime: time=${renderTimeMs}ms`);
       } catch { /* non-critique — ignorer silencieusement */ }
     })();
 

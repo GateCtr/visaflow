@@ -70,11 +70,6 @@ function resetErrorState(jobId: string): void {
  * Tourne indéfiniment, scanne les dossiers allemagne actifs.
  */
 export async function startGermanyLoop(): Promise<void> {
-  log("INFO", "═══ GERMANY RK-TERMIN LOOP DÉMARRÉE ═══");
-  log("INFO", "   → Scan périodique des créneaux ambassade allemande");
-  log("INFO", "   → Portail: service2.diplo.de/rktermin");
-  log("INFO", "   → Captcha: image JPEG base64 (2Captcha/CapSolver)");
-
   // ─── Redis : init + restauration de l'état ──────────────────────────────
   await initGermanyRedis();
   if (isGermanyRedisReady()) {
@@ -104,7 +99,6 @@ export async function startGermanyLoop(): Promise<void> {
       RKTERMIN_TIMING.pollingInterval.normal.min,
       RKTERMIN_TIMING.pollingInterval.normal.max,
     );
-    log("DEBUG", `Prochain cycle dans ${Math.round(sleepMs / 60_000)} min`);
     await new Promise(r => setTimeout(r, sleepMs));
   }
 }
@@ -136,7 +130,6 @@ async function runGermanyCycle(): Promise<void> {
     );
     
     if (germanyJobs.length === 0) {
-      log("DEBUG", "Aucun dossier Germany actif");
       return;
     }
     

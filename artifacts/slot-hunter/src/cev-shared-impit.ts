@@ -934,7 +934,6 @@ export function initCevProxyGuard(proxyUrl: string, identifier?: string, exitIp?
     expectedExitIp: exitIp,
     identifier,
   };
-  console.log(`[CEV-PROXY-GUARD] ✅ Guard initialisé (IP: ${exitIp ?? "inconnue"})`);
 }
 
 /** Libère le proxy guard (fin de session / rotation). */
@@ -1136,7 +1135,6 @@ export async function initCevProxyGuardWithExitIp(proxyUrl: string, identifier?:
     }
     
     const exitIp = (await res.text()).trim();
-    console.log(`[CEV-PROXY-GUARD] IP de sortie proxy détectée: ${exitIp}`);
     initCevProxyGuard(proxyUrl, identifier, exitIp);
     return exitIp;
   } catch (err) {
