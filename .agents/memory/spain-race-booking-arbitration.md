@@ -7,7 +7,7 @@ En mode publication/race, ne jamais attendre un sémaphore et ne jamais réclame
 
 **Why:** L’observation réelle confirme que Bookitit accepte un gagnant et renvoie `signin/ → 0B`, un timeout ou parfois un rejet aux perdants. Un `getsigninfields/` valide confirme l’armement de session, pas la réservation. Les verrous locaux ajoutent un délai critique et empêchent le serveur d’arbitrer naturellement.
 
-**How to apply:** Garder les protections Redis pré-booking hors race. En race, passer immédiatement au candidat suivant après un `signin/ → 0B`, timeout ou réponse de concurrence; traiter séparément les erreurs de credentials, qui sont permanentes. N’utiliser la coordination persistante qu’après une réussite.
+**How to apply:** Garder les protections Redis pré-booking hors race. En race, traiter séparément les erreurs de credentials, qui sont permanentes. Après une réponse de concurrence (`busyslot`/horaire pris), abandonner les candidats de la session courante et relancer un cycle complet avec un nouveau PHPSESSID avant de recalculer le tri. Les `0B` isolés restent un cas distinct.
 
 Les traces de septembre 2026 montrent aussi des `signin/ → 0B` avec des tokens
 frais et un état de cookies inchangé, tandis que d'autres tentatives avec le même

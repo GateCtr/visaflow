@@ -406,6 +406,26 @@ export function shouldFallbackAfterSignin(
 }
 
 /**
+ * Une réponse métier indiquant que l'horaire vient d'être pris ne doit pas
+ * poursuivre la cascade avec le même PHPSESSID. Le portail renvoie ensuite
+ * souvent 0B sur les candidats suivants de cette session.
+ *
+ * Le dossier reste actif : l'appelant doit abandonner uniquement la liste de
+ * candidats courante, puis lancer un refreshSessionAndScan() complet.
+ */
+export function shouldRefreshAfterSlotTaken(
+  status: SpainBookingResult["status"],
+  errorMessage?: string,
+): boolean {
+  if (status !== "signin_failed" && status !== "booking_failed") return false;
+  const message = (errorMessage ?? "").toLowerCase();
+  return message.includes("seleccionada por otra persona")
+    || message.includes("elegida")
+    || message.includes("ya no está disponible")
+    || message.includes("no disponible");
+}
+
+/**
  * Seuil "assez de places" pour BYPASSER le sémaphore de booking.
  *
  * Le sémaphore (MAX_CONCURRENT_BOOKERS) sert à éviter les réponses 0B du serveur
@@ -1995,6 +2015,7 @@ export async function runDossierWorker(
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
+    let refreshAfterSlotTaken = false;
 
     // ── spain-synchronized-scan (task 10.1) : phase + tick effectif de la grille ──
     // La phase (preflight/hunt/late) dérive de l'horloge murale Europe/Madrid ; le tick
@@ -2423,25 +2444,25 @@ export async function runDossierWorker(
           }).filter(Boolean);
 
           // ── P1+P2+P5 : Boucle de booking avec cascade fallback ───────────────
-          // Le worker itère tous les candidats éligibles. Si un créneau est pris par
-          // un humain ("seleccionada") ou que summary/ échoue après retries, on libère
-          // le claim Redis et on passe au candidat suivant — pas de sortie du cycle.
+          // Le worker tente les candidats éligibles. Une réponse indiquant qu'un
+          // créneau vient d'être pris invalide toutefois la session de booking :
+          // on abandonne la liste courante et on relance un scan complet avec un
+          // nouveau PHPSESSID avant de retenter.
           //
           // MODE RACE (≤ RACE_MODE_SLOT_THRESHOLD créneaux) :
           //   Pas de lock Redis — tous les workers foncent en parallèle sur le même
           //   créneau. Le serveur Bookitit décide du gagnant. Les perdants reçoivent
-          //   "seleccionada" et passent au prochain candidat.
-          //   En race, chaque worker a accès à TOUS les créneaux (pas seulement son
-          //   sous-ensemble P4) pour maximiser les chances de fallback.
+          //   "seleccionada" et relancent un scan complet avec un nouveau PHPSESSID.
+          //   Le nouveau snapshot recalculera les créneaux et leur ordre.
           let bookingSucceeded = false;
           const raceMode = eligible.length <= RACE_MODE_SLOT_THRESHOLD;
           if (raceMode) {
             log("INFO", `${tag} 🏁 MODE RACE activé (${eligible.length} créneau(x) ≤ ${RACE_MODE_SLOT_THRESHOLD}) — pas de lock Redis, tous les workers foncent`);
           }
 
-          // En mode race : premier choix = P4 (distribution déterministe), mais les
-          // créneaux restants sont ajoutés en fallback. Chaque worker commence par son
-          // slot assigné, et s'il échoue (seleccionada) il tente les autres.
+          // En mode race : premier choix = P4 (distribution déterministe). Si le
+          // créneau est pris, le worker abandonne l'ancien snapshot et rescanne ;
+          // il ne consomme pas les autres candidats avec la même session PHP.
           // En mode normal : distribution P4 stricte (pas de fallback cross-slot).
           const bookingCandidates = raceMode
             ? (() => {
@@ -2950,21 +2971,18 @@ export async function runDossierWorker(
               return workerResult;
             }
 
-            // ── P1 : "seleccionada por otra persona" → continuer au créneau suivant ──
+            // ── P1 : "seleccionada por otra persona" → nouveau cycle/session ─────
             // Le serveur dit que ce créneau est pris par un humain/autre agent.
-            // En mode race, c'est probablement un de NOS workers qui a gagné — pas grave.
-            // On ne quitte pas le cycle : on tente immédiatement le prochain candidat.
-            const errLower = (bookResult.errorMessage ?? "").toLowerCase();
-            const isSlotTakenByOther = errLower.includes("seleccionada por otra persona")
-              || errLower.includes("elegida")
-              || errLower.includes("ya no está disponible")
-              || errLower.includes("no disponible");
-            if (isSlotTakenByOther) {
-              if (raceMode) {
-                log("INFO", `${tag} 🏁 Race perdue: ${slot.date} ${slot.time} pris (un de nos workers ou humain) — fallback`);
-              } else {
-                log("INFO", `${tag} ⏭️ P1: Créneau ${slot.date} ${slot.time} pris par un humain — fallback au prochain candidat`);
-              }
+            // Les traces montrent que les fallbacks suivants avec le même PHPSESSID
+            // renvoient 0B. Ne pas perdre la fenêtre sur cette cascade : le prochain
+            // essai doit repasser par refreshSessionAndScan() (main → config →
+            // service → agenda → datetime) et recalculer les candidats.
+            const slotTaken = shouldRefreshAfterSlotTaken(
+              bookResult.status,
+              bookResult.errorMessage,
+            );
+            if (slotTaken) {
+              log("INFO", `${tag} 🔄 ${slot.date} ${slot.time} pris par un autre — abandon de la liste courante, refresh + scan avec nouveau PHPSESSID`);
               // Remonter l'échec à la page Bookings (avant, ce cas n'était jamais reporté).
               reportBookingLog({
                 applicationId: config.applicationId,
@@ -2976,8 +2994,8 @@ export async function runDossierWorker(
                 reason: "Créneau pris par un autre (hora ya seleccionada)",
                 serviceName: scan.serviceName,
               }).catch(() => {});
-              await sleep(300); // micro-délai pour ne pas spammer
-              continue; // → prochain candidat dans sortedEligible
+              refreshAfterSlotTaken = true;
+              break; // → refreshSessionAndScan() complet, puis nouveau tri
             }
 
             // ── Échec signin/ → fallback sans confondre vide, réseau et surcharge ──
@@ -3026,7 +3044,9 @@ export async function runDossierWorker(
           if (!bookingSucceeded) {
             log(
               "INFO",
-              `${tag} Cycle ${cycleCount}: tous les créneaux éligibles (${sortedEligible.length}) épuisés — next cycle`,
+              refreshAfterSlotTaken
+                ? `${tag} Cycle ${cycleCount}: horaire pris — refresh + scan immédiat avec nouveau PHPSESSID`
+                : `${tag} Cycle ${cycleCount}: tous les créneaux éligibles (${sortedEligible.length}) épuisés — next cycle`,
             );
             // V2 : libérer le sémaphore — ce worker n'a pas réussi à booker
             if (holdingBookingSlot) {
@@ -3058,6 +3078,19 @@ export async function runDossierWorker(
         );
         rt.state = "RECOVERING";
         enterRecoveryAsync(rt, recoveryKind, recoveryDeps);
+      }
+
+      // Un busyslot rend la session de booking courante improductive. Repartir
+      // immédiatement au sommet de la boucle appelle refreshSessionAndScan(),
+      // qui recrée le PHPSESSID et reconstruit le snapshot service/agenda/datetime.
+      // Aucun délai de grille ni fallback sur l'ancien snapshot ne doit intervenir.
+      if (refreshAfterSlotTaken) {
+        transition(rt, "scan_ok");
+        if (shouldScheduleWake(Date.now(), windowEnd)) {
+          log("INFO", `${tag} 🔄 Rescan immédiat après horaire pris — nouveaux service/agenda/datetime puis nouveau tri`);
+          continue;
+        }
+        break;
       }
 
       // Heartbeat de scan OK / not_found

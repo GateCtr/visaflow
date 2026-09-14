@@ -426,6 +426,25 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     )).toBe(false);
   });
 
+  it("déclenche un nouveau scan après une heure prise, sans fallback sur la même session", () => {
+    expect(worker.shouldRefreshAfterSlotTaken(
+      "signin_failed",
+      "La hora elegida ha sido seleccionada por otra persona, por favor elija una distinta",
+    )).toBe(true);
+    expect(worker.shouldRefreshAfterSlotTaken(
+      "booking_failed",
+      "summary/ sans locator: hora ya no está disponible",
+    )).toBe(true);
+    expect(worker.shouldRefreshAfterSlotTaken(
+      "signin_failed",
+      "signin/ → 0B",
+    )).toBe(false);
+    expect(worker.shouldRefreshAfterSlotTaken(
+      "signin_failed",
+      "Usuario o contraseña incorrectos",
+    )).toBe(false);
+  });
+
   it("préserve un échec HTTP transitoire comme surcharge, pas comme 0B", () => {
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",
