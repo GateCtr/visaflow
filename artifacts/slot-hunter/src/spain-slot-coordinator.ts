@@ -13,6 +13,7 @@
 
 export {
   tryClaimWorkerSlot as tryClaimSlot,
+  type SpainSlotClaimResult,
   /**
    * Libère la réservation d'UN dossier sur un créneau (atomic Lua dossier-specific).
    * Décrémente `booked` du groupSize de ce dossier uniquement.
