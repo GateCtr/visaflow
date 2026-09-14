@@ -9,6 +9,12 @@ En mode publication/race, ne jamais attendre un sémaphore et ne jamais réclame
 
 **How to apply:** Garder les protections Redis pré-booking hors race. En race, traiter séparément les erreurs de credentials, qui sont permanentes. Après une réponse de concurrence (`busyslot`/horaire pris), abandonner les candidats de la session courante et relancer un cycle complet avec un nouveau PHPSESSID avant de recalculer le tri. Les `0B` isolés restent un cas distinct.
 
+Après chaque rescan ou re-cycle de session, recalculer le mode race à partir du nouveau nombre de créneaux avant de décider d'appeler Redis. Ne jamais réutiliser le booléen du snapshot précédent.
+
+**Why:** Un premier snapshot peut être en mode normal puis le nouveau snapshot contenir moins de créneaux. Conserver l'ancien mode fait appeler `tryClaimSlot()` et peut bloquer localement un créneau avant que Bookitit ne l'arbitre.
+
+**How to apply:** Le mode race et la décision `shouldCoordinateBeforeBooking()` doivent être dérivés du même snapshot que `armCandidates`.
+
 Les traces de septembre 2026 montrent aussi des `signin/ → 0B` avec des tokens
 frais et un état de cookies inchangé, tandis que d'autres tentatives avec le même
 type de token renvoient `client_signin=true` ou `busyslot`.

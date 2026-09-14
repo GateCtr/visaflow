@@ -390,6 +390,16 @@ describe("attemptBookingRace — seuil de bypass sémaphore (Req 9.5)", () => {
 });
 
 describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
+  it("recalcule le mode race quand le rescan réduit le snapshot", () => {
+    expect(worker.isSpainRaceMode(8)).toBe(false);
+    expect(worker.isSpainRaceMode(2)).toBe(true);
+    expect(worker.shouldCoordinateBeforeBooking(worker.isSpainRaceMode(2))).toBe(false);
+  });
+
+  it("ne classe pas un snapshot vide en mode race", () => {
+    expect(worker.isSpainRaceMode(0)).toBe(false);
+  });
+
   it("désactive toute coordination pré-booking en race, mais la conserve hors race", () => {
     expect(worker.shouldCoordinateBeforeBooking(true)).toBe(false);
     expect(worker.shouldCoordinateBeforeBooking(false)).toBe(true);

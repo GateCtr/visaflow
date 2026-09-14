@@ -381,6 +381,15 @@ export function shouldStopMonthlyScanAfterSlots(
 const RACE_MODE_SLOT_THRESHOLD = 5;
 
 /**
+ * Le mode race doit toujours être déterminé sur le snapshot actuellement
+ * utilisé pour le booking. Après un re-cycle de session, le nombre de
+ * créneaux peut avoir changé.
+ */
+export function isSpainRaceMode(slotCount: number): boolean {
+  return slotCount > 0 && slotCount <= RACE_MODE_SLOT_THRESHOLD;
+}
+
+/**
  * En publication/race, Bookitit arbitre lui-même les tentatives concurrentes :
  * aucun sémaphore ni claim Redis ne doit retarder un signin/.
  * Hors race, les protections Redis historiques restent actives.
@@ -2455,7 +2464,7 @@ export async function runDossierWorker(
           //   "seleccionada" et relancent un scan complet avec un nouveau PHPSESSID.
           //   Le nouveau snapshot recalculera les créneaux et leur ordre.
           let bookingSucceeded = false;
-          const raceMode = eligible.length <= RACE_MODE_SLOT_THRESHOLD;
+          let raceMode = isSpainRaceMode(eligible.length);
           if (raceMode) {
             log("INFO", `${tag} 🏁 MODE RACE activé (${eligible.length} créneau(x) ≤ ${RACE_MODE_SLOT_THRESHOLD}) — pas de lock Redis, tous les workers foncent`);
           }
@@ -2600,6 +2609,15 @@ export async function runDossierWorker(
             armDs = reScan.ds ?? armDs;
             armServiceId = reScan.serviceId ?? armServiceId;
             armCandidates = reSorted;
+            const previousRaceMode = raceMode;
+            raceMode = isSpainRaceMode(armCandidates.length);
+            if (raceMode !== previousRaceMode) {
+              log(
+                "INFO",
+                `${tag} 🔄 coordination recalculée sur le nouveau snapshot: ` +
+                `${armCandidates.length} créneau(x) → ${raceMode ? "MODE RACE (claim Redis désactivé)" : "MODE NORMAL (claim Redis actif)"}`,
+              );
+            }
             armGsf = await doArmGsf(armDs, armCandidates[0], armServiceId);
             armGsfBytes = gsfBytesOf(armGsf);
             log("INFO", `${tag} 🔁 re-cycle ${recycle}: getsigninfields/ → ${armGsfBytes}B${armGsfBytes > 0 ? " ✅ session ré-armée" : " ⚠️ toujours 0B"}`);
@@ -2624,11 +2642,17 @@ export async function runDossierWorker(
           // booking pour ne pas gaspiller des signin/ stériles (et des tokens gct). Le worker
           // re-scannera au prochain front de grille avec un PHPSESSID neuf.
           const canAttemptSignin = armGsfBytes > 0;
+          const coordinateBeforeBooking = shouldCoordinateBeforeBooking(raceMode);
+          log(
+            "INFO",
+            `${tag} 🔐 coordination booking: snapshot=${armCandidates.length} ` +
+            `mode=${raceMode ? "RACE (serveur arbitre)" : "NORMAL (claim Redis)"}`,
+          );
           for (const candidate of (canAttemptSignin ? armCandidates : [])) {
             // Hors race seulement : claim atomique anti-collision historique.
             // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
             // choisit le gagnant ; les perdants passent immédiatement au suivant.
-            if (shouldCoordinateBeforeBooking(raceMode)) {
+            if (coordinateBeforeBooking) {
               const ok = await tryClaimSlot(
                 candidate.date,
                 candidate.time,
@@ -2941,7 +2965,7 @@ export async function runDossierWorker(
 
             // Hors race, libérer le claim pré-booking après échec. En race aucun claim
             // n'a été créé : Redis ne bloque jamais une tentative avant Bookitit.
-            if (shouldCoordinateBeforeBooking(raceMode)) {
+            if (coordinateBeforeBooking) {
               releaseSlotClaim(slot.date, slot.time, slot.agendaId ?? "", config.id).catch(() => {});
             }
 
