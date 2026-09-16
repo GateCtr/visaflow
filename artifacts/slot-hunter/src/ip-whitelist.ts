@@ -147,24 +147,15 @@ async function addIproyalWhitelistEntry(
     const existing = await listIproyalWhitelistEntries(apiToken, userHash);
     const alreadyExists = existing.find((e) => e.ip === ip);
     if (alreadyExists) {
-      console.log(`[ip-whitelist] ✅ IPRoyal: IP ${ip} déjà whitelistée (hash: ${alreadyExists.hash})`);
+      console.log(`[ip-whitelist] ✅ IPRoyal: IP déjà whitelistée`);
       return { ok: true, entry: alreadyExists, alreadyExists: true };
     }
 
     // 2. Nettoyer les anciennes entrées (IPs Railway périmées)
     //    On garde seulement les entrées qui ont une note "railway" ou "auto"
     //    pour ne pas supprimer les entrées manuelles de l'utilisateur.
-    const autoEntries = existing.filter(
-      (e) => e.ip !== ip // pas la nôtre (au cas où)
-    );
     // Note: On ne supprime PAS automatiquement les anciennes entrées
     // car l'utilisateur pourrait avoir d'autres serveurs légitimes.
-    // On log juste les entrées existantes pour information.
-    if (autoEntries.length > 0) {
-      console.log(
-        `[ip-whitelist] IPRoyal: ${autoEntries.length} entrée(s) whitelist existante(s): ${autoEntries.map((e) => e.ip).join(", ")}`,
-      );
-    }
 
     // 3. Ajouter la nouvelle IP
     const body: Record<string, unknown> = { ip, port };
@@ -183,14 +174,14 @@ async function addIproyalWhitelistEntry(
 
     if (res.ok || res.status === 201) {
       const entry = (await res.json()) as IProyalWhitelistEntry;
-      console.log(`[ip-whitelist] ✅ IPRoyal: IP ${ip} ajoutée à la whitelist (hash: ${entry.hash}, port: ${entry.port})`);
+      console.log(`[ip-whitelist] ✅ IPRoyal: IP ${ip} ajoutée à la whitelist`);
       return { ok: true, entry, alreadyExists: false };
     }
 
     // Gérer le cas "déjà existante" retourné comme erreur
     if (res.status === 422 || res.status === 409) {
-      const errBody = await res.text();
-      console.log(`[ip-whitelist] ℹ️ IPRoyal: IP ${ip} probablement déjà whitelistée (${res.status}): ${errBody}`);
+      await res.text();
+      console.log(`[ip-whitelist] ✅ IPRoyal: IP déjà whitelistée (${res.status})`);
       return { ok: true, alreadyExists: true };
     }
 
@@ -327,8 +318,6 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
     // Override possible via IPROYAL_WHITELIST_CONFIG
     const config = process.env.IPROYAL_WHITELIST_CONFIG || buildDefaultIproyalConfig();
 
-    console.log(`[ip-whitelist] 🌐 IPRoyal: Ajout IP ${serverIp} à la whitelist...`);
-    console.log(`[ip-whitelist]    Config: ${config}`);
     const iproyalResult = await addIproyalWhitelistEntry(
       serverIp,
       iproyalToken,
@@ -363,7 +352,6 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
   const brightdataZone = process.env.BRIGHTDATA_ZONE_NAME || extractBrightDataZone();
 
   if (brightdataApiKey) {
-    console.log(`[ip-whitelist] 🌐 BrightData: Ajout IP ${serverIp} à la whitelist (zone: ${brightdataZone || "toutes"})...`);
     const bdResult = await addBrightDataWhitelistEntry(serverIp, brightdataApiKey, brightdataZone);
     if (bdResult.ok) {
       result.brightdata = {
@@ -389,7 +377,6 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
       ok: true,
       message: `Gateway mode ✅ — auth user:pass via eu.proxy.2captcha.com:2334 (whitelist IP NON requise)`,
     };
-    console.log(`[ip-whitelist] ✅ 2Captcha: Mode gateway — whitelist IP non requise (auth credentials)`);
   } else {
     result.twocaptcha = { ok: false, message: "TWOCAPTCHA_API_KEY absent" };
   }
@@ -405,7 +392,6 @@ export async function autoWhitelistIp(serverIp: string): Promise<WhitelistResult
       ok: true,
       message: `Auth user:pass ✅ — proxy.soax.com:9000 (whitelist IP NON requise)`,
     };
-    console.log(`[ip-whitelist] ✅ SOAX: Auth par credentials — whitelist IP non requise`);
   } else {
     result.soax = { ok: false, message: "SOAX_PROXY_URL absent" };
     console.log(`[ip-whitelist] ⚠️ SOAX: non configuré (SOAX_PROXY_URL absent)`);
@@ -442,7 +428,6 @@ export async function cleanupOldIproyalWhitelistEntries(
     // Décommenter la ligne ci-dessous pour activer le nettoyage automatique :
     // const deleted = await deleteIproyalWhitelistEntry(iproyalToken, iproyalHash, entry.hash);
     // if (deleted) removed++;
-    console.log(`[ip-whitelist] ℹ️ IPRoyal: ancienne entrée ${entry.ip}:${entry.port} (hash: ${entry.hash}) — non supprimée (sécurité)`);
     kept++;
   }
 
