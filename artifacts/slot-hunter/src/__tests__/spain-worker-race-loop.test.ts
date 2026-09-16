@@ -492,19 +492,19 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     )).toBe(false);
   });
 
-  it("préserve un échec HTTP transitoire comme fallback, pas comme session consommée", () => {
+  it("recycle la session après un échec HTTP transitoire de signin/", () => {
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",
-      "signin/ → HTTP transitoire non résolue après retries",
-    )).toBe(true);
+      "signin/ → HTTP transitoire après tentative unique",
+    )).toBe(false);
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",
       "signin/ → réponse vide",
     )).toBe(false);
     expect(worker.shouldRefreshAfterSignin(
       "signin_failed",
-      "signin/ → HTTP transitoire non résolue après retries",
-    )).toBe(false);
+      "signin/ → HTTP transitoire après tentative unique",
+    )).toBe(true);
   });
 });
 

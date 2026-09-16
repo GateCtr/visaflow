@@ -659,13 +659,12 @@ const CALL_DIRECT_RETRY_MAX_MS = 1_500;
 
 /**
  * Exceptions à la politique « rescan direct » :
- * - signin/ garde ses retries car chaque retry résout un nouveau token hCaptcha ;
  * - datetime/ garde ses retries ciblés, qui restent sur le même PHPSESSID.
  *
  * Les autres endpoints ne rejouent plus le même appel : leur échec remonte au
  * worker, qui recrée une session PHP et relance un scan complet.
  */
-const DIRECT_RETRY_ENDPOINTS = new Set(["signin/", "datetime/"]);
+const DIRECT_RETRY_ENDPOINTS = new Set(["datetime/"]);
 
 /** Backoff plafonné : 400, 800, 1200, 1500, 1500… (pas d'explosion exponentielle). */
 function retryBackoffMs(attempt: number): number {
@@ -763,10 +762,9 @@ export async function callDirect(
       return parsed.payload;
     } catch (e) {
       if (timeout) clearTimeout(timeout);
-      // signin/ : PAS de retry sur timeout/abort (option d'observation). On a laissé
-      // 240s au serveur ; s'il n'a pas répondu, retenter relancerait le MÊME gct sur le
-      // MÊME créneau et masquerait la réalité. On renvoie directement le sentinel réseau
-      // pour que le worker traite l'absence de réponse sans empiler des tentatives longues.
+      // signin/ : PAS de retry sur timeout/abort. On a laissé 240s au serveur ;
+      // s'il ne répond pas, le worker abandonne ce snapshot et repart avec un
+      // nouveau PHPSESSID au lieu d'empiler des tentatives longues.
       const isTimeoutErr =
         e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
       if (endpoint === "signin/" && isTimeoutErr) {

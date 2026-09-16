@@ -155,13 +155,9 @@ describe("callDirect — propagation PHPSESSID", () => {
     expect(fetchCount).toBe(1);
   });
 
-  it("rafraîchit les paramètres avant un retry HTTP 504", async () => {
+  it("ne rejoue pas signin/ après un HTTP 504", async () => {
     const seenUrls: string[] = [];
     const responses = [
-      new Response("<html>gateway timeout</html>", {
-        status: 504,
-        headers: { "retry-after": "0" },
-      }),
       new Response("<html>gateway timeout</html>", {
         status: 504,
         headers: { "retry-after": "0" },
@@ -194,21 +190,22 @@ describe("callDirect — propagation PHPSESSID", () => {
       },
     });
 
-    expect(result).toEqual({ Access: { bktToken: "server-token" } });
-    expect(seenUrls).toHaveLength(3);
+    expect(result).toBe(CALL_DIRECT_HTTP_OVERLOAD);
+    expect(seenUrls).toHaveLength(1);
     expect(seenUrls[0]).toContain("gct=old-token");
-    expect(seenUrls[1]).toContain("gct=fresh-token-1");
-    expect(seenUrls[2]).toContain("gct=fresh-token-2");
-    expect(refreshCount).toBe(2);
+    expect(refreshCount).toBe(0);
   });
 
-  it("retourne le sentinel HTTP après épuisement des retries", async () => {
+  it("conserve les retries pour datetime/", async () => {
+    let fetchCount = 0;
     const ds = {
       impit: {
-        fetch: async () => new Response("<html>gateway timeout</html>", {
-          status: 504,
-          headers: { "retry-after": "0" },
-        }),
+        fetch: async () => {
+          fetchCount += 1;
+          return fetchCount === 1
+            ? new Response("<html>gateway timeout</html>", { status: 504, headers: { "retry-after": "0" } })
+            : new Response(jsonp({ dates: [] }), { status: 200 });
+        },
       },
       jar: { PHPSESSID: "session" },
       userAgent: "Mozilla/5.0",
@@ -221,7 +218,8 @@ describe("callDirect — propagation PHPSESSID", () => {
       bookititBase: "https://www.citaconsular.es/onlinebookings",
     } as any as DynamicSession;
 
-    const result = await callDirect(ds, "signin/", { gct: "token" });
-    expect(result).toBe(CALL_DIRECT_HTTP_OVERLOAD);
+    const result = await callDirect(ds, "datetime/", { month: "2026-10" });
+    expect(result).toEqual({ dates: [] });
+    expect(fetchCount).toBe(2);
   });
 });

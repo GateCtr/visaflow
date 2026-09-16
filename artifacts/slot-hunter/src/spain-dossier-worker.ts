@@ -400,7 +400,7 @@ export function shouldCoordinateBeforeBooking(raceMode: boolean): boolean {
 }
 
 /**
- * Une réponse vide ou sans bktToken après un getsigninfields/ valide invalide
+ * Une réponse vide, sans bktToken ou transitoire après un getsigninfields/ valide invalide
  * la session de booking courante. Même si HTTP répond 200, le serveur a déjà
  * traité signin/ avec ce PHPSESSID : ne pas poursuivre avec les autres slots
  * du même snapshot. Le worker doit refaire un cycle complet et rescanner.
@@ -413,23 +413,23 @@ export function shouldRefreshAfterSignin(
   const message = (errorMessage ?? "").toLowerCase();
   return message.includes("0b")
     || message.includes("réponse vide")
-    || message.includes("sans bktoken");
+    || message.includes("sans bktoken")
+    || message.includes("http transitoire")
+    || message.includes("erreur réseau");
 }
 
 /**
- * Une erreur HTTP transitoire qui n'a pas produit une réponse Bookitit exploitable
- * reste un fallback local : elle ne prouve pas que le PHPSESSID a été armé puis
- * consommé par le serveur.
+ * Conservé pour compatibilité avec les anciens appelants : les erreurs
+ * transitoires de signin/ déclenchent désormais un rescan, pas un fallback
+ * vers le créneau suivant avec le même PHPSESSID.
  */
 export function shouldFallbackAfterSignin(
   status: SpainBookingResult["status"],
   errorMessage?: string,
 ): boolean {
-  const message = (errorMessage ?? "").toLowerCase();
-  return status === "signin_failed" && (
-    message.includes("http transitoire")
-    || message.includes("refresh hcaptcha")
-  );
+  void status;
+  void errorMessage;
+  return false;
 }
 
 /**
@@ -2877,7 +2877,10 @@ export async function runDossierWorker(
             // On appelle signin/ directement sur ce candidat, avec les logintypes
             // découverts à l'armement. Ne JAMAIS re-appeler getsigninfields/ ici : ça
             // renverrait 0B (rate-limit) et nous ferait abandonner un créneau bookable.
-            const loginTypes = armedLoginTypes;
+            // signin/ est one-shot comme les autres endpoints de booking :
+            // aucun fallback vers un second logintype avec le même PHPSESSID.
+            // Un échec repartira sur un nouveau cycle/session.
+            const loginTypes = armedLoginTypes.slice(0, 1);
             let signinLogintype: SpainLoginType = loginTypes[0];
             let signinRaw: unknown | null | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_HTTP_OVERLOAD = null;
             let gctToken = "";
@@ -2916,20 +2919,6 @@ export async function runDossierWorker(
                 // gct = token hCaptcha (vide si le portail n'exige pas de captcha).
                 // Requis par les portails avec WidgetConfiguration.captcha=1 (ex. Kinshasa).
                 gct:       gctToken,
-              }, undefined, {
-                refreshParamsForRetry: async ({ extra: currentExtra }) => {
-                  // Un 504 peut avoir consommé le token côté Bookitit avant que la
-                  // passerelle ne réponde. Ne jamais rejouer le même gct sur retry.
-                  if (!captchaNeeded) return { ...currentExtra };
-                  const refreshed = await solveSpainHcaptcha(signinCaptchaSitekey, config.portalUrl.split("#")[0]);
-                  if (!refreshed) {
-                    log("WARN", `${tag} 🔐 retry signin/ sans nouveau token hCaptcha — abandon sécurisé`);
-                    return null;
-                  }
-                  gctToken = refreshed;
-                  log("INFO", `${tag} 🔐 nouveau token hCaptcha résolu pour retry signin/ (${gctToken.length} car.)`);
-                  return { ...currentExtra, gct: gctToken };
-                },
               });
 
               if (
@@ -2991,7 +2980,7 @@ export async function runDossierWorker(
               const errMsg = signinErrors.length
                 ? signinErrors.map((e) => e.message).join(", ")
                 : signinRaw === CALL_DIRECT_HTTP_OVERLOAD
-                  ? "signin/ → HTTP transitoire non résolue après retries"
+                  ? "signin/ → HTTP transitoire après tentative unique"
                   : signinRaw === CALL_DIRECT_NETWORK_ERROR
                     ? "signin/ → erreur réseau sans réponse"
                     : signinRaw === CALL_DIRECT_RETRY_REFRESH_FAILED

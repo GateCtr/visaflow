@@ -7,11 +7,13 @@ The active Spain flow must not replay the same GET/POST with the same PHP sessio
 session initialization or ordinary Bookitit endpoints. Discard the snapshot and start a
 fresh session cycle with a new PHPSESSID on the same proxy when the failure is a portal
 or server response. Proxy failures still rotate the IP, captcha solving keeps its own
-retry/polling behavior, and datetime/ may retry on the same session.
+retry/polling behavior, and only datetime/ may retry on the same session.
 
 **Why:** Bookitit initialization endpoints are stateful and one-shot in practice; repeating
 the same request can waste the scan window while preserving a broken or stale session.
 
-**How to apply:** Keep generic direct-call retries disabled except signin/ and datetime/.
-Make recovery paths recreate the full worker session before re-running PHP initialization,
-and preserve proxy/network classification so bad IPs are rotated instead of rescanned.
+**How to apply:** Keep generic direct-call retries disabled except datetime/. signin/ is
+one-shot; if it fails, discard the booking snapshot and let the worker rescan with a new
+PHPSESSID. hCaptcha may still be solved again by the next cycle, but the same signin/
+request is never replayed. Preserve proxy/network classification so bad IPs are rotated
+instead of rescanned.
