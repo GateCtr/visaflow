@@ -9,12 +9,12 @@ Disallow: /continue
 Disallow: /login
 Disallow: /register
 
-# ═══ AI Search & Retrieval Bots — TOUS AUTORISÉS ═══
-# Pour apparaître dans les réponses IA (ChatGPT, Claude, Perplexity, Gemini, Copilot, etc.)
+# ═══ AI Search & Retrieval Bots — RECHERCHE AUTORISÉE ═══
+# Les robots de recherche IA sont autorisés ; l'entraînement général OpenAI via GPTBot est bloqué.
 
 # OpenAI (ChatGPT)
 User-agent: GPTBot
-Allow: /
+Disallow: /
 Disallow: /dashboard
 Disallow: /admin
 Disallow: /sso-callback
