@@ -667,10 +667,20 @@ export const sendSlotFoundClient = internalAction({
     applicationId: v.string(),
   },
   handler: async (_ctx, args) => {
+    const dossierName = escHtml(args.applicantName);
+    const subjectDossierName = args.applicantName.replace(/[\r\n]+/g, " ").trim();
     const body = `
       <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Un rendez-vous est disponible 🎉</h2>
       ${urgentBanner("Vous avez 48 heures pour régler la prime de succès et sécuriser ce créneau.")}
-      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Notre système a capturé un créneau d'entretien à l'ambassade pour votre visa <strong>${destLabel(args.destination)}</strong>${args.slotDate ? ` — date : <strong>${args.slotDate}</strong>` : ""}.</p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 16px;">
+        <tr>
+          <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 18px;">
+            <p style="margin:0 0 4px;color:#1e40af;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Dossier concerné</p>
+            <p style="margin:0;color:#1e3a5f;font-size:16px;font-weight:700;">${dossierName}</p>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Notre système a capturé un créneau d'entretien à l'ambassade pour le dossier de <strong>${dossierName}</strong>, visa <strong>${destLabel(args.destination)}</strong>${args.slotDate ? ` — date : <strong>${args.slotDate}</strong>` : ""}.</p>
       <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 4px;">Pour débloquer tous les détails et recevoir votre kit d'entretien, réglez la <strong>prime de succès de ${args.successFee}&nbsp;USD</strong> dans les 48 heures.</p>
       ${paymentBox()}
       ${cta(`${APP_URL}/dashboard`, "Débloquer mon rendez-vous")}
@@ -678,7 +688,7 @@ export const sendSlotFoundClient = internalAction({
     await sendEmail({
       from: FROM,
       to: args.to,
-      subject: `🎉 URGENT — Créneau ${destLabel(args.destination)} trouvé ! 48h pour confirmer`,
+      subject: `🎉 URGENT — Créneau ${destLabel(args.destination)} trouvé — Dossier ${subjectDossierName}`,
       html: htmlWrapper("Créneau trouvé — Action requise", body),
     });
   },
