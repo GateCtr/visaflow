@@ -186,48 +186,38 @@ async function main(): Promise<void> {
     log("INFO", `  captcha=${captcha} | raw: ${JSON.stringify(gsfPayload).slice(0, 120)}`);
   }
 
-  // ── ÉTAPE 4 : signin/ — retry 3× comme en prod ────────────────────────────
-  section("ÉTAPE 4 — signin/ (faux identifiants — retry 3×)");
+  // ── ÉTAPE 4 : signin/ — tentative unique comme en prod ───────────────────
+  section("ÉTAPE 4 — signin/ (faux identifiants — tentative unique)");
   log("INFO", `Params: services[]=${serviceId} agendas[]=${slot.agendaId}`);
   log("INFO", `        date=${slot.date} time=${slot.time} selectedPeople=${TEST_CONFIG.groupSize ?? 1}`);
   log("INFO", `        logintype=document login=${FAKE_LOGIN} password=${FAKE_PASSWORD}`);
 
-  let signinPayload: Record<string, unknown> | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) {
-      const delay = 3_000 * attempt;
-      log("INFO", `Retry signin/ ${attempt}/2 (délai ${delay}ms)…`);
-      await new Promise(r => setTimeout(r, delay));
-    }
-    const raw = await callDirect(ds, "signin/", {
-      "services[]":   serviceId,
-      "agendas[]":    slot.agendaId ?? "",
-      date:           slot.date,
-      time:           slot.time,
-      selectedPeople: String(TEST_CONFIG.groupSize ?? 1),
-      logintype:      "document",
-      login:          FAKE_LOGIN,
-      password:       FAKE_PASSWORD,
-      comments:       "",
-    }, "[TEST]");
+  const raw = await callDirect(ds, "signin/", {
+    "services[]":   serviceId,
+    "agendas[]":    slot.agendaId ?? "",
+    date:           slot.date,
+    time:           slot.time,
+    selectedPeople: String(TEST_CONFIG.groupSize ?? 1),
+    logintype:      "document",
+    login:          FAKE_LOGIN,
+    password:       FAKE_PASSWORD,
+    comments:       "",
+  }, "[TEST]");
 
-    if (raw === null) {
-      log("WARN", `signin/ tentative ${attempt + 1}/3 → 0B`);
-      if (attempt < 2) continue;
-      break;
-    }
-    if (raw === CALL_DIRECT_NETWORK_ERROR) {
-      log("ERR", "❌ signin/ → erreur réseau");
-      process.exit(1);
-    }
+  let signinPayload: Record<string, unknown> | null = null;
+  if (raw === null) {
+    log("WARN", "signin/ tentative unique → 0B");
+  } else if (raw === CALL_DIRECT_NETWORK_ERROR) {
+    log("ERR", "❌ signin/ → erreur réseau");
+    process.exit(1);
+  } else {
     signinPayload = raw as Record<string, unknown>;
-    break;
   }
 
   // Analyser la réponse signin/ exactement comme en prod
   section("RÉSULTAT signin/");
   if (!signinPayload) {
-    log("WARN", "⚠️ signin/ → 0B après 3 tentatives");
+    log("WARN", "⚠️ signin/ → 0B après tentative unique");
     log("INFO", "→ En prod : cela déclenche signin_failed (pas de bktToken)");
     process.exit(0);
   }
