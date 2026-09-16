@@ -1124,12 +1124,12 @@ const guides: Guide[] = [
 
   {
     slug: "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
-    title: "Délai rendez-vous Espagne à Kinshasa en 2026",
-    metaTitle: "Délai rendez-vous Espagne à Kinshasa en 2026 | Joventy",
+    title: "Délai rendez-vous visa Espagne à Kinshasa en 2026",
+    metaTitle: "Délai rendez-vous visa Espagne Kinshasa 2026 | Joventy",
     metaDescription:
-      "Délai Espagne à Kinshasa : distinguez réponse de l'ambassade, recherche, attente du rendez-vous et traitement du visa pour planifier votre voyage en 2026.",
+      "Combien de temps pour un rendez-vous visa Espagne à Kinshasa ? Réponse ambassade, recherche, attente, instruction du visa et calendrier 2026.",
     publishedDate: "2026-07-26",
-    updatedDate: "2026-07-26",
+    updatedDate: "2026-09-16",
     readingTime: 7,
     category: "Visa Schengen",
     coverEmoji: "🇪🇸",
@@ -1315,15 +1315,15 @@ const guides: Guide[] = [
 
   {
     slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
-    title: "Procédure rendez-vous Espagne à Kinshasa en 2026",
-    metaTitle: "Rendez-vous Espagne à Kinshasa : procédure 2026 | Joventy",
-    metaDescription: "Procédure officielle du rendez-vous Espagne à Kinshasa en 2026 : inscription personnelle par email, accès citaconsular.es, pièces et dépôt à l'ambassade.",
+    title: "Rendez-vous visa Espagne à Kinshasa : procédure 2026",
+    metaTitle: "Rendez-vous visa Espagne Kinshasa : procédure 2026",
+    metaDescription: "Comment prendre un rendez-vous visa Espagne à Kinshasa en 2026 : email d'inscription à l'ambassade, citaconsular.es, pièces, confirmation et dépôt.",
     publishedDate: "2026-06-27",
-    updatedDate: "2026-07-05",
+    updatedDate: "2026-09-16",
     readingTime: 8,
     category: "Visa Schengen",
     coverEmoji: "🇪🇸",
-      intro: "Vous cherchez à prendre un rendez-vous visa Espagne depuis Kinshasa ? Attention : l'Espagne ne passe PAS par le Centre Européen des Visas (CEV), contrairement à la France ou la Belgique. La procédure est entièrement gérée par l'Ambassade d'Espagne à Kinshasa et se fait en deux étapes : chaque demandeur envoie personnellement un email, puis réserve un créneau sur le portail citaconsular.es. Ce guide vous explique la procédure exacte, les documents à préparer, et comment Joventy peut vous aider à préparer votre démarche.",
+      intro: "Pour prendre un rendez-vous visa Espagne depuis Kinshasa, chaque demandeur doit d'abord envoyer personnellement un email à l'Ambassade d'Espagne, puis utiliser les accès reçus sur citaconsular.es. L'Espagne ne passe pas par le Centre Européen des Visas (CEV). Ce guide distingue la procédure officielle — inscription, créneau et dépôt — de l'accompagnement Joventy, qui aide à préparer les documents et peut surveiller les disponibilités après réception de vos identifiants.",
     sections: [
       {
         heading: "Étape 1 — Inscription par email à l'Ambassade d'Espagne",

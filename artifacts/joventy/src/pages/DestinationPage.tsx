@@ -193,6 +193,86 @@ export default function DestinationPage() {
         </div>
       </section>
 
+      {/* ── RÉPONSE RAPIDE — Espagne ── */}
+      {dest.slug === "visa-espagne-kinshasa" && (
+        <section
+          className="border-b border-blue-100 bg-blue-50/70 px-4 py-10 sm:px-6"
+          aria-labelledby="spain-appointment-summary"
+          data-testid="section-spain-appointment-summary"
+        >
+          <div className="mx-auto max-w-6xl">
+            <div className="max-w-3xl">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-blue-700">
+                Réponse rapide
+              </p>
+              <h2 id="spain-appointment-summary" className="mb-3 text-2xl font-bold text-primary sm:text-3xl">
+                Comment prendre un rendez-vous visa Espagne à Kinshasa ?
+              </h2>
+              <p className="mb-6 text-sm leading-relaxed text-slate-700 sm:text-base">
+                La procédure officielle se déroule en trois temps : inscription personnelle par email,
+                réception des identifiants de l’ambassade, puis recherche et confirmation d’un créneau sur
+                <strong> citaconsular.es</strong>. Joventy peut accompagner la préparation et le suivi, mais
+                l’ambassade reste responsable du rendez-vous et de la décision de visa.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {[
+                {
+                  number: "1",
+                  title: "S’inscrire par email",
+                  description: "Chaque demandeur envoie son inscription personnelle à l’ambassade avec les pièces demandées.",
+                },
+                {
+                  number: "2",
+                  title: "Recevoir les accès",
+                  description: "L’ambassade transmet les identifiants nécessaires pour accéder au portail officiel.",
+                },
+                {
+                  number: "3",
+                  title: "Confirmer le créneau",
+                  description: "Le rendez-vous est recherché et confirmé sur citaconsular.es selon les disponibilités.",
+                },
+              ].map((step) => (
+                <div
+                  key={step.number}
+                  className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"
+                  data-testid={`card-spain-appointment-step-${step.number}`}
+                >
+                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                    {step.number}
+                  </div>
+                  <h3 className="mb-1 font-bold text-primary">{step.title}</h3>
+                  <p className="text-sm leading-relaxed text-slate-600">{step.description}</p>
+                </div>
+              ))}
+            </div>
+            <nav className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold" aria-label="Guides Espagne">
+              <Link
+                href="/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026"
+                className="text-primary hover:text-secondary hover:underline"
+                data-testid="link-spain-procedure-guide"
+              >
+                Lire la procédure officielle du rendez-vous →
+              </Link>
+              <Link
+                href="/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026"
+                className="text-primary hover:text-secondary hover:underline"
+                data-testid="link-spain-delay-guide"
+              >
+                Vérifier les délais et planifier le voyage →
+              </Link>
+              <Link
+                href="/creneaux-visa-espagne-kinshasa"
+                className="text-primary hover:text-secondary hover:underline"
+                data-testid="link-spain-slot-service"
+              >
+                Voir le service de suivi des créneaux →
+              </Link>
+            </nav>
+          </div>
+        </section>
+      )}
+
       {/* ── POURQUOI 100% EN LIGNE ── */}
       <Why100PercentOnline />
 

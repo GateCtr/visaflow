@@ -129,6 +129,60 @@ export default function GuidePage() {
           </p>
         </header>
 
+        {isSpainGuide && (
+          <nav
+            className="mb-10 rounded-2xl border border-blue-100 bg-blue-50/70 p-5"
+            aria-label="Ressources rendez-vous Espagne"
+            data-testid="nav-spain-guide-resources"
+          >
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-blue-700">
+              Parcours rendez-vous Espagne
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Link
+                href="/visa-espagne-kinshasa"
+                className="rounded-xl border border-blue-100 bg-white p-4 transition-colors hover:border-primary/30 hover:shadow-sm"
+                data-testid="link-spain-destination-top"
+              >
+                <span className="font-semibold text-slate-800">Page principale Espagne</span>
+                <span className="mt-1 block text-sm leading-relaxed text-slate-500">
+                  Voir les types de visa, les pièces et les options d’accompagnement.
+                </span>
+              </Link>
+              <Link
+                href={
+                  guide.slug === "visa-espagne-kinshasa-rendez-vous-ambassade-2026"
+                    ? "/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026"
+                    : "/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026"
+                }
+                className="rounded-xl border border-blue-100 bg-white p-4 transition-colors hover:border-primary/30 hover:shadow-sm"
+                data-testid="link-spain-companion-guide-top"
+              >
+                <span className="font-semibold text-slate-800">
+                  {guide.slug === "visa-espagne-kinshasa-rendez-vous-ambassade-2026"
+                    ? "Calculer le délai du rendez-vous"
+                    : "Lire la procédure du rendez-vous"}
+                </span>
+                <span className="mt-1 block text-sm leading-relaxed text-slate-500">
+                  {guide.slug === "visa-espagne-kinshasa-rendez-vous-ambassade-2026"
+                    ? "Additionner inscription, attente, rendez-vous et instruction."
+                    : "Suivre l’inscription par email et la réservation sur citaconsular.es."}
+                </span>
+              </Link>
+              <Link
+                href="/creneaux-visa-espagne-kinshasa"
+                className="rounded-xl border border-blue-100 bg-white p-4 transition-colors hover:border-primary/30 hover:shadow-sm"
+                data-testid="link-spain-slot-service-top"
+              >
+                <span className="font-semibold text-slate-800">Suivi des créneaux</span>
+                <span className="mt-1 block text-sm leading-relaxed text-slate-500">
+                  Voir l’option de suivi après inscription personnelle et réception des accès.
+                </span>
+              </Link>
+            </div>
+          </nav>
+        )}
+
         {/* Sections */}
         <div className="space-y-10">
           {guide.sections.map((section, i) => (
