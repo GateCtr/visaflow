@@ -413,7 +413,7 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     expect(workers.every((entry) => entry.canAttempt)).toBe(true);
   });
 
-  it("un gagnant et plusieurs signin/ 0B font passer les perdants au candidat suivant", () => {
+  it("un signin/ 0B invalide la session et déclenche un nouveau scan", () => {
     const outcomes = [
       { status: "booked" as const, errorMessage: undefined },
       { status: "signin_failed" as const, errorMessage: "signin/ → 0B" },
@@ -421,7 +421,7 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     ];
 
     expect(outcomes.map((outcome) =>
-      worker.shouldFallbackAfterSignin(outcome.status, outcome.errorMessage),
+      worker.shouldRefreshAfterSignin(outcome.status, outcome.errorMessage),
     )).toEqual([false, true, true]);
   });
 
@@ -470,7 +470,22 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     )).toBe(false);
   });
 
-  it("préserve un échec HTTP transitoire comme surcharge, pas comme 0B", () => {
+  it("reclasse une réponse signin vide comme session à recycler", () => {
+    expect(worker.shouldRefreshAfterSignin(
+      "signin_failed",
+      "signin/ → réponse vide",
+    )).toBe(true);
+    expect(worker.shouldRefreshAfterSignin(
+      "signin_failed",
+      "signin/ sans bktoken",
+    )).toBe(true);
+    expect(worker.shouldRefreshAfterSignin(
+      "signin_failed",
+      "Identifiants incorrects",
+    )).toBe(false);
+  });
+
+  it("préserve un échec HTTP transitoire comme fallback, pas comme session consommée", () => {
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",
       "signin/ → HTTP transitoire non résolue après retries",
@@ -478,6 +493,10 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     expect(worker.shouldFallbackAfterSignin(
       "signin_failed",
       "signin/ → réponse vide",
+    )).toBe(false);
+    expect(worker.shouldRefreshAfterSignin(
+      "signin_failed",
+      "signin/ → HTTP transitoire non résolue après retries",
     )).toBe(false);
   });
 });

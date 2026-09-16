@@ -399,8 +399,26 @@ export function shouldCoordinateBeforeBooking(raceMode: boolean): boolean {
 }
 
 /**
- * Un signin/ sans réponse après un getsigninfields/ valide est une race perdue
- * (ou une surcharge ponctuelle) : le worker doit tenter le candidat suivant.
+ * Une réponse vide ou sans bktToken après un getsigninfields/ valide invalide
+ * la session de booking courante. Même si HTTP répond 200, le serveur a déjà
+ * traité signin/ avec ce PHPSESSID : ne pas poursuivre avec les autres slots
+ * du même snapshot. Le worker doit refaire un cycle complet et rescanner.
+ */
+export function shouldRefreshAfterSignin(
+  status: SpainBookingResult["status"],
+  errorMessage?: string,
+): boolean {
+  if (status !== "signin_failed") return false;
+  const message = (errorMessage ?? "").toLowerCase();
+  return message.includes("0b")
+    || message.includes("réponse vide")
+    || message.includes("sans bktoken");
+}
+
+/**
+ * Une erreur HTTP transitoire qui n'a pas produit une réponse Bookitit exploitable
+ * reste un fallback local : elle ne prouve pas que le PHPSESSID a été armé puis
+ * consommé par le serveur.
  */
 export function shouldFallbackAfterSignin(
   status: SpainBookingResult["status"],
@@ -408,8 +426,7 @@ export function shouldFallbackAfterSignin(
 ): boolean {
   const message = (errorMessage ?? "").toLowerCase();
   return status === "signin_failed" && (
-    message.includes("0b")
-    || message.includes("http transitoire")
+    message.includes("http transitoire")
     || message.includes("refresh hcaptcha")
   );
 }
@@ -2038,7 +2055,7 @@ export async function runDossierWorker(
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
-    let refreshReason: "slot_taken" | "summary_failed" | null = null;
+    let refreshReason: "slot_taken" | "summary_failed" | "signin_failed" | null = null;
 
     // ── spain-synchronized-scan (task 10.1) : phase + tick effectif de la grille ──
     // La phase (preflight/hunt/late) dérive de l'horloge murale Europe/Madrid ; le tick
@@ -3065,7 +3082,32 @@ export async function runDossierWorker(
               break; // → refreshSessionAndScan() complet, puis nouveau tri
             }
 
-            // ── Échec signin/ → fallback sans confondre vide, réseau et surcharge ──
+            // ── signin/ vide/sans token → nouveau cycle/session ──────────────────
+            // Même avec HTTP 200, Bookitit a déjà répondu à la tentative sur ce
+            // PHPSESSID. Ne pas consommer les autres candidats avec un snapshot
+            // potentiellement obsolète : le nouveau cycle recrée PHPSESSID, relit
+            // service/agenda/datetime et recalcule les créneaux restants.
+            const signinSessionInvalid = shouldRefreshAfterSignin(
+              bookResult.status,
+              bookResult.errorMessage,
+            );
+            if (signinSessionInvalid) {
+              log("INFO", `${tag} 🔄 ${bookResult.errorMessage} — session booking consommée, abandon du snapshot et refresh + scan avec nouveau PHPSESSID`);
+              reportBookingLog({
+                applicationId: config.applicationId,
+                dossierId: config.id,
+                applicantName: config.applicantName,
+                date: slot.date,
+                time: slot.time,
+                status: "failed",
+                reason: bookResult.errorMessage ?? "signin/ non exploitable",
+                serviceName: scan.serviceName,
+              }).catch(() => {});
+              refreshReason = "signin_failed";
+              break;
+            }
+
+            // ── Échec signin/ transitoire → fallback sans nouveau PHP ────────────
             const isSlotGoneOrOverload = shouldFallbackAfterSignin(
               bookResult.status,
               bookResult.errorMessage,
@@ -3160,7 +3202,9 @@ export async function runDossierWorker(
             "INFO",
             refreshReason === "summary_failed"
               ? `${tag} 🔄 Rescan immédiat après summary/ non confirmé — nouveaux service/agenda/datetime puis nouveau tri`
-              : `${tag} 🔄 Rescan immédiat après horaire pris — nouveaux service/agenda/datetime puis nouveau tri`,
+              : refreshReason === "signin_failed"
+                ? `${tag} 🔄 Rescan immédiat après signin/ vide — nouveau PHPSESSID, nouveaux service/agenda/datetime puis nouveau tri`
+                : `${tag} 🔄 Rescan immédiat après horaire pris — nouveaux service/agenda/datetime puis nouveau tri`,
           );
           continue;
         }
