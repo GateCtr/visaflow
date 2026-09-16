@@ -657,6 +657,16 @@ const CALL_DIRECT_RETRY_BASE_MS = 400;
 /** Plafond du backoff — évite d'exploser le temps de cycle pendant le pic. */
 const CALL_DIRECT_RETRY_MAX_MS = 1_500;
 
+/**
+ * Exceptions à la politique « rescan direct » :
+ * - signin/ garde ses retries car chaque retry résout un nouveau token hCaptcha ;
+ * - datetime/ garde ses retries ciblés, qui restent sur le même PHPSESSID.
+ *
+ * Les autres endpoints ne rejouent plus le même appel : leur échec remonte au
+ * worker, qui recrée une session PHP et relance un scan complet.
+ */
+const DIRECT_RETRY_ENDPOINTS = new Set(["signin/", "datetime/"]);
+
 /** Backoff plafonné : 400, 800, 1200, 1500, 1500… (pas d'explosion exponentielle). */
 function retryBackoffMs(attempt: number): number {
   return Math.min(CALL_DIRECT_RETRY_BASE_MS * (attempt + 1) + attempt * 200, CALL_DIRECT_RETRY_MAX_MS);
@@ -693,7 +703,7 @@ export async function callDirect(
   const prefix = tag ? `[bookitit-direct] ${tag}` : "[bookitit-direct]";
   const timeoutMs = timeoutForEndpoint(endpoint);
   const maxRetries = options?.maxRetries === undefined
-    ? CALL_DIRECT_MAX_RETRIES
+    ? (DIRECT_RETRY_ENDPOINTS.has(endpoint) ? CALL_DIRECT_MAX_RETRIES : 0)
     : Math.max(0, Math.round(options.maxRetries));
   let requestExtra = extra ? { ...extra } : {};
 

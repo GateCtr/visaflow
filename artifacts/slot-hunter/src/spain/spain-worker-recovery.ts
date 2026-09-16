@@ -204,7 +204,9 @@ async function attemptRecovery(
     }
 
     case "session_dead": {
-      // datetime 0B tous mois → nouveau PHPSESSID, garder IP + CF (Requirement 10.6).
+      // datetime 0B tous mois → rescan direct complet sur la même IP.
+      // initWorkerSession recrée le jar et le PHPSESSID au lieu de rejouer
+      // getservices/getagendas sur l'identité morte.
       if (rt.session === undefined) {
         // Sans session CF, impossible de régénérer le PHPSESSID : escalade CF re-solve.
         console.warn(
@@ -216,10 +218,16 @@ async function attemptRecovery(
       }
       let phpState: WorkerPhpState | null;
       try {
+        const result = await initWorkerSession(rt.proxyUrl, deps.portalUrl, deps.capsolverKey);
+        if (result === null || !result.session.cfClearance) {
+          console.error(`[spain-recovery] ${deps.tag} session_dead: rescan sessionnel échoué`);
+          return "retry";
+        }
+        rt.session = result.session;
         phpState = await initPhpState(rt.session, deps.config, deps.tag);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`[spain-recovery] ${deps.tag} session_dead: erreur initPhpState: ${message}`);
+        console.error(`[spain-recovery] ${deps.tag} session_dead: erreur rescan direct: ${message}`);
         return "retry";
       }
       if (phpState === null) {

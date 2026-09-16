@@ -232,6 +232,11 @@ export interface SolveResult {
   durationMs: number;
 }
 
+/** Cause d'échec de l'initialisation, utilisée pour choisir rescan ou rotation IP. */
+export type WorkerSessionFailureKind = "proxy" | "captcha" | "portal";
+
+export type WorkerSessionFailureObserver = (kind: WorkerSessionFailureKind) => void;
+
 // ─── SOAX Sticky URL Builder ────────────────────────────────────────────────
 
 const _spainSoaxRotationCount = new Map<string, number>();
@@ -1735,7 +1740,16 @@ export async function initWorkerSession(
   targetUrl: string,
   capsolverApiKey: string,
   onSetCookie?: SetCookieObserver,
+  onFailure?: WorkerSessionFailureObserver,
 ): Promise<{ session: SpainCfSession; impit: InstanceType<typeof Impit>; cfFromCache: boolean } | null> {
+  const fail = (kind: WorkerSessionFailureKind): null => {
+    onFailure?.(kind);
+    return null;
+  };
+  const isProxyFailure = (error: unknown): boolean =>
+    /ProxyTunnelError|CONNECT|tunnel|proxy.*502|502.*proxy/i.test(
+      error instanceof Error ? error.message : String(error),
+    );
 
   /** Helpers locaux identiques au bloc capsolver-residential */
   const captureSetCookies = (
@@ -1772,47 +1786,21 @@ export async function initWorkerSession(
   const jar: Record<string, string> = {};
 
   /**
-   * fetch avec retry sur 502/503/504 ET erreur réseau (corrupt message, TLS, timeout).
-   * Pendant le pic de publication, le serveur crache des 504 et des "corrupt message"
-   * pendant plusieurs secondes sur GET widget / POST token / GET /main/. Sans retry,
-   * l'init échoue → blacklist IP + rotation (gaspille temps et IPs pendant la fenêtre).
-   * Avec retry, on traverse la surcharge sur la MÊME IP (dont le CF est déjà résolu).
-   * Configurable via SPAIN_INIT_MAX_RETRIES (défaut 4 = 5 tentatives), backoff plafonné.
+   * Effectue UN appel d'initialisation.
+   *
+   * Les retries du même GET/POST sont remplacés par un rescan complet :
+   * une réponse transitoire ou tronquée invalide le snapshot courant et le
+   * worker recrée un PHPSESSID. La résolution captcha et la rotation IP
+   * conservent leurs propres politiques.
    */
-  const INIT_MAX_RETRIES = Math.max(1, Number(process.env.SPAIN_INIT_MAX_RETRIES ?? "2") || 2);
-  const INIT_OVERLOAD_CODES = new Set([502, 503, 504]);
-  const fetchInitRetry = async (
+  const fetchInitOnce = async (
     url: string,
     options: Record<string, unknown>,
     label: string,
   ): Promise<{ res: Response; body: string } | null> => {
-    for (let attempt = 0; attempt <= INIT_MAX_RETRIES; attempt++) {
-      try {
-        const res = await (impit.fetch(url, options as any) as unknown as Promise<Response>);
-        const body = await res.text();
-        // 502/503/504 = surcharge serveur → retry si tentatives restantes
-        if (INIT_OVERLOAD_CODES.has(res.status) && attempt < INIT_MAX_RETRIES) {
-          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
-          console.warn(`[spain-soax] 🔧   ⏳ ${label} → HTTP ${res.status} (surcharge) — retry ${attempt + 1}/${INIT_MAX_RETRIES} dans ${backoff}ms`);
-          await new Promise((r) => setTimeout(r, backoff));
-          continue;
-        }
-        return { res, body };
-      } catch (e) {
-        // Erreur réseau (corrupt message, TLS, timeout) → retry si tentatives restantes.
-        // Ne PAS retry les ProxyTunnelError (CONNECT cassé = proxy mort) — laisser remonter.
-        const msg = e instanceof Error ? e.message : String(e);
-        const isProxyDead = /ProxyTunnelError|CONNECT|tunnel/i.test(msg);
-        if (!isProxyDead && attempt < INIT_MAX_RETRIES) {
-          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
-          console.warn(`[spain-soax] 🔧   ⏳ ${label} → erreur réseau (${msg.slice(0, 60)}) — retry ${attempt + 1}/${INIT_MAX_RETRIES} dans ${backoff}ms`);
-          await new Promise((r) => setTimeout(r, backoff));
-          continue;
-        }
-        throw e; // proxy mort ou retries épuisés → laisser le catch appelant gérer
-      }
-    }
-    return null;
+    const res = await (impit.fetch(url, options as any) as unknown as Promise<Response>);
+    const body = await res.text();
+    return { res, body };
   };
 
   // ── Étape 1 : Probe GET widget (UA + Accept seulement — identique à l'ancien système) ──
@@ -1832,7 +1820,7 @@ export async function initWorkerSession(
     }
   } catch (e) {
     console.warn(`[spain-soax] 🔧   ❌ Probe échoué: ${e}`);
-    return null;
+    return fail(isProxyFailure(e) ? "proxy" : "portal");
   }
 
   // ── Étape 2 : CapSolver si CF challenge — cache Redis par proxy d'abord ────────
@@ -1850,7 +1838,7 @@ export async function initWorkerSession(
       const capResult = await solveSpainCloudflare(targetUrl, capsolverApiKey, stickyProxyUrl, challengeHtml, WORKER_UA);
       if (!capResult.success || !capResult.session?.cfClearance) {
         console.warn(`[spain-soax] 🔧   ❌ CapSolver échoué: ${capResult.error}`);
-        return null;
+        return fail("captcha");
       }
       jar.cf_clearance = capResult.session.cfClearance;
       // Sauvegarder dans Redis pour les prochains lancements du même worker (TTL 1h55)
@@ -1868,7 +1856,7 @@ export async function initWorkerSession(
   let token: string | undefined;
 
   const attemptGetToken = async (): Promise<{ token: string | undefined; status: number; bytes: number }> => {
-    const r = await fetchInitRetry(targetUrl, {
+    const r = await fetchInitOnce(targetUrl, {
       headers: { "User-Agent": WORKER_UA, "Cookie": buildCookieStr(jar) },
     }, "GET widget (token)");
     if (!r) return { token: undefined, status: 0, bytes: 0 };
@@ -1893,7 +1881,7 @@ export async function initWorkerSession(
       const capResult = await solveSpainCloudflare(targetUrl, capsolverApiKey, stickyProxyUrl, challengeHtml, WORKER_UA);
       if (!capResult.success || !capResult.session?.cfClearance) {
         console.warn(`[spain-soax] 🔧   ❌ Re-solve CapSolver échoué: ${capResult.error}`);
-        return null;
+        return fail("captcha");
       }
       jar.cf_clearance = capResult.session.cfClearance;
       const cfExpiresAt = Date.now() + (115 * 60_000);
@@ -1905,17 +1893,17 @@ export async function initWorkerSession(
       token = retry.token;
       if (!token) {
         console.warn(`[spain-soax] 🔧   ❌ Token absent après re-solve (HTTP ${retry.status}, ${retry.bytes}B)`);
-        return null;
+        return fail("portal");
       }
     } else if (!token) {
       console.warn(`[spain-soax] 🔧   ❌ Token absent (HTTP ${first.status}, ${first.bytes}B)`);
-      return null;
+      return fail("portal");
     }
 
     console.log(`[spain-soax] 🔧   ✅ Token: ${token.slice(0, 15)}… | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
   } catch (e) {
     console.warn(`[spain-soax] 🔧   ❌ GET portail (token) échoué: ${e}`);
-    return null;
+    return fail(isProxyFailure(e) ? "proxy" : "portal");
   }
 
   // ── Étape 4 : POST token → srvsrc + version ──────────────────────────────────
@@ -1923,7 +1911,7 @@ export async function initWorkerSession(
   let srvsrc = baseHost;
   let version = "4";
   try {
-    const rp = await fetchInitRetry(targetUrl, {
+    const rp = await fetchInitOnce(targetUrl, {
       method: "POST",
       headers: {
         "User-Agent": WORKER_UA,
@@ -1935,8 +1923,8 @@ export async function initWorkerSession(
       body: `token=${encodeURIComponent(token)}`,
     }, "POST token");
     if (!rp) {
-      console.warn(`[spain-soax] 🔧   ❌ POST token → null après retries`);
-      return null;
+      console.warn(`[spain-soax] 🔧   ❌ POST token → aucun résultat`);
+      return fail("portal");
     }
     const bodyPost = rp.body;
     Object.assign(jar, extractCookies(rp.res.headers as any, "post-token"));
@@ -1945,7 +1933,7 @@ export async function initWorkerSession(
     console.log(`[spain-soax] 🔧   ✅ POST token → HTTP ${rp.res.status} | srvsrc=${srvsrc} | v=${version} | PHPSESSID: ${jar.PHPSESSID ? "✅" : "❌"}`);
   } catch (e) {
     console.warn(`[spain-soax] 🔧   ❌ POST token échoué: ${e}`);
-    return null;
+    return fail(isProxyFailure(e) ? "proxy" : "portal");
   }
 
   // ── Étape 5 : GET /main/ → validation session ─────────────────────────────────
@@ -1969,44 +1957,34 @@ export async function initWorkerSession(
 
   let prefetchedMainHtml = "";
   try {
-    // Retry /main/ sur 504/erreur réseau ET sur réponse tronquée.
-    // Un /main/ complet fait ~120-128kB. Une réponse de 0-50kB (ex. 6kB sous charge) est
-    // une page TRONQUÉE = widget PHP à moitié initialisé → getservices/ échoue derrière.
-    // Seuil 1000B trop bas → on exige MAIN_MIN_BYTES (50kB) pour valider la session.
+    // Un /main/ complet fait ~120-128kB. Une réponse sous le seuil est une page
+    // tronquée : le snapshot courant est abandonné et le worker lance un rescan.
     const MAIN_MIN_BYTES = Math.max(1000, Number(process.env.SPAIN_MAIN_MIN_BYTES ?? "50000") || 50000);
-    let mainOk = false;
-    for (let attempt = 0; attempt <= INIT_MAX_RETRIES; attempt++) {
-      const rm = await fetchInitRetry(makeUrl("main/"), {
-        headers: {
-          "User-Agent": WORKER_UA,
-          "Accept": "text/javascript, application/javascript, */*; q=0.01",
-          "X-Requested-With": "XMLHttpRequest",
-          "Sec-Fetch-Site": "same-origin",
-          "Sec-Fetch-Mode": "cors",
-          "Sec-Fetch-Dest": "empty",
-          "Referer": targetUrl,
-          "Cookie": buildCookieStr(jar),
-        },
-      }, "GET /main/");
-      if (!rm) break;
-      captureSetCookies("main", rm.res.headers as any);
-      prefetchedMainHtml = rm.body;
-      if (prefetchedMainHtml.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
-      // Réponse tronquée (0B ou 6kB = surcharge PHP) → retry
-      if (attempt < INIT_MAX_RETRIES) {
-        const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
-        console.warn(`[spain-soax] 🔧   ⏳ /main/ tronqué: ${Math.round(prefetchedMainHtml.length / 1024)}kB (surcharge PHP) — retry ${attempt + 1}/${INIT_MAX_RETRIES} dans ${backoff}ms`);
-        await new Promise((r) => setTimeout(r, backoff));
-      }
+    const rm = await fetchInitOnce(makeUrl("main/"), {
+      headers: {
+        "User-Agent": WORKER_UA,
+        "Accept": "text/javascript, application/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "Referer": targetUrl,
+        "Cookie": buildCookieStr(jar),
+      },
+    }, "GET /main/");
+    if (!rm) {
+      return fail("portal");
     }
-    if (!mainOk) {
-      console.warn(`[spain-soax] 🔧   ❌ /main/ tronqué après retries: ${Math.round(prefetchedMainHtml.length / 1024)}kB`);
-      return null;
+    captureSetCookies("main", rm.res.headers as any);
+    prefetchedMainHtml = rm.body;
+    if (prefetchedMainHtml.length < MAIN_MIN_BYTES) {
+      console.warn(`[spain-soax] 🔧   ❌ /main/ tronqué: ${Math.round(prefetchedMainHtml.length / 1024)}kB → rescan complet`);
+      return fail("portal");
     }
     console.log(`[spain-soax] 🔧   ✅ /main/ → ${prefetchedMainHtml.length}B — session prête!`);
   } catch (e) {
     console.warn(`[spain-soax] 🔧   ❌ /main/ échoué: ${e}`);
-    return null;
+    return fail(isProxyFailure(e) ? "proxy" : "portal");
   }
 
   // ── Build SpainCfSession ──────────────────────────────────────────────────────

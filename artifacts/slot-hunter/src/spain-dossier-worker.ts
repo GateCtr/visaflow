@@ -26,6 +26,7 @@ import {
   initWorkerSession,
   spainCfFetch,
   type SpainCfSession,
+  type WorkerSessionFailureKind,
 } from "./spain-soax-solver.js";
 import {
   buildDynamicSession,
@@ -1387,43 +1388,17 @@ export async function refreshSessionAndScan(
   const buildCookieStr = (jar: Record<string, string>): string =>
     Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
 
-  // fetch avec retry sur 502/503/504 ET erreur réseau (corrupt message, TLS, timeout).
-  // Sous charge, le GET widget / POST token / GET /main/ tombent en 504 ou "corrupt
-  // message" pendant plusieurs secondes. Sans retry, le cycle sort en proxy_error →
-  // rotation IP inutile (l'IP est bonne, c'est la surcharge serveur). Avec retry, on
-  // traverse la surcharge sur la même IP (CF déjà résolu). ProxyTunnelError = proxy mort
-  // → on ne retry pas, on laisse remonter pour déclencher la vraie rotation.
-  const RS_MAX_RETRIES = Math.max(1, Number(process.env.SPAIN_INIT_MAX_RETRIES ?? "2") || 2);
+  // Un échec de GET widget / POST token / GET /main/ invalide le snapshot :
+  // aucun retry du même appel, le résultat remonte pour un rescan rapide avec
+  // un nouveau PHPSESSID. Les erreurs CONNECT restent des proxy_error et
+  // déclenchent la politique de rotation IP.
   const RS_OVERLOAD = new Set([502, 503, 504]);
   const fetchRetry = async (
     url: string, options: Record<string, unknown>, label: string,
   ): Promise<{ res: Response; body: string }> => {
-    let lastErr: unknown = null;
-    for (let attempt = 0; attempt <= RS_MAX_RETRIES; attempt++) {
-      try {
-        const res = await (impit.fetch(url, options as any) as unknown as Promise<Response>);
-        const body = await res.text();
-        if (RS_OVERLOAD.has(res.status) && attempt < RS_MAX_RETRIES) {
-          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
-          log("WARN", `${tag} ⏳ ${label} → HTTP ${res.status} (surcharge) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
-          await new Promise((r) => setTimeout(r, backoff));
-          continue;
-        }
-        return { res, body };
-      } catch (e) {
-        lastErr = e;
-        const msg = e instanceof Error ? e.message : String(e);
-        const isProxyDead = /ProxyTunnelError|CONNECT|tunnel/i.test(msg);
-        if (!isProxyDead && attempt < RS_MAX_RETRIES) {
-          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
-          log("WARN", `${tag} ⏳ ${label} → erreur réseau (${msg.slice(0, 50)}) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
-          await new Promise((r) => setTimeout(r, backoff));
-          continue;
-        }
-        throw e;
-      }
-    }
-    throw lastErr ?? new Error(`${label}: retries épuisés`);
+    const res = await (impit.fetch(url, options as any) as unknown as Promise<Response>);
+    const body = await res.text();
+    return { res, body };
   };
 
   // Cookie jar : cf_clearance + cookies existants (sauf PHPSESSID qu'on veut frais)
@@ -1450,11 +1425,21 @@ export async function refreshSessionAndScan(
     token = body.match(/name="token"\s+value="([^"]+)"/i)?.[1] ?? "";
     if (!token) {
       if (RS_OVERLOAD.has(r.status)) {
-        log("WARN", `${tag} ① GET widget → HTTP ${r.status} après retries → server_overload (même identité)`);
-        return { status: "server_overload", errorMessage: `GET widget HTTP ${r.status}`, monthTraces: [] };
+        log("WARN", `${tag} ① GET widget → HTTP ${r.status} → rescan direct avec nouveau PHPSESSID`);
+        return {
+          status: "server_overload",
+          errorMessage: `GET widget HTTP ${r.status}`,
+          rescanImmediately: true,
+          monthTraces: [],
+        };
       }
-      log("WARN", `${tag} ① GET widget → token absent (HTTP ${r.status}, ${body.length}B) → proxy_error`);
-      return { status: "proxy_error", errorMessage: `Token absent (HTTP ${r.status}, ${body.length}B)`, monthTraces: [] };
+      log("WARN", `${tag} ① GET widget → token absent (HTTP ${r.status}, ${body.length}B) → rescan direct`);
+      return {
+        status: "server_overload",
+        errorMessage: `Token absent (HTTP ${r.status}, ${body.length}B)`,
+        rescanImmediately: true,
+        monthTraces: [],
+      };
     }
     log("INFO", `${tag} ① token ✅`);
   } catch (e) {
@@ -1485,11 +1470,21 @@ export async function refreshSessionAndScan(
     version = body.match(/loadermaec\.js\?v=(\d+)/)?.[1] ?? "4";
     if (!jar.PHPSESSID) {
       if (RS_OVERLOAD.has(r.status)) {
-        log("WARN", `${tag} ② POST token → HTTP ${r.status} après retries → server_overload (même identité)`);
-        return { status: "server_overload", errorMessage: `POST token HTTP ${r.status}`, monthTraces: [] };
+          log("WARN", `${tag} ② POST token → HTTP ${r.status} → rescan direct avec nouveau PHPSESSID`);
+          return {
+            status: "server_overload",
+            errorMessage: `POST token HTTP ${r.status}`,
+            rescanImmediately: true,
+            monthTraces: [],
+          };
       }
-      log("WARN", `${tag} ② POST → PHPSESSID absent → proxy_error`);
-      return { status: "proxy_error", errorMessage: "PHPSESSID absent après POST", monthTraces: [] };
+        log("WARN", `${tag} ② POST → PHPSESSID absent → rescan direct`);
+        return {
+          status: "server_overload",
+          errorMessage: "PHPSESSID absent après POST",
+          rescanImmediately: true,
+          monthTraces: [],
+        };
     }
     log("INFO", `${tag} ② PHPSESSID=${jar.PHPSESSID.slice(0, 8)}…`);
   } catch (e) {
@@ -1521,11 +1516,9 @@ export async function refreshSessionAndScan(
     return { status: "error", errorMessage: "buildDynamicSession échoué", monthTraces: [] };
   }
 
-  // 3. GET /main/ — avec retry sur 504/erreur réseau ET réponse tronquée.
-  // IMPORTANT : un /main/ complet fait ~120-128kB. Une réponse de 0-50kB (ex. 6kB
-  // observé sous charge) est une page TRONQUÉE = widget PHP à moitié initialisé →
-  // getservices/ échoue derrière (0B). Le seuil 1000B était trop bas et laissait passer
-  // ces sessions cassées. On exige MAIN_MIN_BYTES (50kB) pour valider la session.
+  // 3. GET /main/ — un échec invalide le snapshot et déclenche un rescan direct.
+  // IMPORTANT : un /main/ complet fait ~120-128kB. Une réponse sous le seuil est
+  // une page tronquée et ne doit pas être rejouée avec le même PHPSESSID.
   const MAIN_MIN_BYTES = Math.max(1000, Number(process.env.SPAIN_MAIN_MIN_BYTES ?? "50000") || 50000);
   const mainUrl = makeDirectUrl(ds, "main/");
   const mainHeaders = makeDirectHeaders(ds);
@@ -1533,7 +1526,7 @@ export async function refreshSessionAndScan(
 
   // ── main // config EN PARALLÈLE (validé 6/6) ──────────────────────────────────
   // getwidgetconfigurations/ (config) ne dépend QUE du PHPSESSID (posé au POST token),
-  // pas de /main/. On lance donc main (avec sa boucle de retry troncature) ET config
+  // pas de /main/. On lance donc main ET config
   // ENSEMBLE. Le PHPSESSID ne se renouvelant jamais via Set-Cookie (prouvé), aucun risque
   // de race sur le jar partagé. Gain ~1s/cycle. On traite ensuite les résultats dans
   // l'ordre : main d'abord (échec main = session cassée → server_overload/proxy_error),
@@ -1543,33 +1536,19 @@ export async function refreshSessionAndScan(
     | { ok: false; status: "server_overload" | "proxy_error"; msg: string; rescanImmediately?: boolean };
   const runMain = async (): Promise<MainResult> => {
     try {
-      let mainBody = "";
-      let mainOk = false;
-      for (let attempt = 0; attempt <= RS_MAX_RETRIES; attempt++) {
-        const rm = await fetchRetry(mainUrl, { headers: mainHeaders }, "③ GET /main/");
-        mainBody = rm.body;
-        const newCookies = extractCookies(rm.res.headers as any);
-        Object.assign(ds.jar, newCookies);
-        if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
-        if (mainBody.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
-        if (shouldRescanAfterEmptyMain(mainBody.length, attempt)) {
-          log("WARN", `${tag} ⏳ ③ /main/ → 0kB dès la première tentative — session PHP abandonnée, rescan immédiat avec nouveau PHPSESSID`);
-          return {
-            ok: false,
-            status: "server_overload",
-            msg: "/main/ 0B dès la première tentative",
-            rescanImmediately: true,
-          };
-        }
-        if (attempt < RS_MAX_RETRIES) {
-          const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
-          log("WARN", `${tag} ⏳ ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué, surcharge PHP) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
-          await new Promise((r) => setTimeout(r, backoff));
-        }
-      }
-      if (!mainOk) {
-        log("WARN", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué après retries) → server_overload`);
-        return { ok: false, status: "server_overload", msg: `/main/ ${mainBody.length}B tronqué` };
+      const rm = await fetchRetry(mainUrl, { headers: mainHeaders }, "③ GET /main/");
+      const mainBody = rm.body;
+      const newCookies = extractCookies(rm.res.headers as any);
+      Object.assign(ds.jar, newCookies);
+      if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
+      if (mainBody.length < MAIN_MIN_BYTES) {
+        log("WARN", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB tronqué → rescan direct avec nouveau PHPSESSID`);
+        return {
+          ok: false,
+          status: "server_overload",
+          msg: `/main/ ${mainBody.length}B tronqué`,
+          rescanImmediately: true,
+        };
       }
       log("INFO", `${tag} ③ /main/ → ${Math.round(mainBody.length / 1024)}kB ✅`);
       return { ok: true, html: mainBody };
@@ -1598,8 +1577,13 @@ export async function refreshSessionAndScan(
 
   // 4. getwidgetconfigurations/ (résultat du Promise.all)
   if (cfgPayload === CALL_DIRECT_HTTP_OVERLOAD) {
-    log("WARN", `${tag} ④ getwidgetconfigurations/ → surcharge HTTP → server_overload`);
-    return { status: "server_overload", errorMessage: "getwidgetconfigurations/ HTTP overload", monthTraces: [] };
+    log("WARN", `${tag} ④ getwidgetconfigurations/ → surcharge HTTP → rescan direct`);
+    return {
+      status: "server_overload",
+      errorMessage: "getwidgetconfigurations/ HTTP overload",
+      rescanImmediately: true,
+      monthTraces: [],
+    };
   }
   if (cfgPayload === CALL_DIRECT_NETWORK_ERROR) {
     log("WARN", `${tag} ④ getwidgetconfigurations/ → erreur réseau`);
@@ -1659,8 +1643,13 @@ export async function refreshSessionAndScan(
 
   // getservices/ : toujours rendu → 0 services / sentinel = proxy mort ou surcharge.
   if (svcPayload === CALL_DIRECT_HTTP_OVERLOAD) {
-    log("WARN", `${tag} ⑤ getservices/ → surcharge HTTP → server_overload`);
-    return { status: "server_overload", errorMessage: "getservices/ HTTP overload", monthTraces: [] };
+    log("WARN", `${tag} ⑤ getservices/ → surcharge HTTP → rescan direct`);
+    return {
+      status: "server_overload",
+      errorMessage: "getservices/ HTTP overload",
+      rescanImmediately: true,
+      monthTraces: [],
+    };
   }
   if (svcPayload === CALL_DIRECT_NETWORK_ERROR) {
     log("WARN", `${tag} ⑤ getservices/ → erreur réseau`);
@@ -1700,8 +1689,13 @@ export async function refreshSessionAndScan(
 
   // getagendas/ : sentinels = surcharge/réseau (jamais une absence de créneau).
   if (agPayload === CALL_DIRECT_HTTP_OVERLOAD) {
-    log("WARN", `${tag} ⑥ getagendas/ → surcharge HTTP → server_overload`);
-    return { status: "server_overload", errorMessage: "getagendas/ HTTP overload", monthTraces: [] };
+    log("WARN", `${tag} ⑥ getagendas/ → surcharge HTTP → rescan direct`);
+    return {
+      status: "server_overload",
+      errorMessage: "getagendas/ HTTP overload",
+      rescanImmediately: true,
+      monthTraces: [],
+    };
   }
   if (agPayload === CALL_DIRECT_NETWORK_ERROR) {
     log("WARN", `${tag} ⑥ getagendas/ → erreur réseau`);
@@ -1746,6 +1740,74 @@ export async function refreshSessionAndScan(
     ds,
   };
   return scanDatetimeDirect(phpState, config, tag);
+}
+
+// ─── Session init avec rescan direct ──────────────────────────────────────────
+
+/**
+ * Rejoue l'initialisation complète sur la même IP quand le portail échoue.
+ *
+ * Ce n'est pas un retry du GET/POST qui vient d'échouer : chaque passage crée
+ * un nouvel impit, un nouveau jar et un nouveau PHPSESSID. Les erreurs proxy
+ * et captcha sortent immédiatement afin de laisser leur politique prendre la main.
+ */
+const DIRECT_SESSION_RESCAN_MAX = Math.max(
+  1,
+  Math.min(3, Number(process.env.SPAIN_SESSION_RESCAN_MAX ?? "2") || 2),
+);
+
+async function initWorkerSessionWithDirectRescan(
+  stickyProxyUrl: string,
+  targetUrl: string,
+  capsolverKey: string,
+  tag: string,
+): Promise<Awaited<ReturnType<typeof initWorkerSession>>> {
+  for (let attempt = 1; attempt <= DIRECT_SESSION_RESCAN_MAX; attempt++) {
+    let failureKind: WorkerSessionFailureKind = "portal";
+    const result = await initWorkerSession(
+      stickyProxyUrl,
+      targetUrl,
+      capsolverKey,
+      undefined,
+      (kind) => { failureKind = kind; },
+    );
+    if (result) return result;
+
+    if (failureKind !== "portal") {
+      log(
+        "WARN",
+        `${tag} ❌ init session → ${failureKind === "proxy" ? "proxy/IP" : "captcha"} — ` +
+        "pas de rescan sur la même identité",
+      );
+      return null;
+    }
+
+    if (attempt < DIRECT_SESSION_RESCAN_MAX) {
+      log(
+        "WARN",
+        `${tag} 🔄 init session portail échouée — rescan direct ` +
+        `${attempt + 1}/${DIRECT_SESSION_RESCAN_MAX} sur la même IP (nouveau PHPSESSID)`,
+      );
+    }
+  }
+  return null;
+}
+
+function replaceWorkerSessionInPlace(target: SpainCfSession, replacement: SpainCfSession): void {
+  target.cfClearance = replacement.cfClearance;
+  target.cfDomain = replacement.cfDomain;
+  target.soaxProxyUrl = replacement.soaxProxyUrl;
+  target.userAgent = replacement.userAgent;
+  target.createdAt = replacement.createdAt;
+  target.expiresAt = replacement.expiresAt;
+  target.allCookies = replacement.allCookies;
+  target.extraHeaders = replacement.extraHeaders;
+  target.source = replacement.source;
+  target.prefetchedMainHtml = replacement.prefetchedMainHtml;
+  target.phpSessionCreatedAt = replacement.phpSessionCreatedAt;
+  target.portalKey = replacement.portalKey;
+  target._ownImpit = replacement._ownImpit;
+  target.bookititState = replacement.bookititState;
 }
 
 // ─── Entrée publique ──────────────────────────────────────────────────────────
@@ -1876,7 +1938,12 @@ export async function runDossierWorker(
     log("INFO", `${tag} 🔐 Session init (tentative ${attempt + 1}/${MAX_SESSION_RETRIES})${cacheHint} — ${maskProxy(stickyProxy)} sid=${stickyId}`);
     solveT0 = Date.now(); // reset per attempt
 
-    const result = await initWorkerSession(stickyProxy, portalUrlNoFrag, capsolverKey);
+    const result = await initWorkerSessionWithDirectRescan(
+      stickyProxy,
+      portalUrlNoFrag,
+      capsolverKey,
+      tag,
+    );
 
     if (result) {
       session = result.session;
@@ -1956,9 +2023,30 @@ export async function runDossierWorker(
       initRetries++;
       const initFailure = getPhpInitFailure(session);
       if (initFailure === "server_overload") {
-        log("WARN", `${tag} ⚠️ initPhpState → surcharge HTTP — retry même proxy ${initRetries}/${MAX_INIT_ROTATIONS}`);
-        await sleep(Math.min(400 * initRetries, 1_000));
-        phpState = await initPhpState(session, config, tag);
+        log("WARN", `${tag} ⚠️ initPhpState → surcharge HTTP — rescan direct même IP ${initRetries}/${MAX_INIT_ROTATIONS}`);
+        const refreshed = await initWorkerSessionWithDirectRescan(
+          session.soaxProxyUrl,
+          config.portalUrl.split("#")[0],
+          capsolverKey,
+          tag,
+        );
+        if (refreshed) {
+          replaceWorkerSessionInPlace(session, refreshed.session);
+           const sameIpRefresh = await initWorkerSessionWithDirectRescan(
+             session.soaxProxyUrl,
+             config.portalUrl.split("#")[0],
+             capsolverKey,
+             tag,
+           );
+           if (sameIpRefresh) {
+             replaceWorkerSessionInPlace(session, sameIpRefresh.session);
+             phpState = await initPhpState(session, config, tag);
+           } else {
+             phpState = null;
+           }
+        } else {
+          phpState = null;
+        }
         continue;
       }
       log("WARN", `${tag} ⚠️ initPhpState échoué (getservices/ 0B ou erreur réseau) — rotation IP ${initRetries}/${MAX_INIT_ROTATIONS}`);
@@ -1968,7 +2056,7 @@ export async function runDossierWorker(
         break;
       }
       proxyUrl = newProxy;
-      phpState = await initPhpState(session, config, tag);
+         phpState = await initPhpState(session, config, tag);
     }
   }
   if (!phpState) {
@@ -2334,8 +2422,19 @@ export async function runDossierWorker(
         // même IP. Si cette réinit échoue aussi, l'IP/session est probablement
         // réellement dégradée : rotation complète avant d'abandonner le worker.
         rt.state = "RECOVERING"; // classify → session_dead (ensemble fermé) ; recovery inline
-        log("WARN", `${tag} 🔄 session_dead — réinit PHPSESSID (proxy conservé)`);
-        phpState = await initPhpState(session, config, tag);
+        log("WARN", `${tag} 🔄 session_dead — rescan direct (proxy conservé, nouveau PHPSESSID)`);
+        const sameIpRefresh = await initWorkerSessionWithDirectRescan(
+          session.soaxProxyUrl,
+          portalUrlNoFrag,
+          capsolverKey,
+          tag,
+        );
+        if (sameIpRefresh) {
+          replaceWorkerSessionInPlace(session, sameIpRefresh.session);
+          phpState = await initPhpState(session, config, tag);
+        } else {
+          phpState = null;
+        }
         if (!phpState) {
           log("WARN", `${tag} ❌ Réinit PHP échouée après session_dead — rotation IP immédiate`);
           const newProxy = await rotateWorkerIp(
@@ -3497,7 +3596,12 @@ async function rotateWorkerIp(
     stickyNewProxy = addStickySession(newProxy, stickyId);
     log("INFO", `${tag} 🔄 Nouvelle IP (${attempt}/${ROTATE_MAX_ATTEMPTS}) : ${maskProxy(stickyNewProxy)} (sid=${stickyId})`);
 
-    result = await initWorkerSession(stickyNewProxy, portalUrl, capsolverKey);
+    result = await initWorkerSessionWithDirectRescan(
+      stickyNewProxy,
+      portalUrl,
+      capsolverKey,
+      tag,
+    );
     if (result) break; // succès → sortie de boucle
 
     // Échec sur cette IP : blacklist + libère, exclut cette base et tente la suivante.

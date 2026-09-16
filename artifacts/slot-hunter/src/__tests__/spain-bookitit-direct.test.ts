@@ -129,6 +129,32 @@ describe("callDirect — propagation PHPSESSID", () => {
     );
   });
 
+  it("ne rejoue pas getservices/ après un HTTP 504", async () => {
+    let fetchCount = 0;
+    const ds = {
+      impit: {
+        fetch: async () => {
+          fetchCount += 1;
+          return new Response("<html>gateway timeout</html>", { status: 504 });
+        },
+      },
+      jar: { PHPSESSID: "session" },
+      userAgent: "Mozilla/5.0",
+      jqCallback: "jQuery123",
+      reqCounter: 1,
+      publickey: "publickey",
+      version: "4",
+      widgetUrl: "https://www.citaconsular.es/widget/",
+      srvsrc: "https://www.citaconsular.es",
+      bookititBase: "https://www.citaconsular.es/onlinebookings",
+    } as any as DynamicSession;
+
+    const result = await callDirect(ds, "getservices/");
+
+    expect(result).toBe(CALL_DIRECT_HTTP_OVERLOAD);
+    expect(fetchCount).toBe(1);
+  });
+
   it("rafraîchit les paramètres avant un retry HTTP 504", async () => {
     const seenUrls: string[] = [];
     const responses = [

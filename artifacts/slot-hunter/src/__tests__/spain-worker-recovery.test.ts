@@ -4,8 +4,8 @@
  * tâche 7.2).
  *
  * L'infra réseau/proxy est entièrement mockée via vitest (`vi.mock`) :
- *   - `initWorkerSession` (spain-soax-solver)      — re-solve CF d'une session
- *   - `initPhpState`      (spain-dossier-worker)    — régénère le PHPSESSID
+ *   - `initWorkerSession` (spain-soax-solver)      — rescan complet d'une session
+ *   - `initPhpState`      (spain-dossier-worker)    — initialise le PHPSESSID
  *   - `rotateDecodoUrl`   (spain-decodo-pool)       — sélection d'une IP distincte
  *   - `flagDecodoIp`      (spain-decodo-pool)       — blacklist d'une IP morte
  *
@@ -17,7 +17,7 @@
  *   - Property 8 : Swap réserve prioritaire sur re-solve — `proxy_dead` avec
  *     `size()>0` au swap ⟹ aucun `initWorkerSession` synchrone bloquant. (Req 5.2)
  *   - Unit : transition SCANNING → RECOVERING en < 100 ms (Req 3.2).
- *   - Unit : `session_dead` garde IP + CF (Req 10.6).
+ *   - Unit : `session_dead` garde IP et relance la session (Req 10.6).
  *   - Unit : `cf_expired` garde le PHPSESSID (Req 10.7).
  *   - Unit : backoff/retry max 10 puis reste RECOVERING terminal (Req 3.6, 3.7).
  *   - Unit : pool épuisé (borrow null + rotation impossible) reste RECOVERING
@@ -289,14 +289,16 @@ describe("transition SCANNING → RECOVERING (Req 3.2)", () => {
   });
 });
 
-// ─── Unit : session_dead garde IP + CF (Req 10.6) ─────────────────────────────
+// ─── Unit : session_dead garde IP et relance la session (Req 10.6) ─────────────
 
-describe("session_dead — garde IP + CF, régénère uniquement le PHPSESSID (Req 10.6)", () => {
-  it("appelle initPhpState sans re-solve CF ni rotation d'IP, IP + session inchangées", async () => {
+describe("session_dead — garde IP et relance un cycle complet (Req 10.6)", () => {
+  it("recrée la session sur la même IP sans rotation", async () => {
+    mockInitWorkerSession.mockResolvedValue(
+      makeInitResult(makeCfSession({ soaxProxyUrl: CURRENT_PROXY })),
+    );
     mockInitPhpState.mockResolvedValue(makePhpState("agenda-neuf"));
 
     const rt = makeRuntime();
-    const originalSession = rt.session;
     const pool = makeReservePoolSpy();
     const deps = makeDeps(pool);
 
@@ -308,11 +310,10 @@ describe("session_dead — garde IP + CF, régénère uniquement le PHPSESSID (R
     expect(mockInitPhpState).toHaveBeenCalledTimes(1);
     expect(rt.phpState?.agendaId).toBe("agenda-neuf");
 
-    // Aucun re-solve CF ni rotation d'IP : IP + CF conservés.
-    expect(mockInitWorkerSession).not.toHaveBeenCalled();
+    // Même IP, mais nouvelle session issue du rescan.
+    expect(mockInitWorkerSession).toHaveBeenCalledTimes(1);
     expect(mockRotateDecodoUrl).not.toHaveBeenCalled();
     expect(rt.proxyUrl).toBe(CURRENT_PROXY);
-    expect(rt.session).toBe(originalSession);
 
     // Récupéré ⟹ ARMED.
     expect(rt.state).toBe("ARMED");
