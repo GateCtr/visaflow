@@ -405,6 +405,13 @@ describe("publication/race — Bookitit arbitre sans blocage Redis", () => {
     expect(worker.shouldCoordinateBeforeBooking(false)).toBe(true);
   });
 
+  it("rescane immédiatement après un /main/ vide au premier appel", () => {
+    expect(worker.shouldRescanAfterEmptyMain(0, 0)).toBe(true);
+    expect(worker.shouldRescanAfterEmptyMain(0, 1)).toBe(false);
+    expect(worker.shouldRescanAfterEmptyMain(6144, 0)).toBe(false);
+    expect(worker.shouldRescanAfterEmptyMain(0, 1)).toBe(false);
+  });
+
   it("plusieurs workers peuvent tenter immédiatement le même créneau", () => {
     const workers = Array.from({ length: 3 }, () => ({
       canAttempt: !worker.shouldCoordinateBeforeBooking(true),

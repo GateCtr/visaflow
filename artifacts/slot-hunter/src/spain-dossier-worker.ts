@@ -746,6 +746,22 @@ export interface WorkerScanResult {
    * la rotation est immédiate.
    */
   forceProxyRotation?: boolean;
+  /** Le premier /main/ a répondu 0B : abandonner immédiatement le PHPSESSID
+   * courant et relancer refreshSessionAndScan sans attendre le prochain front. */
+  rescanImmediately?: boolean;
+}
+
+/**
+ * Une réponse /main/ vide dès la première tentative n'est pas une surcharge à
+ * retenter avec la même session PHP. Le POST token vient de créer cette identité
+ * et /main/ n'a fourni aucun état exploitable : il faut recréer PHPSESSID et
+ * refaire le scan. Les réponses tronquées non vides restent retentables.
+ */
+export function shouldRescanAfterEmptyMain(
+  bodyBytes: number,
+  attempt: number,
+): boolean {
+  return bodyBytes === 0 && attempt === 0;
 }
 
 /**
@@ -1524,7 +1540,7 @@ export async function refreshSessionAndScan(
   // puis config.
   type MainResult =
     | { ok: true; html: string }
-    | { ok: false; status: "server_overload" | "proxy_error"; msg: string };
+    | { ok: false; status: "server_overload" | "proxy_error"; msg: string; rescanImmediately?: boolean };
   const runMain = async (): Promise<MainResult> => {
     try {
       let mainBody = "";
@@ -1536,6 +1552,15 @@ export async function refreshSessionAndScan(
         Object.assign(ds.jar, newCookies);
         if (newCookies.PHPSESSID) jar.PHPSESSID = newCookies.PHPSESSID;
         if (mainBody.length >= MAIN_MIN_BYTES) { mainOk = true; break; }
+        if (shouldRescanAfterEmptyMain(mainBody.length, attempt)) {
+          log("WARN", `${tag} ⏳ ③ /main/ → 0kB dès la première tentative — session PHP abandonnée, rescan immédiat avec nouveau PHPSESSID`);
+          return {
+            ok: false,
+            status: "server_overload",
+            msg: "/main/ 0B dès la première tentative",
+            rescanImmediately: true,
+          };
+        }
         if (attempt < RS_MAX_RETRIES) {
           const backoff = Math.min(400 * (attempt + 1) + attempt * 200, 1_500);
           log("WARN", `${tag} ⏳ ③ /main/ → ${Math.round(mainBody.length / 1024)}kB (tronqué, surcharge PHP) — retry ${attempt + 1}/${RS_MAX_RETRIES} dans ${backoff}ms`);
@@ -1562,7 +1587,12 @@ export async function refreshSessionAndScan(
 
   // Traiter main d'abord (session cassée = échec bloquant).
   if (!mainResult.ok) {
-    return { status: mainResult.status, errorMessage: mainResult.msg, monthTraces: [] };
+    return {
+      status: mainResult.status,
+      errorMessage: mainResult.msg,
+      monthTraces: [],
+      rescanImmediately: mainResult.rescanImmediately,
+    };
   }
   capturedMainHtml = mainResult.html;
 
@@ -2264,6 +2294,11 @@ export async function runDossierWorker(
       }
 
       if (scan.status === "server_overload") {
+        if (scan.rescanImmediately) {
+          transition(rt, "scan_ok");
+          log("WARN", `${tag} 🔄 /main/ 0B — rescan immédiat avec nouveau PHPSESSID, sans retry supplémentaire`);
+          continue;
+        }
         // 502/503/504 Bookitit : le proxy et le CF restent valides.
         // Laisser la grille planifier le prochain cycle sans rotation IP ni re-solve.
         transition(rt, "scan_ok");
