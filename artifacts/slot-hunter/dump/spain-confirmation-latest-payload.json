@@ -1,0 +1,24 @@
+{
+  "Events": {
+    "Customer": {
+      "name": "TSHAMALA INOKOYA ELIE",
+      "email": null,
+      "password": null,
+      "signedin": null
+    },
+    "Appointment": {
+      "locator": null,
+      "people": "1",
+      "date": "2026-10-20",
+      "time": "10:30",
+      "agenda": "Visados",
+      "serviceList": [
+        {
+          "title": "TRAMITACIÓN DE  VISADOS",
+          "duration": "15 minutos",
+          "extraList": []
+        }
+      ]
+    }
+  }
+}

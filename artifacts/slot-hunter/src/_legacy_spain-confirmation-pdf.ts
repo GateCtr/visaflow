@@ -43,7 +43,7 @@ export interface SpainConfirmationData {
 
 // ─── HTML Template ──────────────────────────────────────────────────────────
 
-function buildConfirmationHtml(data: SpainConfirmationData): string {
+export function buildConfirmationHtml(data: SpainConfirmationData): string {
   const now = new Date();
   const createdAt = `${now.toLocaleDateString("es-ES")} ${now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`;
 

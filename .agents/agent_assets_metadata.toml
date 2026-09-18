@@ -108,3 +108,17 @@ mtime_ms = 1787458697641
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:89ef7422-5b19-42df-9375-42396b2b4451/d0826f95-905f-4469-930b-397edd25c311/dc62abdd-f559-4997-878c-403619aa9ddf"
 storage_version_token = "1787458714243520"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "3WBcjXxRZGIKhDj8tNXYH"
+uri = "file://artifacts/slot-hunter/dump/spain-confirmation-latest.pdf"
+type = "pdf"
+title = "Confirmation de rendez-vous Espagne"
+description = "PDF généré à partir de la réponse HTTP réelle de geteventhistory/. Aucune annulation n'a été appelée."
+logical_id = "7a804fb9-eb5f-47c1-9507-a47ee719cea5"
+content_hash = "sha256:44c39a8e34986514887f8de73b7d031a6db3f772283196be1497a34cf3b6f75f"
+size = 40806
+mtime_ms = 1789748287578
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:89ef7422-5b19-42df-9375-42396b2b4451/7a804fb9-eb5f-47c1-9507-a47ee719cea5/d669f119-b93d-4d18-bb3a-67887233d041"
+storage_version_token = "1789748552012966"
+content_type = "application/pdf"

@@ -32,8 +32,14 @@
  */
 
 import "dotenv/config";
+import { mkdir, writeFile } from "node:fs/promises";
+import puppeteer from "puppeteer";
 import { initDecodoPool, getDecodoProxyForIndex } from "../spain-decodo-pool.js";
 import { initSpainRedis } from "../spain-redis-persistence.js";
+import {
+  buildConfirmationHtml,
+  extractConfirmationData,
+} from "../_legacy_spain-confirmation-pdf.js";
 import {
   CALL_DIRECT_HTTP_OVERLOAD,
   CALL_DIRECT_NETWORK_ERROR,
@@ -144,6 +150,47 @@ function getHistoryEvents(value: unknown): any[] {
   return Array.isArray(value) ? value : [];
 }
 
+function getFirstTicketEvent(value: unknown, fallback: Record<string, any>): Record<string, any> {
+  const root = asRecord(value);
+  const eventsObject = asRecord(root.Events);
+  const appointment = asRecord(eventsObject.Appointment);
+  if (Object.keys(appointment).length > 0) {
+    const services = Array.isArray(appointment.serviceList) ? appointment.serviceList : [];
+    return {
+      ...appointment,
+      title: services[0]?.title ?? "",
+      name: appointment.agenda ?? "",
+      people: appointment.people ?? 1,
+    };
+  }
+  const event = getHistoryEvents(value)[0];
+  return Object.keys(asRecord(event)).length > 0 ? asRecord(event) : fallback;
+}
+
+function getTicketCustomer(value: unknown): Record<string, any> {
+  const root = asRecord(value);
+  const eventsObject = asRecord(root.Events);
+  return asRecord(eventsObject.Customer);
+}
+
+async function renderConfirmationPdf(data: Parameters<typeof buildConfirmationHtml>[0]): Promise<Buffer> {
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+  });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(buildConfirmationHtml(data), { waitUntil: "domcontentloaded" });
+    return Buffer.from(await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+    }));
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 function getFieldOptions(value: unknown): string[] {
   const root = asRecord(value);
   const customFields = asRecord(root.CustomFields);
@@ -180,6 +227,10 @@ async function downloadLiveBundle(session: Parameters<typeof spainCfFetch>[1]): 
         continue;
       }
       const body = await response.text();
+      if (modulePath.endsWith("/ticket.js")) {
+        await mkdir("dump", { recursive: true });
+        await writeFile("dump/live-ticket.js", body, "utf8");
+      }
       const endpoints = [...new Set(
         [...body.matchAll(/(?:get_server_url\(\)\s*\+\s*["']|url\s*\+=\s*["'])([^"']+\/)/g)]
           .map((match) => match[1]),
@@ -323,7 +374,83 @@ async function main(): Promise<void> {
       );
     }
     console.log(`   geteventhistory/ accepté : clés=${objectKeys(ticketPayload)}`);
-    console.log("   aucune fenêtre d'impression ni écriture de fichier n'est déclenchée en HTTP pur");
+    await mkdir("dump", { recursive: true });
+    await writeFile(
+      "dump/spain-confirmation-latest-payload.json",
+      JSON.stringify(ticketPayload, null, 2),
+      "utf8",
+    );
+
+    const ticketEvent = getFirstTicketEvent(ticketPayload, event);
+    const ticketCustomer = getTicketCustomer(ticketPayload);
+    const ticketLocator = String(
+      ticketEvent.locator ??
+      ticketEvent.confirmationCode ??
+      event.locator ??
+      event.confirmationCode ??
+      eventId,
+    );
+    const ticketDate = String(ticketEvent.date ?? event.date ?? "");
+    const ticketTime = String(ticketEvent.time ?? event.time ?? "");
+    const ticketService = String(
+      ticketEvent.service ??
+      ticketEvent.title ??
+      event.service ??
+      event.title ??
+      "Cita consular",
+    );
+    const ticketAgenda = String(
+      ticketEvent.agenda_name ??
+      ticketEvent.agenda ??
+      event.agenda_name ??
+      event.agenda ??
+      "",
+    );
+    const ticketPeople = Number(ticketEvent.people ?? event.people ?? 1) || 1;
+    const applicantName = String(
+      ticketCustomer.name ??
+      account.name ??
+      account.document ??
+      "Titular de la reserva",
+    );
+    // geteventhistory/ retourne { Events: [...] }, alors que le helper PDF
+    // accepte le format ticket { Event: ... } : on normalise sans modifier
+    // les données reçues du portail.
+    const confirmationData = extractConfirmationData([{ Event: ticketEvent }], {
+      applicantName,
+      serviceName: ticketService,
+      slotDate: ticketDate,
+      slotTime: ticketTime,
+    });
+
+    if (!confirmationData) {
+      console.warn(
+        `   format ticket plat détecté (eventKeys=${objectKeys(ticketEvent)}) — rendu avec l'id événement`,
+      );
+    }
+
+    const enrichedConfirmationData = {
+      ...(confirmationData ?? {
+        locator: ticketLocator,
+        applicantName,
+        date: ticketDate,
+        time: ticketTime,
+        serviceName: ticketService,
+      }),
+      locator: ticketLocator || confirmationData?.locator || "Non communiqué",
+      date: ticketDate || confirmationData?.date || "Non communiquée",
+      time: ticketTime || confirmationData?.time || "Non communiquée",
+      serviceName: ticketService,
+      agendaName: ticketAgenda || undefined,
+      people: ticketPeople > 1 ? ticketPeople : undefined,
+      document: account.document ? String(account.document) : undefined,
+    };
+
+    const pdf = await renderConfirmationPdf(enrichedConfirmationData);
+    await writeFile("dump/spain-confirmation-latest.pdf", pdf);
+    console.log("   confirmation officielle sauvegardée : dump/spain-confirmation-latest.pdf");
+    console.log("   payload source sauvegardé : dump/spain-confirmation-latest-payload.json");
+    console.log("   aucune requête d'annulation n'a été déclenchée");
   }
 
   console.log("✅ Test HTTP pur terminé : bundle, signinaccount/ et gethistory/ vérifiés.");

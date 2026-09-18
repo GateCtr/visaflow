@@ -58,3 +58,4 @@
 - [Spain slot claim freshness](spain-slot-claim-freshness.md) — Redis capacity claims must compare snapshot timestamps and report the stored capacity on refusal.
 - [Slot Hunter operational logging](slot-hunter-logging.md) — keep logs focused on failures, bookings, slots, locks, and meaningful state changes.
 - [Spain direct rescan policy](spain-direct-rescan-policy.md) — discard broken PHP snapshots; rescan on the same proxy, except captcha, proxy rotation, and datetime retries.
+- [Spain history ticket payload](spain-history-ticket-payload.md) — print is client-side: geteventhistory returns Events.Customer/Appointment; render locally and never treat it as a PDF download.
