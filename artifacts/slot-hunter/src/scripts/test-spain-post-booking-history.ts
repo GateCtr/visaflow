@@ -1,40 +1,48 @@
 /**
  * test-spain-post-booking-history.ts
  *
- * Diagnostic provisoire du flux POST-BOOKING Espagne.
+ * Diagnostic provisoire du flux POST-BOOKING Espagne en HTTP pur.
  *
  * Le booking (signin/ → summary/) est volontairement absent de ce script.
- * Il part du principe qu'un rendez-vous existe déjà, puis crée une session
- * PHP distincte, recharge /main/, ouvre #signinaccount et vérifie #history.
+ * Il part du principe qu'un rendez-vous existe déjà, crée une nouvelle session
+ * HTTP/impit, recharge /main/, puis appelle directement :
+ *
+ *   getsigninaccountfields/ → signinaccount/ → gethistory/
+ *   → geteventhistory/ (uniquement avec --print)
+ *
+ * Il n'utilise ni Chromium, ni Puppeteer, ni les sélecteurs DOM.
  *
  * Sécurité :
  *   - aucune valeur de credential n'est affichée ;
  *   - aucune requête summary/ n'est envoyée ;
- *   - l'action d'annulation n'est jamais confirmée ;
- *   - --print est optionnel et génère uniquement un PDF local de diagnostic.
+ *   - deleteeventhistory/ n'est jamais appelé ;
+ *   - --print ne fait qu'un GET geteventhistory/ non destructif.
  *
  * Usage :
  *   SPAIN_POST_BOOKING_LOGIN="..." \
  *   SPAIN_POST_BOOKING_PASSWORD="..." \
- *   SPAIN_CF_PROFILE_DIR=/tmp/spain-post-booking-test \
  *   pnpm exec tsx src/scripts/test-spain-post-booking-history.ts
  *
  * Optionnel :
  *   SPAIN_POST_BOOKING_PORTAL_URL="https://www.citaconsular.es/es/hosteds/widgetdefault/<key>/"
+ *   SPAIN_POST_BOOKING_LOGIN_TYPE="document"
+ *   SPAIN_POST_BOOKING_PROXY_INDEX="0"
  *   SPAIN_POST_BOOKING_LOCATOR="ABC123"
  *   ... test-spain-post-booking-history.ts --print
  */
 
 import "dotenv/config";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import {
-  ensureSpainPersistentBrowserSession,
-  getActiveSpainPersistentBrowserSession,
-  spainPersistentBrowser,
-} from "../_legacy_spain-persistent-browser.js";
-import { initDecodoPool } from "../spain-decodo-pool.js";
+import { initDecodoPool, getDecodoProxyForIndex } from "../spain-decodo-pool.js";
 import { initSpainRedis } from "../spain-redis-persistence.js";
+import {
+  CALL_DIRECT_HTTP_OVERLOAD,
+  CALL_DIRECT_NETWORK_ERROR,
+  CALL_DIRECT_RETRY_REFRESH_FAILED,
+  buildDynamicSession,
+  callDirect,
+  type DynamicSession,
+} from "../spain-bookitit-direct.js";
+import { initWorkerSession } from "../spain-soax-solver.js";
 
 const DEFAULT_PORTAL_URL =
   "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
@@ -45,23 +53,24 @@ const LOGIN = process.env.SPAIN_POST_BOOKING_LOGIN?.trim() ?? "";
 const PASSWORD = process.env.SPAIN_POST_BOOKING_PASSWORD ?? "";
 const LOGIN_TYPE = process.env.SPAIN_POST_BOOKING_LOGIN_TYPE?.trim() || "document";
 const LOCATOR = process.env.SPAIN_POST_BOOKING_LOCATOR?.trim() || "";
-const DUMP_DIR = join(process.cwd(), "dump");
+const PROXY_INDEX = Math.max(
+  0,
+  Number.parseInt(process.env.SPAIN_POST_BOOKING_PROXY_INDEX ?? "0", 10) || 0,
+);
+const CAPSOLVER_KEY = process.env.CAPSOLVER_API_KEY ?? process.env.NONECAP_API_KEY ?? "";
 const PRINT_MODE = process.argv.includes("--print");
 
-type NetworkObservation = {
-  method: string;
-  endpoint: string;
-  status?: number;
-};
-
-function endpointOf(url: string): string {
+function addStickySession(url: string, sid: string): string {
   try {
     const parsed = new URL(url);
-    const marker = "/onlinebookings/";
-    const index = parsed.pathname.indexOf(marker);
-    return index >= 0 ? parsed.pathname.slice(index + marker.length) : parsed.pathname;
+    const user = decodeURIComponent(parsed.username);
+    const stickyUser = user.includes("-session-")
+      ? user.replace(/-session-[^-]+/, `-session-${sid}`)
+      : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${sid}$2`);
+    parsed.username = encodeURIComponent(stickyUser);
+    return parsed.toString();
   } catch {
-    return url.slice(0, 100);
+    return url;
   }
 }
 
@@ -71,204 +80,213 @@ function assertConfig(): void {
       "Variables manquantes: SPAIN_POST_BOOKING_LOGIN et SPAIN_POST_BOOKING_PASSWORD",
     );
   }
+  if (!CAPSOLVER_KEY) {
+    throw new Error("Variable manquante: CAPSOLVER_API_KEY");
+  }
+}
+
+function isCallFailure(
+  value: unknown,
+): value is null | typeof CALL_DIRECT_HTTP_OVERLOAD | typeof CALL_DIRECT_NETWORK_ERROR | typeof CALL_DIRECT_RETRY_REFRESH_FAILED {
+  return (
+    value === null ||
+    value === CALL_DIRECT_HTTP_OVERLOAD ||
+    value === CALL_DIRECT_NETWORK_ERROR ||
+    value === CALL_DIRECT_RETRY_REFRESH_FAILED
+  );
+}
+
+async function callPure(
+  session: DynamicSession,
+  endpoint: string,
+  params: Record<string, string> = {},
+): Promise<unknown> {
+  const value = await callDirect(
+    session,
+    endpoint,
+    params,
+    "[post-booking-http-pure]",
+    { maxRetries: 0 },
+  );
+  if (isCallFailure(value)) {
+    const reason =
+      value === CALL_DIRECT_HTTP_OVERLOAD
+        ? "HTTP overload"
+        : value === CALL_DIRECT_NETWORK_ERROR
+          ? "network/proxy error"
+          : value === CALL_DIRECT_RETRY_REFRESH_FAILED
+            ? "retry parameter refresh failed"
+            : "empty or invalid response";
+    throw new Error(`${endpoint} échoué: ${reason}`);
+  }
+  return value;
+}
+
+function asRecord(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+}
+
+function objectKeys(value: unknown): string {
+  return Object.keys(asRecord(value)).sort().join(",") || "-";
+}
+
+function getAccountClient(value: unknown): Record<string, any> {
+  const root = asRecord(value);
+  return asRecord(root.Client ?? root.Customer ?? root);
+}
+
+function getHistoryEvents(value: unknown): any[] {
+  const root = asRecord(value);
+  if (Array.isArray(root.Events)) return root.Events;
+  if (Array.isArray(root.Event)) return root.Event;
+  return Array.isArray(value) ? value : [];
+}
+
+function getFieldOptions(value: unknown): string[] {
+  const root = asRecord(value);
+  const customFields = asRecord(root.CustomFields);
+  const clients = Array.isArray(customFields.Clients) ? customFields.Clients : [];
+  return clients
+    .filter((field) => Number(field?.show_widget) === 1 && Number(field?.validate) === 1)
+    .map((field) => String(field.input_text ?? ""))
+    .filter(Boolean);
 }
 
 async function main(): Promise<void> {
   assertConfig();
 
   console.log("═".repeat(76));
-  console.log("  TEST PROVISOIRE — SESSION POST-BOOKING / HISTORY ESPAGNE");
+  console.log("  TEST PROVISOIRE — SESSION POST-BOOKING ESPAGNE / HTTP PUR");
   console.log("═".repeat(76));
   console.log(`Portail : ${PORTAL_URL}`);
+  console.log(`Proxy   : pool index ${PROXY_INDEX} (sticky session neuve)`);
   console.log(`Locator : ${LOCATOR || "(non fourni — contrôle structurel uniquement)"}`);
-  console.log(`Mode    : ${PRINT_MODE ? "inspection + PDF local" : "inspection sans impression"}`);
+  console.log(`Mode    : ${PRINT_MODE ? "history + geteventhistory" : "history uniquement"}`);
   console.log("");
 
   await initSpainRedis();
   await initDecodoPool();
 
-  // Ce script est prévu pour être lancé avec un profil dédié
-  // (SPAIN_CF_PROFILE_DIR=/tmp/spain-post-booking-test). On ferme uniquement
-  // l'instance appartenant à ce processus avant d'ouvrir la nouvelle session.
-  await spainPersistentBrowser.close();
-
-  console.log("1 — Création d'une session CF/browser indépendante…");
-  const initialSession = await ensureSpainPersistentBrowserSession(PORTAL_URL);
-  if (!initialSession) {
-    throw new Error("Impossible d'établir la nouvelle session CF/browser");
+  const proxyBase = getDecodoProxyForIndex(PROXY_INDEX);
+  if (!proxyBase) {
+    throw new Error(`Aucun proxy Decodo disponible à l'index ${PROXY_INDEX}`);
   }
+  const stickyId = Math.random().toString(36).slice(2, 10);
+  const stickyProxy = addStickySession(proxyBase, stickyId);
 
-  const initialMainBytes = initialSession.prefetchedMainHtml?.length ?? 0;
-  console.log(`   /main/ initial : ${initialMainBytes}B`);
-
-  // Frontière explicite après summary/ : on supprime le PHPSESSID existant
-  // et le manager relance /main/ avec un identifiant de session applicative neuf.
-  console.log("2 — Rotation PHPSESSID après summary/ réussi (sans réutiliser le booking)…");
-  const refreshed = await spainPersistentBrowser.refreshPhpSession();
-  if (!refreshed) {
-    throw new Error("La création de la session PHP post-booking a échoué");
-  }
-
-  const postBookingSession = getActiveSpainPersistentBrowserSession();
-  const postBookingMainBytes = postBookingSession?.prefetchedMainHtml?.length ?? 0;
-  console.log(`   /main/ post-booking : ${postBookingMainBytes}B`);
-
-  const page = spainPersistentBrowser.getActivePage();
-  if (!page) throw new Error("Page Chromium absente après la création de session");
-
-  const observations: NetworkObservation[] = [];
-  const onRequest = (request: any) => {
-    const url = String(request.url());
-    if (url.includes("/onlinebookings/")) {
-      observations.push({ method: request.method(), endpoint: endpointOf(url) });
-    }
-  };
-  const onResponse = (response: any) => {
-    const url = String(response.url());
-    if (url.includes("/onlinebookings/")) {
-      const endpoint = endpointOf(url);
-      const item = [...observations].reverse().find(
-        (entry) => entry.endpoint === endpoint && entry.status === undefined,
-      );
-      if (item) item.status = response.status();
-    }
-  };
-  page.on("request", onRequest);
-  page.on("response", onResponse);
-
-  console.log("3 — Ouverture de #signinaccount…");
-  await page.waitForSelector('a[href="#signinaccount"]', { timeout: 30_000 });
-  await page.click('a[href="#signinaccount"]');
-  await page.waitForSelector("#idIptBktAccountLoginlogin", { timeout: 30_000 });
-  await page.waitForSelector("#idIptBktAccountLoginpassword", { timeout: 30_000 });
-
-  // Le bundle charge les valeurs réelles de logintype dans ce select.
-  await page.evaluate((loginType: string) => {
-    const select = document.querySelector<HTMLSelectElement>("#idSelBktAccountLoginType");
-    if (!select) return;
-    const option = Array.from(select.options).find((item) => item.value === loginType);
-    if (option) {
-      select.value = option.value;
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-  }, LOGIN_TYPE);
-
-  await page.$eval(
-    "#idIptBktAccountLoginlogin",
-    (element: Element, value: string) => {
-      const input = element as HTMLInputElement;
-      input.value = value;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    },
-    LOGIN,
+  // Cette init crée une nouvelle instance impit, un nouveau jar et un nouveau
+  // PHPSESSID. Elle ne réutilise pas la session HTTP du booking précédent.
+  console.log("1 — Création de la session HTTP/impit post-booking…");
+  const initialized = await initWorkerSession(
+    stickyProxy,
+    PORTAL_URL,
+    CAPSOLVER_KEY,
   );
-  await page.$eval(
-    "#idIptBktAccountLoginpassword",
-    (element: Element, value: string) => {
-      const input = element as HTMLInputElement;
-      input.value = value;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    },
-    PASSWORD,
-  );
-
-  console.log("4 — Envoi du login de compte (aucun credential dans les logs)…");
-  await page.click("#idBktDefaultAccountLoginConfirmButton");
-
-  await page.waitForFunction(
-    () => {
-      const hash = window.location.hash;
-      const history = document.querySelector("#idBktDefaultAccountHistoryContainer");
-      const error = document.querySelector("#idBktDefaultAccountLoginErrorContainer");
-      const visible = (element: Element | null) =>
-        !!element && getComputedStyle(element).display !== "none";
-      return hash === "#history" || visible(history) || visible(error);
-    },
-    { timeout: 45_000 },
-  );
-
-  const loginState = await page.evaluate(() => ({
-    hash: window.location.hash,
-    historyVisible: (() => {
-      const element = document.querySelector("#idBktDefaultAccountHistoryContainer");
-      return !!element && getComputedStyle(element).display !== "none";
-    })(),
-    loginErrorVisible: (() => {
-      const element = document.querySelector("#idBktDefaultAccountLoginErrorContainer");
-      return !!element && getComputedStyle(element).display !== "none";
-    })(),
-    loginErrorText: document.querySelector("#idBktDefaultAccountLoginErrorContainer")?.textContent?.trim().slice(0, 180) ?? "",
-  }));
-
-  console.log(`   état login : hash=${loginState.hash || "(vide)"}`);
-  if (loginState.loginErrorVisible) {
-    throw new Error(`Login compte refusé: ${loginState.loginErrorText || "erreur non détaillée"}`);
-  }
-  if (!loginState.historyVisible && loginState.hash !== "#history") {
-    throw new Error("Le portail n'a pas ouvert #history après le login");
+  if (!initialized) {
+    throw new Error("Impossible d'établir la nouvelle session HTTP post-booking");
   }
 
-  console.log("5 — Inspection de l'historique…");
-  await new Promise((resolve) => setTimeout(resolve, 1_500));
-  const historyState = await page.evaluate(() => {
-    const appointmentRows = (selector: string) =>
-      Array.from(document.querySelectorAll(selector)).filter(
-        (row) => !row.querySelector(".clsDivBktAccountHistoryContentHeader"),
-      ).length;
-    const printActions = document.querySelectorAll(
-      ".clsDivBktAccountHistoryContentDataPrintContainer .clsDivBktAccountHistoryContentDataPrintIcon",
-    ).length;
-    const cancelActions = document.querySelectorAll(
-      ".clsDivBktAccountHistoryContentDataDeleteContainer .clsDivBktAccountHistoryContentDataDeleteIcon",
-    ).length;
-    const activeRows = appointmentRows(
-      "#idDivBktAccountHistoryContent > .clsDivBktAccountHistoryContentRow",
+  const { session } = initialized;
+  const mainBytes = session.prefetchedMainHtml?.length ?? 0;
+  const phpSession = session.allCookies.find((cookie) => cookie.name === "PHPSESSID");
+  console.log(`   /main/ : ${mainBytes}B`);
+  console.log(`   PHPSESSID neuf : ${phpSession ? "oui" : "non"}`);
+  if (!phpSession || mainBytes <= 0) {
+    throw new Error("Session HTTP initialisée sans PHPSESSID ou sans réponse /main/");
+  }
+
+  const dynamicSession = buildDynamicSession(session);
+  if (!dynamicSession) {
+    throw new Error("Impossible de construire la DynamicSession HTTP pure");
+  }
+
+  console.log("2 — Lecture des types de login via getsigninaccountfields/…");
+  const fieldsPayload = await callPure(dynamicSession, "getsigninaccountfields/");
+  const availableTypes = getFieldOptions(fieldsPayload);
+  console.log(`   logintype disponibles : ${availableTypes.join(", ") || "(réponse sans Clients)"}`);
+  if (availableTypes.length > 0 && !availableTypes.includes(LOGIN_TYPE)) {
+    throw new Error(
+      `SPAIN_POST_BOOKING_LOGIN_TYPE=${LOGIN_TYPE} absent des types retournés`,
     );
-    const pastRows = appointmentRows(
-      "#idDivBktAccountHistoryContentPast .clsDivBktAccountHistoryContentRow",
-    );
-    return { printActions, cancelActions, activeRows, pastRows };
+  }
+
+  console.log("3 — Connexion via signinaccount/ (HTTP pur)…");
+  const accountPayload = await callPure(dynamicSession, "signinaccount/", {
+    logintype: LOGIN_TYPE,
+    login: LOGIN,
+    // accountlogin.js encode le password avant que jQuery encode la query.
+    password: encodeURIComponent(PASSWORD),
   });
-
-  console.log(`   rendez-vous actifs : ${historyState.activeRows}`);
-  console.log(`   actions imprimer   : ${historyState.printActions}`);
-  console.log(`   actions annuler    : ${historyState.cancelActions}`);
-  console.log(`   rendez-vous passés: ${historyState.pastRows}`);
-
-  if (historyState.printActions === 0 && historyState.cancelActions === 0) {
-    console.warn("⚠️ #history est ouvert mais aucune action n'est encore rendue");
+  const account = getAccountClient(accountPayload);
+  const signedIn = account.signedin ?? account.signedIn ?? asRecord(accountPayload).signedin;
+  const bktToken = account.bktToken ?? asRecord(accountPayload).bktToken;
+  if (!signedIn || !bktToken) {
+    const root = asRecord(accountPayload);
+    const error = root.Exception?.errors ?? root.errors ?? root.Exception ?? "réponse sans signedin/bktToken";
+    throw new Error(`signinaccount/ refusé: ${JSON.stringify(error).slice(0, 240)}`);
   }
+  console.log(`   signinaccount/ accepté : signedin oui, bktToken oui`);
 
-  if (PRINT_MODE && historyState.printActions > 0) {
-    console.log("6 — Activation de l'action imprimer (jamais l'annulation)…");
-    await page.click(".clsDivBktAccountHistoryContentDataPrintIcon");
-    await page.waitForFunction(() => {
-      const ticket = document.querySelector("#idBktDefaultTicketContainer");
-      return !!ticket && getComputedStyle(ticket).display !== "none";
-    }, { timeout: 15_000 });
-
-    const pdfPath = join(
-      DUMP_DIR,
-      `spain-post-booking-ticket-${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`,
+  console.log("4 — Lecture de l'historique via gethistory/ (HTTP pur)…");
+  const historyPayload = await callPure(dynamicSession, "gethistory/", {
+    signedin: String(signedIn),
+    bktToken: String(bktToken),
+  });
+  const historyRoot = asRecord(historyPayload);
+  if (historyRoot.Exception || historyRoot.errors) {
+    throw new Error(
+      `gethistory/ refusé: ${JSON.stringify(historyRoot.Exception?.errors ?? historyRoot.errors ?? historyRoot.Exception).slice(0, 240)}`,
     );
-    await mkdir(DUMP_DIR, { recursive: true });
-    await page.pdf({ path: pdfPath, format: "A4", printBackground: true });
-    console.log(`   PDF local généré : ${pdfPath}`);
   }
 
-  const uniqueEndpoints = [...new Set(observations.map((entry) => entry.endpoint))];
-  console.log(`6 — Endpoints observés : ${uniqueEndpoints.join(", ") || "(aucun)"}`);
-  console.log("✅ Test post-booking terminé : session booking non réutilisée, history vérifié.");
+  const events = getHistoryEvents(historyPayload);
+  const futureEvents = events.filter((event) => event?.block !== "past");
+  const pastEvents = events.filter((event) => event?.block === "past");
+  const printableEvents = events.filter((event) => event?.print === true);
+  const cancellableEvents = events.filter((event) => event?.cancel === true);
 
-  page.off("request", onRequest);
-  page.off("response", onResponse);
-  await spainPersistentBrowser.close();
+  console.log(`   gethistory/ accepté : ${events.length} événement(s)`);
+  console.log(`   futurs : ${futureEvents.length} | passés : ${pastEvents.length}`);
+  console.log(`   imprimables : ${printableEvents.length}`);
+  console.log(`   annulables : ${cancellableEvents.length}`);
+  console.log(`   clés réponse : ${objectKeys(historyPayload)}`);
+
+  if (LOCATOR) {
+    const locatorMatch = events.filter((event) =>
+      String(event?.locator ?? event?.id ?? "").includes(LOCATOR),
+    ).length;
+    console.log(`   correspondances locator : ${locatorMatch}`);
+  }
+
+  if (PRINT_MODE && printableEvents.length > 0) {
+    const event = printableEvents[0];
+    const eventId = String(event.id ?? event.event ?? "");
+    if (!eventId) {
+      throw new Error("Événement imprimable sans id");
+    }
+    console.log("5 — Lecture du ticket via geteventhistory/ (GET non destructif)…");
+    const ticketPayload = await callPure(dynamicSession, "geteventhistory/", {
+      event: eventId,
+      signedin: String(signedIn),
+      bktToken: String(bktToken),
+    });
+    const ticketRoot = asRecord(ticketPayload);
+    if (ticketRoot.Exception || ticketRoot.errors) {
+      throw new Error(
+        `geteventhistory/ refusé: ${JSON.stringify(ticketRoot.Exception?.errors ?? ticketRoot.errors ?? ticketRoot.Exception).slice(0, 240)}`,
+      );
+    }
+    console.log(`   geteventhistory/ accepté : clés=${objectKeys(ticketPayload)}`);
+    console.log("   aucune fenêtre d'impression ni écriture de fichier n'est déclenchée en HTTP pur");
+  }
+
+  console.log("✅ Test HTTP pur terminé : nouvelle session, signinaccount/ et gethistory/ vérifiés.");
+  console.log("   deleteeventhistory/ n'a pas été appelé.");
 }
 
-main().catch(async (error) => {
-  console.error(`❌ Test post-booking échoué: ${error instanceof Error ? error.message : String(error)}`);
-  await spainPersistentBrowser.close().catch(() => {});
+main().catch((error) => {
+  console.error(`❌ Test HTTP pur échoué: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });
