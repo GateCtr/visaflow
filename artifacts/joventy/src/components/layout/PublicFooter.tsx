@@ -88,6 +88,14 @@ export function PublicFooter() {
               <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer nofollow" className="hover:text-white transition-colors">
                 💬 +243 840 808 122
               </a>
+              <a
+                href="https://www.facebook.com/share/19iohcDwpf/?mibextid=wwXIfr"
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="hover:text-white transition-colors"
+              >
+                f Facebook Joventy
+              </a>
             </div>
             <div className="mt-6 flex flex-wrap gap-2">
               <Link href="/alerte-espagne" className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 transition-colors border border-white/10 rounded-xl px-3 py-1.5 text-xs font-semibold text-white/70">

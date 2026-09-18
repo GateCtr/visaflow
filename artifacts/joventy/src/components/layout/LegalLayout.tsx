@@ -92,6 +92,14 @@ export function LegalLayout({ title, subtitle, lastUpdated, description, slug, c
             <a href="https://wa.me/243840808122" className="flex items-center gap-1.5 hover:text-white transition-colors">
               <Phone className="w-3.5 h-3.5" /> +243 840 808 122
             </a>
+            <a
+              href="https://www.facebook.com/share/19iohcDwpf/?mibextid=wwXIfr"
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="flex items-center gap-1.5 hover:text-white transition-colors"
+            >
+              <span aria-hidden="true" className="font-bold">f</span> Facebook Joventy
+            </a>
           </div>
         </div>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-6 pt-6 border-t border-white/10 flex flex-wrap justify-center gap-4 text-white/30 text-xs">
