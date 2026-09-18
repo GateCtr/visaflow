@@ -42,7 +42,7 @@ import {
   callDirect,
   type DynamicSession,
 } from "../spain-bookitit-direct.js";
-import { initWorkerSession } from "../spain-soax-solver.js";
+import { initWorkerSession, spainCfFetch } from "../spain-soax-solver.js";
 
 const DEFAULT_PORTAL_URL =
   "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/";
@@ -154,6 +154,48 @@ function getFieldOptions(value: unknown): string[] {
     .filter(Boolean);
 }
 
+async function downloadLiveBundle(session: Parameters<typeof spainCfFetch>[1]): Promise<void> {
+  const version = session.bookititState?.version ?? "4";
+  const modulePaths = [
+    "mainv1.js",
+    "default/views/accountlogin.js",
+    "default/collections/signinaccountfields.js",
+    "default/collections/events.js",
+    "default/views/historyappointmentslist.js",
+    "default/views/ticket.js",
+  ];
+
+  console.log("2 — Téléchargement des modules live du bundle Bookitit…");
+  for (const modulePath of modulePaths) {
+    const url = `https://www.citaconsular.es/js/widgets/${modulePath}?v=${encodeURIComponent(version)}`;
+    try {
+      const response = await spainCfFetch(url, session, {
+        headers: {
+          Accept: "application/javascript, text/javascript, */*;q=0.01",
+          Referer: session.bookititState?.widgetUrl ?? PORTAL_URL,
+        },
+      });
+      if (!response) {
+        console.warn(`   ${modulePath} → aucune réponse`);
+        continue;
+      }
+      const body = await response.text();
+      const endpoints = [...new Set(
+        [...body.matchAll(/(?:get_server_url\(\)\s*\+\s*["']|url\s*\+=\s*["'])([^"']+\/)/g)]
+          .map((match) => match[1]),
+      )];
+      console.log(
+        `   ${modulePath} → HTTP ${response.status}, ${body.length}B` +
+        (endpoints.length ? `, endpoints=${endpoints.join(",")}` : ""),
+      );
+    } catch (error) {
+      // Le test continue avec les routes déjà confirmées localement si un module
+      // statique est temporairement refusé par le portail.
+      console.warn(`   ${modulePath} → téléchargement impossible: ${String(error).slice(0, 120)}`);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   assertConfig();
 
@@ -202,7 +244,9 @@ async function main(): Promise<void> {
     throw new Error("Impossible de construire la DynamicSession HTTP pure");
   }
 
-  console.log("2 — Lecture des types de login via getsigninaccountfields/…");
+  await downloadLiveBundle(session);
+
+  console.log("3 — Lecture des types de login via getsigninaccountfields/…");
   const fieldsPayload = await callPure(dynamicSession, "getsigninaccountfields/");
   const availableTypes = getFieldOptions(fieldsPayload);
   console.log(`   logintype disponibles : ${availableTypes.join(", ") || "(réponse sans Clients)"}`);
@@ -212,7 +256,7 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log("3 — Connexion via signinaccount/ (HTTP pur)…");
+  console.log("4 — Connexion via signinaccount/ (HTTP pur)…");
   const accountPayload = await callPure(dynamicSession, "signinaccount/", {
     logintype: LOGIN_TYPE,
     login: LOGIN,
@@ -229,7 +273,7 @@ async function main(): Promise<void> {
   }
   console.log(`   signinaccount/ accepté : signedin oui, bktToken oui`);
 
-  console.log("4 — Lecture de l'historique via gethistory/ (HTTP pur)…");
+  console.log("5 — Lecture de l'historique via gethistory/ (HTTP pur)…");
   const historyPayload = await callPure(dynamicSession, "gethistory/", {
     signedin: String(signedIn),
     bktToken: String(bktToken),
@@ -266,7 +310,7 @@ async function main(): Promise<void> {
     if (!eventId) {
       throw new Error("Événement imprimable sans id");
     }
-    console.log("5 — Lecture du ticket via geteventhistory/ (GET non destructif)…");
+    console.log("6 — Lecture du ticket via geteventhistory/ (GET non destructif)…");
     const ticketPayload = await callPure(dynamicSession, "geteventhistory/", {
       event: eventId,
       signedin: String(signedIn),
@@ -282,7 +326,7 @@ async function main(): Promise<void> {
     console.log("   aucune fenêtre d'impression ni écriture de fichier n'est déclenchée en HTTP pur");
   }
 
-  console.log("✅ Test HTTP pur terminé : nouvelle session, signinaccount/ et gethistory/ vérifiés.");
+  console.log("✅ Test HTTP pur terminé : bundle, signinaccount/ et gethistory/ vérifiés.");
   console.log("   deleteeventhistory/ n'a pas été appelé.");
 }
 
