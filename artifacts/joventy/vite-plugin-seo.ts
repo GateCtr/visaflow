@@ -258,7 +258,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
     const description = "Recevez sur WhatsApp les alertes de créneaux visa Espagne à Kinshasa pour 10 USD. Réservez vous-même avec vos accès, sans abonnement ni garantie de délai.";
     const url = "https://joventy.cd/alerte-espagne";
     const schemas = buildAlertSchemas(url);
-    return html
+    const updated = html
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`)
       .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(description)}"`)
       .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
@@ -268,6 +268,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
       .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${esc(title)}"`)
       .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${esc(description)}"`)
       .replace("</head>", `${schemas}\n</head>`);
+    return replaceHreflang(updated, url);
   }
 
   if (clean === "/methodologie-sources") {
@@ -293,7 +294,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
   if (creneauxPage) {
     const url = `https://joventy.cd/${creneauxPage.slug}`;
     const schemas = buildCreneauxSchemas(creneauxPage, url);
-    return html
+    const updated = html
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(creneauxPage.title)}</title>`)
       .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(creneauxPage.metaDescription)}"`)
       .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
@@ -306,6 +307,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
       .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(`Créneau Visa ${creneauxPage.name} depuis Kinshasa avec Joventy`)}"`)
       .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
       .replace("</head>", `${schemas}\n</head>`);
+    return replaceHreflang(updated, url);
   }
 
   const destSlug = clean.replace(/^\//, "");
@@ -334,7 +336,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
   if (embassy) {
     const url = `https://joventy.cd/${embassy.slug}`;
     const schemas = buildEmbassySchemas(embassy, url);
-    return html
+    const updated = html
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(embassy.title)}</title>`)
       .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(embassy.metaDescription)}"`)
       .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
@@ -347,6 +349,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
       .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(`${embassy.officialName} à Kinshasa`)}"`)
       .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
       .replace("</head>", `${schemas}\n</head>`);
+    return replaceHreflang(updated, url);
   }
 
   const guideMatch = clean.match(/^\/guides\/([^/?]+)$/);
@@ -369,7 +372,10 @@ export function injectSeoMeta(html: string, pathname: string): string {
         .replace(/<meta property="og:image" content="[^"]*"/, `<meta property="og:image" content="https://joventy.cd/opengraph.jpg"`)
         .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(guide.title)}"`)
         .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
-      return appendBeforeHeadClose(updated, [...articleMeta, schemas]);
+      return replaceHreflang(
+        appendBeforeHeadClose(updated, [...articleMeta, schemas]),
+        url,
+      );
     }
   }
 
