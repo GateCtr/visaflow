@@ -4158,14 +4158,14 @@ const guides: Guide[] = [
     title: "Rendez-vous visa Espagne à Kinshasa pour agences : partenariat Joventy",
     metaTitle: "Rendez-vous Visa Espagne Kinshasa pour Agences | Joventy",
     metaDescription:
-      "Agence de voyage à Kinshasa ? Confiez la recherche de rendez-vous visa Espagne à un partenaire spécialisé. Suivi des dossiers, WhatsApp et paiement après résultat.",
+      "Agence de voyage à Kinshasa ? Obtenez votre rendez-vous visa Espagne avec un délai court d'une semaine, un suivi WhatsApp et un paiement après résultat.",
     publishedDate: "2026-09-22",
     updatedDate: "2026-09-22",
     readingTime: 8,
     category: "Visa Business",
     coverEmoji: "🤝",
     intro:
-      "Les agences de voyage de Kinshasa perdent souvent des heures à rechercher des rendez-vous visa Espagne pour leurs clients, sans voir de disponibilité sur citaconsular.es. Joventy propose un partenariat simple : vous gardez la relation avec votre client, nous vous aidons à organiser la recherche du créneau sur son propre dossier et vous recevez les confirmations sur WhatsApp. Le paiement du service créneau intervient après l'obtention effective du rendez-vous ; aucun intermédiaire ne peut toutefois imposer le calendrier de l'ambassade ni garantir une date fixe.",
+      "Les agences de voyage de Kinshasa perdent souvent des heures à rechercher des rendez-vous visa Espagne pour leurs clients, sans voir de disponibilité sur citaconsular.es. Joventy propose un partenariat simple avec un délai court de référence d'environ une semaine pour les dossiers activables : vous gardez la relation avec votre client, nous organisons la recherche du créneau sur son propre dossier et vous recevez les confirmations sur WhatsApp. Le paiement du service créneau intervient après l'obtention effective du rendez-vous.",
     sections: [
       {
         heading: "Pourquoi les agences ont du mal à obtenir les rendez-vous Espagne",
@@ -4220,13 +4220,14 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Un service rapide, sans fausse promesse de délai",
+        heading: "Un délai court de référence : environ une semaine",
         body:
-          "Nous comprenons qu'une agence cherche une solution rapide, surtout lorsque le client a déjà payé son voyage. La rapidité dépend cependant de la publication des créneaux, des annulations et de la validité des accès. Joventy peut accélérer l'organisation et la surveillance du dossier, mais ne contrôle ni l'agenda ni la décision de l'ambassade.",
+          "Nous comprenons qu'une agence cherche une solution rapide, surtout lorsque le client a déjà payé son voyage. Pour un dossier complet, activable et disposant d'accès fonctionnels, le délai court de référence de Joventy est d'environ une semaine pour l'obtention du rendez-vous. Ce délai commence lorsque le dossier est réellement activable ; l'inscription préalable auprès de l'ambassade et la décision de visa suivent leur propre calendrier.",
         list: [
           "Le service créneau individuel est payable après l'obtention effective du rendez-vous",
-          "Aucun délai de 24 ou 72 heures ne doit être annoncé comme garanti à votre client",
-          "Une date de voyage proche doit être évaluée avant toute promesse commerciale",
+          "Délai court de référence : environ une semaine pour un dossier activable",
+          "Un dossier sans réponse de l'ambassade ou sans accès citaconsular.es ne peut pas encore entrer dans ce délai",
+          "Une date de voyage proche doit être communiquée dès le premier échange pour prioriser correctement le dossier",
           "Le rendez-vous obtenu ne garantit pas l'accord du visa : le dossier reste examiné par l'ambassade",
           "La confirmation officielle doit être conservée avant d'acheter un billet non remboursable",
         ],
@@ -4275,7 +4276,7 @@ const guides: Guide[] = [
       },
       {
         q: "Pouvez-vous garantir un rendez-vous Espagne en 24 ou 72 heures ?",
-        a: "Non. Aucun intermédiaire ne contrôle le calendrier de l'ambassade. Joventy peut organiser une recherche spécialisée et surveiller citaconsular.es après réception des accès, mais la disponibilité et le délai dépendent du portail, des ouvertures et des annulations. Le service créneau individuel est payable après l'obtention effective du rendez-vous.",
+        a: "Le délai court de référence de Joventy est d'environ une semaine pour les dossiers complets, activables et dont les accès fonctionnent. Nous ne présentons pas 24 ou 72 heures comme notre délai de référence. Le délai d'une semaine commence après l'activation réelle du dossier ; l'inscription auprès de l'ambassade et la décision de visa restent des étapes distinctes.",
       },
       {
         q: "L'agence peut-elle envoyer un seul email pour plusieurs clients ?",
@@ -4329,7 +4330,7 @@ const guides: Guide[] = [
     ],
     conversion: {
       heading: "Agence à Kinshasa ? Parlons de vos dossiers Espagne",
-      body: "Écrivez « AGENCE ESPAGNE » sur WhatsApp avec le nombre de clients, les dates de voyage et le statut des accès. Nous discuterons d'un suivi par dossier et du tarif applicable, avec paiement du service créneau après résultat individuel.",
+      body: "Écrivez « AGENCE ESPAGNE » sur WhatsApp avec le nombre de clients, les dates de voyage et le statut des accès. Pour les dossiers activables, notre délai court de référence est d'environ une semaine, avec paiement du service créneau après résultat individuel.",
       primaryLabel: "Voir le service créneau Espagne",
       primaryHref: "/creneaux-visa-espagne-kinshasa",
       whatsappLabel: "Discuter avec Joventy sur WhatsApp",
