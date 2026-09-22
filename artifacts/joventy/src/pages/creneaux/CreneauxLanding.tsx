@@ -15,6 +15,7 @@ import {
   Clock,
 } from "lucide-react";
 import type { CreneauxSEO } from "@/data/creneaux-seo";
+import { trackEvent } from "@/lib/analytics";
 
 interface Props {
   data: CreneauxSEO;
@@ -161,7 +162,10 @@ export function CreneauxLanding({ data }: Props) {
                 </div>
               ))}
             </div>
-            <Link href="/dashboard/applications/new/creneau">
+            <Link
+              href="/dashboard/applications/new/creneau"
+              onClick={() => trackEvent("application_start", { location: "slot_hero", service: data.slug })}
+            >
               <button className="w-full inline-flex items-center justify-center gap-3 bg-secondary hover:bg-secondary/90 text-white font-black text-lg px-8 py-4 rounded-xl shadow-2xl shadow-secondary/30 transition-all hover:scale-105 active:scale-100">
                 Obtenir mon créneau
                 <ChevronRight className="w-5 h-5" />
@@ -222,7 +226,10 @@ export function CreneauxLanding({ data }: Props) {
             ))}
           </div>
           <div className="mt-10 text-center">
-            <Link href="/dashboard/applications/new/creneau">
+            <Link
+              href="/dashboard/applications/new/creneau"
+              onClick={() => trackEvent("application_start", { location: "slot_mid_cta", service: data.slug })}
+            >
               <Button size="lg" className="bg-secondary text-white hover:bg-secondary/90 font-bold shadow-lg shadow-secondary/25">
                 Démarrer — 0 $ d'acompte <ChevronRight className="ml-1 w-4 h-4" />
               </Button>
@@ -335,13 +342,21 @@ export function CreneauxLanding({ data }: Props) {
               Aucun acompte — vous payez 350 $ uniquement quand le créneau est confirmé.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/dashboard/applications/new/creneau">
+              <Link
+                href="/dashboard/applications/new/creneau"
+                onClick={() => trackEvent("application_start", { location: "slot_bottom_cta", service: data.slug })}
+              >
                 <button className="inline-flex items-center gap-3 bg-secondary hover:bg-secondary/90 text-white font-black text-lg px-10 py-4 rounded-2xl shadow-xl shadow-black/20 transition-all hover:scale-105 active:scale-100">
                   Obtenir mon créneau · 0 $ d'acompte
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </Link>
-              <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+              <a
+                href={`https://wa.me/243840808122?text=${encodeURIComponent(`Bonjour Joventy, je souhaite obtenir un créneau ${data.name} depuis Kinshasa. Pouvez-vous m'expliquer les étapes ?`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackEvent("whatsapp_click", { location: "slot_bottom_cta", service: data.slug })}
+              >
                 <button className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/30 text-white font-bold px-6 py-4 rounded-2xl transition-all">
                   <MessageCircle className="w-5 h-5" />
                   Question ? WhatsApp

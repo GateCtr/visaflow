@@ -22,6 +22,7 @@ import {
   Star,
   ArrowDown,
 } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 const MPESA_NUMBER = "0820 344 541";
 const AIRTEL_NUMBER = "0990 775 880";
@@ -142,6 +143,7 @@ export default function AlerteEspagne() {
       if (!res.ok) throw new Error(`Upload échoué (${res.status})`);
       const { storageId } = await res.json();
       await submitOrder({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined, proofStorageId: storageId as string });
+      trackEvent("alert_signup_completed", { location: "spain_alert", price_usd: PRICE_USD });
       setDone(true);
     } catch {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible d'envoyer. Réessayez." });

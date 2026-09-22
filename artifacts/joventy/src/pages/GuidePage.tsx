@@ -9,6 +9,7 @@ import { WhatsAppAuditCTA } from "@/components/WhatsAppAuditCTA";
 import { ShieldCheck } from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { AdSenseInArticle } from "@/components/AdSenseInArticle";
+import { trackEvent } from "@/lib/analytics";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Visa USA": "bg-blue-100 text-blue-700",
@@ -267,7 +268,10 @@ export default function GuidePage() {
                 </p>
               </div>
               <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
-                <Link href={guide.conversion.primaryHref}>
+                <Link
+                  href={guide.conversion.primaryHref}
+                  onClick={() => trackEvent("service_click", { location: "guide_conversion", guide: guide.slug })}
+                >
                   <Button className="w-full sm:w-auto bg-secondary hover:bg-secondary/90 text-white font-semibold">
                     {guide.conversion.primaryLabel} <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
@@ -276,6 +280,7 @@ export default function GuidePage() {
                   href={`https://wa.me/243840808122?text=${encodeURIComponent(guide.conversion.whatsappMessage)}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => trackEvent("whatsapp_click", { location: "guide_conversion", guide: guide.slug })}
                   className="inline-flex items-center justify-center text-sm font-semibold text-white/90 hover:text-white underline underline-offset-4"
                 >
                   <MessageCircle className="mr-2 h-4 w-4" />
@@ -407,6 +412,7 @@ export default function GuidePage() {
         href={whatsappHref}
         target="_blank"
         rel="noreferrer"
+        onClick={() => trackEvent("whatsapp_click", { location: "guide_floating_cta", guide: guide.slug })}
         aria-label={`Contacter Joventy sur WhatsApp au sujet de ${guide.title}`}
         className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-[#25D366] text-white text-sm font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-[#1ebe5d] transition-colors sm:right-24"
       >

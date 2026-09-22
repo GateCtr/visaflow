@@ -12,6 +12,7 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Why100PercentOnline } from "@/components/Why100PercentOnline";
 import { TrustFAQ } from "@/components/TrustFAQ";
 import { AdSenseBanner } from "@/components/AdSenseBanner";
+import { trackEvent } from "@/lib/analytics";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -73,6 +74,8 @@ export default function DestinationPage() {
         description: "Portail officiel à utiliser avec votre compte et email personnels avant les étapes de rendez-vous et de dépôt.",
         }
       : null;
+  const whatsappMessage = `Bonjour Joventy, je souhaite être accompagné pour mon visa ${dest.nameShort} depuis Kinshasa. Pouvez-vous m'expliquer les étapes et les tarifs ?`;
+  const whatsappHref = `https://wa.me/243840808122?text=${encodeURIComponent(whatsappMessage)}`;
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -181,12 +184,20 @@ export default function DestinationPage() {
           <p className="text-white/75 text-lg max-w-2xl leading-relaxed mb-8">{dest.intro}</p>
 
           <div className="flex flex-wrap gap-4">
-            <Link href="/register">
+            <Link
+              href="/register"
+              onClick={() => trackEvent("application_start", { location: "destination_hero", destination: dest.slug })}
+            >
               <Button size="lg" className="h-12 px-7 bg-secondary hover:bg-secondary/90 text-white font-bold shadow-xl rounded-xl">
                 Créer mon dossier <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
-            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackEvent("whatsapp_click", { location: "destination_hero", destination: dest.slug })}
+            >
               <Button size="lg" variant="outline" className="h-12 px-7 border-white/30 text-white hover:bg-white/10 font-semibold rounded-xl">
                 <MessageCircle className="mr-2 w-4 h-4" /> WhatsApp
               </Button>
@@ -500,7 +511,10 @@ export default function DestinationPage() {
                   Chaque demandeur envoie personnellement l'email d'inscription à emb.kinshasa.citasvis@maec.es ; Joventy aide à le préparer puis surveille les créneaux sur citaconsular.es après réception des identifiants. Aucun acompte — 350 $ payés uniquement après confirmation.
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <Link href="/creneaux-visa-espagne-kinshasa">
+                  <Link
+                    href="/creneaux-visa-espagne-kinshasa"
+                    onClick={() => trackEvent("service_click", { location: "destination_spain_summary", service: "spain_slot" })}
+                  >
                     <Button className="bg-secondary hover:bg-secondary/90 text-white font-bold shadow-lg shadow-secondary/20 gap-2">
                       Créneau Espagne · 0 $ d'acompte <ArrowRight className="w-4 h-4" />
                     </Button>
@@ -587,12 +601,20 @@ export default function DestinationPage() {
             Créez votre dossier en 5 minutes et payez via M-Pesa. Joventy s'occupe du reste. Vous ne payez la prime de succès que si ça marche.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/register">
+            <Link
+              href="/register"
+              onClick={() => trackEvent("application_start", { location: "destination_bottom_cta", destination: dest.slug })}
+            >
               <Button size="lg" className="h-13 px-8 text-base bg-secondary hover:bg-secondary/90 text-white font-bold shadow-xl rounded-xl">
                 Créer mon dossier — {dest.engagement} USD <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-            <a href="https://wa.me/243840808122" target="_blank" rel="noopener noreferrer">
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackEvent("whatsapp_click", { location: "destination_bottom_cta", destination: dest.slug })}
+            >
               <Button size="lg" variant="outline" className="h-13 px-8 text-base border-white/30 text-white hover:bg-white/10 font-bold rounded-xl">
                 <MessageCircle className="mr-2 w-5 h-5" /> Question ? WhatsApp
               </Button>
