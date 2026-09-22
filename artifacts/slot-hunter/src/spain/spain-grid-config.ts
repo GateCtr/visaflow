@@ -40,11 +40,11 @@ export type FailureKind =
 
 /** Configuration de la grille d'horloge murale, adossée aux variables d'environnement. */
 export interface GridConfig {
-  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 10000). */
+  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 6000). */
   huntTickMs: number;
   /** Tick de la phase tardive en ms (SPAIN_LATE_TICK_MS, défaut 60000). */
   lateTickMs: number;
-  /** Amplitude max du jitter en fraction du tick (SPAIN_GRID_JITTER_PCT, défaut 0.02). */
+  /** Jitter conservé pour compatibilité de configuration, mais désactivé par défaut. */
   jitterPct: number;
   /** Minute de début de fenêtre (SPAIN_WINDOW_START_MIN, défaut 3). */
   windowStartMin: number;
@@ -89,25 +89,16 @@ export interface WorkerRuntimeState {
 const TICK_MIN_MS = 1000;
 const TICK_MAX_MS = 3_600_000;
 
-/** Bornes de jitter (fraction du tick). */
-const JITTER_PCT_MIN = 0;
-const JITTER_PCT_MAX = 0.5;
-
 /** Bornes des minutes-dans-l'heure. */
 const MINUTE_MIN = 0;
 const MINUTE_MAX = 59;
 
 /** Valeurs par défaut (Requirements 11.2, 11.3, 11.4, 11.6, 11.9). */
-// huntTickMs = 10 s. Le cycle Kinshasa recrée une PHPSESSID et refait
-// main → getservices → getagendas → datetime à chaque passage. Un tick de 6 s
-// faisait rater un front dès qu'un cycle dépassait 6 s ; 10 s laisse une marge
-// réaliste tout en conservant des fronts communs.
-const DEFAULT_HUNT_TICK_MS = 10_000;
+// huntTickMs = 6 s : cadence demandée pour la chasse active.
+const DEFAULT_HUNT_TICK_MS = 6_000;
 const DEFAULT_LATE_TICK_MS = 60_000;
-// jitterPct = 0.02 (±200 ms à 10 s). Chaque worker a une IP/session/PHPSESSID distincts →
-// aucune raison anti-détection de les désynchroniser entre eux ; on veut au contraire qu'ils
-// frappent quasi ensemble sur le même front de grille. Jitter quasi nul = synchronisation.
-const DEFAULT_JITTER_PCT = 0.02;
+// Le jitter de grille est désactivé : tous les workers utilisent le même front exact.
+const DEFAULT_JITTER_PCT = 0;
 // windowStartMin = 3 : la phase preflight démarre à HH:03 (au lieu de HH:05) pour donner
 // 10 min de préparation (armement + pre-pub HH:10) avant la chasse HH:13. Aligné sur
 // WINDOW_START_MIN de l'orchestrateur.
@@ -146,37 +137,6 @@ function parseIntEnv(
   return parsed;
 }
 
-/**
- * Lit un nombre décimal depuis l'environnement, puis le borne dans [min, max].
- * Applique le défaut si absent/vide/non numérique,
- * borne sinon (avec avertissement si hors intervalle).
- */
-function parseFloatBoundedEnv(
-  name: string,
-  raw: string | undefined,
-  min: number,
-  max: number,
-  defaultValue: number,
-): number {
-  if (raw === undefined || raw.trim() === "") {
-    return defaultValue;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) {
-    console.warn(`[spain-grid] ${name} non numérique ("${raw}"), valeur par défaut appliquée: ${defaultValue}`);
-    return defaultValue;
-  }
-  if (parsed < min) {
-    console.warn(`[spain-grid] ${name}=${parsed} < ${min}, borné à ${min}`);
-    return min;
-  }
-  if (parsed > max) {
-    console.warn(`[spain-grid] ${name}=${parsed} > ${max}, borné à ${max}`);
-    return max;
-  }
-  return parsed;
-}
-
 // ─── Chargement de configuration ─────────────────────────────────────────────
 
 /**
@@ -207,14 +167,6 @@ export function loadGridConfig(env: NodeJS.ProcessEnv = process.env): GridConfig
     TICK_MAX_MS,
     DEFAULT_LATE_TICK_MS,
   );
-  const jitterPct = parseFloatBoundedEnv(
-    "SPAIN_GRID_JITTER_PCT",
-    env.SPAIN_GRID_JITTER_PCT,
-    JITTER_PCT_MIN,
-    JITTER_PCT_MAX,
-    DEFAULT_JITTER_PCT,
-  );
-
   let windowStartMin = parseIntEnv(
     "SPAIN_WINDOW_START_MIN",
     env.SPAIN_WINDOW_START_MIN,
@@ -262,7 +214,9 @@ export function loadGridConfig(env: NodeJS.ProcessEnv = process.env): GridConfig
   return {
     huntTickMs,
     lateTickMs,
-    jitterPct,
+    // Le jitter est définitivement désactivé. Le champ reste présent uniquement
+    // pour compatibilité avec les configurations/tests historiques.
+    jitterPct: DEFAULT_JITTER_PCT,
     windowStartMin,
     huntStartMin,
     lateStartMin,

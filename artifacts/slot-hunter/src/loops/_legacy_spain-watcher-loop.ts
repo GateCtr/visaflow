@@ -35,7 +35,7 @@ import { log } from "../scheduler-utils.js";
 
 const SPAIN_HTTP_MODE = process.env.SPAIN_HTTP_MODE === "1";
 const SPAIN_HTTP_SCAN_INTERVAL_SEC = (() => {
-  const configured = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "10");
+  const configured = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "6");
   if (!Number.isFinite(configured) || configured < 10) return 10;
   return Math.round(configured);
 })();

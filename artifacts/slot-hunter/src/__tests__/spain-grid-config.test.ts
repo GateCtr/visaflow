@@ -20,9 +20,9 @@ import type { GridConfig } from "../spain/spain-grid-config.js";
 // ─── Défauts attendus (miroir du module sous test) ──────────────────────────
 
 const DEFAULTS = {
-  huntTickMs: 10_000,
+  huntTickMs: 6_000,
   lateTickMs: 60_000,
-  jitterPct: 0.02,
+  jitterPct: 0,
   windowStartMin: 3,
   huntStartMin: 13,
   lateStartMin: 17,
@@ -77,7 +77,7 @@ describe("loadGridConfig — valeurs valides", () => {
     expect(cfg).toEqual<GridConfig>({
       huntTickMs: 12_000,
       lateTickMs: 45_000,
-      jitterPct: 0.3,
+      jitterPct: 0,
       windowStartMin: 4,
       huntStartMin: 10,
       lateStartMin: 20,
@@ -123,10 +123,6 @@ describe("loadGridConfig — défauts + warning sur entrée invalide", () => {
     { label: "late tick absent", key: "SPAIN_LATE_TICK_MS", raw: undefined, expectedField: "lateTickMs", expectedValue: DEFAULTS.lateTickMs },
     { label: "late tick non numérique", key: "SPAIN_LATE_TICK_MS", raw: "xyz", expectedField: "lateTickMs", expectedValue: DEFAULTS.lateTickMs },
     { label: "late tick hors borne", key: "SPAIN_LATE_TICK_MS", raw: "0", expectedField: "lateTickMs", expectedValue: DEFAULTS.lateTickMs },
-    // — SPAIN_GRID_JITTER_PCT — (défaut uniquement si absent/vide/non numérique)
-    { label: "jitter absent", key: "SPAIN_GRID_JITTER_PCT", raw: undefined, expectedField: "jitterPct", expectedValue: DEFAULTS.jitterPct },
-    { label: "jitter vide", key: "SPAIN_GRID_JITTER_PCT", raw: "", expectedField: "jitterPct", expectedValue: DEFAULTS.jitterPct },
-    { label: "jitter non numérique", key: "SPAIN_GRID_JITTER_PCT", raw: "nope", expectedField: "jitterPct", expectedValue: DEFAULTS.jitterPct },
     // — minutes —
     { label: "windowStart absent", key: "SPAIN_WINDOW_START_MIN", raw: undefined, expectedField: "windowStartMin", expectedValue: DEFAULTS.windowStartMin },
     { label: "windowStart hors [0,59]", key: "SPAIN_WINDOW_START_MIN", raw: "60", expectedField: "windowStartMin", expectedValue: DEFAULTS.windowStartMin },
@@ -155,32 +151,22 @@ describe("loadGridConfig — défauts + warning sur entrée invalide", () => {
       const cfg = loadGridConfig(makeEnv(base));
 
       expect(cfg[c.expectedField]).toBe(c.expectedValue);
-      // Un warning au moins doit nommer la variable concernée.
-      expect(warnSpy).toHaveBeenCalled();
-      const named = warnSpy.mock.calls.some((args: readonly unknown[]) =>
-        typeof args[0] === "string" && args[0].includes(c.key),
-      );
-      expect(named).toBe(true);
+      // Les valeurs absentes/vides utilisent silencieusement le défaut ; les
+      // valeurs explicites invalides doivent nommer la variable concernée.
+      const shouldWarn = c.raw !== undefined && c.raw.trim() !== "";
+      if (shouldWarn) {
+        expect(warnSpy).toHaveBeenCalled();
+        const named = warnSpy.mock.calls.some((args: readonly unknown[]) =>
+          typeof args[0] === "string" && args[0].includes(c.key),
+        );
+        expect(named).toBe(true);
+      } else {
+        expect(warnSpy).not.toHaveBeenCalled();
+      }
       // Aucune violation d'ordre ici → pas d'error.
       expect(errorSpy).not.toHaveBeenCalled();
     });
   }
-});
-
-// ─── loadGridConfig — jitterPct hors bornes → borné (Req 11.5) ───────────────
-
-describe("loadGridConfig — jitterPct borné à [0, 0.5]", () => {
-  it("jitterPct < 0 est borné à 0 avec warning", () => {
-    const cfg = loadGridConfig(makeEnv({ SPAIN_GRID_JITTER_PCT: "-0.4" }));
-    expect(cfg.jitterPct).toBe(0);
-    expect(warnSpy).toHaveBeenCalled();
-  });
-
-  it("jitterPct > 0.5 est borné à 0.5 avec warning", () => {
-    const cfg = loadGridConfig(makeEnv({ SPAIN_GRID_JITTER_PCT: "0.9" }));
-    expect(cfg.jitterPct).toBe(0.5);
-    expect(warnSpy).toHaveBeenCalled();
-  });
 });
 
 // ─── loadGridConfig — ordre invalide → défauts (5,13,17,25) + error (Req 11.8/11.9) ─

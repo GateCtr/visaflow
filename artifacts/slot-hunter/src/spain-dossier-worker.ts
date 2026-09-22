@@ -7,7 +7,7 @@
  *   3. Solve CF via CapSolver EN PASSANT le HTML capturé → cf_clearance lié à l'empreinte TLS impit
  *   4. Utilise le MÊME impit (session._ownImpit) pour toutes les requêtes suivantes
  *   5. Initialise PHPSESSID via GET + POST token
- *   6. Boucle de scan toutes les ~10 s pendant WORKER_WINDOW_MS (25 min) :
+ *   6. Boucle de scan toutes les ~6 s pendant WORKER_WINDOW_MS (25 min) :
  *        /main/ → getservices/ → getagendas/ → datetime/ mois courant+suivants
  *        → créneau éligible ? → Lua Redis atomic claim → executeHttpBooking
  *   7. Sort après booking réussi ou fin de fenêtre.
@@ -216,7 +216,7 @@ const WINDOW_END_MIN = ((): number => {
 
 /** Intervalle de scan start-to-start (secondes → ms) */
 const SCAN_INTERVAL_MS = ((): number => {
-  const s = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "10");
+  const s = Number(process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "6");
   return Math.max(5, Number.isFinite(s) ? s : 10) * 1_000;
 })();
 
@@ -225,7 +225,7 @@ const SCAN_INTERVAL_MS = ((): number => {
 /** Intervalle warm-up : HH:05 → HH:10 (60s entre cycles) */
 const SCAN_WARMUP_INTERVAL_MS = 60_000;
 
-/** Intervalle normal : HH:10 → détection (10s, identique à l'actuel) */
+/** Intervalle normal : HH:10 → détection (6s) */
 const SCAN_NORMAL_INTERVAL_MS = SCAN_INTERVAL_MS;
 
 /** Intervalle hyper-rapide : à partir de HH:12 (pic de publication) → 1s entre cycles */
@@ -239,7 +239,7 @@ const HYPERFAST_START_MINUTE = 12;
  *
  * Phases (basées sur la minute UTC dans l'heure) :
  *   - Warm-up   (HH:05 → HH:10) : 60s — init PHP, CF cache chaud
- *   - Normal    (HH:10 → HH:12) : 10s — scan actif, en attente de publication
+ *   - Normal    (HH:10 → HH:12) : 6s — scan actif, en attente de publication
  *   - Hyperfast (HH:12+)        : 1s  — pic de publication, on scanne au max
  *
  * Note : plus de mode "fast" post-détection. Pendant le pic (HH:12+), hyperfast (1s)
@@ -260,7 +260,7 @@ function getAdaptiveScanInterval(holdingBookingSlot: boolean): number {
   if (minInHour >= HYPERFAST_START_MINUTE) {
     return SCAN_HYPERFAST_INTERVAL_MS; // HH:12+ = pic de publication, scan 1s
   }
-  return SCAN_NORMAL_INTERVAL_MS; // HH:10 → HH:12 = scan normal 10s
+  return SCAN_NORMAL_INTERVAL_MS; // HH:10 → HH:12 = scan normal 6s
 }
 
 /** Tolérance slotDateFrom (jours) — identique au watcher legacy */
@@ -3298,7 +3298,7 @@ export async function runDossierWorker(
       // récupération ASYNCHRONE non bloquante : classify(scan) donne http_5xx ou
       // proxy_dead, on passe RECOVERING et on détache enterRecoveryAsync (fire-and-forget).
       // Le worker n'attend PAS la fin de la réparation : la boucle dort jusqu'au prochain
-      // front, et enterRecoveryAsync rebascule rt en ARMED au succès (transition "recovered").
+    // front, et enterRecoveryAsync rebascule rt en ARMED au succès (transition "recovered").
       // Aucune double-récupération ici : ces branches n'ont pas de handler inline concurrent.
       // NB : à ce point rt.state === "SCANNING" (les branches proxy_error/cf_expired/
       // session_dead font toutes continue/return avant d'arriver ici). Ces statuts n'ont
@@ -3353,8 +3353,7 @@ export async function runDossierWorker(
     //
     // FIX (task 10.1) : dormir jusqu'au prochain front de grille ABSOLU via
     // grid.msUntilNextTick(now, tick, gridSeed). Le front de base ceil(now/tick)*tick est
-    // commun à TOUS les workers (barrière commune) ; seul un jitter déterministe ±jitterPct
-    // par worker les sépare (indétectabilité sans casser l'alignement). Remplace l'ancien
+    // commun à TOUS les workers (barrière commune), sans jitter. Remplace l'ancien
     // calcul adaptiveInterval - (now % adaptiveInterval).
     const nowMs = Date.now();
     const nextWait = grid.msUntilNextTick(nowMs, tick, rt.gridSeed);
@@ -3363,29 +3362,29 @@ export async function runDossierWorker(
     if (nextWait >= 0) lastGridWaitMs = nextWait;
 
     // ── RATTRAPAGE BORNE ─────────────────────────────────────────────────────
-    // Un cycle lent peut finir juste après un front et sinon attendre presque
-    // tout le tick. Pendant la chasse, lancer au plus un scan immédiat si plus
-    // de la moitié du tick reste à attendre. Le rattrapage est explicitement
-    // hors grille, avec un petit jitter, puis le prochain cycle se recale sur
-    // le front absolu. Il ne s'applique pas aux erreurs/récupérations ni à la
-    // phase late volontairement ralentie.
-    const catchUpThreshold = Math.max(1_000, Math.floor(tick / 2));
+    // Un cycle qui traverse un front peut sinon attendre presque tout le tick.
+    // Pendant la chasse, lancer au plus un rattrapage dès que le cycle a réellement
+    // dépassé un front. Le rattrapage est immédiat (0–100 ms de délai de sécurité),
+    // puis le cycle suivant se recale sur le front absolu. Il ne s'applique pas aux
+    // erreurs/récupérations ni à la phase late volontairement ralentie.
+    const crossedGridFront =
+      Math.floor(cycleStart / tick) < Math.floor(nowMs / tick);
     if (
       scheduleCatchUp &&
       phase === "hunt" &&
       !catchUpUsedSinceLastFront &&
-      wait > catchUpThreshold &&
+      crossedGridFront &&
       shouldScheduleWake(nowMs, windowEnd)
     ) {
       catchUpUsedSinceLastFront = true;
-      const catchUpJitterMs = Math.abs(Math.trunc(rt.gridSeed)) % 501;
+      const catchUpDelayMs = Math.floor(Math.random() * 101);
       log(
         "INFO",
-        `${tag} ⚡ rattrapage hors grille — wait=${wait}ms ` +
-          `(seuil=${catchUpThreshold}ms, jitter=${catchUpJitterMs}ms), ` +
+        `${tag} ⚡ rattrapage immédiat hors grille — wait=${wait}ms ` +
+          `(délai=${catchUpDelayMs}ms, max=100ms), ` +
           `prochain front conservé`,
       );
-      if (catchUpJitterMs > 0) await sleep(catchUpJitterMs);
+      if (catchUpDelayMs > 0) await sleep(catchUpDelayMs);
       continue;
     }
 

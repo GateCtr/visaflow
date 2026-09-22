@@ -38,7 +38,7 @@ function banner(msg: string) {
 async function main() {
   banner(`test-worker-parallel — ${N} workers Cuba en parallèle`);
   console.log(`[${ts()}] Window  : ${process.env.SPAIN_WORKER_WINDOW_MIN ?? "25"} min`);
-  console.log(`[${ts()}] Interval: ${process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "10"} s`);
+  console.log(`[${ts()}] Interval: ${process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "6"} s`);
   console.log(`[${ts()}] Portal  : ${CUBA_LMD_PORTAL_URL}`);
   console.log(`[${ts()}] Workers : ${N}\n`);
 
