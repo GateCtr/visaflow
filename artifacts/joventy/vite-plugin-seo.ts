@@ -16,6 +16,22 @@ function appendBeforeHeadClose(html: string, tags: string[]): string {
   return html.replace("</head>", `${tags.join("\n")}\n</head>`);
 }
 
+function replaceHreflang(html: string, url: string): string {
+  return html
+    .replace(
+      /<link rel="alternate" hreflang="fr" href="[^"]*" \/>/,
+      `<link rel="alternate" hreflang="fr" href="${url}" />`,
+    )
+    .replace(
+      /\s*<link rel="alternate" hreflang="en" href="[^"]*" \/>/,
+      "",
+    )
+    .replace(
+      /<link rel="alternate" hreflang="x-default" href="[^"]*" \/>/,
+      `<link rel="alternate" hreflang="x-default" href="${url}" />`,
+    );
+}
+
 function buildDestSchemas(dest: (typeof DESTINATIONS_SEO)[0], url: string): string {
   const faq = JSON.stringify({
     "@context": "https://schema.org",
@@ -297,7 +313,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
   if (dest) {
     const url = `https://joventy.cd/${dest.slug}`;
     const schemas = buildDestSchemas(dest, url);
-    return html
+    const pageHtml = html
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(dest.title)}</title>`)
       .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${esc(dest.metaDescription)}"`)
       .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`)
@@ -310,6 +326,7 @@ export function injectSeoMeta(html: string, pathname: string): string {
       .replace(/<meta property="og:image:alt" content="[^"]*"/, `<meta property="og:image:alt" content="${esc(`${dest.name} depuis Kinshasa avec Joventy`)}"`)
       .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="https://joventy.cd/opengraph.jpg"`)
       .replace("</head>", `${schemas}\n</head>`);
+    return replaceHreflang(pageHtml, url);
   }
 
   const embassySlug = clean.replace(/^\//, "");

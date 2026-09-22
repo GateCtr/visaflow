@@ -130,6 +130,8 @@ export default function DestinationPage() {
         <title>{dest.title}</title>
         <meta name="description" content={dest.metaDescription} />
         <link rel="canonical" href={`https://joventy.cd/${dest.slug}`} />
+        <link rel="alternate" hrefLang="fr" href={`https://joventy.cd/${dest.slug}`} />
+        <link rel="alternate" hrefLang="x-default" href={`https://joventy.cd/${dest.slug}`} />
         <meta property="og:title" content={dest.title} />
         <meta property="og:description" content={dest.metaDescription} />
         <meta property="og:url" content={`https://joventy.cd/${dest.slug}`} />
