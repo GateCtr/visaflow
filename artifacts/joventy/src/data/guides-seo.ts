@@ -4154,6 +4154,189 @@ const guides: Guide[] = [
   },
 
   {
+    slug: "agence-rendez-vous-visa-espagne-kinshasa",
+    title: "Rendez-vous visa Espagne à Kinshasa pour agences : partenariat Joventy",
+    metaTitle: "Rendez-vous Visa Espagne Kinshasa pour Agences | Joventy",
+    metaDescription:
+      "Agence de voyage à Kinshasa ? Confiez la recherche de rendez-vous visa Espagne à un partenaire spécialisé. Suivi des dossiers, WhatsApp et paiement après résultat.",
+    publishedDate: "2026-09-22",
+    updatedDate: "2026-09-22",
+    readingTime: 8,
+    category: "Visa Business",
+    coverEmoji: "🤝",
+    intro:
+      "Les agences de voyage de Kinshasa perdent souvent des heures à rechercher des rendez-vous visa Espagne pour leurs clients, sans voir de disponibilité sur citaconsular.es. Joventy propose un partenariat simple : vous gardez la relation avec votre client, nous vous aidons à organiser la recherche du créneau sur son propre dossier et vous recevez les confirmations sur WhatsApp. Le paiement du service créneau intervient après l'obtention effective du rendez-vous ; aucun intermédiaire ne peut toutefois imposer le calendrier de l'ambassade ni garantir une date fixe.",
+    sections: [
+      {
+        heading: "Pourquoi les agences ont du mal à obtenir les rendez-vous Espagne",
+        body:
+          "À Kinshasa, le rendez-vous visa Espagne suit un parcours distinct du CEV : le demandeur doit d'abord s'inscrire personnellement auprès de l'ambassade, puis utiliser les accès reçus sur citaconsular.es. Pour une agence qui gère plusieurs voyageurs, cette séquence crée une charge opérationnelle importante et chaque erreur peut faire perdre une occasion.",
+        list: [
+          "Le portail affiche souvent aucun créneau au moment où l'équipe de l'agence se connecte",
+          "Les disponibilités peuvent disparaître très rapidement après leur ouverture ou une annulation",
+          "Chaque client a ses propres identifiants, son passeport et sa date de voyage : les dossiers ne peuvent pas être mélangés",
+          "Une erreur de nom, de numéro de passeport ou de confirmation peut rendre le rendez-vous inutilisable",
+          "Les équipes doivent répondre aux clients tout en préparant les vols, hébergements et documents du voyage",
+          "Une promesse de date faite avant la confirmation expose l'agence à des réclamations et à des pertes commerciales",
+        ],
+      },
+      {
+        heading: "Un partenaire rendez-vous Espagne pour votre agence",
+        body:
+          "Joventy intervient comme support spécialisé sur la recherche du rendez-vous, pas comme revendeur de créneaux. Votre agence reste le point de contact commercial de son client ; nous structurons le suivi du dossier et travaillons avec les informations officielles du demandeur. Un rendez-vous citaconsular.es est nominatif : il doit être réservé pour le bon passeport et ne peut pas être transféré d'un client à un autre.",
+        list: [
+          "Un suivi séparé pour chaque voyageur et chaque numéro de passeport",
+          "Une coordination directe avec votre agence par WhatsApp",
+          "Une vérification des informations nécessaires avant l'activation de la recherche",
+          "Une surveillance du portail officiel après réception des accès du demandeur",
+          "Une notification dès qu'un rendez-vous est effectivement confirmé",
+          "Une démarche traçable sur le dossier du client, sans achat de créneau anonyme",
+        ],
+      },
+      {
+        heading: "Les avantages pour une agence de voyage à Kinshasa",
+        body:
+          "Ce partenariat permet à votre équipe de se concentrer sur la vente, le conseil voyage et la préparation des dossiers au lieu de rafraîchir le portail toute la journée. Vous gardez une visibilité sur chaque demande et vous pouvez donner à votre client une information honnête : dossier en préparation, accès en attente, recherche active ou rendez-vous confirmé.",
+        list: [
+          "Gagnez du temps sur les recherches manuelles et répétitives",
+          "Réduisez les erreurs de connexion et de saisie sur les dossiers multiples",
+          "Améliorez le suivi client avec des étapes claires et des confirmations WhatsApp",
+          "Protégez votre réputation en évitant de vendre une date non confirmée",
+          "Appuyez-vous sur une équipe habituée au parcours Espagne depuis Kinshasa",
+          "Demandez un accompagnement adapté au nombre de dossiers et à l'urgence réelle de vos clients",
+        ],
+      },
+      {
+        heading: "Comment fonctionne le partenariat avec Joventy",
+        body:
+          "Le démarrage se fait directement sur WhatsApp. Nous analysons d'abord le nombre de dossiers, les dates de voyage et l'état de chaque inscription. Cette étape permet de distinguer les clients qui attendent encore la réponse de l'ambassade de ceux qui disposent déjà des accès nécessaires pour rechercher un rendez-vous.",
+        list: [
+          "1. Présentez votre agence, le nombre de dossiers et les dates de voyage souhaitées",
+          "2. Envoyez uniquement les informations utiles et vérifiez que chaque client a donné son accord pour la démarche",
+          "3. Pour chaque demandeur, l'email d'inscription officiel est envoyé personnellement par le demandeur selon les consignes de l'ambassade",
+          "4. Dès que les accès citaconsular.es sont reçus, le dossier peut être activé pour la recherche",
+          "5. Joventy suit la disponibilité correspondant au profil du client et vous informe de l'évolution",
+          "6. Après confirmation, votre agence reçoit les éléments du rendez-vous pour organiser la suite du dossier",
+        ],
+      },
+      {
+        heading: "Un service rapide, sans fausse promesse de délai",
+        body:
+          "Nous comprenons qu'une agence cherche une solution rapide, surtout lorsque le client a déjà payé son voyage. La rapidité dépend cependant de la publication des créneaux, des annulations et de la validité des accès. Joventy peut accélérer l'organisation et la surveillance du dossier, mais ne contrôle ni l'agenda ni la décision de l'ambassade.",
+        list: [
+          "Le service créneau individuel est payable après l'obtention effective du rendez-vous",
+          "Aucun délai de 24 ou 72 heures ne doit être annoncé comme garanti à votre client",
+          "Une date de voyage proche doit être évaluée avant toute promesse commerciale",
+          "Le rendez-vous obtenu ne garantit pas l'accord du visa : le dossier reste examiné par l'ambassade",
+          "La confirmation officielle doit être conservée avant d'acheter un billet non remboursable",
+        ],
+      },
+      {
+        heading: "Tarif et organisation pour les agences",
+        body:
+          "Le service de recherche de créneau Espagne affiché par Joventy est de 350 USD pour un dossier individuel, payable après confirmation du rendez-vous. Une agence qui apporte plusieurs dossiers peut nous contacter sur WhatsApp pour discuter de l'organisation, du volume et de la situation de chaque client. Les frais consulaires et les autres frais de voyage restent distincts.",
+        list: [
+          "Pas de paiement du service créneau avant l'obtention du rendez-vous individuel",
+          "Devis et organisation à discuter pour un portefeuille de plusieurs voyageurs",
+          "Chaque client reste rattaché à son propre passeport et à son propre accès officiel",
+          "Les frais de l'ambassade ne sont pas inclus dans le service Joventy",
+          "La préparation complète du dossier visa est une prestation distincte à préciser avec l'agence",
+        ],
+      },
+      {
+        heading: "Ce que votre agence doit préparer avant de nous écrire",
+        body:
+          "Une demande bien structurée permet de répondre plus vite et d'éviter les échanges inutiles. Ne transmettez pas de mots de passe dans un groupe ou à une personne non autorisée : utilisez un canal convenu avec votre client et votre agence.",
+        list: [
+          "Nom de l'agence et nom de la personne responsable du suivi",
+          "Nombre de clients concernés et type de visa demandé",
+          "Date de voyage prévue et niveau d'urgence de chaque dossier",
+          "Statut de l'inscription : email déjà envoyé, réponse reçue ou accès citaconsular.es disponible",
+          "Numéro de passeport et nom exactement tels qu'ils apparaissent sur le document, transmis de manière sécurisée",
+          "Documents déjà prêts : formulaire, assurance, hébergement, transport et justificatifs",
+        ],
+      },
+      {
+        heading: "Contactez-nous directement sur WhatsApp",
+        body:
+          "Vous êtes une agence à Kinshasa et plusieurs clients attendent un rendez-vous visa Espagne ? Écrivez à Joventy avec le mot « AGENCE ESPAGNE ». Indiquez le nombre de dossiers, la date de voyage la plus proche et l'état des accès. Nous pourrons discuter de la faisabilité, du mode de suivi et de la formule adaptée sans vous demander de promettre une date avant sa confirmation.",
+        list: [
+          "Message recommandé : « Bonjour Joventy, nous sommes une agence à Kinshasa avec [nombre] dossier(s) Espagne. Les dates de voyage sont [dates]. Voici l'état des inscriptions et des accès. Nous souhaitons discuter d'un partenariat de recherche de rendez-vous. »",
+          "Une réponse WhatsApp permet de qualifier rapidement les dossiers réellement activables",
+          "Les clients qui n'ont pas encore reçu leurs accès suivent d'abord la procédure officielle d'inscription",
+          "Les dossiers prêts peuvent être orientés vers le service de recherche de créneau",
+        ],
+      },
+    ],
+    faq: [
+      {
+        q: "Joventy travaille-t-il avec les agences de voyage à Kinshasa ?",
+        a: "Oui. Une agence peut nous contacter directement sur WhatsApp pour discuter du suivi de plusieurs dossiers de rendez-vous visa Espagne. Chaque demandeur reste cependant rattaché à son propre passeport, à ses propres informations et à ses accès officiels.",
+      },
+      {
+        q: "Pouvez-vous garantir un rendez-vous Espagne en 24 ou 72 heures ?",
+        a: "Non. Aucun intermédiaire ne contrôle le calendrier de l'ambassade. Joventy peut organiser une recherche spécialisée et surveiller citaconsular.es après réception des accès, mais la disponibilité et le délai dépendent du portail, des ouvertures et des annulations. Le service créneau individuel est payable après l'obtention effective du rendez-vous.",
+      },
+      {
+        q: "L'agence peut-elle envoyer un seul email pour plusieurs clients ?",
+        a: "Chaque demandeur doit suivre les consignes officielles de l'ambassade et envoyer personnellement son inscription avec ses propres informations. L'agence peut aider son client à préparer les éléments, mais elle ne doit pas mélanger les identités ou les pièces.",
+      },
+      {
+        q: "Pouvez-vous revendre un rendez-vous à mon client ?",
+        a: "Non. Un rendez-vous sur citaconsular.es est nominatif et lié au passeport du demandeur. Joventy travaille sur le dossier du client avec ses informations officielles ; nous ne revendons pas une date appartenant à un autre profil.",
+      },
+      {
+        q: "Combien coûte le service de rendez-vous Espagne pour une agence ?",
+        a: "Le service créneau individuel affiché est de 350 USD, payable après confirmation du rendez-vous. Pour plusieurs dossiers, contactez-nous sur WhatsApp afin de discuter du volume, de l'état des inscriptions et de l'organisation adaptée à votre agence.",
+      },
+      {
+        q: "Le rendez-vous obtenu garantit-il l'obtention du visa ?",
+        a: "Non. Le rendez-vous permet de déposer le dossier ; la décision de visa appartient exclusivement à l'ambassade. L'agence doit continuer à préparer des documents cohérents, une assurance conforme, les justificatifs financiers et les preuves du voyage.",
+      },
+      {
+        q: "Comment démarrer avec Joventy ?",
+        a: "Écrivez-nous directement sur WhatsApp au +243 840 808 122 avec « AGENCE ESPAGNE », le nombre de dossiers, les dates de voyage et le statut des accès de chaque client. Nous vous répondrons pour qualifier le partenariat.",
+      },
+    ],
+    relatedSlugs: [
+      "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
+      "rendez-vous-visa-espagne-kinshasa-72h-creneau-rapide",
+      "documents-visa-schengen-kinshasa",
+    ],
+    relatedDestination: "visa-espagne-kinshasa",
+    internalLinks: [
+      {
+        href: "/creneaux-visa-espagne-kinshasa",
+        label: "Service créneau visa Espagne",
+        description: "Comprendre le suivi des créneaux et les étapes officielles avant la réservation.",
+      },
+      {
+        href: "/visa-espagne-kinshasa",
+        label: "Parcours visa Espagne depuis Kinshasa",
+        description: "Voir les types de visa, les pièces à préparer et les options d'accompagnement.",
+      },
+      {
+        href: "/guides/rendez-vous-visa-espagne-kinshasa-72h-creneau-rapide",
+        label: "Aucun créneau disponible : que faire ?",
+        description: "Les causes des indisponibilités, les erreurs à éviter et les limites des délais.",
+      },
+      {
+        href: "/guides/documents-visa-schengen-kinshasa",
+        label: "Checklist documents Schengen",
+        description: "Préparer les pièces de vos clients avant que le rendez-vous soit confirmé.",
+      },
+    ],
+    conversion: {
+      heading: "Agence à Kinshasa ? Parlons de vos dossiers Espagne",
+      body: "Écrivez « AGENCE ESPAGNE » sur WhatsApp avec le nombre de clients, les dates de voyage et le statut des accès. Nous discuterons d'un suivi par dossier et du tarif applicable, avec paiement du service créneau après résultat individuel.",
+      primaryLabel: "Voir le service créneau Espagne",
+      primaryHref: "/creneaux-visa-espagne-kinshasa",
+      whatsappLabel: "Discuter avec Joventy sur WhatsApp",
+      whatsappMessage: "Bonjour Joventy, nous sommes une agence à Kinshasa et nous cherchons un partenaire pour des rendez-vous visa Espagne. Nous avons [nombre] dossier(s), avec des dates de voyage à partir du [date]. Pouvez-vous nous expliquer le suivi par dossier et les conditions du partenariat ?",
+    },
+  },
+  {
     slug: "rendez-vous-visa-espagne-kinshasa-72h-creneau-rapide",
     metaTitle: "Aucun créneau Espagne à Kinshasa : que faire ? | Joventy",
     metaDescription:
