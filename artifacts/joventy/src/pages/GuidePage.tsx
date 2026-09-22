@@ -76,6 +76,9 @@ export default function GuidePage() {
         }]
       : []),
   ];
+  const whatsappMessage = guide.conversion?.whatsappMessage ??
+    `Bonjour Joventy, je viens de consulter votre guide « ${guide.title} » et je souhaite discuter de mon dossier de visa depuis Kinshasa. Pouvez-vous m'aider ?`;
+  const whatsappHref = `https://wa.me/243840808122?text=${encodeURIComponent(whatsappMessage)}`;
 
   return (
     <PublicLayout solidNav>
@@ -401,9 +404,10 @@ export default function GuidePage() {
 
       {/* WhatsApp floating */}
       <a
-        href="https://wa.me/243840808122"
+        href={whatsappHref}
         target="_blank"
         rel="noreferrer"
+        aria-label={`Contacter Joventy sur WhatsApp au sujet de ${guide.title}`}
         className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-[#25D366] text-white text-sm font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-[#1ebe5d] transition-colors sm:right-24"
       >
         <MessageCircle className="w-5 h-5" />
