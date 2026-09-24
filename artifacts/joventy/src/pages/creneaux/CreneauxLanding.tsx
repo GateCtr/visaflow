@@ -201,11 +201,11 @@ export function CreneauxLanding({ data }: Props) {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <p className="text-secondary font-bold text-xs uppercase tracking-widest mb-2">Service sans acompte</p>
-            <h2 className="text-3xl sm:text-4xl font-black text-primary leading-snug">
-              Comment ça marche — en 3 étapes
-            </h2>
+              <h2 className="text-3xl sm:text-4xl font-black text-primary leading-snug">
+                {data.processHeading ?? "Comment ça marche — en 3 étapes"}
+              </h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-              Votre dossier est prêt. Joventy s'occupe du reste. Vous payez uniquement quand c'est fait.
+                {data.processIntro ?? "Votre dossier est prêt. Joventy s'occupe du reste. Vous payez uniquement quand c'est fait."}
             </p>
           </div>
           <div className="grid sm:grid-cols-3 gap-6">

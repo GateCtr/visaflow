@@ -9,6 +9,8 @@ export interface CreneauxSEO {
   h1: string;
   accroche: string;
   urgency: string;
+  processHeading?: string;
+  processIntro?: string;
   stats: { n: string; label: string }[];
   highlights?: string[];
   steps: { icon: string; title: string; desc: string }[];
@@ -177,14 +179,17 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     destinationKey: "spain",
     emoji: "🇪🇸",
     name: "Espagne",
-    title: "Créneau visa Espagne Kinshasa : 350 $ après résultat",
+    title: "Rendez-vous visa Espagne à Kinshasa : service créneau",
     metaDescription:
-      "Service créneau après inscription à l’ambassade et réception des accès. 0 $ d’acompte : 350 $ à payer seulement après confirmation sur citaconsular.es.",
-    h1: "Créneau visa Espagne à Kinshasa : réservation",
+      "Service créneau pour rendez-vous visa Espagne à Kinshasa : suivi sur citaconsular.es après réception des accès. 0 $ d’acompte ; 350 $ après confirmation.",
+    h1: "Service de créneau visa Espagne à Kinshasa : tarif et étapes",
     accroche:
-      "L'Espagne gère ses rendez-vous visa directement via son ambassade à Kinshasa — pas par le système commun des pays Schengen. Chaque demandeur envoie personnellement son email à l'ambassade, puis réserve sur citaconsular.es avec son numéro de passeport et son mot de passe. Joventy aide à préparer l'email et peut surveiller les créneaux après réception des accès. Vous ne payez que quand le rendez-vous est confirmé.",
+      "À Kinshasa, le rendez-vous visa Espagne se réserve sur citaconsular.es après l’inscription personnelle à l’ambassade et la réception des identifiants. Joventy propose un service facultatif de vérification de l’email et de surveillance des créneaux : 350 USD uniquement après confirmation, sans acompte. Le service ne garantit ni date précise ni visa.",
     urgency:
       "Les créneaux sur citaconsular.es sont pris en moins de 2 minutes dès leur ouverture.",
+    processHeading: "Comment obtenir un créneau visa Espagne à Kinshasa ?",
+    processIntro:
+      "Le parcours se fait en trois étapes : email personnel à l’ambassade, réception des identifiants, puis recherche du créneau sur citaconsular.es. L’accompagnement Joventy est facultatif et ne garantit ni date ni visa.",
     stats: [
       { n: "350 $", label: "payés uniquement après obtention du créneau" },
       { n: "0 $", label: "d'acompte — aucun paiement à l'avance" },
@@ -194,12 +199,12 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     steps: [
       {
         icon: "📋",
-        title: "Votre dossier est prêt — créez votre demande de créneau",
+        title: "Lancez votre demande de créneau visa Espagne",
         desc: "Sélectionnez 'Créneau uniquement — Espagne' sur la plateforme Joventy. Aucun acompte. Communiquez vos informations (nom, numéro de passeport, date de voyage souhaitée) via l'espace client.",
       },
       {
         icon: "📧",
-        title: "Préparez votre email d'inscription",
+        title: "Envoyez personnellement l’email d’inscription",
         desc: "Chaque demandeur contacte personnellement emb.kinshasa.citasvis@maec.es avec l'objet 'RENDEZ-VOUS VISA EST' et les pièces jointes requises. Joventy peut aider à vérifier l'email. L'ambassade répond sous 1 à 14 jours avec vos identifiants citaconsular (numéro de passeport + mot de passe).",
       },
       {
@@ -217,6 +222,10 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       "Support WhatsApp réactif (réponse < 2h)",
     ],
     faqs: [
+      {
+        q: "Comment obtenir un rendez-vous visa Espagne à Kinshasa ?",
+        a: "Envoyez d’abord personnellement votre email d’inscription à l’ambassade. Après réception des identifiants, utilisez citaconsular.es pour accéder à la réservation officielle. Joventy peut vous aider à vérifier l’email et surveiller les créneaux ; son service coûte 350 USD uniquement après confirmation, sans acompte. Aucun délai ni visa n’est garanti.",
+      },
       {
         q: "L'Espagne passe-t-elle par le système commun Schengen pour les visas depuis Kinshasa ?",
          a: "Non. Contrairement à la France, la Belgique ou l'Allemagne (visa Schengen court séjour), l'Espagne gère ses rendez-vous visa directement via son ambassade à Kinshasa. Chaque demandeur envoie d'abord personnellement un email à emb.kinshasa.citasvis@maec.es, puis réserve sur le portail officiel citaconsular.es avec son numéro de passeport et son mot de passe. Joventy peut aider à préparer l'email et surveiller les créneaux.",
