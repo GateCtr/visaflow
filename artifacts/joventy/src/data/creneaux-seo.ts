@@ -177,9 +177,9 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     destinationKey: "spain",
     emoji: "🇪🇸",
     name: "Espagne",
-    title: "Créneau visa Espagne à Kinshasa : réservation | Joventy",
+    title: "Créneau visa Espagne Kinshasa : 350 $ après résultat",
     metaDescription:
-      "Réservez votre créneau visa Espagne à Kinshasa après l'inscription personnelle et la réception de vos accès. Service Joventy à 350 USD, payable après résultat.",
+      "Service créneau après inscription à l’ambassade et réception des accès. 0 $ d’acompte : 350 $ à payer seulement après confirmation sur citaconsular.es.",
     h1: "Créneau visa Espagne à Kinshasa : réservation",
     accroche:
       "L'Espagne gère ses rendez-vous visa directement via son ambassade à Kinshasa — pas par le système commun des pays Schengen. Chaque demandeur envoie personnellement son email à l'ambassade, puis réserve sur citaconsular.es avec son numéro de passeport et son mot de passe. Joventy aide à préparer l'email et peut surveiller les créneaux après réception des accès. Vous ne payez que quand le rendez-vous est confirmé.",

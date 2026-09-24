@@ -1125,9 +1125,9 @@ const guides: Guide[] = [
   {
     slug: "delai-rendez-vous-espagne-kinshasa-bookitit-2026",
     title: "Délai rendez-vous visa Espagne à Kinshasa en 2026",
-    metaTitle: "Délai rendez-vous visa Espagne Kinshasa 2026 | Joventy",
+    metaTitle: "Délai visa Espagne Kinshasa : rendez-vous et attente 2026",
     metaDescription:
-      "Combien de temps pour un rendez-vous visa Espagne à Kinshasa ? Réponse ambassade, recherche, attente, instruction du visa et calendrier 2026.",
+      "Repère observé : environ 36 jours entre la réservation et la date du rendez-vous, sans garantie. Ajoutez l’attente de l’inscription et l’instruction du visa.",
     publishedDate: "2026-07-26",
     updatedDate: "2026-09-16",
     readingTime: 7,
