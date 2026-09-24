@@ -9,6 +9,7 @@ import { JoventyLogo } from "@/components/JoventyLogo";
 import { getEmbassyBySlug, EMBASSIES_SEO } from "@/data/embassies-seo";
 import { getDestinationBySlug } from "@/data/destinations-seo";
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { trackEvent } from "@/lib/analytics";
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -329,6 +330,35 @@ export default function EmbassyPage() {
                   </Link>
                 </div>
               </div>
+            </div>
+          </section>
+        )}
+
+        {embassy.slug === "ambassade-espagne-kinshasa" && (
+          <section className="rounded-3xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-8 sm:p-10">
+            <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center">
+              <div className="max-w-2xl">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-green-700">
+                  Après réception de vos accès
+                </p>
+                <h2 className="mb-2 text-xl font-bold text-primary sm:text-2xl">
+                  Service créneau visa Espagne à Kinshasa
+                </h2>
+                <p className="text-sm leading-relaxed text-slate-700">
+                  Après l’inscription personnelle à l’ambassade et la réception de vos identifiants,
+                  Joventy peut surveiller les disponibilités sur citaconsular.es. Aucun acompte :
+                  350 USD sont dus uniquement après confirmation du rendez-vous. La décision de visa
+                  reste celle de l’ambassade.
+                </p>
+              </div>
+              <Link
+                href="/creneaux-visa-espagne-kinshasa"
+                onClick={() => trackEvent("service_click", { location: "embassy_spain_service", service: "spain_slot" })}
+              >
+                <Button className="bg-secondary font-bold text-white hover:bg-secondary/90">
+                  Découvrir le service créneau <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
             </div>
           </section>
         )}

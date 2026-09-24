@@ -178,9 +178,9 @@ export default function GuidePage() {
                 className="rounded-xl border border-blue-100 bg-white p-4 transition-colors hover:border-primary/30 hover:shadow-sm"
                 data-testid="link-spain-slot-service-top"
               >
-                <span className="font-semibold text-slate-800">Suivi des créneaux</span>
+                <span className="font-semibold text-slate-800">Service créneau visa Espagne</span>
                 <span className="mt-1 block text-sm leading-relaxed text-slate-500">
-                  Voir l’option de suivi après inscription personnelle et réception des accès.
+                  Suivi possible après inscription personnelle et réception des accès.
                 </span>
               </Link>
             </div>

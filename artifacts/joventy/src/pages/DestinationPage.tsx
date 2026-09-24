@@ -279,7 +279,7 @@ export default function DestinationPage() {
                 className="text-primary hover:text-secondary hover:underline"
                 data-testid="link-spain-slot-service"
               >
-                Voir le service de suivi des créneaux →
+                Découvrir le service de créneau visa Espagne →
               </Link>
             </nav>
           </div>
