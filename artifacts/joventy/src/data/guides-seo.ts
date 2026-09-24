@@ -1316,8 +1316,8 @@ const guides: Guide[] = [
   {
     slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
     title: "Rendez-vous visa Espagne à Kinshasa : procédure 2026",
-    metaTitle: "Rendez-vous visa Espagne Kinshasa : procédure 2026",
-    metaDescription: "Comment prendre un rendez-vous visa Espagne à Kinshasa en 2026 : email d'inscription à l'ambassade, citaconsular.es, pièces, confirmation et dépôt.",
+    metaTitle: "Rendez-vous visa Espagne à Kinshasa : 3 étapes en 2026",
+    metaDescription: "Inscription personnelle par email, réception des accès puis réservation sur citaconsular.es. Préparez les pièces et suivez les étapes jusqu’au dépôt.",
     publishedDate: "2026-06-27",
     updatedDate: "2026-09-16",
     readingTime: 8,
