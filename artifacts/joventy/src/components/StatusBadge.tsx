@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, successModel }: { status: string; successModel?: string }) {
   const config: Record<string, { label: string; className: string }> = {
     draft: { label: "Brouillon", className: "bg-slate-100 text-slate-700 border-slate-200" },
     submitted: { label: "Soumis", className: "bg-blue-100 text-blue-800 border-blue-200" },
@@ -15,7 +15,13 @@ export function StatusBadge({ status }: { status: string }) {
     rejected: { label: "Refusé", className: "bg-red-100 text-red-800 border-red-200" },
   };
 
-  const c = config[status] ?? { label: status, className: "bg-slate-100 text-slate-700 border-slate-200" };
+  const paperVisaConfig: Record<string, { label: string; className: string }> = {
+    slot_hunting: { label: "Traitement du dossier", className: "bg-violet-100 text-violet-800 border-violet-200" },
+    slot_found_awaiting_success_fee: { label: "Visa accordé", className: "bg-green-100 text-green-800 border-green-200" },
+  };
+  const c = (successModel === "paper_visa" ? paperVisaConfig[status] : undefined)
+    ?? config[status]
+    ?? { label: status, className: "bg-slate-100 text-slate-700 border-slate-200" };
 
   return (
     <Badge variant="outline" className={`font-medium px-3 py-1 ${c.className}`}>

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -238,7 +239,7 @@ function SpainOtpConfigCard({ appId }: { appId: Id<"applications"> }) {
   );
 }
 
-function getSteps(isEvisaModel: boolean, isDossierOnly: boolean, isSlotOnly: boolean) {
+function getSteps(isEvisaModel: boolean, isPaperVisaModel: boolean, isDossierOnly: boolean, isSlotOnly: boolean) {
   if (isDossierOnly) {
     return [
       { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
@@ -258,8 +259,8 @@ function getSteps(isEvisaModel: boolean, isDossierOnly: boolean, isSlotOnly: boo
   return [
     { key: "awaiting_engagement_payment", label: "Paiement d'engagement", icon: CreditCard },
     { key: "documents_pending", label: "Documents requis", icon: FileText },
-    { key: "in_review_slot_hunting", label: isEvisaModel ? "Traitement & Obtention visa" : "Traitement & Recherche créneau", icon: Search },
-    { key: "slot_found_awaiting_success_fee", label: isEvisaModel ? "Visa obtenu !" : "Créneau trouvé !", icon: Star },
+    { key: "in_review_slot_hunting", label: isPaperVisaModel ? "Formulaire & examen préalable" : isEvisaModel ? "Traitement & Obtention visa" : "Traitement & Recherche créneau", icon: Search },
+    { key: "slot_found_awaiting_success_fee", label: isPaperVisaModel || isEvisaModel ? "Visa accordé !" : "Créneau trouvé !", icon: Star },
     { key: "completed", label: "Dossier complété", icon: CheckCircle2 },
   ];
 }
@@ -385,7 +386,7 @@ function InterviewKit({ app, confirmationLetterUrl, docs }: {
           <div>
             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Visa demandé</p>
             <p className="font-bold text-sm">{app.destination.toUpperCase()}</p>
-            <p className="text-xs text-slate-500">{app.visaType}</p>
+            <p className="text-xs text-slate-500">{getDisplayVisaType(app.destination, app.visaType)}</p>
           </div>
           <div>
             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-0.5">Date du rendez-vous</p>
@@ -738,13 +739,17 @@ export default function ClientApplicationDetail() {
   const hasEngagementProofPending = !!app.paymentProofUrl && !isEngagementPaid;
   const hasSuccessProofPending = !!app.successFeeProofUrl && !isSuccessFeePaid;
 
-  const successModel = (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
+  const successModel = app.destination === "china"
+    ? "paper_visa"
+    : (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = successModel === "evisa";
+  const isPaperVisaModel = successModel === "paper_visa";
+  const isVisaOutcomeModel = isEvisaModel || isPaperVisaModel;
   const servicePackage = (app as { servicePackage?: string }).servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const isSlotOnly = servicePackage === "slot_only";
   const successCopy = pricing?.successCopy;
-  const STEPS = getSteps(isEvisaModel, isDossierOnly, isSlotOnly);
+  const STEPS = getSteps(isEvisaModel, isPaperVisaModel, isDossierOnly, isSlotOnly);
   const stepIndex = isDossierOnly
     ? getStepIndexDossierOnly(app.status)
     : isSlotOnly
@@ -752,7 +757,7 @@ export default function ClientApplicationDetail() {
       : getStepIndex(app.status);
 
   // Appointment details are only shown AFTER success fee is paid (completed state), for appointment model
-  const showAppointmentDetails = isCompleted && isSuccessFeePaid && !isEvisaModel;
+  const showAppointmentDetails = isCompleted && isSuccessFeePaid && !isVisaOutcomeModel;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -761,14 +766,14 @@ export default function ClientApplicationDetail() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-primary flex items-center gap-3">
             <Plane className="w-6 h-6 text-secondary" />
-            {app.destination.toUpperCase()} — {app.visaType}
+            {app.destination.toUpperCase()} — {getDisplayVisaType(app.destination, app.visaType)}
           </h1>
           <p className="text-muted-foreground mt-0.5 text-sm">
             Ref : JOV-{app._id.slice(-5).toUpperCase()} · Demandeur : {app.applicantName}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <StatusBadge status={app.status} />
+          <StatusBadge status={app.status} successModel={app.destination === "china" ? "paper_visa" : app.successModel} />
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
               isDossierOnly
@@ -937,7 +942,7 @@ export default function ClientApplicationDetail() {
                       <strong className="text-primary">{formatCurrency(app.priceDetails?.successFee)}</strong>{" "}
                       pour y accéder.</>}
               </p>
-              {!isEvisaModel && app.slotExpiresAt && (
+              {!isVisaOutcomeModel && app.slotExpiresAt && (
                 <p className="text-xs text-red-600 font-medium flex items-center gap-1">
                   <Clock className="w-3 h-3" /> Réservation expire dans :{" "}
                   <Countdown targetTs={app.slotExpiresAt} />
@@ -959,9 +964,11 @@ export default function ClientApplicationDetail() {
           <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
           <p className="text-sm text-amber-800">
             <strong>Reçu de prime de succès reçu !</strong> Validation en cours —{" "}
-            {isEvisaModel
-              ? "votre visa sera débloqué sous 24h."
-              : "vos détails de RDV seront débloqués sous 24h."}
+            {isPaperVisaModel
+              ? "le justificatif de votre visa sera débloqué après validation."
+              : isEvisaModel
+                ? "votre visa sera débloqué sous 24h."
+                : "vos détails de RDV seront débloqués sous 24h."}
           </p>
         </div>
       )}
@@ -983,10 +990,14 @@ export default function ClientApplicationDetail() {
                 Votre dossier est prêt !
               </h3>
               <p className="text-sm text-slate-600 mb-2">
-                Joventy a constitué et vérifié l'intégralité de votre dossier de demande de visa. Tous les documents sont conformes aux exigences du consulat.
+                {app.destination === "china"
+                  ? "Joventy a préparé les éléments inclus dans votre formule. Vérifiez les pièces demandées par le portail officiel avant la soumission; la décision appartient aux autorités chinoises."
+                  : "Joventy a constitué et vérifié l'intégralité de votre dossier de demande de visa. Tous les documents sont conformes aux exigences du consulat."}
               </p>
               <p className="text-xs text-slate-500">
-                Prenez rendez-vous directement au consulat ou ambassade avec votre dossier complet.
+                {app.destination === "china"
+                  ? "Après approbation en ligne, imprimez le certificat et présentez le passeport original au Centre de Kinshasa, sans rendez-vous."
+                  : "Prenez rendez-vous directement au consulat ou ambassade avec votre dossier complet."}
               </p>
             </div>
           </div>
@@ -994,10 +1005,10 @@ export default function ClientApplicationDetail() {
       )}
 
       {/* Interview kit — only when completed, appointment model, not dossier_only */}
-      {isCompleted && !isEvisaModel && !isDossierOnly && <InterviewKit app={app} confirmationLetterUrl={confirmationLetterUrl} docs={docs as KitDoc[]} />}
+      {isCompleted && !isVisaOutcomeModel && !isDossierOnly && <InterviewKit app={app} confirmationLetterUrl={confirmationLetterUrl} docs={docs as KitDoc[]} />}
 
-      {/* Visa PDF delivery — evisa model */}
-      {isCompleted && isEvisaModel && !isDossierOnly && (
+      {/* Visa result — electronic or classic passport visa */}
+      {isCompleted && isVisaOutcomeModel && !isDossierOnly && (
         <div className="bg-green-50 border-2 border-green-400 rounded-2xl p-6">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
@@ -1008,13 +1019,15 @@ export default function ClientApplicationDetail() {
                 {successCopy?.completedNote ?? "Votre visa est disponible !"}
               </h3>
               <p className="text-sm text-slate-600 mb-4">
-                Félicitations ! Votre visa a été accordé. Téléchargez votre document officiel ci-dessous.
+                {isPaperVisaModel
+                  ? "Votre visa classique a été accordé. Le fichier ci-dessous est un justificatif ou une copie; il ne remplace pas le passeport original."
+                  : "Félicitations ! Votre visa a été accordé. Téléchargez votre document officiel ci-dessous."}
               </p>
               <div className="flex flex-wrap gap-3 items-center">
                 {visaDocUrl ? (
                   <Button asChild className="bg-primary hover:bg-primary/90 text-white font-bold gap-2 h-11">
                     <a href={visaDocUrl} target="_blank" rel="noopener noreferrer" download>
-                      <Download className="w-4 h-4" /> Télécharger mon visa
+                      <Download className="w-4 h-4" /> {isPaperVisaModel ? "Télécharger le justificatif" : "Télécharger mon visa"}
                     </a>
                   </Button>
                 ) : (
@@ -1022,7 +1035,7 @@ export default function ClientApplicationDetail() {
                     <Clock className="w-4 h-4" /> Document en cours de préparation...
                   </div>
                 )}
-                {confirmationLetterUrl && (
+                {confirmationLetterUrl && !isPaperVisaModel && (
                   <Button asChild variant="outline" size="sm" className="gap-2 border-green-600 text-green-700 hover:bg-green-50">
                     <a href={confirmationLetterUrl} target="_blank" rel="noopener noreferrer" download="confirmation_soumission_evisa.pdf">
                       <FileText className="w-4 h-4" /> Confirmation de soumission
@@ -1075,7 +1088,7 @@ export default function ClientApplicationDetail() {
                   )}
                 </div>
               </div>
-              {!isEvisaModel && (
+              {!isVisaOutcomeModel && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Rendez-vous Consulaire</p>
                   {showAppointmentDetails ? (
@@ -1109,12 +1122,12 @@ export default function ClientApplicationDetail() {
                   )}
                 </div>
               )}
-              {isEvisaModel && (
+              {isVisaOutcomeModel && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Statut Visa</p>
                   {isCompleted && visaDocUrl ? (
                     <p className="text-sm text-green-700 font-semibold flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" /> Visa accordé — prêt au téléchargement
+                      <CheckCircle2 className="w-4 h-4" /> Visa accordé — justificatif prêt à télécharger
                     </p>
                   ) : isSlotFound ? (
                     <div className="flex items-center gap-2 text-slate-500">
@@ -1124,7 +1137,7 @@ export default function ClientApplicationDetail() {
                   ) : (
                     <p className="text-sm text-slate-500 flex items-center gap-2">
                       <Search className="w-4 h-4 text-slate-300" />
-                      En cours d'obtention
+                      {isPaperVisaModel ? "Examen préalable en cours" : "En cours d'obtention"}
                     </p>
                   )}
                 </div>
@@ -1153,7 +1166,7 @@ export default function ClientApplicationDetail() {
                 >
                   <span className="flex items-center gap-2 text-sm font-semibold text-blue-800">
                     <FileText className="w-4 h-4 text-blue-600" />
-                    📋 Guide complet des documents requis — {app.visaType}
+                    📋 Guide complet des documents requis — {getDisplayVisaType(app.destination, app.visaType)}
                   </span>
                   <ChevronDown className={`w-4 h-4 text-blue-500 transition-transform ${showDocGuide ? "rotate-180" : ""}`} />
                 </button>
@@ -1205,7 +1218,7 @@ export default function ClientApplicationDetail() {
           {!isEngagementPaid && (
             <div className="bg-card p-6 rounded-2xl border border-border shadow-premium">
               <h2 className="text-lg font-bold text-primary mb-1 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-secondary" /> Guide des documents — {app.visaType}
+                <FileText className="w-4 h-4 text-secondary" /> Guide des documents — {getDisplayVisaType(app.destination, app.visaType)}
               </h2>
               <p className="text-sm text-muted-foreground mb-5">
                 Voici l'ensemble des documents nécessaires pour votre dossier, classés par catégorie.
@@ -1316,7 +1329,7 @@ export default function ClientApplicationDetail() {
       {showReviewModal && appId && (
         <ReviewModal
           applicationId={appId}
-          destination={`${pricing?.flag ?? ""} ${app.visaType}`}
+          destination={`${pricing?.flag ?? ""} ${getDisplayVisaType(app.destination, app.visaType)}`}
           onClose={() => setShowReviewModal(false)}
         />
       )}

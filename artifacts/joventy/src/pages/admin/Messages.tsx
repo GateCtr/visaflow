@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { MessageCircle, ChevronRight, User } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { formatDate } from "@/lib/format";
 
 export default function AdminMessages() {
@@ -127,10 +128,10 @@ function ConversationRow({
                 </span>
               )}
             </h3>
-            <StatusBadge status={conv.status} />
+            <StatusBadge status={conv.status} successModel={conv.destination === "china" ? "paper_visa" : undefined} />
           </div>
           <p className="text-xs text-muted-foreground mb-1">
-            {conv.destination.toUpperCase()} — {conv.visaType} | {conv.applicantName}
+            {conv.destination.toUpperCase()} — {getDisplayVisaType(conv.destination, conv.visaType)} | {conv.applicantName}
           </p>
           {conv.lastMessage ? (
             <div className="flex items-center gap-2">

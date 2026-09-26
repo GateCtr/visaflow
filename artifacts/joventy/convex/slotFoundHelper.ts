@@ -4,6 +4,8 @@ import { internal } from "./_generated/api";
 import { VISA_PRICING } from "./constants";
 
 export function getEffectiveSuccessModel(app: { successModel?: string; destination?: string }): string {
+  // The old China model was saved as evisa on some applications; never present or process it as an e-Visa.
+  if (app.destination === "china") return "paper_visa";
   if (app.successModel) return app.successModel;
   const pricing = app.destination ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
   return pricing?.successModel ?? "appointment";
@@ -33,8 +35,8 @@ export async function coreMarkSlotFound(
   }
 
   const effectiveModel = getEffectiveSuccessModel(app);
-  if (effectiveModel === "evisa") {
-    throw new Error("Ce dossier utilise le modèle e-Visa — utilisez 'Visa Obtenu' plutôt que 'Créneau'.");
+  if (effectiveModel === "evisa" || effectiveModel === "paper_visa") {
+    throw new Error("Ce dossier utilise le modèle de résultat visa — utilisez 'Visa obtenu' plutôt que 'Créneau'.");
   }
 
   const priceDetails = app.priceDetails ?? {

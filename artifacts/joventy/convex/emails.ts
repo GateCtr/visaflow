@@ -694,7 +694,7 @@ export const sendSlotFoundClient = internalAction({
   },
 });
 
-/* ──────────────────────── 6. VISA OBTENU (e-Visa) → CLIENT (URGENT) ─── */
+/* ──────────────────────── 6. VISA OBTENU → CLIENT (URGENT) ─── */
 export const sendVisaObtainedClient = internalAction({
   args: {
     to: v.string(),
@@ -704,18 +704,21 @@ export const sendVisaObtainedClient = internalAction({
     applicationId: v.string(),
   },
   handler: async (_ctx, args) => {
+    const isChinaClassicVisa = args.destination === "china";
     const body = `
-      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Votre visa ${destLabel(args.destination)} est prêt 🎉</h2>
-      ${urgentBanner("Réglez la prime de succès pour recevoir votre document officiel.")}
+      <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:700;letter-spacing:-0.3px;">${isChinaClassicVisa ? "Votre visa Chine est accordé" : `Votre visa ${destLabel(args.destination)} est prêt 🎉`}</h2>
+      ${urgentBanner(isChinaClassicVisa ? "Réglez la prime de succès pour accéder au justificatif fourni dans votre dossier." : "Réglez la prime de succès pour recevoir votre document officiel.")}
       <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 12px;">Excellente nouvelle ! L'équipe Joventy a obtenu votre visa <strong>${destLabel(args.destination)}</strong> pour <strong>${args.applicantName}</strong>.</p>
-      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 4px;">Pour télécharger votre document officiel, réglez la <strong>prime de succès de ${args.successFee}&nbsp;USD</strong>.</p>
+      <p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 4px;">${isChinaClassicVisa ? "Pour accéder au justificatif ou à la copie du visa classique, réglez la" : "Pour télécharger votre document officiel, réglez la"} <strong>prime de succès de ${args.successFee}&nbsp;USD</strong>.</p>
       ${paymentBox()}
-      ${cta(`${APP_URL}/dashboard`, "Télécharger mon visa")}
+      ${cta(`${APP_URL}/dashboard`, isChinaClassicVisa ? "Voir mon justificatif" : "Télécharger mon visa")}
     `;
     await sendEmail({
       from: FROM,
       to: args.to,
-      subject: `🎉 Votre visa ${destLabel(args.destination)} est prêt — Prime de succès à régler`,
+      subject: isChinaClassicVisa
+        ? "Visa Chine accordé — prime de succès à régler"
+        : `🎉 Votre visa ${destLabel(args.destination)} est prêt — Prime de succès à régler`,
       html: htmlWrapper("Visa obtenu", body),
     });
   },

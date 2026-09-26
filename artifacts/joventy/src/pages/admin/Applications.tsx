@@ -9,6 +9,7 @@
  * - Pagination légère
  */
 import { useState, useMemo } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { Link } from "wouter";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -254,10 +255,10 @@ export default function AdminApplications() {
                           </div>
                         </td>
                         <td className="px-3 py-2.5 hidden lg:table-cell">
-                          <span className="text-xs text-slate-500">{app.visaType || "—"}</span>
+                          <span className="text-xs text-slate-500">{app.visaType ? getDisplayVisaType(app.destination, app.visaType) : "—"}</span>
                         </td>
                         <td className="px-3 py-2.5">
-                          <StatusBadge status={app.status} />
+                          <StatusBadge status={app.status} successModel={app.destination === "china" ? "paper_visa" : app.successModel} />
                         </td>
                         <td className="px-3 py-2.5 hidden sm:table-cell">
                           <span className="text-[11px] text-slate-400">{formatDate(app.updatedAt)}</span>
@@ -318,7 +319,7 @@ export default function AdminApplications() {
                         <div className="flex items-center gap-1 text-[11px] text-slate-500">
                           <Globe className="w-3 h-3" />
                           <span className="font-medium">{app.destination.toUpperCase()}</span>
-                          {app.visaType && <><span className="mx-0.5">·</span><span>{app.visaType}</span></>}
+                          {app.visaType && <><span className="mx-0.5">·</span><span>{getDisplayVisaType(app.destination, app.visaType)}</span></>}
                         </div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors shrink-0" />
@@ -326,7 +327,7 @@ export default function AdminApplications() {
 
                     {/* Bottom: Status + Date */}
                     <div className="flex items-center justify-between pt-2.5 border-t border-slate-100">
-                      <StatusBadge status={app.status} />
+                      <StatusBadge status={app.status} successModel={app.destination === "china" ? "paper_visa" : app.successModel} />
                       <span className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
                         {formatDate(app.updatedAt)}

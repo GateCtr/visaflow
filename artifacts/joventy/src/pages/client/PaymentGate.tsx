@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -34,8 +35,11 @@ export default function PaymentGate() {
     app?.status === "slot_found_awaiting_success_fee" ? "success_fee" : "engagement";
 
   const pricing = app ? VISA_PRICING[app.destination as keyof typeof VISA_PRICING] : undefined;
-  const effectiveModel = (app as { successModel?: string } | undefined)?.successModel ?? pricing?.successModel ?? "appointment";
+  const effectiveModel = app?.destination === "china"
+    ? "paper_visa"
+    : (app as { successModel?: string } | undefined)?.successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = effectiveModel === "evisa";
+  const isPaperVisaModel = effectiveModel === "paper_visa";
   const servicePackage = (app as { servicePackage?: string } | undefined)?.servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const isSlotOnly = servicePackage === "slot_only";
@@ -128,6 +132,8 @@ export default function PaymentGate() {
               : "Réglez les frais d'engagement pour activer votre dossier."
             : isEvisaModel
               ? "Réglez la prime de succès pour recevoir votre visa électronique."
+              : isPaperVisaModel
+                ? "Réglez la prime de succès après l'obtention de votre visa classique."
               : "Réglez la prime de succès pour confirmer votre rendez-vous consulaire."}
         </p>
       </div>
@@ -141,7 +147,7 @@ export default function PaymentGate() {
           </p>
           <p className="text-4xl font-bold text-secondary">{formatCurrency(amount)}</p>
           <p className="text-slate-300 text-xs mt-1">
-            Dossier : {app.destination.toUpperCase()} — {app.visaType}
+            Dossier : {app.destination.toUpperCase()} — {getDisplayVisaType(app.destination, app.visaType)}
             {isSlotOnly && " — Créneau consulaire"}
           </p>
         </div>
@@ -185,7 +191,25 @@ export default function PaymentGate() {
             <strong>{formatCurrency(app.priceDetails?.successFee ?? 0)}</strong> ne sera due{" "}
             {isEvisaModel
               ? "qu'une fois votre visa électronique obtenu."
-              : "qu'une fois votre créneau de rendez-vous consulaire obtenu."}
+              : isPaperVisaModel
+                ? "qu'une fois votre visa Chine obtenu après le traitement au Centre."
+                : "qu'une fois votre créneau de rendez-vous consulaire obtenu."}
+          </p>
+        </div>
+      )}
+
+      {app.destination === "china" && paymentType === "engagement" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+          <p className="font-semibold mb-1">Frais officiels du Centre — séparés des frais Joventy</p>
+          <p>
+            L'avis officiel de Kinshasa indique des frais de service de <strong>110 USD en procédure normale</strong> ou{" "}
+            <strong>130 USD en procédure express</strong>, à régler par virement après la soumission en ligne et à justifier
+            avec un reçu portant le nom et le numéro de passeport du demandeur. Après approbation en ligne, les frais de visa
+            sont payés en espèces au guichet. Consultez le{" "}
+            <a href="https://www.visaforchina.cn/FIH4_FR/" target="_blank" rel="noreferrer" className="underline font-semibold">
+              portail officiel de Kinshasa
+            </a>{" "}
+            pour les instructions à jour; aucun montant de frais de visa n'est indiqué ici.
           </p>
         </div>
       )}

@@ -3,6 +3,7 @@
  * Single-row on desktop, stacked on mobile. Maximum info density.
  */
 import { useState } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDateOnly } from "@/lib/format";
 import { SERVICE_PACKAGES } from "@convex/constants";
@@ -30,9 +31,10 @@ interface Props {
   isDossierOnly: boolean;
   isSlotOnly: boolean;
   isEvisaModel?: boolean;
+  isPaperVisaModel?: boolean;
 }
 
-export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly, isEvisaModel = false }: Props) {
+export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly, isEvisaModel = false, isPaperVisaModel = false }: Props) {
   const [trackingCopied, setTrackingCopied] = useState(false);
   const [refCopied, setRefCopied] = useState(false);
   const trackingToken = (app as { trackingToken?: string }).trackingToken;
@@ -68,7 +70,7 @@ export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly, isE
             </div>
             <div className="min-w-0">
               <h1 className="text-base lg:text-lg font-bold text-slate-900 tracking-tight truncate">
-                {app.destination.toUpperCase()} · {app.visaType}
+                {app.destination.toUpperCase()} · {getDisplayVisaType(app.destination, app.visaType)}
               </h1>
             </div>
           </div>
@@ -78,7 +80,7 @@ export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly, isE
 
           {/* Status + Package badges */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <StatusBadge status={app.status} />
+            <StatusBadge status={app.status} successModel={app.destination === "china" ? "paper_visa" : typeof app.successModel === "string" ? app.successModel : undefined} />
             <span
               className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                 isDossierOnly
@@ -95,10 +97,12 @@ export function HeaderCard({ app, servicePackage, isDossierOnly, isSlotOnly, isE
               className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                 isEvisaModel
                   ? "bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200/60"
+                  : isPaperVisaModel
+                    ? "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200/60"
                   : "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200/60"
               }`}
             >
-              {isEvisaModel ? "E-Visa" : "Visa Complet"}
+              {isEvisaModel ? "E-Visa" : isPaperVisaModel ? "Visa classique" : "Visa Complet"}
             </span>
           </div>
         </div>

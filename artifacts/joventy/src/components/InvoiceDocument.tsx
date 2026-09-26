@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { Download, Printer, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
@@ -466,7 +467,7 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
   const [isGenerating, setIsGenerating] = useState(false);
 
   const pricing = VISA_PRICING[app.destination as keyof typeof VISA_PRICING];
-  const successModel = app.successModel ?? pricing?.successModel ?? "appointment";
+  const successModel = app.destination === "china" ? "paper_visa" : app.successModel ?? pricing?.successModel ?? "appointment";
   const servicePackage = app.servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const packageLabel = SERVICE_PACKAGES?.[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? servicePackage;
@@ -616,10 +617,10 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
               <div className="space-y-1">
                 {[
                   ["Destination", `${destInfo?.flag ?? ""} ${destInfo?.label ?? app.destination}`],
-                  ["Type de visa", app.visaType],
+                  ["Type de visa", getDisplayVisaType(app.destination, app.visaType)],
                   ["Package", packageLabel],
                   urgencyLabel ? ["Urgence", urgencyLabel] : null,
-                  successModel === "evisa" ? ["Mode", "E-Visa / Sans rendez-vous"] : null,
+                  successModel === "evisa" ? ["Mode", "E-Visa / Sans rendez-vous"] : successModel === "paper_visa" ? ["Mode", "Visa classique / dépôt du passeport"] : null,
                 ].filter((r): r is [string, string] => r !== null).map(([label, value]) => (
                   <div key={label as string} className="flex items-start gap-2">
                     <span className="text-xs text-slate-400 w-20 flex-shrink-0">{label}</span>

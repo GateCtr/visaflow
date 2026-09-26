@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -56,7 +57,7 @@ export default function ClientApplications() {
                       Destination : {app.destination.toUpperCase()}
                     </h3>
                     <p className="text-muted-foreground text-sm">
-                      {app.visaType} • Demandeur : {app.applicantName}
+                      {getDisplayVisaType(app.destination, app.visaType)} • Demandeur : {app.applicantName}
                     </p>
                   </div>
                 </div>
@@ -66,7 +67,7 @@ export default function ClientApplications() {
                     <p className="text-xs text-muted-foreground mb-1">Mise à jour</p>
                     <p className="text-sm font-medium">{formatDate(app.updatedAt)}</p>
                   </div>
-                  <StatusBadge status={app.status} />
+                  <StatusBadge status={app.status} successModel={app.destination === "china" ? "paper_visa" : app.successModel} />
                   <ChevronRight className="w-5 h-5 text-slate-300 hidden sm:block" />
                 </div>
               </div>

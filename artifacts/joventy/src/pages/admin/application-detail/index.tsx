@@ -79,8 +79,11 @@ export default function ApplicationDetailPage() {
   const isSlotFound = app.status === "slot_found_awaiting_success_fee";
   const isCompleted = app.status === "completed";
   const isRejected = app.status === "rejected";
-  const successModel = (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
+  const successModel = app.destination === "china"
+    ? "paper_visa"
+    : (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = successModel === "evisa";
+  const isPaperVisaModel = successModel === "paper_visa";
   const servicePackage = (app as { servicePackage?: string }).servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const isSlotOnly = servicePackage === "slot_only";
@@ -98,6 +101,7 @@ export default function ApplicationDetailPage() {
         isDossierOnly={isDossierOnly}
         isSlotOnly={isSlotOnly}
         isEvisaModel={isEvisaModel}
+        isPaperVisaModel={isPaperVisaModel}
       />
 
       {/* ═══ TAB BAR + CHAT TOGGLE ═══ */}
@@ -181,6 +185,7 @@ export default function ApplicationDetailPage() {
               isSlotFound={isSlotFound}
               isCompleted={isCompleted}
               isEvisaModel={isEvisaModel}
+              isPaperVisaModel={isPaperVisaModel}
               isSlotOnly={isSlotOnly}
               hunterConfig={hunterConfig}
               pricing={pricing}
@@ -307,12 +312,13 @@ function TabDocuments({ appId, destination, visaType, servicePackage, docs, isEn
    ══════════════════════════════════════════════════════════════════════════════ */
 function TabBot({
   appId, app, isSlotHunting, isSlotFound, isCompleted,
-  isEvisaModel, isSlotOnly, hunterConfig, pricing, confirmationLetterUrl, botLogs,
+  isEvisaModel, isPaperVisaModel, isSlotOnly, hunterConfig, pricing, confirmationLetterUrl, botLogs,
 }: any) {
+  const isVisaOutcomeModel = isEvisaModel || isPaperVisaModel;
   return (
     <div className="space-y-4">
       {/* Slot Panel (appointment model) */}
-      {!isEvisaModel && (isSlotHunting || isSlotFound || (isCompleted && app.appointmentDetails)) && (
+      {!isVisaOutcomeModel && (isSlotHunting || isSlotFound || (isCompleted && app.appointmentDetails)) && (
         <SlotPanel
           appId={appId}
           isSlotHunting={isSlotHunting}
@@ -326,8 +332,8 @@ function TabBot({
       )}
 
       {/* E-Visa Panel */}
-      {isEvisaModel && (isSlotHunting || isSlotFound) && !isCompleted && (
-        <EvisaPanel appId={appId} isSlotFound={isSlotFound} isSlotHunting={isSlotHunting} />
+      {isVisaOutcomeModel && (isSlotHunting || isSlotFound) && !isCompleted && (
+        <EvisaPanel appId={appId} isSlotFound={isSlotFound} isSlotHunting={isSlotHunting} isPaperVisaModel={isPaperVisaModel} />
       )}
 
       {/* Hunter Config */}

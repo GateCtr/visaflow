@@ -1,4 +1,5 @@
 import { useRoute } from "wouter";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { CheckCircle2, Clock, CreditCard, Search, Star, XCircle, Plane, MapPin, Calendar } from "lucide-react";
@@ -7,6 +8,7 @@ const DEST_LABELS: Record<string, string> = {
   usa: "États-Unis",
   schengen: "Espace Schengen",
   dubai: "Dubaï",
+  china: "Chine",
   turkey: "Turquie",
   india: "Inde",
   germany: "Allemagne",
@@ -16,6 +18,7 @@ const DEST_FLAG: Record<string, string> = {
   usa: "🇺🇸",
   schengen: "🇪🇺",
   dubai: "🇦🇪",
+  china: "🇨🇳",
   turkey: "🇹🇷",
   india: "🇮🇳",
   germany: "🇩🇪",
@@ -25,6 +28,7 @@ const DEST_COLOR: Record<string, string> = {
   usa: "from-blue-600 to-blue-800",
   schengen: "from-indigo-600 to-indigo-800",
   dubai: "from-amber-500 to-amber-700",
+  china: "from-red-600 to-red-800",
   turkey: "from-red-600 to-red-800",
   india: "from-orange-500 to-orange-700",
   germany: "from-yellow-500 to-yellow-700",
@@ -64,14 +68,55 @@ const STEPS: StatusStep[] = [
   },
 ];
 
-function getStepIndex(status: string): number {
-  for (let i = 0; i < STEPS.length; i++) {
-    if (STEPS[i].key.includes(status)) return i;
+const CHINA_STEPS: StatusStep[] = [
+  {
+    key: ["awaiting_engagement_payment"],
+    label: "Paiement d'engagement",
+    description: "En attente du règlement des frais d'engagement Joventy.",
+    icon: CreditCard,
+  },
+  {
+    key: ["documents_pending", "in_review", "slot_hunting", "submitted"],
+    label: "Formulaire & examen préalable",
+    description: "La demande est préparée ou examinée par le Centre. Des corrections ou une nouvelle soumission peuvent être demandées.",
+    icon: Search,
+  },
+  {
+    key: ["slot_found_awaiting_success_fee"],
+    label: "Visa Chine accordé",
+    description: "Le visa classique a été enregistré; la prime de succès est en attente de règlement.",
+    icon: Star,
+  },
+  {
+    key: ["completed", "approved"],
+    label: "Dossier complété",
+    description: "Le justificatif du visa accordé est accessible dans votre dossier Joventy.",
+    icon: CheckCircle2,
+  },
+];
+
+function getStepIndex(status: string, steps: StatusStep[] = STEPS): number {
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i].key.includes(status)) return i;
   }
   return 0;
 }
 
-function getStatusLabel(status: string): string {
+function getStatusLabel(status: string, isChinaClassicVisa: boolean): string {
+  if (isChinaClassicVisa) {
+    const chinaMap: Record<string, string> = {
+      awaiting_engagement_payment: "En attente de paiement d'engagement",
+      documents_pending: "Pièces du dossier à préparer",
+      in_review: "Dossier en cours de vérification",
+      slot_hunting: "Formulaire et examen préalable en cours",
+      slot_found_awaiting_success_fee: "Visa Chine accordé — prime en attente",
+      submitted: "Demande soumise au Centre",
+      completed: "Visa Chine accordé ✅",
+      approved: "Visa Chine accordé ✅",
+      rejected: "Demande refusée",
+    };
+    return chinaMap[status] ?? status;
+  }
   const map: Record<string, string> = {
     awaiting_engagement_payment: "En attente de paiement",
     documents_pending: "Documents en cours de collecte",
@@ -135,7 +180,9 @@ export default function PublicTracking() {
 
   const isRejected = app.status === "rejected";
   const isCompleted = app.status === "completed" || app.status === "approved";
-  const currentStep = getStepIndex(app.status);
+  const isChinaClassicVisa = app.destination === "china";
+  const currentStep = getStepIndex(app.status, isChinaClassicVisa ? CHINA_STEPS : STEPS);
+  const trackingSteps = isChinaClassicVisa ? CHINA_STEPS : STEPS;
   const dest = app.destination;
   const gradientClass = DEST_COLOR[dest] ?? "from-blue-600 to-blue-800";
   const flag = DEST_FLAG[dest] ?? "🌍";
@@ -157,7 +204,7 @@ export default function PublicTracking() {
             <div>
               <h1 className="text-2xl font-bold">{app.applicantName}</h1>
               <p className="text-white/80 text-sm mt-0.5">
-                {destLabel} · {app.visaType}
+                {destLabel} · {getDisplayVisaType(app.destination, app.visaType)}
               </p>
               <p className="text-white/60 text-xs mt-1">
                 Réf : JOV-{app._id.slice(-5).toUpperCase()}
@@ -181,7 +228,7 @@ export default function PublicTracking() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-0.5">Statut actuel</p>
               <p className={`font-bold text-sm ${isRejected ? "text-red-700" : isCompleted ? "text-green-700" : "text-blue-800"}`}>
-                {getStatusLabel(app.status)}
+                {getStatusLabel(app.status, isChinaClassicVisa)}
               </p>
             </div>
           </div>
@@ -199,7 +246,7 @@ export default function PublicTracking() {
               {/* Vertical line */}
               <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-100" />
               <div className="space-y-6">
-                {STEPS.map((step, idx) => {
+                {trackingSteps.map((step, idx) => {
                   const Icon = step.icon;
                   const isDone = idx < currentStep;
                   const isCurrent = idx === currentStep;
@@ -235,7 +282,7 @@ export default function PublicTracking() {
         )}
 
         {/* Appointment info — only if completed and date available */}
-        {isCompleted && app.appointmentDetails?.date && (
+        {isCompleted && !isChinaClassicVisa && app.appointmentDetails?.date && (
           <div className="bg-white rounded-2xl border border-green-200 shadow-sm p-5">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">Rendez-vous</p>
             <div className="space-y-2 text-sm">

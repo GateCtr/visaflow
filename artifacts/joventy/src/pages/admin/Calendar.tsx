@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link } from "wouter";
@@ -63,7 +64,7 @@ function AppointmentCard({ app, compact = false }: { app: Appointment; compact?:
           </span>
         </div>
         <p className="text-sm font-bold text-primary mt-2 leading-tight">{app.applicantName}</p>
-        {!compact && <p className="text-xs text-muted-foreground mt-0.5">{app.visaType}</p>}
+        {!compact && <p className="text-xs text-muted-foreground mt-0.5">{getDisplayVisaType(app.destination, app.visaType)}</p>}
         <div className="mt-2 space-y-1">
           {app.time && (
             <p className="text-xs text-slate-600 flex items-center gap-1">
@@ -327,7 +328,7 @@ export default function AdminCalendar() {
                             </span>
                           </div>
                           <p className="font-bold text-primary truncate">{a.applicantName}</p>
-                          <p className="text-xs text-muted-foreground truncate">{a.visaType}</p>
+                          <p className="text-xs text-muted-foreground truncate">{getDisplayVisaType(a.destination, a.visaType)}</p>
                         </div>
                         <div className="text-right hidden sm:block flex-shrink-0">
                           {a.time && <p className="text-sm font-bold text-primary">{a.time}</p>}
@@ -368,7 +369,7 @@ export default function AdminCalendar() {
                             </span>
                           </div>
                           <p className="font-bold text-slate-600 truncate">{a.applicantName}</p>
-                          <p className="text-xs text-muted-foreground truncate">{a.visaType}</p>
+                          <p className="text-xs text-muted-foreground truncate">{getDisplayVisaType(a.destination, a.visaType)}</p>
                         </div>
                         <div className="text-right hidden sm:block flex-shrink-0">
                           {a.time && <p className="text-sm font-semibold text-slate-500">{a.time}</p>}

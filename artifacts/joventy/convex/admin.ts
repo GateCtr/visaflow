@@ -451,12 +451,12 @@ export const markVisaObtained = mutation({
     }
 
     if (app.servicePackage === "dossier_only") {
-      throw new Error("Ce dossier est en mode 'Constitution uniquement' — il n'a pas de visa e-Visa.");
+      throw new Error("Ce dossier est en mode 'Constitution uniquement' — il ne peut pas recevoir de résultat visa dans ce parcours.");
     }
 
     const effectiveModel = getEffectiveSuccessModel(app);
-    if (effectiveModel !== "evisa") {
-      throw new Error("Ce dossier utilise le modèle rendez-vous — utilisez 'Créneau' plutôt que 'Visa Obtenu'.");
+    if (effectiveModel !== "evisa" && effectiveModel !== "paper_visa") {
+      throw new Error("Ce dossier utilise le modèle rendez-vous — utilisez 'Créneau' plutôt que 'Visa obtenu'.");
     }
 
     const priceDetails = app.priceDetails ?? {
@@ -551,6 +551,7 @@ export const validateSuccessFee = mutation({
       throw new Error("La prime de succès a déjà été validée pour ce dossier.");
     }
 
+    const effectiveModel = getEffectiveSuccessModel(app);
     await ctx.db.patch(args.applicationId, {
       status: "completed",
       isPaid: true,
@@ -562,7 +563,9 @@ export const validateSuccessFee = mutation({
       logs: [
         ...(app.logs ?? []),
         makeLog(
-          `✅ Prime de succès (${priceDetails.successFee}$) validée. Dossier complété — le client peut télécharger son kit d'entretien.`,
+          effectiveModel === "paper_visa"
+            ? `✅ Prime de succès (${priceDetails.successFee}$) validée. Dossier complété — le justificatif du visa classique est accessible au client.`
+            : `✅ Prime de succès (${priceDetails.successFee}$) validée. Dossier complété — le client peut télécharger son kit d'entretien.`,
           "admin"
         ),
       ],

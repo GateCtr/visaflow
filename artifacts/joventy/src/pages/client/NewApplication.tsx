@@ -42,7 +42,7 @@ const DESTINATIONS = [
   { id: "dubai",       name: "Dubaï (EAU)",          desc: "E-Visa 100 % en ligne — résultat en 48-72 h",                                    processType: "evisa" as const },
   { id: "turkey",      name: "Turquie",              desc: "E-Visa en ligne (si visa USA/Schengen/UK valide) ou visa sticker ambassade",      processType: "evisa" as const },
   { id: "india",       name: "Inde",                 desc: "E-Visa électronique ou visa régulier (études)",                                  processType: "evisa" as const },
-  { id: "china",       name: "Chine 🇨🇳",            desc: "E-Visa court séjour ou visa L/M/F — dossier complet pris en charge",             processType: "hybrid" as const },
+  { id: "china",       name: "Chine 🇨🇳",            desc: "Visa classique — demande en ligne, examen préalable puis dépôt du passeport au Centre sans rendez-vous", processType: "paper_visa" as const },
   { id: "morocco",     name: "Maroc 🇲🇦",            desc: "E-Visa en ligne (24-72h) ou visa consulaire — dossier complet",                  processType: "hybrid" as const },
   { id: "egypt",       name: "Égypte 🇪🇬",           desc: "E-Visa en ligne ou visa consulaire — dossier complet",                          processType: "hybrid" as const },
   { id: "brazil",      name: "Brésil 🇧🇷",           desc: "Visa Brésil — dossier + créneau consulaire à l'ambassade de Kinshasa",           processType: "appointment" as const },
@@ -94,6 +94,13 @@ function getPackageInfo(
   const isEvisa = pricing.successModel === "evisa" || isTurkeyEvisa;
 
   if (pkgKey === "full_service") {
+    if (destination === "china") {
+      return {
+        label: base.label,
+        tagline: "Visa classique",
+        description: "Joventy vous accompagne pour le formulaire et les pièces sur le portail officiel visaforchina.cn. Le Centre examine d'abord la demande en ligne; après approbation, vous imprimez le certificat et présentez votre passeport original au Centre de Kinshasa, sans rendez-vous. Les frais officiels sont séparés des frais Joventy.",
+      };
+    }
     if (isEvisa) {
       const name =
         destination === "turkey"  ? "e-Visa Turquie" :
@@ -214,6 +221,13 @@ function getPackageInfo(
   }
 
   if (pkgKey === "dossier_only") {
+    if (destination === "china") {
+      return {
+        label: base.label,
+        tagline: base.tagline,
+        description: "Vous fournissez vos documents et justificatifs. Joventy vous aide à préparer le formulaire et le dossier pour le portail officiel visaforchina.cn. Après l'examen préalable et l'approbation en ligne, vous imprimez le certificat et présentez vous-même votre passeport original au Centre de Kinshasa, sans rendez-vous.",
+      };
+    }
     if (isEvisa) {
       const portal =
         destination === "dubai"   ? "portail officiel GDRFA / ICP" :
@@ -419,6 +433,9 @@ export default function NewApplication() {
                               )}
                               {dest.processType === "hybrid" && (
                                 <span className="text-[10px] bg-amber-100 text-amber-700 font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide">E-Visa / VFS</span>
+                              )}
+                              {dest.processType === "paper_visa" && (
+                                <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide">Visa classique</span>
                               )}
                             </div>
                             <div className="text-sm text-muted-foreground mt-1">{dest.desc}</div>

@@ -453,37 +453,32 @@ export const VISA_PRICING = {
     engagementFee: 500,
     successFee: 1000,
     total: 1500,
-    successModel: "evisa" as const,
+    successModel: "paper_visa" as const,
     visaTypes: [
-      "E-Visa Chine (portail officiel — court séjour)",
-      "Visa L — Tourisme (VFS Global, sans rendez-vous)",
-      "Visa M — Affaires / Commerce (VFS Global)",
-      "Visa F — Échange / Visite courte (VFS Global)",
-      "Visa X2 — Études court séjour ≤180j (VFS Global)",
+      "Visa L — Tourisme",
+      "Visa M — Affaires / Commerce",
+      "Visa F — Échange / Visite",
+      "Visa X2 — Études court séjour ≤180j",
     ],
     requiredDocuments: [
-      { key: "passport_scan", label: "Passeport valide 6 mois + 2 pages vierges (scan HD)", required: true },
-      { key: "photo_id", label: "Photo biométrique fond blanc 33×48mm (JPEG)", required: true },
-      { key: "hotel_booking", label: "Itinéraire d'hébergement en Chine", required: true },
-      { key: "flight_booking", label: "Réservation de vol confirmée", required: true },
-      { key: "proof_of_funds", label: "Relevés bancaires (3 derniers mois)", required: true },
-      { key: "employment_letter", label: "Attestation de travail / RCCM / lettre d'invitation", required: true },
-      { key: "invitation_letter", label: "Lettre d'invitation officielle (Visa M/F)", required: false },
+      { key: "passport_scan", label: "Copie numérique lisible du passeport", required: true },
+      { key: "photo_id", label: "Photo numérique conforme aux exigences du portail", required: true },
+      { key: "supporting_documents", label: "Pièces justificatives exigées selon le motif du visa", required: true },
     ],
-    embassyAddress: "VFS Global Chine — Avenue de la Gombe, Kinshasa-Gombe (dépôt sans rendez-vous)",
-    portalUrl: "https://www.visaforchina.cn",
-    portalName: "Portail Visa Chine Officiel / VFS Global",
-    portalDashboardUrl: "https://www.visaforchina.cn",
-    portalAppointmentUrl: "https://www.visaforchina.cn",
-    portalScheduleUrl: "https://www.visaforchina.cn",
-    processingType: "hybrid",
+    embassyAddress: "Centre de demande de visa pour la Chine — rez-de-chaussée, Luxury Tower, nº 148 Boulevard du 30 Juin, Gombe, Kinshasa",
+    portalUrl: "https://www.visaforchina.cn/FIH4_FR/",
+    portalName: "Centre de demande de visa pour la Chine — Kinshasa",
+    portalDashboardUrl: "https://www.visaforchina.cn/FIH4_FR/",
+    portalAppointmentUrl: "",
+    portalScheduleUrl: "",
+    processingType: "paper_visa",
     successCopy: {
-      triggerLabel: "Visa obtenu",
-      clientCtaTitle: "Votre visa Chine est prêt !",
-      clientCtaBody: "Joventy a obtenu votre visa chinois. Réglez la prime de succès pour recevoir votre passeport avec le visa apposé.",
-      completedNote: "Votre visa Chine est disponible ci-dessous. Vérifiez les dates de validité avant l'embarquement.",
+      triggerLabel: "Visa Chine accordé",
+      clientCtaTitle: "Votre visa Chine est accordé",
+      clientCtaBody: "Une décision favorable a été enregistrée pour votre visa classique. Réglez la prime de succès pour accéder au justificatif disponible dans votre dossier. Le formulaire en ligne et son approbation préliminaire ne constituent pas un e‑Visa.",
+      completedNote: "Le visa Chine est lié au passeport original. Le document numérique disponible ici est un justificatif ou une copie; il ne remplace pas le passeport. Suivez les instructions du Centre pour le dépôt et le retrait.",
     },
-    notes: "Deux voies : (1) E-Visa Chine en ligne via portail officiel — disponible pour RDC depuis l'expansion 2025, court séjour ≤15 jours, délai 4-7 jours. (2) Visa standard via VFS Global Kinshasa sans rendez-vous (dépôt direct) — frais consulaires ~140 USD + frais VFS ~30 USD, délai 4-7 jours ouvrables. Types principaux : L (tourisme), M (affaires), F (échange), X2 (études <180j). Frais Joventy : 500 USD engagement + 1 000 USD prime de succès (total 1 500 USD).",
+    notes: "Procédure Kinshasa publiée sur visaforchina.cn/FIH4_FR/: compte, formulaire et pièces en ligne, puis soumission depuis la page « PAYER ». Le portail indique un virement des frais de service du Centre de 110 USD (normal) ou 130 USD (express) et le téléversement du justificatif portant le nom et le numéro de passeport du demandeur. Après examen préalable et approbation en ligne, imprimer le certificat et présenter le passeport original au Centre sans rendez-vous; les frais de visa sont payés en espèces au guichet. Montant des frais de visa à vérifier sur le portail. Ces frais officiels sont distincts des frais Joventy.",
   },
   brazil: {
     label: "Brésil",
@@ -556,7 +551,7 @@ export const VISA_PRICING = {
 } as const;
 
 export type Destination = keyof typeof VISA_PRICING;
-export type SuccessModel = "appointment" | "evisa";
+export type SuccessModel = "appointment" | "evisa" | "paper_visa";
 export type ServicePackage = "full_service" | "slot_only" | "dossier_only";
 
 // ─── Tarification créneaux (système simplifié) ────────────────────────────

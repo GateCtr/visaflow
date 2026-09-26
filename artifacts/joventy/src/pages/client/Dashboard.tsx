@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useAuth } from "@/lib/auth";
@@ -177,7 +178,7 @@ export default function ClientDashboard() {
                         </div>
                         <div>
                           <h4 className="font-bold text-primary text-sm">
-                            {app.destination.toUpperCase()} — {app.visaType}
+                            {app.destination.toUpperCase()} — {getDisplayVisaType(app.destination, app.visaType)}
                           </h4>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {app.applicantName} · {formatDate(app.updatedAt)}
@@ -185,7 +186,7 @@ export default function ClientDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <StatusBadge status={app.status} />
+                        <StatusBadge status={app.status} successModel={app.destination === "china" ? "paper_visa" : app.successModel} />
                         <ChevronRight className="w-4 h-4 text-slate-300 hidden sm:block" />
                       </div>
                     </div>
@@ -229,7 +230,7 @@ export default function ClientDashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-primary text-xs truncate">
-                          {conv.destination.toUpperCase()} — {conv.visaType}
+                          {conv.destination.toUpperCase()} — {getDisplayVisaType(conv.destination, conv.visaType)}
                         </p>
                         {conv.lastMessage && (
                           <p className={`text-xs truncate mt-0.5 ${conv.unreadCount > 0 ? "font-semibold text-slate-800" : "text-slate-500"}`}>

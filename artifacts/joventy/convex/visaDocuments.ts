@@ -252,6 +252,20 @@ const SCHENGEN_VISA_D: VisaDoc[] = [
 ];
 
 // ─────────────────────────────────────────────
+// CHINE — procédure classique du Centre de Kinshasa
+// ─────────────────────────────────────────────
+const CHINA_COMMON: VisaDoc[] = [
+  { key: "passport_scan", category: "upload", required: true, label: "Copie numérique lisible du passeport", notes: "L'original sera présenté au Centre après l'approbation en ligne." },
+  { key: "photo_id", category: "upload", required: true, label: "Photo numérique conforme aux exigences du portail", notes: "Suivez les critères affichés sur le portail officiel." },
+  { key: "supporting_documents", category: "upload", required: true, label: "Pièces justificatives demandées selon le motif du visa", notes: "La liste dépend de votre demande; consultez les exigences du portail officiel de Kinshasa." },
+  { category: "joventy", required: true, label: "Préparation du formulaire en ligne et soumission depuis la page « PAYER » du portail officiel" },
+  { category: "joventy", required: true, label: "Suivi de l'examen préalable et aide à la correction ou à la nouvelle soumission si le Centre le demande" },
+  { category: "direct", required: true, label: "Frais de service du Centre : 110 USD (normal) ou 130 USD (express), par virement", notes: "Montants indiqués par l'avis officiel. Téléversez le justificatif portant votre nom et numéro de passeport; frais distincts de Joventy. Vérifiez les instructions actuelles sur le portail." },
+  { category: "direct", required: true, label: "Frais de visa à régler en espèces au guichet du Centre", notes: "Le montant dépend du dossier et n'est pas indiqué ici; vérifiez les instructions officielles." },
+  { category: "embassy", required: true, label: "Après approbation en ligne : certificat imprimé et passeport original à présenter au Centre, sans rendez-vous", notes: "Apportez une photo uniquement si le portail indique que la photo téléversée n'est pas conforme." },
+];
+
+// ─────────────────────────────────────────────
 // Export principal
 // ─────────────────────────────────────────────
 export const VISA_DOCUMENTS: Record<string, Record<string, VisaDoc[]>> = {
@@ -286,6 +300,17 @@ export const VISA_DOCUMENTS: Record<string, Record<string, VisaDoc[]>> = {
     "Visa C — Tourisme / Affaires":                       SCHENGEN_VISA_C,
     "Visa C — Études court séjour (gratuit*)":            SCHENGEN_VISA_C,
     "Visa D — Long Séjour (études / regroupement familial)": SCHENGEN_VISA_D,
+  },
+  china: {
+    "Visa L — Tourisme": CHINA_COMMON,
+    "Visa M — Affaires / Commerce": CHINA_COMMON,
+    "Visa F — Échange / Visite": CHINA_COMMON,
+    "Visa X2 — Études court séjour ≤180j": CHINA_COMMON,
+    "E-Visa Chine (portail officiel — court séjour)": CHINA_COMMON,
+    "Visa L — Tourisme (VFS Global, sans rendez-vous)": CHINA_COMMON,
+    "Visa M — Affaires / Commerce (VFS Global)": CHINA_COMMON,
+    "Visa F — Échange / Visite courte (VFS Global)": CHINA_COMMON,
+    "Visa X2 — Études court séjour ≤180j (VFS Global)": CHINA_COMMON,
   },
 };
 

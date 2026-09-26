@@ -178,10 +178,10 @@ const DESTINATIONS = [
   {
     code: "cn",
     name: "Chine",
-    visaTypes: ["Visa papier via CVSC/VFS", "Visa L Tourisme (VFS)", "Visa M Affaires (VFS)", "Visa F / X2 (VFS)"],
+    visaTypes: ["Visa L — Tourisme", "Visa M — Affaires / Commerce", "Visa F — Échange / Visite", "Visa X2 — Études court séjour"],
     engagement: 500,
     success: 1000,
-    model: "appointment",
+    model: "paper_visa",
     note: null,
     badge: null,
   },

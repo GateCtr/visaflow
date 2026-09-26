@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -186,7 +187,7 @@ export default function ClientDetail() {
                   >
                     <TableCell className="font-medium">{app.applicantName}</TableCell>
                     <TableCell>{app.destination.toUpperCase()}</TableCell>
-                    <TableCell>{app.visaType}</TableCell>
+                    <TableCell>{getDisplayVisaType(app.destination, app.visaType)}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{app.status}</Badge>
                     </TableCell>

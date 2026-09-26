@@ -1,5 +1,5 @@
 /**
- * EvisaPanel — Upload du visa obtenu (modèle e-visa: Dubaï, Inde).
+ * EvisaPanel — Enregistrement du visa obtenu pour les parcours à résultat visa.
  */
 import { useState, useRef } from "react";
 import { useMutation } from "convex/react";
@@ -14,9 +14,10 @@ interface Props {
   appId: Id<"applications">;
   isSlotFound: boolean;
   isSlotHunting: boolean;
+  isPaperVisaModel?: boolean;
 }
 
-export function EvisaPanel({ appId, isSlotFound, isSlotHunting }: Props) {
+export function EvisaPanel({ appId, isSlotFound, isSlotHunting, isPaperVisaModel = false }: Props) {
   const { toast } = useToast();
   const markVisaObtained = useMutation(api.admin.markVisaObtained);
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
@@ -47,7 +48,7 @@ export function EvisaPanel({ appId, isSlotFound, isSlotHunting }: Props) {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center">
             <CheckCircle2 className="w-4 h-4 text-white" />
           </div>
-          <h2 className="font-semibold text-emerald-800 text-sm">Visa uploadé — client en attente de paiement</h2>
+          <h2 className="font-semibold text-emerald-800 text-sm">{isPaperVisaModel ? "Visa classique enregistré — client en attente de paiement" : "Visa uploadé — client en attente de paiement"}</h2>
         </div>
       </div>
     );
@@ -61,16 +62,20 @@ export function EvisaPanel({ appId, isSlotFound, isSlotHunting }: Props) {
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
           <FileText className="w-4 h-4 text-white" />
         </div>
-        <h2 className="font-semibold text-slate-800 text-sm">Enregistrer le visa obtenu</h2>
+        <h2 className="font-semibold text-slate-800 text-sm">{isPaperVisaModel ? "Enregistrer le visa classique obtenu" : "Enregistrer le visa obtenu"}</h2>
       </div>
       <div className="p-6 space-y-4">
-        <p className="text-sm text-slate-600">Uploadez le PDF du visa. Le client ne pourra le télécharger qu'après paiement de la prime.</p>
+        <p className="text-sm text-slate-600">
+          {isPaperVisaModel
+            ? "Uploadez une copie du visa classique effectivement accordé. L'approbation préliminaire du formulaire ne suffit pas; le fichier ne remplace pas le passeport original."
+            : "Uploadez le PDF du visa. Le client ne pourra le télécharger qu'après paiement de la prime."}
+        </p>
         <Input value={visaNotes} onChange={(e) => setVisaNotes(e.target.value)} placeholder="Notes pour le client (optionnel)" className="h-9 bg-slate-50/80 text-sm" />
         <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
         <Button onClick={() => fileRef.current?.click()} disabled={uploading}
           className="h-10 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold gap-2 shadow-sm">
           {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-          {uploading ? "Upload..." : "Uploader le visa PDF"}
+          {uploading ? "Upload..." : isPaperVisaModel ? "Enregistrer le visa classique" : "Uploader le visa PDF"}
         </Button>
       </div>
     </div>

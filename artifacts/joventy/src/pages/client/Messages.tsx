@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { MessageCircle, ChevronRight, Plane } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { formatDate } from "@/lib/format";
 
 export default function ClientMessages() {
@@ -56,9 +57,9 @@ export default function ClientMessages() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <h3 className="font-bold text-primary text-sm truncate">
-                        {conv.destination.toUpperCase()} — {conv.visaType}
+                        {conv.destination.toUpperCase()} — {getDisplayVisaType(conv.destination, conv.visaType)}
                       </h3>
-                      <StatusBadge status={conv.status} />
+                      <StatusBadge status={conv.status} successModel={conv.destination === "china" ? "paper_visa" : undefined} />
                     </div>
                     <p className="text-xs text-muted-foreground mb-1">
                       Pour {conv.applicantName}

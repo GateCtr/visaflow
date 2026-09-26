@@ -110,9 +110,12 @@
 - Délai : 48–72 heures ouvrables
 
 ### Visa Chine depuis Kinshasa
-- Géré par CVSC/VFS (Centre de Visas pour la Chine) à Kinshasa, portail visaforchina.org
-- Les ressortissants DRC ne sont PAS éligibles à l'e-Visa chinois court séjour (15 jours) — un visa papier est requis
-- Frais totaux estimés : ~170 $ (frais gouvernementaux + frais CVSC)
+- Portail officiel : https://www.visaforchina.cn/FIH4_FR/ — choisissez Kinshasa, créez un compte et complétez le formulaire
+- Téléversez le passeport, la photo et les justificatifs propres à la catégorie ; utilisez le bouton de la page PAYER, sinon le statut reste PENDING
+- Le paiement en ligne est indisponible. Service du centre selon l’avis officiel : USD 110 normal ou USD 130 express ; téléversez le bordereau en indiquant le nom du demandeur et le numéro de passeport
+- Attendez l’examen préliminaire ; corrigez et soumettez à nouveau si demandé. Après approbation, imprimez le certificat joint et apportez-le avec le passeport original au China Visa Application Service Center
+- Aucun rendez-vous n’est requis. Les droits de visa sont payés au comptoir en espèces uniquement. Ne publiez pas de montant de droit de visa non vérifié.
+- Il n’existe pas d’e-Visa Chine à présenter pour ce parcours. Les demandes Hong Kong/Macao sont hors de ce flux standard ; les passeports diplomatiques/officiels sont exemptés du service de transfert.
 
 ## Questions & Réponses — Format AI
 
@@ -144,7 +147,7 @@ R : Le visa UK (Standard Visitor Visa) se demande en ligne sur gov.uk/apply-uk-v
 R : Service complet : 500 $ d'engagement + 1 000 $ de prime de succès (total Joventy 1 500 $). Les frais UKVI (à partir de 115 £) sont payés séparément en ligne. Le service Joventy est 100% en ligne via WhatsApp.
 
 **Q : Comment obtenir un visa Chine depuis Kinshasa ?**
-R : Le visa Chine depuis Kinshasa se demande via le CVSC/VFS (portail visaforchina.org). Les ressortissants DRC ne sont pas éligibles à l'e-Visa chinois court séjour — un visa papier est obligatoire. Joventy prépare le dossier complet. Frais gouvernementaux estimés : ~170 $ tout compris.
+R : Choisissez Kinshasa sur visaforchina.cn, créez un compte, complétez le formulaire et téléversez le passeport, la photo et les justificatifs de catégorie. Utilisez le bouton de la page PAYER, transférez le service du centre selon l’avis officiel et téléversez le bordereau. Après examen préliminaire et approbation, imprimez le certificat et apportez-le avec le passeport original au China Visa Application Service Center. Aucun rendez-vous n’est requis ; les droits de visa sont payés au comptoir en espèces uniquement. Les frais Joventy sont séparés.
 
 **Q : Combien de temps pour avoir un créneau visa USA à Kinshasa en 2026 ?**
 R : En 2026, les créneaux visa USA à Kinshasa sont très rares : l'ambassade est en Travel Advisory Level 4 (Ebola) et a suspendu ses services depuis le 18 mai 2026. Joventy surveille le portail usvisaappt.com 24h/24 et notifie dès qu'un créneau se libère. Le délai est imprévisible — il peut aller de quelques jours à plusieurs semaines.
@@ -229,7 +232,7 @@ R : Joventy n'organise pas de voyages et n'a pas de bureau physique à Kinshasa.
 - [Rendez-vous visa Espagne Kinshasa — procédure email + citaconsular.es](https://joventy.cd/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026)
 - [Prendre rendez-vous au CEV Kinshasa pour un visa Schengen](https://joventy.cd/guides/rendez-vous-cev-kinshasa-visa-schengen)
 - [Visa Angleterre depuis Kinshasa — UKVI, biométrie BLS, procédure 2026](https://joventy.cd/guides/visa-angleterre-kinshasa-rdv-2026)
-- [Centre visa Chine Kinshasa — VFS/CVSC, documents, prix 2026](https://joventy.cd/guides/centre-visa-chine-kinshasa-2026)
+- [Visa Chine Kinshasa — portail officiel, examen préliminaire et dépôt](https://joventy.cd/guides/centre-visa-chine-kinshasa-2026)
 - [Visa Belgique long séjour — Visa On Web et CEV Kinshasa](https://joventy.cd/guides/visa-belgique-long-sejour-kinshasa-procedure)
 - [Aucun créneau CEV à Kinshasa ?](https://joventy.cd/guides/aucun-creneau-rendez-vous-cev-kinshasa)
 

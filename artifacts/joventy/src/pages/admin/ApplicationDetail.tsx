@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { getDisplayVisaType } from "@/lib/visa-display";
 import { useRoute } from "wouter";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -701,8 +702,12 @@ export default function AdminApplicationDetail() {
   const isSlotFound = app.status === "slot_found_awaiting_success_fee";
   const isCompleted = app.status === "completed";
   const isRejected = app.status === "rejected";
-  const successModel = (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
+  const successModel = app.destination === "china"
+    ? "paper_visa"
+    : (app as { successModel?: string }).successModel ?? pricing?.successModel ?? "appointment";
   const isEvisaModel = successModel === "evisa";
+  const isPaperVisaModel = successModel === "paper_visa";
+  const isVisaOutcomeModel = isEvisaModel || isPaperVisaModel;
   const servicePackage = (app as { servicePackage?: string }).servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const isSlotOnly = servicePackage === "slot_only";
@@ -731,14 +736,14 @@ export default function AdminApplicationDetail() {
           <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
             <div>
               <h1 className="text-2xl sm:text-3xl font-serif font-semibold text-primary">
-                {app.destination.toUpperCase()} — {app.visaType}
+                {app.destination.toUpperCase()} — {getDisplayVisaType(app.destination, app.visaType)}
               </h1>
               <p className="text-muted-foreground text-sm mt-0.5">
                 Ref : JOV-{app._id.slice(-5).toUpperCase()} · {app.applicantName}
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <StatusBadge status={app.status} />
+              <StatusBadge status={app.status} successModel={app.destination === "china" ? "paper_visa" : app.successModel} />
               <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
                 isDossierOnly
                   ? "bg-blue-100 text-blue-700"
@@ -750,9 +755,9 @@ export default function AdminApplicationDetail() {
                 {SERVICE_PACKAGES[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? "Service Complet"}
               </span>
               <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
-                isEvisaModel ? "bg-teal-100 text-teal-700" : "bg-sky-100 text-sky-700"
+                isEvisaModel ? "bg-teal-100 text-teal-700" : isPaperVisaModel ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"
               }`}>
-                {isEvisaModel ? "E-Visa" : "Visa Complet"}
+                {isEvisaModel ? "E-Visa" : isPaperVisaModel ? "Visa classique" : "Visa Complet"}
               </span>
               {(app as { trackingToken?: string }).trackingToken && (
                 <button
@@ -1488,7 +1493,7 @@ export default function AdminApplicationDetail() {
         )}
 
         {/* ===== RESULT PANEL — Appointment model (USA, Turquie) ===== */}
-        {!isEvisaModel && (isSlotHunting || isSlotFound || (isCompleted && app.appointmentDetails)) && (
+        {!isVisaOutcomeModel && (isSlotHunting || isSlotFound || (isCompleted && app.appointmentDetails)) && (
                 <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
                 <div className="p-5 border-b border-border bg-muted/50 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-secondary" />
@@ -2140,33 +2145,38 @@ export default function AdminApplicationDetail() {
           );
         })()}
 
-        {/* ===== RESULT PANEL — E-Visa model (Dubaï, Inde) ===== */}
-        {isEvisaModel && (isSlotHunting || isSlotFound) && !isCompleted && (
+        {/* ===== RESULT PANEL — electronic or classic passport visa ===== */}
+        {isVisaOutcomeModel && (isSlotHunting || isSlotFound) && !isCompleted && (
                 <div className="bg-card rounded-2xl border border-border shadow-premium overflow-hidden">
                 <div className="p-5 border-b border-border bg-muted/50 flex items-center gap-2">
               <FileText className="w-4 h-4 text-secondary" />
               <h2 className="font-bold text-primary text-base">
-                {isSlotFound ? "Visa Enregistré" : "Enregistrer le Visa Obtenu"}
+                {isSlotFound
+                  ? isPaperVisaModel ? "Visa classique enregistré" : "Visa enregistré"
+                  : isPaperVisaModel ? "Enregistrer le visa obtenu" : "Enregistrer le visa obtenu"}
               </h2>
               <span className="ml-auto text-[11px] text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
-                {pricing?.successCopy?.triggerLabel ?? "E-Visa"}
+                {pricing?.successCopy?.triggerLabel ?? (isPaperVisaModel ? "Visa classique" : "E-Visa")}
               </span>
             </div>
             <div className="p-6">
               {isSlotFound ? (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
                   <p className="text-sm text-green-800 font-semibold flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" /> Visa uploadé — client en attente de paiement
+                    <CheckCircle2 className="w-4 h-4" /> {isPaperVisaModel ? "Visa classique enregistré — client en attente de paiement" : "Visa uploadé — client en attente de paiement"}
                   </p>
                   <p className="text-xs text-slate-600">
-                    Le client recevra son document PDF dès validation de la prime de succès.
+                    {isPaperVisaModel
+                      ? "Le client recevra le justificatif du visa après validation de la prime. Le visa doit être effectivement accordé; l'approbation préliminaire du formulaire ne suffit pas."
+                      : "Le client recevra son document PDF dès validation de la prime de succès."}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <p className="text-sm text-slate-600">
-                    Uploadez le PDF ou l'image du visa accordé par les autorités. Le client ne pourra télécharger
-                    ce document qu'après avoir réglé la prime de succès.
+                    {isPaperVisaModel
+                      ? "Uploadez une copie ou un justificatif du visa classique effectivement accordé. Ne marquez pas l'approbation préliminaire du formulaire comme un visa obtenu. Le client ne pourra télécharger ce fichier qu'après validation de la prime de succès."
+                      : "Uploadez le PDF ou l'image du visa accordé par les autorités. Le client ne pourra télécharger ce document qu'après avoir réglé la prime de succès."}
                   </p>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground uppercase">Notes pour le client (optionnel)</label>
@@ -2193,7 +2203,7 @@ export default function AdminApplicationDetail() {
                     className="bg-green-600 hover:bg-green-700 text-white font-bold gap-2 h-11 w-full sm:w-auto"
                   >
                     {visaUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    {visaUploading ? "Upload en cours..." : "Uploader le visa PDF et déclencher la prime"}
+                    {visaUploading ? "Upload en cours..." : isPaperVisaModel ? "Enregistrer le visa classique" : "Uploader le visa PDF et déclencher la prime"}
                   </Button>
                 </div>
               )}
