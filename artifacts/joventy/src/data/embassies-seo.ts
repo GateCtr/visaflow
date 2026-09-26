@@ -20,6 +20,16 @@ export interface EmbassySEO {
   intro: string;
   practicalInfo: string[];
   visaNote: string;
+  appointmentProcedure?: {
+    heading: string;
+    intro: string;
+    registrationEmail: string;
+    registrationSubject: string;
+    portalUrl: string;
+    guideHref: string;
+    steps: { title: string; desc: string }[];
+    timingNote: string;
+  };
   faqs: { q: string; a: string }[];
 }
 
@@ -267,16 +277,43 @@ export const EMBASSIES_SEO: EmbassySEO[] = [
     website: "https://www.exteriores.gob.es/Embajadas/kinshasa",
     mapsQuery: "Boulevard Colonel Tshatshi 37 Gombe Kinshasa Ambassade Espagne",
       title: "Ambassade d'Espagne à Kinshasa : contact et rendez-vous",
-      metaDescription: "Ambassade d'Espagne à Kinshasa : adresse à Gombe, téléphone, email et prise de rendez-vous visa. Coordonnées vérifiées et procédure de réservation 2026.",
+     metaDescription: "Ambassade d’Espagne à Kinshasa : email d’inscription visa, citaconsular.es, créneaux et délais indicatifs. Adresse, contacts et guide complet 2026.",
      h1: "Ambassade d'Espagne à Kinshasa : adresse et contact",
     intro: "L'Ambassade d'Espagne, seule représentation diplomatique espagnole en République Démocratique du Congo, se trouve Boulevard Colonel Tshatshi nº 37, à Gombe, Kinshasa. Pour un visa Espagne, la procédure officielle passe par une inscription par email auprès de l'ambassade, puis une réservation sur citaconsular.es. Cette page vous donne les coordonnées exactes et le cadre de rendez-vous, tandis que notre guide dédié détaille la procédure complète.",
     practicalInfo: [
       "L'ambassade est établie depuis 1969 et reste la seule représentation espagnole en RDC",
       "Les demandes de visa Espagne ne passent pas par le CEV : inscription par email puis réservation sur citaconsular.es",
-      "Tous les rendez-vous se prennent exclusivement par email ou téléphone au préalable",
+      "Le créneau se choisit en ligne sur citaconsular.es après réception des accès personnels",
       "Un passeport valide et un dossier complet sont exigés avant toute prise de rendez-vous",
     ],
      visaNote: "Le visa Espagne se demande via l'Ambassade d'Espagne : chaque demandeur envoie personnellement son email, puis réserve sur citaconsular.es. Joventy prépare votre dossier, aide à vérifier l'email et peut surveiller les créneaux après réception des identifiants.",
+    appointmentProcedure: {
+      heading: "Prendre rendez-vous pour un visa Espagne à Kinshasa",
+      intro: "Le parcours se déroule en deux démarches : l’inscription personnelle par email, puis la réservation sur citaconsular.es avec les accès transmis par l’ambassade. Le rendez-vous n’est confirmé qu’après validation finale sur le portail.",
+      registrationEmail: "emb.kinshasa.citasvis@maec.es",
+      registrationSubject: "RENDEZ-VOUS VISA EST",
+      portalUrl: "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services",
+      guideHref: "/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026",
+      steps: [
+        {
+          title: "Envoyer l’email d’inscription",
+          desc: "Chaque demandeur envoie son propre email à l’adresse dédiée, avec l’objet exact affiché ci-dessus. Le guide complet précise le format des données et les pièces à joindre.",
+        },
+        {
+          title: "Attendre les accès personnels",
+          desc: "Après traitement de l’inscription, l’ambassade transmet les identifiants nécessaires à la réservation. Conservez-les et suivez les indications reçues ; une réponse à l’email ne constitue pas encore un rendez-vous.",
+        },
+        {
+          title: "Rechercher un créneau sur citaconsular.es",
+          desc: "Connectez-vous au portail officiel avec les accès reçus et consultez les dates réellement affichées. Les disponibilités varient ; aucune date ni heure d’ouverture n’est garantie à l’avance.",
+        },
+        {
+          title: "Confirmer le rendez-vous et organiser le dépôt",
+          desc: "Suivez les dernières étapes du portail et conservez l’email de confirmation. Vérifiez que la date du rendez-vous, le dossier et votre projet de voyage restent cohérents avant d’engager des frais non remboursables.",
+        },
+      ],
+      timingNote: "Prévoyez séparément l’attente de la réponse à l’email, la recherche d’un créneau et l’instruction après dépôt. Le guide Joventy cite une réponse pouvant prendre jusqu’à 14 jours, une moyenne observée d’environ 36 jours entre réservation et rendez-vous, puis 15 jours d’instruction pouvant aller jusqu’à 45 jours selon le dossier. Ces repères sont indicatifs, ne garantissent ni une date ni un visa et doivent être vérifiés avec les consignes officielles à jour.",
+    },
     faqs: [
       { q: "Où se trouve l'Ambassade d'Espagne à Kinshasa ?", a: "L'ambassade se situe Boulevard Colonel Tshatshi nº 37, commune de Gombe à Kinshasa." },
       { q: "L'Espagne passe-t-elle par le CEV à Kinshasa ?", a: "Non. L'Espagne ne traite pas ses visas via le CEV. La procédure passe directement par l'Ambassade d'Espagne, avec inscription par email puis réservation sur citaconsular.es." },

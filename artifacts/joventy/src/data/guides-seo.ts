@@ -1320,11 +1320,11 @@ const guides: Guide[] = [
 
   {
     slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
-    title: "Comment obtenir un rendez-vous visa Espagne à Kinshasa en 2026",
+    title: "Visa Espagne depuis Kinshasa : email, portail et rendez-vous",
     metaTitle: "Rendez-vous visa Espagne Kinshasa : 3 étapes et créneau",
-    metaDescription: "Rendez-vous visa Espagne Kinshasa en 3 étapes : inscription par email, accès citaconsular.es, réservation du créneau. Délais et pièges à éviter en 2026.",
+    metaDescription: "Rendez-vous visa Espagne à Kinshasa : modèle d’email, accès citaconsular.es et confirmation du créneau. Délais indicatifs, pièces et erreurs à éviter en 2026.",
     publishedDate: "2026-06-27",
-    updatedDate: "2026-09-16",
+    updatedDate: "2026-09-26",
     readingTime: 8,
     category: "Visa Schengen",
     coverEmoji: "🇪🇸",

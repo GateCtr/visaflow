@@ -53,9 +53,6 @@ export default function EmbassyPage() {
   const destination = embassy.destinationSlug ? getDestinationBySlug(embassy.destinationSlug) : undefined;
   const relatedEmbassies = EMBASSIES_SEO.filter((e) => e.slug !== embassy.slug).slice(0, 3);
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(embassy.mapsQuery)}`;
-  const spainPortal = embassy.slug === "ambassade-espagne-kinshasa"
-    ? "https://www.citaconsular.es/es/hosteds/widgetdefault/25028fcd7126544630b8da0c6e60722b5/#services"
-    : null;
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -260,22 +257,66 @@ export default function EmbassyPage() {
           </ul>
         </section>
 
-        {spainPortal && (
-          <section className="bg-amber-50/70 border border-amber-200 rounded-2xl p-6 sm:p-8">
-            <p className="text-amber-700 font-semibold text-xs uppercase tracking-widest mb-1">Portail officiel Espagne</p>
-            <h2 className="text-xl font-bold text-primary mb-2">Réserver votre rendez-vous sur citaconsular.es</h2>
-            <p className="text-sm text-muted-foreground mb-4 max-w-2xl">
-              Après réception des accès transmis par l’ambassade, utilisez ce lien officiel pour rechercher et confirmer votre créneau.
+        {embassy.appointmentProcedure && (
+          <section className="rounded-3xl border border-amber-200 bg-amber-50/70 p-6 sm:p-8" aria-labelledby="appointment-procedure-heading">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-amber-700">Procédure visa Espagne · Kinshasa</p>
+            <h2 id="appointment-procedure-heading" className="mb-3 text-2xl font-bold text-primary">
+              {embassy.appointmentProcedure.heading}
+            </h2>
+            <p className="mb-6 max-w-3xl text-sm leading-relaxed text-slate-700">
+              {embassy.appointmentProcedure.intro}
             </p>
-            <a
-              href={spainPortal}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-secondary hover:underline break-all"
-            >
-              {spainPortal}
-              <ExternalLink className="w-4 h-4 flex-shrink-0" />
-            </a>
+
+            <div className="mb-7 rounded-2xl border border-amber-200 bg-white p-5">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email d’inscription visa</p>
+              <a
+                href={`mailto:${embassy.appointmentProcedure.registrationEmail}?subject=${encodeURIComponent(embassy.appointmentProcedure.registrationSubject)}`}
+                className="break-all text-sm font-bold text-primary underline underline-offset-2"
+              >
+                {embassy.appointmentProcedure.registrationEmail}
+              </a>
+              <p className="mt-2 text-sm text-slate-700">
+                Objet à reprendre exactement : <strong>{embassy.appointmentProcedure.registrationSubject}</strong>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Cette adresse est dédiée à l’inscription visa ; le guide lié détaille le format de l’email et les pièces à joindre.
+              </p>
+            </div>
+
+            <ol className="mb-7 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {embassy.appointmentProcedure.steps.map((step, index) => (
+                <li key={step.title} className="flex gap-4 rounded-2xl border border-amber-100 bg-white p-5">
+                  <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <h3 className="mb-1 font-semibold text-primary">{step.title}</h3>
+                    <p className="text-sm leading-relaxed text-slate-600">{step.desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <p className="mb-6 rounded-xl border-l-4 border-primary/30 bg-white/80 p-4 text-sm leading-relaxed text-slate-700">
+              {embassy.appointmentProcedure.timingNote}
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={embassy.appointmentProcedure.portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white hover:bg-primary/90"
+              >
+                Ouvrir citaconsular.es <ExternalLink className="h-4 w-4" />
+              </a>
+              <Link
+                href={embassy.appointmentProcedure.guideHref}
+                className="inline-flex items-center rounded-xl border border-primary/20 bg-white px-5 py-3 text-sm font-semibold text-primary hover:bg-primary/5"
+              >
+                Lire le guide détaillé
+              </Link>
+            </div>
           </section>
         )}
 
