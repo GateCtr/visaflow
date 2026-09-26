@@ -363,6 +363,10 @@ export default function NewCreneauApplication() {
       }
       setLocation(`/dashboard/applications/${id}`);
     } catch (e) {
+      console.error(
+        "[NewCreneau] create failed:",
+        e instanceof Error ? e.message : "Unknown error",
+      );
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de créer le dossier. Réessayez." });
     } finally {
       setIsPending(false);
