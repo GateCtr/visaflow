@@ -43,9 +43,11 @@ export default function GuidePage() {
   const relatedGuides = getRelatedGuides(guide.relatedSlugs);
   const isSpainGuide = guide.relatedDestination === "visa-espagne-kinshasa";
   const isCevGuide = guide.slug.includes("cev") ||
-    guide.category === "Visa Schengen" ||
-    guide.relatedDestination === "visa-schengen-kinshasa" ||
-    guide.relatedDestination === "visa-belgique-long-sejour-kinshasa";
+    (!isSpainGuide && (
+      guide.category === "Visa Schengen" ||
+      guide.relatedDestination === "visa-schengen-kinshasa" ||
+      guide.relatedDestination === "visa-belgique-long-sejour-kinshasa"
+    ));
   const destinationOffice = EMBASSIES_SEO.find((embassy) => embassy.destinationSlug === guide.relatedDestination);
   const officialLinks = [
     ...(isSpainGuide
@@ -273,7 +275,7 @@ export default function GuidePage() {
         </div>
 
         {/* Fallback Audit & Diagnostic CTA for guides without a designated risk section */}
-        {guide.auditCtaAfterSection === undefined && (
+        {guide.auditCtaAfterSection === undefined && !isSpainGuide && (
           <div className="my-10 bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col sm:flex-row items-center gap-4">
             <ShieldCheck className="w-10 h-10 text-green-700 flex-shrink-0" />
             <div className="flex-1">
