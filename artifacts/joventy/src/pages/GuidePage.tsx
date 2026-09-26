@@ -208,6 +208,24 @@ export default function GuidePage() {
                   ))}
                 </ul>
               )}
+              {section.subsections?.map((subsection, j) => (
+                <div key={j} className="mt-6">
+                  <h3 className="mb-2 text-base font-semibold text-slate-800">
+                    {subsection.heading}
+                  </h3>
+                  <p className="mb-3 text-slate-600 leading-relaxed">{subsection.body}</p>
+                  {subsection.list && (
+                    <ul className="space-y-2">
+                      {subsection.list.map((item, k) => (
+                        <li key={k} className="flex items-start gap-2.5 text-slate-600 text-sm">
+                          <span className="mt-1 w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
               {section.imageSrc && (
                 <figure className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <img

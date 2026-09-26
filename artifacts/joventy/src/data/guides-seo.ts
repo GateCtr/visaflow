@@ -2,6 +2,11 @@ export interface GuideSection {
   heading: string;
   body: string;
   list?: string[];
+  subsections?: {
+    heading: string;
+    body: string;
+    list?: string[];
+  }[];
   imageSrc?: string;
   imageAlt?: string;
   imageCaption?: string;
@@ -1505,10 +1510,10 @@ const guides: Guide[] = [
     title: "Tutoriel rendez-vous CEV Kinshasa : Visa On Web et réservation",
     metaTitle: "Rendez-vous CEV Kinshasa : Visa On Web et réservation | 2026",
     metaDescription:
-      "Tutoriel officiel du rendez-vous CEV Kinshasa : compte Visa On Web personnel, formulaire, bouton « Créez un rendez-vous », données contrôlées et réservation gratuite.",
+      "Rendez-vous CEV Kinshasa : créez votre compte Visa On Web, réservez votre créneau sur cev-kin.eu étape par étape et évitez les erreurs qui bloquent au guichet.",
     publishedDate: "2026-06-15",
-    updatedDate: "2026-09-06",
-    readingTime: 8,
+    updatedDate: "2026-09-26",
+    readingTime: 11,
     category: "Visa Schengen",
     coverEmoji: "🏛️",
     intro:
@@ -1550,7 +1555,7 @@ const guides: Guide[] = [
           "Rendez-vous sur www.cev-kin.eu et cliquez sur « Créez un rendez-vous »",
           "Utilisez les données de votre demande Visa On Web",
           "Ne prenez pas de rendez-vous multiples",
-          "Choisissez une date et un créneau horaire disponibles — les créneaux du matin partent en premier",
+          "Choisissez une date et un créneau horaire disponibles",
           "Confirmez le rendez-vous : vous recevez un email de confirmation avec votre numéro de rendez-vous",
           "Imprimez ou enregistrez la confirmation — elle est exigée à l'entrée du CEV",
           "Si aucun créneau n'est disponible : les plages ouvertes sont déjà réservées ; réessayez le lendemain",
@@ -1572,13 +1577,60 @@ const guides: Guide[] = [
       {
         heading: "Disponibilités de rendez-vous : ce que le CEV annonce",
         body:
-          "Le CEV n’annonce pas de délai individuel garanti. Son site indique une période glissante de cinq semaines, de nouvelles plages chaque jour et environ 1 000 possibilités par semaine.",
+          "Le CEV n’annonce pas de délai individuel garanti. Les disponibilités changent selon les places ouvertes et les demandes enregistrées ; une date n’est acquise qu’après confirmation sur le portail.",
         list: [
-          "Nouvelles plages publiées chaque jour",
           "Si aucune date n’apparaît, les créneaux ouverts sont déjà réservés : réessayez le lendemain",
           "Ne demandez pas un rendez-vous plus de trois mois avant le voyage",
           "Un rendez-vous après la date de voyage peut être annulé",
           "L’instruction du visa après dépôt est distincte de la recherche d’un rendez-vous",
+        ],
+      },
+      {
+        heading: "Comment prendre un rendez-vous au CEV Kinshasa, étape par étape",
+        body:
+          "Réserver un créneau au CEV Kinshasa se fait en ligne, mais l'ordre des actions compte. Voici les contrôles utiles entre votre compte Visa On Web et la confirmation finale.",
+        subsections: [
+          {
+            heading: "Vérifier que votre compte Visa On Web est actif avant de chercher un créneau",
+            body:
+              "Votre compte Visa On Web doit être actif ; sa création et son activation sont déjà décrites à l’étape 1. Avant d’ouvrir le calendrier, vérifiez que vous pouvez vous connecter et que l’adresse associée reçoit les messages. Gardez votre passeport sous les yeux pour comparer les informations reprises lors de la réservation : nom, date de naissance, numéro et date d’expiration. Une incohérence entre le dossier VOW et le document peut vous obliger à corriger le dossier ou à recommencer la réservation. Faites ces contrôles avant la recherche, pas lorsqu’une disponibilité apparaît.",
+            list: [
+              "Le compte VOW s’ouvre avec vos identifiants habituels.",
+              "L’adresse e-mail associée est confirmée et accessible.",
+              "Les données d’identité correspondent au passeport.",
+              "Le type de demande et le pays sont déterminés.",
+            ],
+          },
+          {
+            heading: "Se connecter à cev-kin.eu et lancer la demande de rendez-vous",
+            body:
+              "Une fois les vérifications faites, ouvrez le site officiel du CEV et cliquez sur « Créez un rendez-vous ». Choisissez le type de demande et le pays de destination correspondant au formulaire VOW, puis renseignez les informations d’identité d’après le passeport. L’ordre est important : partir du bon dossier et de la bonne catégorie évite de devoir recommencer après avoir choisi une date. La réservation de créneau sur le portail officiel est gratuite ; aucun paiement en ligne n’est demandé pour réserver. Les frais de visa concernent le dépôt et sont détaillés dans la section suivante.",
+          },
+          {
+            heading: "Choisir un créneau : pourquoi les horaires du matin partent en premier",
+            body:
+              "Le CEV indique une fenêtre glissante d’environ cinq semaines, des places ajoutées quotidiennement et autour de 1 000 possibilités par semaine. Ce sont des chiffres d’ensemble, pas une promesse de disponibilité pour chaque demandeur. Le calendrier montre les options disponibles au moment de la consultation ; aucune heure de publication individuelle n’est garantie. Les créneaux du matin peuvent partir rapidement lorsqu’ils sont affichés : traitez cela comme une observation pratique, pas comme une règle officielle. Préparez vos informations avant la recherche, puis comparez les dates et horaires réellement proposés.",
+            list: [
+              "Gardez le passeport et les données VOW à portée de main.",
+              "Vérifiez la destination et la catégorie avant de continuer.",
+              "Ne comptez pas sur une heure de publication garantie.",
+            ],
+          },
+          {
+            heading: "Finaliser la réservation et conserver votre numéro de rendez-vous",
+            body:
+              "Un horaire sélectionné dans le calendrier n’est pas encore la preuve qu’il est enregistré. Avancez jusqu’à l’écran final du portail et vérifiez une dernière fois l’identité, la destination, la date et l’heure. Si un champ ne correspond pas, corrigez-le avant la confirmation au lieu de valider dans l’urgence. Comme indiqué à l’étape de réservation, conservez l’e-mail officiel avec le numéro de rendez-vous ; gardez-le dans votre boîte et enregistrez-le hors ligne. Vérifiez que les détails reçus correspondent à ce que vous avez confirmé. En cas d’erreur, demandez la marche à suivre au CEV avant de créer une nouvelle demande.",
+            list: [
+              "Ne fermez pas la page avant l’écran de confirmation.",
+              "Conservez le numéro et l’avis reçu par e-mail.",
+              "N’ouvrez pas une demande supplémentaire sans instruction officielle.",
+            ],
+          },
+          {
+            heading: "Que faire si aucun créneau n'est disponible",
+            body:
+              "L’absence de date affichée ne signifie pas que votre demande de visa est refusée. Comme indiqué dans la section sur les disponibilités, revenez au portail officiel plus tard plutôt que de miser sur une heure de publication supposée. Évitez de créer un deuxième compte ou plusieurs demandes pour la même personne : cela peut rendre les informations confuses et ne crée pas de places supplémentaires. La réservation officielle reste gratuite ; aucun intermédiaire ne peut garantir une date. Si le calendrier reste inaccessible, vérifiez d’abord l’accès au compte et les données du passeport, puis utilisez les coordonnées publiées par le CEV.",
+          },
         ],
       },
       {
@@ -1648,9 +1700,22 @@ const guides: Guide[] = [
         q: "Quel est le délai entre la prise de rendez-vous et le résultat final ?",
         a: "Il n’existe pas de délai global garanti. L’ouverture d’un créneau, sa date et l’instruction après dépôt sont trois étapes distinctes ; consultez les informations officielles du pays compétent.",
       },
+      {
+        q: "Comment prendre un rendez-vous au CEV Kinshasa en ligne ?",
+        a: "Connectez-vous à cev-kin.eu avec un compte Visa On Web actif, puis utilisez « Créez un rendez-vous » pour choisir la demande et le pays de destination. Vérifiez les informations à partir du passeport et validez le créneau jusqu’à la confirmation. La réservation officielle est gratuite et l’e-mail final contient votre numéro de rendez-vous.",
+      },
+      {
+        q: "Faut-il payer pour obtenir un créneau de rendez-vous au CEV Kinshasa ?",
+        a: "Non : la réservation sur cev-kin.eu est gratuite et aucun paiement en ligne n’est demandé pour obtenir un créneau. Les frais de visa officiels sont réglés au CEV lors du dépôt, selon la section consacrée aux frais. Ne payez pas un intermédiaire pour une date.",
+      },
+      {
+        q: "Que faire si aucun créneau n'est disponible sur cev-kin.eu ?",
+        a: "L’absence de date signifie qu’aucun créneau n’est visible à cet instant, pas que le visa est refusé. Consultez à nouveau le portail officiel plus tard et évitez les demandes ou comptes en double. Ne payez pas un intermédiaire : la réservation officielle est gratuite et aucune date ne peut être garantie.",
+      },
     ],
     relatedSlugs: ["guide-cev-kinshasa-reservation-rdv-depot", "aucun-creneau-rendez-vous-cev-kinshasa", "delai-ouverture-rendez-vous-cev-kinshasa", "pays-representes-cev-kinshasa-court-long-sejour"],
     relatedDestination: "visa-schengen-kinshasa",
+    auditCtaAfterSection: 5,
   },
 
   {
