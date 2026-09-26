@@ -76,6 +76,17 @@ export default function DestinationPage() {
       : null;
   const whatsappMessage = `Bonjour Joventy, je souhaite être accompagné pour mon visa ${dest.nameShort} depuis Kinshasa. Pouvez-vous m'expliquer les étapes et les tarifs ?`;
   const whatsappHref = `https://wa.me/243840808122?text=${encodeURIComponent(whatsappMessage)}`;
+  const whyJoventyItems = dest.slug === "visa-espagne-kinshasa"
+    ? [
+        { icon: FileText, title: "Dossier adapté au motif", desc: "Nous vous aidons à organiser les justificatifs selon la catégorie de visa et le projet de séjour." },
+        { icon: BadgeCheck, title: "Offres clairement distinctes", desc: "L’accompagnement complet du dossier et l’aide au rendez-vous seul sont deux services différents." },
+        { icon: MessageCircle, title: "Accompagnement sans promesse de visa", desc: "Joventy peut vous guider dans la préparation ; l’Ambassade d’Espagne reste seule décisionnaire." },
+      ]
+    : [
+        { icon: Zap, title: "Surveillance 24h/24", desc: "Nos systèmes capturent les créneaux ou soumettent les e-Visas dès que possible, sans que vous ayez à surveiller manuellement." },
+        { icon: BadgeCheck, title: "Paiement au résultat", desc: "La prime de succès n'est due qu'une fois le résultat obtenu. Aucun résultat = aucun solde. Zéro risque pour vous." },
+        { icon: Star, title: "Mobile Money uniquement", desc: "Payez via M-Pesa, Airtel Money ou Orange Money. Aucun virement international, aucune carte étrangère requise." },
+      ];
 
   const faqSchema = {
     "@context": "https://schema.org",
@@ -206,82 +217,54 @@ export default function DestinationPage() {
         </div>
       </section>
 
-      {/* ── RÉPONSE RAPIDE — Espagne ── */}
+      {/* ── VISA ESPAGNE : CATÉGORIES ── */}
       {dest.slug === "visa-espagne-kinshasa" && (
         <section
           className="border-b border-blue-100 bg-blue-50/70 px-4 py-10 sm:px-6"
-          aria-labelledby="spain-appointment-summary"
-          data-testid="section-spain-appointment-summary"
+          aria-labelledby="spain-visa-overview"
+          data-testid="section-spain-visa-overview"
         >
           <div className="mx-auto max-w-6xl">
             <div className="max-w-3xl">
               <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-blue-700">
-                Réponse rapide
+                Comprendre le visa Espagne
               </p>
-              <h2 id="spain-appointment-summary" className="mb-3 text-2xl font-bold text-primary sm:text-3xl">
-                Comment prendre un rendez-vous visa Espagne à Kinshasa ?
+              <h2 id="spain-visa-overview" className="mb-3 text-2xl font-bold text-primary sm:text-3xl">
+                Quel visa demander pour votre séjour en Espagne ?
               </h2>
               <p className="mb-6 text-sm leading-relaxed text-slate-700 sm:text-base">
-                La procédure officielle se déroule en trois temps : inscription personnelle par email,
-                réception des identifiants de l’ambassade, puis recherche et confirmation d’un créneau sur
-                <strong> citaconsular.es</strong>. Joventy peut accompagner la préparation et le suivi, mais
-                l’ambassade reste responsable du rendez-vous et de la décision de visa.
+                Le choix dépend de la durée et du motif du séjour. Pour un visa Schengen, l’Espagne doit
+                être la destination principale de votre voyage. Les conditions et justificatifs varient
+                selon la catégorie ; l’ambassade publie les exigences applicables à votre situation.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              {[
-                {
-                  number: "1",
-                  title: "S’inscrire par email",
-                  description: "Chaque demandeur envoie son inscription personnelle à l’ambassade avec les pièces demandées.",
-                },
-                {
-                  number: "2",
-                  title: "Recevoir les accès",
-                  description: "L’ambassade transmet les identifiants nécessaires pour accéder au portail officiel.",
-                },
-                {
-                  number: "3",
-                  title: "Confirmer le créneau",
-                  description: "Le rendez-vous est recherché et confirmé sur citaconsular.es selon les disponibilités.",
-                },
-              ].map((step) => (
+            <div className="grid gap-4 md:grid-cols-2">
+              {dest.visaTypes.map((visaType, index) => (
                 <div
-                  key={step.number}
+                  key={visaType.name}
                   className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"
-                  data-testid={`card-spain-appointment-step-${step.number}`}
+                  data-testid={`card-spain-visa-type-${index + 1}`}
                 >
-                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
-                    {step.number}
-                  </div>
-                  <h3 className="mb-1 font-bold text-primary">{step.title}</h3>
-                  <p className="text-sm leading-relaxed text-slate-600">{step.description}</p>
+                  <h3 className="mb-2 font-bold text-primary">{visaType.name}</h3>
+                  <p className="text-sm leading-relaxed text-slate-600">{visaType.desc}</p>
                 </div>
               ))}
             </div>
-            <nav className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold" aria-label="Guides Espagne">
+            <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-white/80 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-primary">Le rendez-vous est une étape du dépôt, pas une catégorie de visa.</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Pour les demandes de court séjour à Kinshasa, consultez le guide séparé sur l’inscription et la réservation.
+                </p>
+              </div>
               <Link
                 href="/guides/visa-espagne-kinshasa-rendez-vous-ambassade-2026"
-                className="text-primary hover:text-secondary hover:underline"
+                className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-primary hover:text-secondary hover:underline"
                 data-testid="link-spain-procedure-guide"
               >
-                Lire la procédure officielle du rendez-vous →
+                Voir la procédure du rendez-vous <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                href="/guides/delai-rendez-vous-espagne-kinshasa-bookitit-2026"
-                className="text-primary hover:text-secondary hover:underline"
-                data-testid="link-spain-delay-guide"
-              >
-                Vérifier les délais et planifier le voyage →
-              </Link>
-              <Link
-                href="/creneaux-visa-espagne-kinshasa"
-                className="text-primary hover:text-secondary hover:underline"
-                data-testid="link-spain-slot-service"
-              >
-                Découvrir le service de créneau visa Espagne →
-              </Link>
-            </nav>
+            </div>
           </div>
         </section>
       )}
@@ -323,7 +306,9 @@ export default function DestinationPage() {
                 <Clock className="w-4 h-4 text-white" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Délai moyen</p>
+                <p className="text-xs text-muted-foreground">
+                  {dest.slug === "visa-espagne-kinshasa" ? "Délai visa court séjour" : "Délai moyen"}
+                </p>
                 <p className="font-bold text-green-700 text-sm">{dest.processingTime}</p>
               </div>
             </div>
@@ -339,25 +324,27 @@ export default function DestinationPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 space-y-20">
 
         {/* ── VISA TYPES ── */}
-        <section>
-          <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2">
-            Types de visa {dest.nameShort} disponibles
-          </h2>
-          <p className="text-muted-foreground mb-8">Joventy gère tous les types de visa pour {dest.name} depuis Kinshasa.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {dest.visaTypes.map((vt) => (
-              <div key={vt.name} className="bg-muted border border-border rounded-2xl p-5 flex gap-4">
-                <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <FileText className="w-4 h-4 text-primary" />
+        {dest.slug !== "visa-espagne-kinshasa" && (
+          <section>
+            <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2">
+              Types de visa {dest.nameShort} disponibles
+            </h2>
+            <p className="text-muted-foreground mb-8">Joventy gère tous les types de visa pour {dest.name} depuis Kinshasa.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {dest.visaTypes.map((vt) => (
+                <div key={vt.name} className="bg-muted border border-border rounded-2xl p-5 flex gap-4">
+                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <FileText className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-primary text-sm mb-1">{vt.name}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{vt.desc}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-primary text-sm mb-1">{vt.name}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{vt.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── ADSENSE ── */}
         <section className="py-8 bg-muted">
@@ -392,7 +379,11 @@ export default function DestinationPage() {
           <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2">
             Documents requis — Visa {dest.nameShort}
           </h2>
-          <p className="text-muted-foreground mb-7">Joventy vérifie chaque pièce et vous signale les documents manquants avant soumission.</p>
+          <p className="text-muted-foreground mb-7">
+            {dest.slug === "visa-espagne-kinshasa"
+              ? "Liste indicative, surtout pour les courts séjours : les pièces exactes dépendent du motif et de la catégorie. La liste officielle de l’ambassade prévaut, notamment pour les visas D."
+              : "Joventy vérifie chaque pièce et vous signale les documents manquants avant soumission."}
+          </p>
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {dest.requirements.map((req) => (
               <li key={req} className="flex items-start gap-3">
@@ -497,18 +488,18 @@ export default function DestinationPage() {
           </section>
         )}
 
-        {/* ── CRÉNEAU UNIQUEMENT — Espagne ── */}
+        {/* ── OPTION SÉPARÉE : RENDEZ-VOUS UNIQUEMENT — Espagne ── */}
         {dest.slug === "visa-espagne-kinshasa" && (
           <section className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-3xl p-8 sm:p-10">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
               <div className="text-5xl flex-shrink-0">🇪🇸</div>
               <div className="flex-1">
-                <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
+                <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Option distincte · Rendez-vous uniquement</p>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
-                  Votre dossier est prêt ? Joventy vous aide à préparer l'email + surveille votre créneau — 350 $ après résultat
+                  Votre dossier est déjà prêt ? Consultez l’offre d’aide au rendez-vous seul.
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Chaque demandeur envoie personnellement l'email d'inscription à emb.kinshasa.citasvis@maec.es ; Joventy aide à le préparer puis surveille les créneaux sur citaconsular.es après réception des identifiants. Aucun acompte — 350 $ payés uniquement après confirmation.
+                  Cette option concerne la recherche et la réservation du créneau après l’inscription auprès de l’ambassade. Elle ne comprend pas l’accompagnement complet du dossier visa ; ses tarifs et conditions sont présentés sur la page dédiée.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link
@@ -516,12 +507,7 @@ export default function DestinationPage() {
                     onClick={() => trackEvent("service_click", { location: "destination_spain_summary", service: "spain_slot" })}
                   >
                     <Button className="bg-secondary hover:bg-secondary/90 text-white font-bold shadow-lg shadow-secondary/20 gap-2">
-                      Créneau Espagne · 0 $ d'acompte <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  </Link>
-                  <Link href="/alerte-espagne">
-                    <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 gap-2">
-                      Groupe Alerte · 10 USD (DIY)
+                      Voir l’offre rendez-vous uniquement <ArrowRight className="w-4 h-4" />
                     </Button>
                   </Link>
                 </div>
@@ -562,11 +548,7 @@ export default function DestinationPage() {
           </h2>
           <p className="text-muted-foreground mb-8">Les avantages qui font la différence depuis Kinshasa.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            {[
-              { icon: Zap, title: "Surveillance 24h/24", desc: "Nos systèmes capturent les créneaux ou soumettent les e-Visas dès que possible, sans que vous ayez à surveiller manuellement." },
-              { icon: BadgeCheck, title: "Paiement au résultat", desc: "La prime de succès n'est due qu'une fois le résultat obtenu. Aucun résultat = aucun solde. Zéro risque pour vous." },
-              { icon: Star, title: "Mobile Money uniquement", desc: "Payez via M-Pesa, Airtel Money ou Orange Money. Aucun virement international, aucune carte étrangère requise." },
-            ].map((item) => {
+            {whyJoventyItems.map((item) => {
               const Icon = item.icon;
               return (
                 <div key={item.title} className="bg-white border border-border rounded-2xl p-6 shadow-sm">
