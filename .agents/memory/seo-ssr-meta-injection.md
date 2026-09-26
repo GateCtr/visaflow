@@ -44,6 +44,13 @@ Shared between dev plugin and build script. Uses `.replace()` with specific rege
 ## Homepage unchanged
 Routes not matching `/visa-*` or `/guides/*` patterns pass through untouched — homepage keeps its generic meta.
 
+## Interpreting duplicate-description reports
+Some SEO exports concatenate the standard description with `og:description` and `twitter:description`. Identical copies across those separate tags are not a repeated phrase inside the standard meta description.
+
+**Why:** A prior Spain-page audit misread this concatenated output as an internal duplicate, although each HTML tag contained one clean description.
+
+**How to apply:** When an audit flags duplicate descriptions, inspect the raw HTML tags independently before changing page copy; only fix repeated text within a tag or genuinely duplicated page descriptions.
+
 ## Expected SEO impact
 Before: 537 RDC impressions/week, 0 clicks (0% CTR) — Google shows generic "Assistance Visa Kinshasa | USA, Canada, Europe, Dubaï | Joventy" title.  
 After next deploy + Googlebot crawl (2-4 weeks): correct title "Rendez-vous Visa Espagne Kinshasa 2026 | Ambassade Directe | Joventy" should increase CTR from 0% to 5-15%.

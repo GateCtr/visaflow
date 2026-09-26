@@ -326,8 +326,8 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     success: 1000,
     externalFees: "Payés directement à l'Ambassade d'Espagne",
     processingTime: "15 jours (jusqu'à 45 jours si dossier incomplet)",
-    title: "Rendez-vous visa Espagne à Kinshasa : créneaux et procédure 2026",
-    metaDescription: "Rendez-vous visa Espagne à Kinshasa : la procédure officielle étape par étape, les délais réels et les créneaux disponibles. Guide mis à jour 2026.",
+    title: "Rendez-vous visa Espagne à Kinshasa : procédure et créneaux",
+    metaDescription: "Rendez-vous visa Espagne à Kinshasa : la procédure officielle étape par étape, les délais réels et les créneaux disponibles. Guide mis à jour pour 2026.",
     h1: "Rendez-vous visa Espagne à Kinshasa : dossier et réservation",
     intro: "Depuis la RDC, la demande de visa Espagne commence par une inscription personnelle auprès de l'Ambassade d'Espagne à Kinshasa, puis se poursuit sur citaconsular.es après réception des accès. Le vrai parcours comprend la préparation des pièces, l'attente de la réponse de l'ambassade, la recherche du créneau et enfin le dépôt du dossier. Joventy peut vérifier votre dossier et suivre la réservation après activation des accès. L'alerte autonome coûte 10 USD, le service créneau 350 USD après résultat et l'accompagnement complet 1 500 USD : ce sont trois produits distincts.",
     visaTypes: [
