@@ -2,6 +2,10 @@ export interface GuideSection {
   heading: string;
   body: string;
   list?: string[];
+  contextualLink?: {
+    href: string;
+    label: string;
+  };
   subsections?: {
     heading: string;
     body: string;
@@ -1507,8 +1511,8 @@ const guides: Guide[] = [
 
   {
     slug: "rendez-vous-cev-kinshasa-visa-schengen",
-    title: "Tutoriel rendez-vous CEV Kinshasa : Visa On Web et réservation",
-    metaTitle: "Rendez-vous CEV Kinshasa : Visa On Web et réservation | 2026",
+    title: "Comment prendre un rendez-vous au CEV Kinshasa, étape par étape",
+    metaTitle: "CEV Kinshasa : rendez-vous en ligne, étapes et créneaux 2026",
     metaDescription:
       "Rendez-vous CEV Kinshasa : créez votre compte Visa On Web, réservez votre créneau sur cev-kin.eu étape par étape et évitez les erreurs qui bloquent au guichet.",
     publishedDate: "2026-06-15",
@@ -1517,12 +1521,12 @@ const guides: Guide[] = [
     category: "Visa Schengen",
     coverEmoji: "🏛️",
     intro:
-      "Le Centre Européen des Visas (CEV), anciennement Maison Schengen et géré par l’Ambassade de Belgique, reçoit les demandes de court séjour des pays qu’il représente, ainsi que les longs séjours Belgique et Luxembourg. Ce tutoriel explique le parcours Visa On Web et la réservation gratuite : vérifiez la liste officielle et la catégorie avant de commencer.",
+      "Le Centre Européen des Visas (CEV) de Kinshasa, géré par l’Ambassade de Belgique, reçoit les demandes de court séjour des pays qu’il représente, ainsi que les longs séjours Belgique et Luxembourg. Ce tutoriel explique le parcours Visa On Web et la réservation gratuite : vérifiez la liste officielle et la catégorie avant de commencer.",
     sections: [
       {
-        heading: "Le CEV en bref — ce qu'il faut savoir avant de commencer",
+        heading: "CEV Kinshasa ou Maison Schengen : de quoi parle-t-on ?",
         body:
-          "Le CEV est un centre officiel géré par l’Ambassade de Belgique, distinct de TLScontact ou VFS. Il reçoit les courts séjours des pays qu’il représente et les longs séjours Belgique et Luxembourg : vérifiez la compétence sur cev-kin.eu, notamment car l’Espagne suit une procédure distincte.",
+          "À Kinshasa, « Maison Schengen » est l’ancien nom du Centre Européen des Visas. Géré par l’Ambassade de Belgique, le CEV est distinct de TLScontact et VFS. Il reçoit les courts séjours des pays qu’il représente et les longs séjours Belgique et Luxembourg. Confirmez toujours la compétence sur cev-kin.eu : l’Espagne suit une procédure distincte.",
         list: [
           "🌐 Site officiel : www.cev-kin.eu",
           "📍 Adresse : Avenue Pierre Mulele (ex-24 Novembre), Gombe – Kinshasa",
@@ -1562,17 +1566,17 @@ const guides: Guide[] = [
         ],
       },
       {
-        heading: "Étape 3 — Préparer et déposer votre dossier physiquement au CEV",
+        heading: "Étape 3 — Préparer le dépôt du dossier au CEV",
         body:
-          "Le jour de votre rendez-vous, vous vous présentez au CEV avec l'intégralité de votre dossier papier. Le CEV n'accepte pas les dossiers incomplets — si un document manque, votre dossier est refusé à l'accueil et vous devez reprendre un rendez-vous.",
+          "La réservation se termine à la confirmation du créneau ; le dossier se dépose ensuite physiquement au CEV. Cette page se concentre sur Visa On Web et la réservation. Le guide consacré au dépôt détaille les pièces à préparer, le jour J et le suivi après remise du dossier.",
         list: [
-          "Arrivez 15 à 20 minutes avant votre créneau — le CEV est strict sur les horaires",
-          "Présentez votre confirmation de rendez-vous (papier ou téléphone) et votre passeport à l'entrée",
-          "L'agent du CEV vérifie que votre dossier est complet avant d'ouvrir le dossier",
-          "Vos empreintes digitales biométriques sont prises sur place — présence physique obligatoire pour tous les demandeurs de plus de 12 ans",
-          "Vous recevez un récépissé de dépôt avec un numéro de suivi — conservez-le précieusement",
-          "Le suivi du dossier se fait ensuite sur le portail Visa On Web avec votre numéro de dossier",
+          "Conservez l’email de confirmation et le numéro de rendez-vous",
+          "Vérifiez la checklist officielle de la destination compétente avant de vous présenter",
         ],
+        contextualLink: {
+          href: "/guides/guide-cev-kinshasa-reservation-rdv-depot",
+          label: "Dépôt du dossier au CEV : pièces, jour J et suivi",
+        },
       },
       {
         heading: "Disponibilités de rendez-vous : ce que le CEV annonce",
@@ -1669,7 +1673,7 @@ const guides: Guide[] = [
           "Vérification complète de votre dossier papier avant le rendez-vous — aucun document manquant",
           "Préparation du formulaire de demande et de la lettre de motivation personnalisée selon votre profil",
           "Accompagnement au CEV le jour J si nécessaire",
-          "Suivi du dossier sur Visa On Web après dépôt et transmission des résultats",
+          "Suivi des informations communiquées après le dépôt et transmission des résultats, selon les consignes de l’autorité compétente",
           "En cas de refus : analyse du motif et conseil pour le recours ou la nouvelle demande",
           "📱 Contactez notre équipe sur WhatsApp : +243 840 808 122",
         ],
@@ -2539,7 +2543,7 @@ const guides: Guide[] = [
     metaDescription:
       "Guide pratique du dépôt CEV à Kinshasa : lieu, contrôle d’identité, dossier, paiement officiel et suivi après le rendez-vous.",
     publishedDate: "2026-07-09",
-    updatedDate: "2026-09-06",
+    updatedDate: "2026-09-26",
     readingTime: 7,
     category: "Visa Schengen",
     coverEmoji: "📍",
@@ -2555,6 +2559,10 @@ const guides: Guide[] = [
           "Vérifier que nom, date de naissance et passeport correspondent exactement",
           "Préparer les originaux et copies de la checklist du pays compétent",
         ],
+        contextualLink: {
+          href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
+          label: "Réserver un rendez-vous CEV Kinshasa sur Visa On Web",
+        },
       },
       {
         heading: "Le jour du dépôt : ce qu'il faut apporter",
@@ -2570,7 +2578,12 @@ const guides: Guide[] = [
       {
         heading: "Après le dépôt : suivi et instruction",
         body:
-          "Après réception, l’instruction dépend de l’autorité compétente. Le CEV ou l’autorité peut demander des compléments. Ne confondez pas l’attente d’un rendez-vous avec le délai d’instruction et ne vous fiez pas à une durée non officielle.",
+          "Après la remise du dossier, l’instruction relève de l’autorité compétente pour la destination. Le récépissé et les notifications reçues indiquent comment suivre la demande et répondre à une éventuelle demande de pièces. Le canal et le délai peuvent varier selon le pays : ne confondez pas l’attente d’un rendez-vous avec le délai d’instruction.",
+        list: [
+          "Conservez le récépissé de dépôt et le numéro de dossier qui y figure",
+          "Suivez le canal et les instructions communiqués par l’autorité compétente",
+          "En cas de demande de pièce complémentaire, respectez le canal et l’échéance indiqués dans la notification officielle",
+        ],
       },
     ],
     faq: [
@@ -2581,6 +2594,10 @@ const guides: Guide[] = [
       {
         q: "Le rendez-vous peut-il être pris pour un groupe familial ?",
         a: "Oui, chaque membre de la famille doit néanmoins avoir son propre créneau, généralement réservables à des horaires proches sur la même journée.",
+      },
+      {
+        q: "Comment suivre mon dossier après le dépôt au CEV ?",
+        a: "Conservez le récépissé et suivez les instructions et le canal indiqués par l’autorité compétente. Le mode de suivi peut varier selon le pays de destination. Si un complément est demandé, répondez selon les indications officielles reçues.",
       },
     ],
     relatedSlugs: ["rendez-vous-cev-kinshasa-visa-schengen", "aucun-creneau-rendez-vous-cev-kinshasa", "delai-ouverture-rendez-vous-cev-kinshasa", "pays-representes-cev-kinshasa-court-long-sejour"],

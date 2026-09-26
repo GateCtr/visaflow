@@ -198,6 +198,17 @@ export default function GuidePage() {
                 {section.heading}
               </h2>
               <p className="text-slate-600 leading-relaxed mb-3">{section.body}</p>
+              {section.contextualLink && (
+                <p className="mb-3">
+                  <Link
+                    href={section.contextualLink.href}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-primary underline underline-offset-4 hover:text-secondary"
+                  >
+                    {section.contextualLink.label}
+                    <ArrowRight className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                  </Link>
+                </p>
+              )}
               {section.list && (
                 <ul className="space-y-2">
                   {section.list.map((item, j) => (
