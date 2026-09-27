@@ -314,10 +314,8 @@ async function main() {
   }
 
   if (!slotDate || !slotTime) {
-    warn("Aucun créneau trouvé — on tente signin/ sans date/heure pour voir la réponse");
-    slotDate = "2026-09-17";
-    slotTime = "09:00";
-    log(`  Créneau hardcodé : ${slotDate} ${slotTime} (connu actif depuis le test dynamique)`);
+    warn("Aucun créneau réel trouvé — arrêt avant getsigninfields/ et signin/");
+    process.exit(0);
   } else {
     ok(`Créneau : ${slotDate} à ${slotTime}`);
   }
@@ -407,15 +405,20 @@ async function main() {
   log(`Créneau cible           : ${slotDate} ${slotTime}`);
   log(`signin/ réponse         : HTTP ${signinStatus} | ${signinRaw.length}B`);
 
-  const signinData = signinParsed as any;
-  if (signinData?.errors?.length > 0 || signinData?.error) {
+  const signinRoot = signinParsed as any;
+  const signinData = signinRoot?.Client ?? signinRoot;
+  const signinErrors = Array.isArray(signinData?.errors)
+    ? signinData.errors
+    : signinData?.error
+      ? [signinData.error]
+      : [];
+  if (signinErrors.length > 0) {
     ok(`signin/ → ERREUR SERVEUR REÇUE (comportement attendu avec faux credentials):`);
-    log(`  ${JSON.stringify(signinData.errors ?? signinData.error)}`);
+    log(`  ${JSON.stringify(signinErrors).slice(0, 300)}`);
   } else if (signinRaw.length === 0) {
     warn("signin/ → 0B — PHPSESSID non encore chaud pour cet endpoint (voir 7b)");
-  } else if (signinData?.bktToken) {
+  } else if (signinRoot?.Access?.bktToken ?? signinData?.bktToken ?? signinRoot?.bktToken) {
     warn("signin/ → bktToken reçu avec faux credentials — comportement inattendu!");
-    log(`  bktToken: ${String(signinData.bktToken).slice(0, 40)}`);
   } else {
     log(`signin/ réponse inattendue : ${JSON.stringify(signinData)?.slice(0, 300)}`);
   }
