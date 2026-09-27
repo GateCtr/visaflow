@@ -421,7 +421,9 @@ export default function NewCreneauApplication() {
           </div>
         </div>
         <div className="sm:ml-auto text-right flex-shrink-0">
-          <p className="text-2xl font-bold text-primary">350 $</p>
+          <p className="text-2xl font-bold text-primary">
+            {dest ? `${getSlotPrice(dest as string, serviceLevel)} $` : `dès ${getSlotPrice("default", "normal")} $`}
+          </p>
           <p className="text-xs text-green-700 font-semibold">Payé UNIQUEMENT après résultat</p>
           <p className="text-xs text-slate-500">Aucun acompte — zéro paiement avant le créneau</p>
         </div>

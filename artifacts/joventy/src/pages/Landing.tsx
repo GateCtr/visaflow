@@ -10,7 +10,10 @@ import { TrustFAQ } from "@/components/TrustFAQ";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { AdSenseBanner } from "@/components/AdSenseBanner";
-import { getSlotPrice } from "@convex/constants";
+import { getSlotPrice, SLOT_PRICING_BY_DESTINATION } from "@convex/constants";
+
+// Prix créneau minimum sur toutes les destinations (pour l'affichage générique "dès X $").
+const SLOT_PRICE_MIN = Math.min(...Object.values(SLOT_PRICING_BY_DESTINATION).map((p) => p.normal));
 import {
   ArrowRight, Star, ShieldCheck, Clock, FileText, CheckCircle2,
   MessageCircle, Phone, Mail, Zap, Award, Users, TrendingUp,
@@ -248,8 +251,8 @@ const PACKAGES = [
     icon: Calendar,
     label: "Créneau Uniquement",
     tagline: "Dossier déjà prêt",
-    price: "350 $",
-    priceDetail: "Payé UNIQUEMENT après obtention · 0 $ d'acompte",
+    price: `dès ${SLOT_PRICE_MIN} $`,
+    priceDetail: "Selon destination · payé UNIQUEMENT après obtention · 0 $ d'acompte",
     desc: "Votre dossier est complet ? Joventy surveille 24h/24 le système de rendez-vous et verrouille votre créneau dès qu'une place se libère — USA, Schengen, Espagne, Allemagne et plus.",
     highlight: false,
     features: [

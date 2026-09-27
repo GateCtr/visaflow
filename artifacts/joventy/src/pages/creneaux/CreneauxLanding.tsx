@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { CreneauxSEO } from "@/data/creneaux-seo";
 import { trackEvent } from "@/lib/analytics";
+import { getSlotPrice } from "@convex/constants";
 
 interface Props {
   data: CreneauxSEO;
@@ -42,7 +43,7 @@ function buildSchemas(data: CreneauxSEO) {
     offers: {
       "@type": "Offer",
       priceCurrency: "USD",
-      price: "350",
+      price: String(getSlotPrice(data.destinationKey, "normal")),
       priceSpecification: {
         "@type": "PriceSpecification",
         description: "Payé uniquement après obtention du créneau — aucun acompte",
@@ -87,6 +88,9 @@ export function CreneauxLanding({ data }: Props) {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const url = `${SITE}/${data.slug}`;
   const schemas = buildSchemas(data);
+  // Prix créneau par destination (source de vérité backend) — normal / express.
+  const slotNormal = getSlotPrice(data.destinationKey, "normal");
+  const slotExpress = getSlotPrice(data.destinationKey, "express");
 
   return (
     <div className="min-h-screen bg-white">
@@ -139,8 +143,8 @@ export function CreneauxLanding({ data }: Props) {
           <div className="max-w-xl mx-auto bg-white/10 border border-white/20 backdrop-blur-sm rounded-2xl p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-5xl font-black text-white">350 <span className="text-3xl">$</span></p>
-                <p className="text-white/70 text-xs mt-1">Formule normale · formule express : 500 $</p>
+                <p className="text-5xl font-black text-white">{slotNormal} <span className="text-3xl">$</span></p>
+                <p className="text-white/70 text-xs mt-1">Formule normale · formule express : {slotExpress} $</p>
                 <p className="text-green-300 font-bold text-sm mt-1">Payés UNIQUEMENT après obtention du créneau</p>
               </div>
               <div className="text-right">
@@ -249,7 +253,7 @@ export function CreneauxLanding({ data }: Props) {
                 bg: "bg-green-50",
                 border: "border-green-200",
                 title: "Paiement au résultat",
-                desc: "Les 350 $ sont dus uniquement quand Joventy a confirmé votre créneau. Pas de créneau = pas de paiement.",
+                desc: `Les ${slotNormal} $ sont dus uniquement quand Joventy a confirmé votre créneau. Pas de créneau = pas de paiement.`,
               },
               {
                 icon: Zap,
@@ -283,7 +287,7 @@ export function CreneauxLanding({ data }: Props) {
       {/* ═══════════════════════════ INCLUDED ═══ */}
       <section className="py-16 px-4">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-black text-primary mb-8 text-center">Ce qui est inclus dans les 350 $</h2>
+          <h2 className="text-2xl font-black text-primary mb-8 text-center">Ce qui est inclus dans les {slotNormal} $</h2>
           <div className="bg-white border border-border rounded-2xl shadow-sm overflow-hidden">
             <div className="divide-y divide-border">
               {data.included.map((item) => (
