@@ -32,4 +32,5 @@ export {
   readSlotSnapshot,
   type SlotSnapshotRead,
   recordBookingWinner,
+  isSlotAlreadyBooked,
 } from "./spain-redis-persistence.js";

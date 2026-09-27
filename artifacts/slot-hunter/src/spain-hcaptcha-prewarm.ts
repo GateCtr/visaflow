@@ -38,6 +38,19 @@ const FRESH_TTL_MS = 20_000;
 /** Nombre de tokens gardés en réserve après la première détection d'un créneau. */
 const BURST_TOKEN_TARGET = 3;
 
+/** Réserve de base (avant toute détection) : 2 tokens au lieu d'1, pour qu'un token frais
+ *  reste disponible même si l'autre vient de périmer (TTL 20 s vs solve ~10-16 s). Évite
+ *  que l'éclaireur — qui détecte le premier — se retrouve sans gct au moment du burst
+ *  (bug prod 2026-09-27). */
+const BASE_TOKEN_TARGET = 2;
+
+/** Fenêtre de fraîcheur "créneau vu récemment" (ms). Après le cutoff horaire, on n'entretient
+ *  le token d'un dossier QUE si un créneau a été vu dans cette fenêtre. Passé ce délai sans
+ *  nouveau créneau (burst épuisé) → arrêt des solves. 90 s couvre les re-publications proches
+ *  sans gaspiller jusqu'à la fin de fenêtre. Override : SPAIN_SLOT_SEEN_FRESH_SEC (défaut 90). */
+const SLOT_SEEN_FRESH_MS =
+  Math.max(10, Math.min(600, Number(process.env.SPAIN_SLOT_SEEN_FRESH_SEC ?? "90") || 90)) * 1000;
+
 interface DossierCaptchaToken {
   token: string;
   solvedAtMs: number;
@@ -58,6 +71,13 @@ interface DossierCaptcha {
    *  n'entretient plus le token que des dossiers ayant vu un créneau (re-bookings), et on
    *  arrête de gaspiller des solves sur les dossiers restés vides (agenda/datetime 0B). */
   slotEverSeen: boolean;
+  /** Instant du DERNIER créneau vu (epoch ms, 0 = jamais). Fenêtre glissante : après le
+   *  cutoff, on n'entretient le token QUE si un créneau a été vu dans les SLOT_SEEN_FRESH_MS
+   *  dernières ms. Évite de continuer à solver des captchas quand les créneaux d'un burst
+   *  HH:13-14 sont épuisés (bug prod : solves gaspillés jusqu'à HH:25 sur slotEverSeen monotone). */
+  lastSlotSeenAtMs: number;
+  /** true dès que ce dossier a booké (RDV pris) → plus AUCUN solve nécessaire. */
+  booked: boolean;
 }
 
 /** Registre par dossierId. Peuplé par les workers (registerDossierCaptcha). */
@@ -99,7 +119,7 @@ export function registerDossierCaptcha(dossierId: string, sitekey: string, pageU
   const normUrl = normalizePageUrl(pageUrl);
   const existing = dossiers.get(dossierId);
   if (existing === undefined) {
-    dossiers.set(dossierId, { sitekey, pageUrl: normUrl, tokens: [], solving: 0, slotEverSeen: false });
+    dossiers.set(dossierId, { sitekey, pageUrl: normUrl, tokens: [], solving: 0, slotEverSeen: false, lastSlotSeenAtMs: 0, booked: false });
     console.log(
       `[spain-hcaptcha-prewarm] 📌 dossier ${dossierId} enregistré (sitekey=${sitekey.slice(0, 8)}…, url=…${normUrl.slice(-24)})`,
     );
@@ -122,10 +142,27 @@ export function registerDossierCaptcha(dossierId: string, sitekey: string, pageU
  */
 export function markDossierSlotSeen(dossierId: string): void {
   const entry = dossiers.get(dossierId);
-  if (entry === undefined || entry.slotEverSeen) return;
-  entry.slotEverSeen = true;
-  // Démarre le burst sans bloquer le worker qui vient de détecter le créneau.
-  void prewarmOne(entry, dossierId);
+  if (entry === undefined) return;
+  // Fenêtre glissante : on rafraîchit lastSlotSeenAtMs à CHAQUE créneau vu (pas monotone).
+  // Sert à couper le prewarm quand le burst est épuisé (aucun créneau vu depuis SLOT_SEEN_FRESH_MS).
+  entry.lastSlotSeenAtMs = Date.now();
+  const first = !entry.slotEverSeen;
+  entry.slotEverSeen = true; // conservé (monotone) pour la compat des lecteurs existants.
+  // Démarre le burst au PREMIER créneau vu sans bloquer le worker qui vient de détecter.
+  if (first) void prewarmOne(entry, dossierId);
+}
+
+/**
+ * Marque un dossier comme AYANT BOOKÉ (RDV pris) : plus aucun token n'est nécessaire.
+ * Vide sa réserve et le sort du cycle de pré-résolution (arrête tout solve payant).
+ * Appelé par le worker après un booking confirmé (summary/ state=1).
+ */
+export function markDossierBooked(dossierId: string): void {
+  const entry = dossiers.get(dossierId);
+  if (entry === undefined) return;
+  entry.booked = true;
+  entry.tokens = [];
+  console.log(`[spain-hcaptcha-prewarm] 🏁 dossier ${dossierId} booké — arrêt de la pré-résolution`);
 }
 
 /**
@@ -157,9 +194,11 @@ export function takeDossierToken(dossierId: string): string | null {
  * Ne lève jamais.
  */
 async function prewarmOne(entry: DossierCaptcha, dossierId: string): Promise<void> {
+  // Dossier déjà booké → aucun token nécessaire, on ne solve plus rien (anti-gaspillage).
+  if (entry.booked) return;
   const nowMs = Date.now();
   const freshCount = pruneExpiredTokens(entry, dossierId, nowMs);
-  const target = entry.slotEverSeen ? BURST_TOKEN_TARGET : 1;
+  const target = entry.slotEverSeen ? BURST_TOKEN_TARGET : BASE_TOKEN_TARGET;
   const missing = target - freshCount - entry.solving;
   if (missing <= 0) return;
 
@@ -213,11 +252,21 @@ export async function prewarmAllDossiers(
   onlySlotSeen = false,
 ): Promise<number> {
   const active = new Set(activeDossierIds);
+  const nowMsGate = Date.now();
   const tasks: Array<Promise<void>> = [];
   for (const [dossierId, entry] of dossiers) {
     if (!active.has(dossierId)) continue;
-    // Après le cutoff : sauter les dossiers restés vides (jamais vu de créneau).
-    if (onlySlotSeen && !entry.slotEverSeen) continue;
+    // Dossier déjà booké → jamais de solve (RDV pris).
+    if (entry.booked) continue;
+    // Après le cutoff : n'entretenir QUE les dossiers ayant vu un créneau RÉCEMMENT
+    // (fenêtre glissante SLOT_SEEN_FRESH_MS). Un dossier qui a vu un burst à HH:13-14 mais
+    // dont les créneaux sont épuisés depuis > SLOT_SEEN_FRESH_MS n'est plus entretenu →
+    // arrêt des solves payants (fix : slotEverSeen monotone gaspillait jusqu'à HH:25).
+    if (onlySlotSeen) {
+      const seenRecently =
+        entry.lastSlotSeenAtMs > 0 && nowMsGate - entry.lastSlotSeenAtMs < SLOT_SEEN_FRESH_MS;
+      if (!seenRecently) continue;
+    }
     tasks.push(prewarmOne(entry, dossierId));
   }
   if (tasks.length === 0) return 0;
@@ -246,9 +295,20 @@ export function hasRegisteredDossiers(activeDossierIds: readonly string[]): bool
  *  Utilisé par l'orchestrateur après le cutoff : si aucun dossier n'a vu de créneau,
  *  le timer de pré-résolution peut s'arrêter complètement (plus rien à entretenir). */
 export function hasSlotSeenDossiers(activeDossierIds: readonly string[]): boolean {
+  const nowMs = Date.now();
   for (const id of activeDossierIds) {
     const entry = dossiers.get(id);
-    if (entry !== undefined && entry.slotEverSeen) return true;
+    // Fenêtre glissante + non booké : un dossier n'est "à entretenir" que s'il a vu un
+    // créneau RÉCEMMENT et n'a pas encore booké. Sinon le timer prewarm doit s'arrêter
+    // (fix : slotEverSeen monotone gardait le timer actif — et les solves — jusqu'à HH:25).
+    if (
+      entry !== undefined &&
+      !entry.booked &&
+      entry.lastSlotSeenAtMs > 0 &&
+      nowMs - entry.lastSlotSeenAtMs < SLOT_SEEN_FRESH_MS
+    ) {
+      return true;
+    }
   }
   return false;
 }

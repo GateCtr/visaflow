@@ -45,7 +45,7 @@ import {
 } from "./spain-http-booking.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
 import { getKnownIdsForPortal, portalRequiresCaptcha } from "./spain-portals.js";
-import { registerDossierCaptcha, takeDossierToken, markDossierSlotSeen } from "./spain-hcaptcha-prewarm.js";
+import { registerDossierCaptcha, takeDossierToken, markDossierSlotSeen, markDossierBooked } from "./spain-hcaptcha-prewarm.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
   tryClaimSlot,
@@ -55,6 +55,7 @@ import {
   releaseWorkerIp,
   publishSlotSnapshot,
   recordBookingWinner,
+  isSlotAlreadyBooked,
 } from "./spain-slot-coordinator.js";
 import { buildSlotAssignment } from "./spain-slot-assignment.js";
 import {
@@ -77,6 +78,7 @@ import {
   deleteWorkerProxyIdentity,
   publishBurstSignal,
   checkBurstFlag,
+  waitForBurstOrTimeout,
   isSpainRedisReady,
   tryAcquireBookingSlot,
   releaseBookingSlot,
@@ -606,12 +608,15 @@ export function attemptBookingRace(
   // Req 9.5 — capacité libre suffisante ⟹ tous les workers bookent en parallèle,
   // sémaphore contourné (aucune collision : chaque worker vise une place distincte).
   const bypassSemaphore = totalFreeCapacity >= RACE_BYPASS_THRESHOLD;
+  // NB : décision basée sur la CAPACITÉ (places ≥ seuil). Distincte du MODE RACE (nb de
+  // créneaux ≤ seuil) : si le mode RACE est actif, le bypass est de toute façon accordé
+  // en aval (enoughSlotsForAll = raceMode || …). Ce log ne reflète QUE le critère capacité.
   log(
     "INFO",
-    `${tag} 🏁 RACE snapshot frais (${Math.round(ageMs / 1000)}s) — ${totalFreeCapacity} places` +
+    `${tag} 🏁 RACE (capacité) snapshot frais (${Math.round(ageMs / 1000)}s) — ${totalFreeCapacity} places` +
       (bypassSemaphore
-        ? ` ≥ ${RACE_BYPASS_THRESHOLD} → bypass sémaphore (booking parallèle)`
-        : ` < ${RACE_BYPASS_THRESHOLD} → respect du sémaphore`),
+        ? ` ≥ ${RACE_BYPASS_THRESHOLD} → bypass par capacité`
+        : ` < ${RACE_BYPASS_THRESHOLD} → pas de bypass par capacité (le mode RACE peut néanmoins bypasser)`),
   );
   return { bypassSemaphore, expired: false, totalFreeCapacity };
 }
@@ -1360,6 +1365,11 @@ export async function scanDatetimeDirect(
     serviceName: phpState.bestServiceName,
     agendaId: phpState.agendaId,
     ds: phpState.ds,   // ← propagé pour que le booking utilise le bon PHPSESSID
+    // CRITIQUE : propager le flag captcha du phpState → sinon la boucle booking calcule
+    // captchaNeeded=false et envoie signin/ SANS gct. Sur Kinshasa (captcha obligatoire),
+    // l'éclaireur shortscan recevait alors 0B "réponse vide" (bug prod 2026-09-27).
+    captchaRequired: phpState.captchaRequired,
+    captchaSitekey: phpState.captchaSitekey,
     monthTraces,
   };
 }
@@ -2449,6 +2459,13 @@ export async function runDossierWorker(
   // si le CF est réellement mort. Remis à 0 sur tout cycle réussi (found/not_found).
   let consecutiveProxyErrors = 0;
 
+  // Instant du dernier `found` DE CE WORKER (epoch ms). Sert à distinguer un 0B datetime/
+  // "anomalie proxy" (créneaux existent selon un peer, mais MOI je vois 0B → proxy cassé)
+  // d'un 0B LÉGITIME (j'ai vu/tenté ces créneaux il y a quelques secondes, ils sont
+  // maintenant consommés → burst flag encore frais mais 0B normal). Sans ça, l'éclaireur
+  // qui rate son booking blackliste une IP saine + re-solve CF inutilement (bug prod 2026-09-27).
+  let lastOwnFoundAtMs = 0;
+
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
@@ -2521,12 +2538,27 @@ export async function runDossierWorker(
       }
       log("INFO", `${tag} 📊 Cycle ${cycleCount} scan=${scan.status}${isMeute ? " [meute]" : ""} | cfClearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
 
+      // Mémoriser l'instant d'un `found` de CE worker (voir lastOwnFoundAtMs) — utilisé
+      // juste après pour ne pas confondre un 0B "créneaux consommés" avec une anomalie proxy.
+      if (scan.status === "found") lastOwnFoundAtMs = Date.now();
+
       // Sur Kinshasa, `datetime/` 0B sur tous les mois est le résultat normal
       // quand l'agenda fallback n'a aucun créneau. Conclure immédiatement
       // `not_found`; vérifier seulement si Redis contient DÉJÀ un burst peer
       // récent qui contredit ce résultat. Aucun délai de polling n'est ajouté.
       if (scan.status === "not_found" && hasAllDatetimeHttpNulls(scan)) {
-        const peerBurstConfirmed = await hasRecentPeerBurst(config.portalUrl, tag);
+        // Faux positif à écarter : si CE worker a lui-même vu des créneaux très récemment
+        // (< PEER_BURST_MAX_AGE_SEC), le burst flag Redis est SON burst (ou celui d'un peer
+        // sur les mêmes créneaux désormais consommés). Un 0B ensuite est LÉGITIME (place
+        // partie), pas une panne proxy → ne PAS rotationner/blacklister une IP saine.
+        const ownFoundRecently =
+          lastOwnFoundAtMs > 0 && Date.now() - lastOwnFoundAtMs < PEER_BURST_MAX_AGE_SEC * 1000;
+        const peerBurstConfirmed = ownFoundRecently
+          ? false
+          : await hasRecentPeerBurst(config.portalUrl, tag);
+        if (ownFoundRecently) {
+          log("INFO", `${tag} 🔎 0B après un found récent de ce worker (${Math.round((Date.now() - lastOwnFoundAtMs) / 1000)}s) — créneaux consommés, PAS d'anomalie proxy (pas de rotation)`);
+        }
         if (peerBurstConfirmed) {
           scan.status = "proxy_error";
           scan.errorMessage = "datetime/ 0B contredit par burst peer récent";
@@ -3090,7 +3122,14 @@ export async function runDossierWorker(
             log("INFO", `${tag} 🔁 re-cycle ${recycle}: getsigninfields/ → ${armGsfBytes}B${armGsfBytes > 0 ? " ✅ session ré-armée" : " ⚠️ toujours 0B"}`);
           }
           if (armGsfBytes === 0) {
-            log("WARN", `${tag} 🚫 armement getsigninfields/ toujours 0B après ${GSF_ARM_RECYCLE_MAX} cycle(s) — signin/ voué à l'échec, on n'insiste pas ce cycle`);
+            if (isMeute) {
+              // MEUTE : getsigninfields/ 0B est ATTENDU (pas de datetime/ préalable → le serveur
+              // ne "sélectionne" pas le créneau). signin/ aboutit quand même sur le créneau du
+              // snapshot (prouvé mémoire fait #2/#4) → on TENTE, contrairement au worker normal.
+              log("INFO", `${tag} 🐺 getsigninfields/ 0B (normal en meute — pas de datetime/) → signin/ tenté directement sur le créneau du snapshot`);
+            } else {
+              log("WARN", `${tag} 🚫 armement getsigninfields/ toujours 0B après ${GSF_ARM_RECYCLE_MAX} cycle(s) — session morte (§9), signin/ voué à l'échec, on n'insiste pas ce cycle`);
+            }
           }
           // logintypes découverts sur l'armement (réutilisés pour TOUS les candidats).
           const armedLoginTypes = (armGsf && armGsfBytes > 0)
@@ -3118,6 +3157,19 @@ export async function runDossierWorker(
             `mode=${raceMode ? "RACE (serveur arbitre)" : "NORMAL (claim Redis)"}`,
           );
           for (const candidate of (canAttemptSignin ? armCandidates : [])) {
+            // Garde "gagnant confirmé" (s'applique AUSSI en RACE) : si un peer a déjà
+            // booké ce créneau (summary/ state=1 → recordBookingWinner), inutile de tenter
+            // signin/ dessus — la place freeSlots=1 est consommée, on récolterait un 0B
+            // "réponse vide" + un solve hCaptcha gaspillé. Ne bloque pas la course initiale
+            // (le gagnant n'est écrit qu'APRÈS summary/), coupe seulement les rescans tardifs.
+            if (await isSlotAlreadyBooked(candidate.date, candidate.time, candidate.agendaId ?? "")) {
+              log(
+                "INFO",
+                `${tag} ${candidate.date} ${candidate.time} → déjà booké par un peer (gagnant Redis) — prochain créneau…`,
+              );
+              continue;
+            }
+
             // Hors race seulement : claim atomique anti-collision historique.
             // En race, plusieurs workers peuvent frapper le même candidat et Bookitit
             // choisit le gagnant ; les perdants passent immédiatement au suivant.
@@ -3201,8 +3253,14 @@ export async function runDossierWorker(
                     gctToken = solved;
                     log("INFO", `${tag} 🔐 hCaptcha neuf prêt pour signin/ (${gctToken.length} car.)`);
                   } else {
-                    log("WARN", `${tag} 🔐 hCaptcha NON résolu — signin/ tenté sans gct (échouera probablement)`);
+                    log("WARN", `${tag} 🔐 hCaptcha NON résolu — gct indisponible, on n'envoie PAS signin/ (0B garanti sur portail captcha) → prochain cycle`);
                   }
+                }
+                // Garde : sur un portail à captcha obligatoire, signin/ SANS gct = 0B garanti
+                // qui consomme la session PHP. Inutile de le tenter — on abandonne ce candidat
+                // et on laissera le rescan/burst suivant retenter avec un token frais.
+                if (!gctToken) {
+                  break;
                 }
               }
               log(
@@ -3407,6 +3465,10 @@ export async function runDossierWorker(
             });
 
             if (bookResult.status === "booked") {
+              // RDV pris → arrêter la pré-résolution hCaptcha de ce dossier (plus aucun
+              // token nécessaire) : évite de continuer à solver des captchas payants après
+              // le booking, y compris post-cutoff (fix gaspillage prod HH:14→25).
+              markDossierBooked(config.id);
               // Coordination APRÈS arbitrage Bookitit : mémoriser le premier gagnant
               // sans jamais utiliser Redis pour bloquer les tentatives en mode race.
               await recordBookingWinner(
@@ -3697,7 +3759,26 @@ export async function runDossierWorker(
 
     // Plafonner : ne planifier aucun réveil au-delà de windowEnd (aucun scan hors fenêtre).
     if (shouldScheduleWake(wakeAtMs, windowEnd)) {
-      await sleep(wait);
+      // MEUTE : sommeil INTERRUPTIBLE par le signal BURST de l'éclaireur. Au lieu d'attendre
+      // le prochain front de grille (jusqu'à ~6s, ~3s en moyenne), la meute se réveille dès
+      // que l'éclaireur publie un burst (publishBurstSignal à la détection). Fallback : si
+      // aucun burst n'arrive, elle dort jusqu'au front normal (via="timeout"). Supprime le
+      // décalage de phase publication→lecture observé en prod (~3s). Hors meute : sleep normal.
+      if (workerIsMeute && wait > 0) {
+        // freshSec court (fenêtre = durée du sommeil + petite marge) : ne se réveiller que
+        // sur un burst RÉCENT (celui d'un éclaireur pendant CE sommeil), pas sur un flag
+        // vieux de ~2 min encore présent (sinon boucle de scan serrée post-détection).
+        const burstFreshSec = Math.max(2, Math.ceil(wait / 1000) + 2);
+        const burst = await waitForBurstOrTimeout(config.portalUrl, wait, burstFreshSec);
+        if (burst.bursted) {
+          log(
+            "INFO",
+            `${tag} 🐺 réveil BURST (${burst.via}, ${burst.waitedMs}ms) — lecture snapshot immédiate`,
+          );
+        }
+      } else {
+        await sleep(wait);
+      }
       // Le sommeil jusqu'au front clôt la période de rattrapage et réarme le
       // droit à un seul rattrapage pour la prochaine période.
       catchUpUsedSinceLastFront = false;
@@ -4520,11 +4601,14 @@ async function reportBookingSuccess(
   }).catch(() => {});
 
   try {
+    // location : en mode meute, scan.serviceName est "" (getservices/ sauté). `??` ne
+    // couvre PAS la chaîne vide → utiliser `||` pour retomber sur le libellé par défaut,
+    // sinon l'endpoint Convex rejette (400 Missing required fields: … location).
     await reportSlotFound({
       applicationId: config.applicationId,
       date: bookedDate,
       time: bookedTime,
-      location: scan.serviceName ?? "TRAMITACIÓN DE VISADOS",
+      location: scan.serviceName || "TRAMITACIÓN DE VISADOS",
       confirmationCode: result.locator,
     });
     log(

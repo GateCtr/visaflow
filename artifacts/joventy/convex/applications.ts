@@ -351,6 +351,17 @@ export const create = mutation({
       applicationId: id,
     });
 
+    // TikTok Events API (server-side) : conversion « création de dossier ».
+    await ctx.scheduler.runAfter(0, internal.tiktokEvents.trackEvent, {
+      event: "CompleteRegistration",
+      eventId: `reg_${id}`,
+      email: userEmail,
+      phone: args.userWhatsapp,
+      externalId: identity.subject,
+      contentId: `${args.destination}_${pkg}`,
+      contentName: `${pricing.label} — ${pkg}`,
+    });
+
     // Spain slot_only: status is immediately slot_hunting (bypasses payment gate).
     // Schedule Spain pre-registration communication now — setSlotHunting won't be called again.
     if (destKey === "spain" && isSlotOnly && userEmail && !args.spainHasCredentials) {

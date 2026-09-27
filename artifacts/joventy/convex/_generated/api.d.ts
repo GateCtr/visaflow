@@ -32,6 +32,7 @@ import type * as spainAlert from "../spainAlert.js";
 import type * as spainBooking from "../spainBooking.js";
 import type * as spainOtp from "../spainOtp.js";
 import type * as spainWatcher from "../spainWatcher.js";
+import type * as tiktokEvents from "../tiktokEvents.js";
 import type * as traffic from "../traffic.js";
 import type * as users from "../users.js";
 import type * as victor from "../victor.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   spainBooking: typeof spainBooking;
   spainOtp: typeof spainOtp;
   spainWatcher: typeof spainWatcher;
+  tiktokEvents: typeof tiktokEvents;
   traffic: typeof traffic;
   users: typeof users;
   victor: typeof victor;

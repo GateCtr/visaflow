@@ -105,5 +105,17 @@ export async function coreMarkSlotFound(
     applicationId: args.applicationId,
   });
 
+  // TikTok Events API : lead qualifié « créneau capturé » (couvre admin + booking auto).
+  await ctx.scheduler.runAfter(0, internal.tiktokEvents.trackEvent, {
+    event: "SubmitForm",
+    eventId: `slot_${args.applicationId}`,
+    email: app.userEmail,
+    phone: (app as { userWhatsapp?: string }).userWhatsapp,
+    externalId: app.userId,
+    value: priceDetails.successFee,
+    contentId: `${app.destination}_slot`,
+    contentName: `Créneau ${app.destination.toUpperCase()}`,
+  });
+
   return args.applicationId;
 }

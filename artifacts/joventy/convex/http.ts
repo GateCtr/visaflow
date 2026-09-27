@@ -496,8 +496,13 @@ http.route({
       return new Response("Invalid JSON body", { status: 400 });
     }
 
-    if (!body.applicationId || !body.date || !body.time || !body.location) {
-      return new Response("Missing required fields: applicationId, date, time, location", { status: 400 });
+    {
+      const missing = (["applicationId", "date", "time", "location"] as const).filter(
+        (k) => !body[k],
+      );
+      if (missing.length > 0) {
+        return new Response(`Missing required fields: ${missing.join(", ")}`, { status: 400 });
+      }
     }
 
     try {

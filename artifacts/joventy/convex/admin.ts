@@ -413,6 +413,18 @@ export const validateEngagementPayment = mutation({
       applicationId: args.applicationId,
     });
 
+    // TikTok Events API : acompte/engagement validé (début de tunnel payant).
+    await ctx.scheduler.runAfter(0, internal.tiktokEvents.trackEvent, {
+      event: "InitiateCheckout",
+      eventId: `engage_${args.applicationId}`,
+      email: app.userEmail,
+      phone: (app as { userWhatsapp?: string }).userWhatsapp,
+      externalId: app.userId,
+      value: priceDetails.engagementFee,
+      contentId: `${app.destination}_engagement`,
+      contentName: `Engagement ${app.destination.toUpperCase()}`,
+    });
+
     return args.applicationId;
   },
 });
@@ -587,6 +599,18 @@ export const validateSuccessFee = mutation({
       title: "Dossier finalisé ✓",
       body: "Votre prime de succès a été validée. Votre kit d'entretien consulaire est maintenant disponible.",
       applicationId: args.applicationId,
+    });
+
+    // TikTok Events API : conversion finale « paiement complété » (valeur = prime de succès).
+    await ctx.scheduler.runAfter(0, internal.tiktokEvents.trackEvent, {
+      event: "CompletePayment",
+      eventId: `pay_${args.applicationId}`,
+      email: app.userEmail,
+      phone: (app as { userWhatsapp?: string }).userWhatsapp,
+      externalId: app.userId,
+      value: priceDetails.successFee,
+      contentId: `${app.destination}_success_fee`,
+      contentName: `Prime de succès ${app.destination.toUpperCase()}`,
     });
 
     return args.applicationId;

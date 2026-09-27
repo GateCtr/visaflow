@@ -153,9 +153,12 @@ async function assignRoles(
 }
 
 /** Intervalle FIXE de rafraîchissement du pool de tokens hCaptcha pré-résolus (ms).
- *  20 s aligne le tick sur l'âge maximal accepté par citaconsular côté module, sans
- *  dépendre de la cadence variable de la boucle orchestrateur. */
-const HCAPTCHA_PREWARM_INTERVAL_MS = 20_000;
+ *  DOIT être NETTEMENT < FRESH_TTL_MS (20 s) : un token n'est accepté par citaconsular
+ *  que < 20 s ET un solve NoneCap prend ~10-16 s. Avec un tick de 20 s (= TTL), il y avait
+ *  systématiquement un trou où AUCUN token frais n'existait (bug prod 2026-09-27 : éclaireur
+ *  avec token âgé de 29 s → signin/ sans gct → 0B). Un tick de 7 s garantit qu'un nouveau
+ *  solve démarre avant que le précédent ne périme, maintenant en permanence ≥ 1 token frais. */
+const HCAPTCHA_PREWARM_INTERVAL_MS = 7_000;
 
 /** Minute-dans-l'heure à partir de laquelle la pré-résolution hCaptcha devient
  *  CONDITIONNELLE : au-delà, on n'entretient plus le token QUE des dossiers ayant vu

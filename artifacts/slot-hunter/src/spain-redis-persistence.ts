@@ -1832,6 +1832,34 @@ export async function recordBookingWinner(
 }
 
 /**
+ * Indique si un créneau a DÉJÀ un gagnant booking confirmé (summary/ state=1), écrit par
+ * recordBookingWinner. Sert de garde en LECTURE côté meute/RACE : un worker qui arrive
+ * tardivement sur un créneau déjà consommé (freeSlots=1 déjà pris par un peer) doit le
+ * sauter au lieu de gaspiller un signin/ + un solve hCaptcha voué au 0B "réponse vide".
+ *
+ * Ne bloque JAMAIS la course initiale : le gagnant n'est écrit qu'APRÈS summary/ confirmé,
+ * donc au moment de la 1ère salve aucun gagnant n'existe → tous les workers foncent (esprit
+ * RACE préservé). Seuls les rescans tardifs sont coupés.
+ *
+ * Redis indisponible → false (on n'empêche jamais une tentative faute de Redis).
+ */
+export async function isSlotAlreadyBooked(
+  date: string,
+  time: string,
+  agendaId: string,
+): Promise<boolean> {
+  if (!redisReady || !redisClient) return false;
+  const slotKey = [agendaId, date, time].map((part) => encodeURIComponent(part)).join(":");
+  const key = `spain:booking:winner:${slotKey}`;
+  try {
+    const val = await redisClient.get(key);
+    return val !== null && val !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Retourne le nombre actuel de workers en booking (informatif, pour les logs).
  */
 export async function getBookingArmedCount(): Promise<number> {
