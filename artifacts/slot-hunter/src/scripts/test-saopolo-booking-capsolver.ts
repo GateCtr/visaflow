@@ -11,13 +11,15 @@
  *   4. getservices/ → serviceId
  *   5. getagendas/ → agendaId
  *   6. datetime/ (mois par mois, dynamique) → premier créneau dispo
- *   7. saute getsigninfields/ puis appelle signin/ avec de faux identifiants
- *   8. Si signin/ retourne 0B → log diagnostic + retry avec session re-isolée
+ *   7. Par défaut, saute getsigninfields/ puis appelle signin/ avec de faux identifiants
+ *   8. TEST_SHARED_SLOT_SECOND_USER=1 : session B indépendante, créneau A partagé,
+ *      getsigninfields/ puis signin/ sans datetime/ sur B
+ *   9. En mode par défaut, si signin/ retourne 0B → retry avec session re-isolée
  *
  * Test partagé entre deux utilisateurs :
- *   TEST_SHARED_SLOT_SECOND_USER=1 démarre une seconde session indépendante,
- *   réutilise le créneau du premier utilisateur, saute datetime/ sur la session
- *   B, puis appelle getsigninfields/ et signin/.
+ *   TEST_SHARED_SLOT_SECOND_USER=1 démarre une seconde session PHP indépendante
+ *   (CF/proxy réutilisés selon le flux dossier), réutilise le créneau A, saute
+ *   datetime/ sur B, puis appelle getsigninfields/ et signin/.
  *
  * Usage :
  *   cd artifacts/slot-hunter
@@ -320,18 +322,62 @@ async function main() {
   }
 
   if (!slotDate || !slotTime) {
-    warn("Aucun créneau réel trouvé — arrêt avant signin/");
+    warn("Aucun créneau réel trouvé — arrêt avant les appels de booking");
     process.exit(0);
   } else {
     ok(`Créneau : ${slotDate} à ${slotTime}`);
   }
 
-  // ── 6b. getsigninfields/ — volontairement sauté ──────────────────────────
-  sep("6b — getsigninfields/ sauté");
-  log("Test d'omission : aucun appel getsigninfields/ avant signin/.");
+  // Si activé, l'utilisateur B reprend uniquement le créneau découvert par A.
+  // Le flux dossier partage la clearance CF et le proxy, mais crée un PHPSESSID
+  // frais pour B. Aucun datetime/ ni état PHP de booking n'est partagé depuis A.
+  let signinSession: SpainCfSession = bookSession;
+  if (SHARED_SLOT_SECOND_USER) {
+    sep("6a — UTILISATEUR B : nouveau PHPSESSID, créneau partagé par A");
+    const userBIsolated = await createIsolatedBookingSession(mainSession, PORTAL_URL);
+    if (!userBIsolated) {
+      err("Session Bookitit fraîche de l'utilisateur B indisponible — arrêt");
+      process.exit(1);
+    }
+    signinSession = userBIsolated.session;
+    const phpA = bookSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
+    const phpB = signinSession.allCookies.find(c => c.name === "PHPSESSID")?.value;
+    if (!phpB || phpB === phpA) {
+      err("PHPSESSID de l'utilisateur B absent ou identique à A — arrêt pour préserver l'isolation");
+      process.exit(1);
+    }
+    ok("PHPSESSID B frais et distinct de A; clearance CF/proxy partagés.");
+    log(`Slot partagé depuis A : ${slotDate} ${slotTime} | service=${serviceId} | agenda=${agendaId}`);
+    log("datetime/ sur la session B : sauté");
+
+    sep("6b — getsigninfields/ sur la session B");
+    const fieldsExtra: Record<string, string> = {
+      "services[]": serviceId,
+      date: slotDate,
+      time: slotTime,
+      selectedPeople: "1",
+    };
+    if (agendaId) fieldsExtra["agendas[]"] = agendaId;
+    const { raw: fieldsRaw, parsed: fieldsParsed, httpStatus: fieldsStatus } =
+      await callJsonp(signinSession, "getsigninfields/", fieldsExtra);
+    log(`HTTP ${fieldsStatus} | ${fieldsRaw.length}B`);
+    log(`  Réponse : ${fieldsRaw.slice(0, 300) || "(vide)"}`);
+    if (fieldsStatus !== 200) {
+      warn(`getsigninfields/ a échoué (HTTP ${fieldsStatus}) — arrêt avant signin/ pour isoler un problème réseau/HTTP.`);
+      process.exit(0);
+    }
+    if (fieldsRaw.length === 0 || fieldsParsed === null) {
+      warn("getsigninfields/ HTTP 200 mais corps vide/non parsé; poursuite avec une tentative signin/ et les identifiants factices.");
+    } else {
+      ok("getsigninfields/ reçu sur B; poursuite vers signin/ sans datetime/ sur B.");
+    }
+  } else {
+    sep("6b — getsigninfields/ sauté");
+    log("Test d'omission : aucun appel getsigninfields/ avant signin/.");
+  }
 
   // ── 7. signin/ avec faux credentials ──────────────────────────────────────
-  sep("7 — signin/ direct (getsigninfields/ sauté, faux credentials)");
+  sep(`7 — signin/ direct (${SHARED_SLOT_SECOND_USER ? "session B, slot partagé" : "getsigninfields/ sauté"}, faux credentials)`);
   log(`  login     : ${FAKE_LOGIN}`);
   log(`  password  : ${FAKE_PASSWORD}`);
   log(`  date      : ${slotDate}`);
@@ -353,14 +399,16 @@ async function main() {
   if (agendaId) signinExtra["agendas[]"] = agendaId;
 
   const { raw: signinRaw, parsed: signinParsed, httpStatus: signinStatus } =
-    await callJsonp(bookSession, "signin/", signinExtra);
+    await callJsonp(signinSession, "signin/", signinExtra);
 
   log(`\n  HTTP Status : ${signinStatus}`);
   log(`  Body size   : ${signinRaw.length}B`);
   log(`  Raw (500c)  :\n${signinRaw.slice(0, 500)}`);
   log(`  Parsed      : ${JSON.stringify(signinParsed, null, 2)}`);
 
-  if (signinRaw.length === 0) {
+  if (signinRaw.length === 0 && SHARED_SLOT_SECOND_USER) {
+    warn("signin/ → 0B sur la session B; pas de retry pour préserver le test d'une seule session B.");
+  } else if (signinRaw.length === 0) {
     sep("7b — signin/ retourné 0B → retry avec session re-isolée");
     warn("signin/ → 0B sur session isolée → création d'une 2ème session isolée fraîche…");
 
@@ -380,13 +428,15 @@ async function main() {
 
   // ── Résumé ────────────────────────────────────────────────────────────────
   sep("RÉSUMÉ FINAL");
-  ok(`Session CF          : ✅ ${mainSession.prefetchedMainHtml?.length ?? 0}B /main/`);
-  ok(`Session isolée      : ${isolated ? "✅" : "⚠️  (fallback session principale)"}`);
+  ok(`Session A (scan)        : ✅ ${mainSession.prefetchedMainHtml?.length ?? 0}B /main/`);
+  ok(`Session isolée A        : ${isolated ? "✅" : "⚠️  (fallback session principale)"}`);
+  log(`Session booking         : ${SHARED_SLOT_SECOND_USER ? "B indépendante" : "A"}`);
+  log(`datetime/ sur B         : ${SHARED_SLOT_SECOND_USER ? "sauté (slot partagé)" : "non applicable"}`);
   log(`getwidgetconfigurations : ${cfgRaw.length > 0 ? "✅" : "❌"} (${cfgRaw.length}B)`);
   log(`getservices             : ${svcRaw.length > 0 ? "✅" : "❌"} (${svcRaw.length}B)`);
   log(`getagendas              : ${agRaw.length > 0 ? "✅" : "❌"} (${agRaw.length}B)`);
   log(`Créneau cible           : ${slotDate} ${slotTime}`);
-  log("getsigninfields/        : sauté");
+  log(`getsigninfields/        : ${SHARED_SLOT_SECOND_USER ? "appelé sur B" : "sauté"}`);
   log(`signin/ réponse         : HTTP ${signinStatus} | ${signinRaw.length}B`);
 
   const signinRoot = signinParsed as any;

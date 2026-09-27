@@ -11,6 +11,14 @@ Après `refreshSessionAndScan()`, le booking doit utiliser le `DynamicSession` r
 
 **Comment appliquer:** les tests E2E doivent reproduire `initWorkerSession()` puis `refreshSessionAndScan()`, sélectionner un créneau réel, et chaîner tout le booking avec `scan.ds` dans le même contexte TLS et le même jar.
 
+## Créneau partagé entre sessions
+
+Sur Saopolo, un utilisateur A a trouvé un créneau réel via `datetime/`, puis un utilisateur B a reçu un nouveau `PHPSESSID` et a utilisé ce créneau sans refaire `datetime/`. Sur B, `getsigninfields/` a répondu HTTP 200 avec 0B, mais `signin/` a tout de même atteint la validation métier et renvoyé « Usuario o contraseña incorrectos » avec de faux identifiants.
+
+**Pourquoi:** cela confirme que le serveur peut traiter `signin/` avec un créneau découvert dans une autre session, mais ne prouve pas qu’un compte valide pourrait réserver. Aucun `bktToken` n’a été obtenu et `summary/` n’a pas été appelé.
+
+**Comment appliquer:** pour les diagnostics de créneau partagé, garder un vrai slot de A, créer un PHPSESSID frais pour B, ne pas appeler `datetime/` sur B, puis distinguer `getsigninfields/` vide d’une réponse métier de `signin/`. Ne jamais extrapoler ce résultat à une réservation réussie.
+
 ## Rotation des cookies
 
 Le jar manuel de `DynamicSession` doit fusionner les `Set-Cookie` reçus par `getsigninfields/`, `signin/` et `summary/` avant l'appel suivant, puis resynchroniser `session.allCookies`. Les valeurs ne doivent jamais apparaître dans les logs.
