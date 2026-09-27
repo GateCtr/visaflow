@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { VISA_PRICING, SLOT_URGENCY_TIERS, VISA_PARTIAL_SERVICE, SERVICE_PACKAGES, getAvailablePackages, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
+import { VISA_PRICING, SLOT_URGENCY_TIERS, VISA_PARTIAL_SERVICE, SERVICE_PACKAGES, getAvailablePackages, getSlotPriceDetails, normalizeSlotLevel, type Destination, type ServicePackage, type SlotUrgencyTier } from "./constants";
 import { getVisaCategory, getVisaClassForBroadcast } from "./visaClassifications";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -172,6 +172,9 @@ export const create = mutation({
       v.literal("dossier_only")
     )),
     slotUrgencyTier: v.optional(v.union(
+      v.literal("normal"),
+      v.literal("express"),
+      // Rétrocompat : anciens tiers tolérés en entrée (normalisés vers normal/express).
       v.literal("standard"),
       v.literal("prioritaire"),
       v.literal("urgent"),
@@ -225,11 +228,12 @@ export const create = mutation({
     let totalPrice: number;
 
     if (isSlotOnly) {
-      const tier: SlotUrgencyTier = (args.slotUrgencyTier ?? "standard") as SlotUrgencyTier;
-      const tierData = SLOT_URGENCY_TIERS[tier];
-      engagementFee = tierData.depositAmount;
-      successFee = tierData.successAmount;
-      totalPrice = tierData.total;
+      // Tarification créneau PAR DESTINATION × niveau (normal/express), payée à l'obtention.
+      const level = normalizeSlotLevel(args.slotUrgencyTier);
+      const slotPrice = getSlotPriceDetails(destKey, level);
+      engagementFee = slotPrice.depositAmount; // 0 — aucun acompte
+      successFee = slotPrice.successAmount;     // prix dû à l'obtention
+      totalPrice = slotPrice.total;
     } else {
       // dossier_only = Accompagnement Partiel : 200 USD engagement + 400 USD prime de succès (VISA_PARTIAL_SERVICE)
       engagementFee = isDossierOnly ? VISA_PARTIAL_SERVICE.engagementFee : pricing.engagementFee;
@@ -255,8 +259,9 @@ export const create = mutation({
       ...appArgs
     } = args;
 
+    const slotLevel = normalizeSlotLevel(args.slotUrgencyTier);
     const tierLabel = isSlotOnly
-      ? ` — Urgence : ${SLOT_URGENCY_TIERS[(args.slotUrgencyTier ?? "standard") as SlotUrgencyTier].label}. Dépôt : ${engagementFee}$ / Solde : ${successFee}$`
+      ? ` — Niveau : ${SLOT_URGENCY_TIERS[slotLevel].label}. Prix (à l'obtention) : ${successFee}$`
       : isDossierOnly ? " — Accompagnement Partiel (200$ engagement + 400$ prime succès)" : "";
 
     const trackingToken = Array.from({ length: 12 }, () =>
@@ -293,7 +298,7 @@ export const create = mutation({
       priceDetails,
       successModel: pricing.successModel,
       servicePackage: pkg,
-      slotUrgencyTier: isSlotOnly ? ((args.slotUrgencyTier ?? "standard") as SlotUrgencyTier) : undefined,
+      slotUrgencyTier: isSlotOnly ? slotLevel : undefined,
       slotBookingRefs: args.slotBookingRefs ?? undefined,
       cevVisaClass: cevVisaClass ?? undefined,
       cevApplicantAgeCategory: cevApplicantAgeCategory ?? undefined,
@@ -567,15 +572,19 @@ export const migrateToNewSlotSystem = mutation({
       throw new Error("La prime de succès de ce dossier est déjà réglée — aucune migration nécessaire");
     }
 
+    // ── Nouvelle tarification par destination (niveau normal, payé à l'obtention) ──
+    const level = normalizeSlotLevel(app.slotUrgencyTier);
+    const slotPrice = getSlotPriceDetails(app.destination, level);
+    const NEW_DEPOSIT = slotPrice.depositAmount; // 0
+    const NEW_SUCCESS = slotPrice.successAmount;
+
     // ── Vérifier éligibilité pricing (server-side) — évite les migrations inutiles ──
-    const currentTierIsStandard = app.slotUrgencyTier === "standard";
-    const currentFeeIsPromo = (app.priceDetails?.engagementFee ?? 0) === SLOT_URGENCY_TIERS["standard"].depositAmount;
-    if (currentTierIsStandard && currentFeeIsPromo) {
+    const currentFeeAligned =
+      (app.priceDetails?.engagementFee ?? -1) === NEW_DEPOSIT &&
+      (app.priceDetails?.successFee ?? -1) === NEW_SUCCESS;
+    if (currentFeeAligned) {
       throw new Error("Ce dossier est déjà sur le nouveau système de tarification");
     }
-
-    const NEW_DEPOSIT = SLOT_URGENCY_TIERS["standard"].depositAmount;
-    const NEW_SUCCESS = SLOT_URGENCY_TIERS["standard"].successAmount;
 
     let newPriceDetails: typeof app.priceDetails;
     let newPrice: number;
@@ -608,7 +617,7 @@ export const migrateToNewSlotSystem = mutation({
 
     const logs = app.logs ?? [];
     await ctx.db.patch(args.applicationId, {
-      slotUrgencyTier: "standard",
+      slotUrgencyTier: level,
       price: newPrice,
       priceDetails: newPriceDetails,
       updatedAt: Date.now(),
@@ -661,16 +670,17 @@ export const migrateToCreneau = mutation({
       );
     }
 
-    const tierData = SLOT_URGENCY_TIERS["standard"]; // $60/$90/$150
+    // Créneau niveau normal, tarif par destination, payé à l'obtention (aucun acompte).
+    const slotPrice = getSlotPriceDetails(app.destination, "normal");
 
     const logs = app.logs ?? [];
     await ctx.db.patch(args.applicationId, {
       servicePackage: "slot_only",
-      slotUrgencyTier: "standard",
-      price: tierData.total,
+      slotUrgencyTier: "normal",
+      price: slotPrice.total,
       priceDetails: {
-        engagementFee: tierData.depositAmount,
-        successFee: tierData.successAmount,
+        engagementFee: slotPrice.depositAmount,
+        successFee: slotPrice.successAmount,
         paidAmount: 0,
         isEngagementPaid: false,
         isSuccessFeePaid: false,
@@ -679,7 +689,7 @@ export const migrateToCreneau = mutation({
       logs: [
         ...logs,
         makeLog(
-          `Passage au service Créneau Uniquement (standard). Nouveau tarif : $${tierData.depositAmount} acompte / $${tierData.successAmount} solde (total $${tierData.depositAmount + tierData.successAmount}). La recherche de créneau démarrera après règlement de l'acompte.`,
+          `Passage au service Créneau Uniquement. Tarif : $${slotPrice.successAmount} payé uniquement à l'obtention du créneau (aucun acompte).`,
           identity.name ?? "client"
         ),
       ],

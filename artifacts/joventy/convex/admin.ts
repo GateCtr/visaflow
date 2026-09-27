@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { VISA_PRICING, SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "./constants";
+import { VISA_PRICING, SLOT_URGENCY_TIERS, getSlotPriceDetails, normalizeSlotLevel, type SlotUrgencyTier } from "./constants";
 import { coreMarkSlotFound, getEffectiveSuccessModel as getSuccessModel } from "./slotFoundHelper";
 
 function getRole(identity: { [key: string]: unknown } | null): string {
@@ -1143,10 +1143,8 @@ export const updateSlotUrgencyTier = mutation({
   args: {
     applicationId: v.id("applications"),
     newTier: v.union(
-      v.literal("standard"),
-      v.literal("prioritaire"),
-      v.literal("urgent"),
-      v.literal("tres_urgent")
+      v.literal("normal"),
+      v.literal("express")
     ),
     reason: v.optional(v.string()),
   },
@@ -1157,24 +1155,41 @@ export const updateSlotUrgencyTier = mutation({
     const app = await ctx.db.get(args.applicationId);
     if (!app) throw new Error("Dossier introuvable");
     if ((app as { servicePackage?: string }).servicePackage !== "slot_only") {
-      throw new Error("Changement de tier uniquement disponible pour les dossiers Créneau Uniquement");
+      throw new Error("Changement de niveau uniquement disponible pour les dossiers Créneau Uniquement");
     }
 
-    const prevTier = ((app as { slotUrgencyTier?: string }).slotUrgencyTier ?? "standard") as SlotUrgencyTier;
-    if (prevTier === args.newTier) {
-      throw new Error(`Le dossier est déjà en tier "${SLOT_URGENCY_TIERS[prevTier].label}"`);
+    // Normalise l'ancien tier (standard/prioritaire/…) vers normal/express.
+    const prevLevel = normalizeSlotLevel((app as { slotUrgencyTier?: string }).slotUrgencyTier);
+    const newLevel: SlotUrgencyTier = args.newTier;
+    if (prevLevel === newLevel) {
+      throw new Error(`Le dossier est déjà en niveau "${SLOT_URGENCY_TIERS[newLevel].label}"`);
     }
 
-    const prevLabel = SLOT_URGENCY_TIERS[prevTier].label;
-    const newLabel = SLOT_URGENCY_TIERS[args.newTier].label;
+    const prevLabel = SLOT_URGENCY_TIERS[prevLevel].label;
+    const newLabel = SLOT_URGENCY_TIERS[newLevel].label;
+
+    // Recalcule le prix selon la destination du dossier + le nouveau niveau (payé à l'obtention).
+    const slotPrice = getSlotPriceDetails(app.destination, newLevel);
+    const isSuccessPaid = app.priceDetails?.isSuccessFeePaid ?? false;
+    if (isSuccessPaid) {
+      throw new Error("La prime de succès de ce dossier est déjà réglée — le niveau ne peut plus être modifié");
+    }
 
     await ctx.db.patch(args.applicationId, {
-      slotUrgencyTier: args.newTier,
+      slotUrgencyTier: newLevel,
+      price: slotPrice.total,
+      priceDetails: {
+        engagementFee: slotPrice.depositAmount,
+        successFee: slotPrice.successAmount,
+        paidAmount: app.priceDetails?.paidAmount ?? 0,
+        isEngagementPaid: app.priceDetails?.isEngagementPaid ?? false,
+        isSuccessFeePaid: false,
+      },
       updatedAt: Date.now(),
       logs: [
         ...(app.logs ?? []),
         makeLog(
-          `Tier urgence changé : ${prevLabel} → ${newLabel}${args.reason ? ` (${args.reason})` : ""}.`,
+          `Niveau créneau changé : ${prevLabel} → ${newLabel} — nouveau prix ${slotPrice.successAmount}$ (à l'obtention)${args.reason ? ` (${args.reason})` : ""}.`,
           identity?.name ?? "admin"
         ),
       ],

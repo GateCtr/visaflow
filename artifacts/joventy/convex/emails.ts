@@ -1,6 +1,6 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { SERVICE_PACKAGES } from "./constants";
+import { SERVICE_PACKAGES, getSlotPrice } from "./constants";
 
 /** Convertit une clé servicePackage en libellé client lisible. */
 function servicePackageLabel(pkg: string | undefined): string {
@@ -572,7 +572,7 @@ export const sendApplicationConfirmationClient = internalAction({
         : info("Frais d'engagement", `${args.engagementFee} USD`));
 
     const nextStep = isSlotOnly
-      ? `<p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Merci de faire confiance à Joventy. Votre dossier créneau est enregistré — <strong>aucun paiement n'est requis maintenant</strong>. Un membre de notre équipe va configurer la surveillance de votre dossier et vous notifiera dès qu'un créneau est disponible. Les <strong>350 USD</strong> ne seront dus qu'après l'obtention effective du créneau.</p>`
+      ? `<p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Merci de faire confiance à Joventy. Votre dossier créneau est enregistré — <strong>aucun paiement n'est requis maintenant</strong>. Un membre de notre équipe va configurer la surveillance de votre dossier et vous notifiera dès qu'un créneau est disponible. Le montant (<strong>à partir de ${getSlotPrice(args.destination, "normal")} USD</strong> selon le niveau choisi) ne sera dû qu'après l'obtention effective du créneau.</p>`
       : `<p style="color:#475569;font-size:15px;line-height:1.7;margin:0 0 20px;">Merci de faire confiance à Joventy. Votre demande de visa est enregistrée. La prochaine étape est de régler les <strong>frais d'engagement (${args.engagementFee}&nbsp;USD)</strong> pour activer votre dossier.</p>`;
 
     const body = `

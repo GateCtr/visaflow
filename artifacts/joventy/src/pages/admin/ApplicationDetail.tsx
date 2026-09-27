@@ -4,7 +4,7 @@ import { useRoute } from "wouter";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Doc, Id } from "@convex/_generated/dataModel";
-import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, normalizeSlotLevel, type SlotUrgencyTier } from "@convex/constants";
 import { getUploadDocs } from "@convex/visaDocuments";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatDateOnly } from "@/lib/format";
@@ -711,7 +711,10 @@ export default function AdminApplicationDetail() {
   const servicePackage = (app as { servicePackage?: string }).servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const isSlotOnly = servicePackage === "slot_only";
-  const urgencyTierKey = (app as { slotUrgencyTier?: string }).slotUrgencyTier as SlotUrgencyTier | undefined;
+  // Normalise l'ancien tier (standard/prioritaire/…) vers normal/express pour l'affichage admin.
+  const urgencyTierKey: SlotUrgencyTier | undefined = isSlotOnly
+    ? normalizeSlotLevel((app as { slotUrgencyTier?: string }).slotUrgencyTier)
+    : undefined;
   const urgencyTier = urgencyTierKey ? SLOT_URGENCY_TIERS[urgencyTierKey] : null;
   const canAdjustFee = isSlotOnly && !isSuccessFeePaid;
 

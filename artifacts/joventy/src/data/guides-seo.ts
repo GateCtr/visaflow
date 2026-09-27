@@ -1326,7 +1326,7 @@ const guides: Guide[] = [
     slug: "visa-espagne-kinshasa-rendez-vous-ambassade-2026",
     title: "Comment prendre rendez-vous pour un visa Espagne à Kinshasa ?",
     metaTitle: "Comment prendre rendez-vous visa Espagne à Kinshasa ?",
-    metaDescription: "Étapes pour demander un rendez-vous visa Espagne à Kinshasa : email à l’ambassade, accès à citaconsular.es et réservation du créneau. Aide Joventy dès 350 USD.",
+    metaDescription: "Étapes pour demander un rendez-vous visa Espagne à Kinshasa : email à l’ambassade, accès à citaconsular.es et réservation du créneau. Aide Joventy dès 200 USD.",
     publishedDate: "2026-06-27",
     updatedDate: "2026-09-26",
     readingTime: 6,
@@ -1392,8 +1392,8 @@ const guides: Guide[] = [
         heading: "Tarifs du service de réservation de créneau",
         body: "Les tarifs ci-dessous rémunèrent le service Joventy de surveillance et d’aide à la réservation. Ils ne correspondent pas aux frais officiels du visa ni à un accompagnement complet du dossier :",
         list: [
-          "Service standard : 350 USD au total.",
-          "Service express : 500 USD au total, selon disponibilité.",
+          "Service standard : 200 USD au total.",
+          "Service express : 250 USD au total, selon disponibilité.",
           "Les modalités de paiement sont confirmées avant le démarrage selon l’état de votre inscription à l’ambassade.",
           "Les frais consulaires et les autres dépenses du dossier de visa sont distincts et se règlent selon les instructions officielles.",
           "Le service de créneau ne garantit ni une date précise ni l’obtention du visa : la décision appartient à l’ambassade.",
@@ -1445,7 +1445,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte le service Joventy de réservation de créneau ?",
-        a: "Le tarif total est de 350 USD pour le service standard et de 500 USD pour le service express, selon disponibilité. Les modalités de paiement sont précisées avant le démarrage en fonction de l’état de votre inscription. Ces tarifs ne couvrent ni les frais consulaires ni un accompagnement complet du dossier visa.",
+        a: "Le tarif total est de 200 USD pour le service standard et de 250 USD pour le service express, selon disponibilité. Les modalités de paiement sont précisées avant le démarrage en fonction de l’état de votre inscription. Ces tarifs ne couvrent ni les frais consulaires ni un accompagnement complet du dossier visa.",
       },
       {
         q: "Que faire si mon email à l'ambassade reste sans réponse ?",
@@ -1490,7 +1490,7 @@ const guides: Guide[] = [
     ],
     conversion: {
       heading: "Besoin d’aide pour réserver un créneau Espagne ?",
-      body: "Après réception de vos identifiants, Joventy peut surveiller citaconsular.es et vous aider à réserver. Le service standard coûte 350 USD ; l’option express coûte 500 USD selon disponibilité. La prestation porte sur le rendez-vous, pas sur l’obtention du visa.",
+      body: "Après réception de vos identifiants, Joventy peut surveiller citaconsular.es et vous aider à réserver. Le service standard coûte 200 USD ; l’option express coûte 250 USD selon disponibilité. La prestation porte sur le rendez-vous, pas sur l’obtention du visa.",
       primaryLabel: "Voir le service créneau Espagne",
       primaryHref: "/creneaux-visa-espagne-kinshasa",
       whatsappLabel: "Choisir le service sur WhatsApp",
@@ -3938,14 +3938,14 @@ const guides: Guide[] = [
     title: "Mon dossier visa est prêt — comment obtenir un créneau rapidement depuis Kinshasa ?",
     metaTitle: "Dossier visa prêt à Kinshasa — Obtenir un créneau rapidement | Joventy",
     metaDescription:
-      "Votre dossier visa est complet mais vous ne trouvez pas de créneau ? Découvrez le package Créneau Uniquement Joventy (350 USD) et les délais réels par destination depuis Kinshasa en 2026.",
+      "Votre dossier visa est complet mais vous ne trouvez pas de créneau ? Découvrez le package Créneau Uniquement Joventy (à partir de 200 USD) et les délais réels par destination depuis Kinshasa en 2026.",
     publishedDate: "2026-08-15",
     updatedDate: "2026-08-15",
     readingTime: 7,
     category: "Créneau Visa",
     coverEmoji: "📁",
     intro:
-      "Vous avez tout préparé : passeport, relevés bancaires, lettre de motivation, assurance voyage, billets d'avion provisoires. Votre dossier est complet et prêt à déposer. Le seul obstacle qui reste entre vous et votre visa ? Un créneau de rendez-vous introuvable. C'est précisément pour ce profil que Joventy a créé le package Créneau Uniquement — 350 USD, zéro engagement, une seule mission : trouver votre date.",
+      "Vous avez tout préparé : passeport, relevés bancaires, lettre de motivation, assurance voyage, billets d'avion provisoires. Votre dossier est complet et prêt à déposer. Le seul obstacle qui reste entre vous et votre visa ? Un créneau de rendez-vous introuvable. C'est précisément pour ce profil que Joventy a créé le package Créneau Uniquement — à partir de 200 USD, zéro engagement, une seule mission : trouver votre date.",
     sections: [
       {
         heading: "Pourquoi « dossier prêt » ne suffit pas — le vrai problème est le créneau",
@@ -3965,7 +3965,7 @@ const guides: Guide[] = [
         body:
           "Si votre dossier est déjà prêt, vous n'avez pas besoin d'un accompagnement complet. Le package Créneau Uniquement est conçu exactement pour votre situation :",
         list: [
-          "💰 350 USD — payés uniquement après obtention effective du créneau, aucun acompte à l'avance",
+          "💰 À partir de 200 USD — payés uniquement après obtention effective du créneau, aucun acompte à l'avance",
           "🤖 Surveillance automatisée 24h/24 : nos outils scannent le portail officiel en continu, y compris la nuit",
           "⚡ Réservation immédiate : dès qu'un créneau compatible avec votre profil apparaît, il est pris en priorité",
           "📲 Confirmation WhatsApp instantanée : vous recevez le détail du rendez-vous dès qu'il est confirmé",
@@ -4005,7 +4005,7 @@ const guides: Guide[] = [
         list: [
           "1. Contactez Joventy sur WhatsApp (+243 840 808 122) ou créez votre dossier sur joventy.cd/register",
           "2. Indiquez votre destination, votre catégorie de visa et votre flexibilité de dates — la surveillance démarre rapidement",
-          "3. Dès que le créneau est confirmé, vous recevez la date par WhatsApp et réglez les 350 USD via M-Pesa, Airtel Money ou Orange Money",
+          "3. Dès que le créneau est confirmé, vous recevez la date par WhatsApp et réglez le service (à partir de 200 USD) via M-Pesa, Airtel Money ou Orange Money",
         ],
       },
     ],
@@ -4028,7 +4028,7 @@ const guides: Guide[] = [
       },
       {
         q: "Quelle est la différence avec l'accompagnement complet Joventy ?",
-        a: "L'accompagnement complet (1 500 USD au total : 500 USD engagement + 1 000 USD prime de succès à l'obtention du visa) inclut la constitution de votre dossier de A à Z (lettre de motivation, vérification des pièces, coaching entretien) en plus de la recherche du créneau. Si votre dossier est déjà prêt et vérifié, le package Créneau Uniquement à 350 USD — payés uniquement après obtention — est suffisant.",
+        a: "L'accompagnement complet (1 500 USD au total : 500 USD engagement + 1 000 USD prime de succès à l'obtention du visa) inclut la constitution de votre dossier de A à Z (lettre de motivation, vérification des pièces, coaching entretien) en plus de la recherche du créneau. Si votre dossier est déjà prêt et vérifié, le package Créneau Uniquement à partir de 200 USD — payés uniquement après obtention — est suffisant.",
       },
     ],
     relatedSlugs: [
@@ -4057,11 +4057,11 @@ const guides: Guide[] = [
     ],
     conversion: {
       heading: "Votre dossier est prêt — il ne manque que le créneau",
-      body: "Le package Créneau Uniquement Joventy surveille le portail officiel 24h/24 et réserve votre rendez-vous dès qu'un slot apparaît. 350 USD payés uniquement après obtention du créneau — aucun acompte, confirmation WhatsApp immédiate.",
-      primaryLabel: "Mon dossier est prêt — je veux juste le créneau (350 USD)",
+      body: "Le package Créneau Uniquement Joventy surveille le portail officiel 24h/24 et réserve votre rendez-vous dès qu'un slot apparaît. À partir de 200 USD payés uniquement après obtention du créneau — aucun acompte, confirmation WhatsApp immédiate.",
+      primaryLabel: "Mon dossier est prêt — je veux juste le créneau (à partir de 200 USD)",
       primaryHref: "/register",
       whatsappLabel: "Démarrer sur WhatsApp",
-      whatsappMessage: "Bonjour Joventy, mon dossier visa est prêt et complet. Je cherche uniquement un créneau de rendez-vous. Je suis intéressé par le package Créneau Uniquement à 350 USD. Pouvez-vous m'aider ?",
+      whatsappMessage: "Bonjour Joventy, mon dossier visa est prêt et complet. Je cherche uniquement un créneau de rendez-vous. Je suis intéressé par le package Créneau Uniquement à partir de 200 USD. Pouvez-vous m'aider ?",
     },
   },
 
@@ -4143,7 +4143,7 @@ const guides: Guide[] = [
         list: [
           "1. Contactez Joventy immédiatement sur WhatsApp (+243 840 808 122) — mentionnez votre date de voyage et votre destination",
           "2. Nous évaluons la faisabilité en moins de 2 heures et vous donnons un avis honnête",
-          "3. Si c'est jouable : nous activons la surveillance Très Urgent immédiatement — les 350 USD sont payés uniquement après obtention du créneau, aucun acompte",
+          "3. Si c'est jouable : nous activons la surveillance Très Urgent immédiatement — le service (à partir de 200 USD) est payé uniquement après obtention du créneau, aucun acompte",
           "4. En parallèle : vérifiez que votre dossier est complet avec la checklist ci-dessus",
           "5. Dès que le créneau est confirmé : Joventy vous envoie la convocation et les instructions de dépôt",
           "6. Vous vous rendez au consulat avec votre dossier complet le jour J",
@@ -4166,11 +4166,11 @@ const guides: Guide[] = [
       },
       {
         q: "Est-ce que le package Très Urgent coûte plus cher que le package standard ?",
-        a: "Le package Créneau Uniquement reste à 350 USD — payés uniquement après obtention du créneau — quelle que soit l'urgence. Le tier Très Urgent signifie une priorité maximale de traitement, sans surcoût.",
+        a: "Le package Créneau Uniquement reste à partir de 200 USD — payés uniquement après obtention du créneau — quelle que soit l'urgence. Le tier Très Urgent signifie une priorité maximale de traitement, sans surcoût.",
       },
       {
         q: "Si aucun créneau n'est trouvé à temps, que se passe-t-il ?",
-        a: "Si Joventy ne trouve pas de créneau, vous ne payez rien — les 350 USD ne sont dus qu'à l'obtention effective du rendez-vous. Contactez-nous pour discuter de la prolongation de la surveillance ou des alternatives selon votre situation.",
+        a: "Si Joventy ne trouve pas de créneau, vous ne payez rien — le service (à partir de 200 USD) n'est dû qu'à l'obtention effective du rendez-vous. Contactez-nous pour discuter de la prolongation de la surveillance ou des alternatives selon votre situation.",
       },
     ],
     relatedSlugs: [
@@ -4184,7 +4184,7 @@ const guides: Guide[] = [
       {
         href: "/guides/dossier-visa-pret-trouver-creneau-kinshasa",
         label: "Dossier prêt — package Créneau Uniquement",
-        description: "Comment fonctionne le package 350 USD si votre dossier est déjà complet.",
+        description: "Comment fonctionne le package à partir de 200 USD si votre dossier est déjà complet.",
       },
       {
         href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
@@ -4199,8 +4199,8 @@ const guides: Guide[] = [
     ],
     conversion: {
       heading: "Voyage urgent — chaque heure compte",
-      body: "Si vous partez dans moins de 3 semaines, contactez Joventy maintenant sur WhatsApp. Nous évaluons la faisabilité en 2 heures et activons la surveillance Très Urgent immédiatement. Package Créneau Uniquement — 350 USD payés uniquement après obtention du créneau, aucun acompte.",
-      primaryLabel: "Démarrer en urgence — Créneau Uniquement 350 USD",
+      body: "Si vous partez dans moins de 3 semaines, contactez Joventy maintenant sur WhatsApp. Nous évaluons la faisabilité en 2 heures et activons la surveillance Très Urgent immédiatement. Package Créneau Uniquement — à partir de 200 USD payés uniquement après obtention du créneau, aucun acompte.",
+      primaryLabel: "Démarrer en urgence — Créneau Uniquement à partir de 200 USD",
       primaryHref: "/register",
       whatsappLabel: "Urgence WhatsApp — réponse en moins de 2h",
       whatsappMessage: "URGENT — Bonjour Joventy, je pars dans moins de 3 semaines depuis Kinshasa. Je n'ai pas encore de créneau de rendez-vous visa. Pouvez-vous évaluer la faisabilité et activer la surveillance en urgence ? Destination : [votre destination]",
@@ -4289,7 +4289,7 @@ const guides: Guide[] = [
       {
         heading: "Tarif et organisation pour les agences",
         body:
-          "Le service de recherche de créneau Espagne affiché par Joventy est de 350 USD pour un dossier individuel, payable après confirmation du rendez-vous. Une agence qui apporte plusieurs dossiers peut nous contacter sur WhatsApp pour discuter de l'organisation, du volume et de la situation de chaque client. Les frais consulaires et les autres frais de voyage restent distincts.",
+          "Le service de recherche de créneau Espagne affiché par Joventy est de 200 USD pour un dossier individuel, payable après confirmation du rendez-vous. Une agence qui apporte plusieurs dossiers peut nous contacter sur WhatsApp pour discuter de l'organisation, du volume et de la situation de chaque client. Les frais consulaires et les autres frais de voyage restent distincts.",
         list: [
           "Pas de paiement du service créneau avant l'obtention du rendez-vous individuel",
           "Devis et organisation à discuter pour un portefeuille de plusieurs voyageurs",
@@ -4342,7 +4342,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte le service de rendez-vous Espagne pour une agence ?",
-        a: "Le service créneau individuel affiché est de 350 USD, payable après confirmation du rendez-vous. Pour plusieurs dossiers, contactez-nous sur WhatsApp afin de discuter du volume, de l'état des inscriptions et de l'organisation adaptée à votre agence.",
+        a: "Le service créneau individuel affiché est de 200 USD, payable après confirmation du rendez-vous. Pour plusieurs dossiers, contactez-nous sur WhatsApp afin de discuter du volume, de l'état des inscriptions et de l'organisation adaptée à votre agence.",
       },
       {
         q: "Le rendez-vous obtenu garantit-il l'obtention du visa ?",
@@ -4498,7 +4498,7 @@ const guides: Guide[] = [
       },
       {
         q: "Combien coûte le service de rendez-vous Espagne chez Joventy ?",
-        a: "Pour la capture du rendez-vous (créneau citaconsular.es), le tarif est de 350 USD, payable uniquement après résultat. Si vous souhaitez aussi la préparation et la vérification complète du dossier, l'accompagnement complet est de 1 500 USD (500 USD d'acompte et 1 000 USD de solde à l'obtention du visa). Les frais consulaires officiels se paient directement à l'ambassade.",
+        a: "Pour la capture du rendez-vous (créneau citaconsular.es), le tarif est de 200 USD, payable uniquement après résultat. Si vous souhaitez aussi la préparation et la vérification complète du dossier, l'accompagnement complet est de 1 500 USD (500 USD d'acompte et 1 000 USD de solde à l'obtention du visa). Les frais consulaires officiels se paient directement à l'ambassade.",
       },
       {
         q: "Peut-on acheter un rendez-vous visa Espagne à Kinshasa ?",
@@ -4545,11 +4545,11 @@ const guides: Guide[] = [
     ],
     conversion: {
       heading: "Fatigué de rafraîchir citaconsular.es sans succès ?",
-       body: "Joventy peut surveiller le portail et vous aider à réserver avec vos propres identifiants. Le service créneau coûte 350 USD, payables après résultat ; l'alerte autonome coûte 10 USD. L'accompagnement complet à 1 500 USD est distinct.",
-      primaryLabel: "Obtenir mon rendez-vous Espagne — 350 USD payable au résultat",
+       body: "Joventy peut surveiller le portail et vous aider à réserver avec vos propres identifiants. Le service créneau coûte 200 USD, payables après résultat ; l'alerte autonome coûte 10 USD. L'accompagnement complet à 1 500 USD est distinct.",
+      primaryLabel: "Obtenir mon rendez-vous Espagne — 200 USD payable au résultat",
       primaryHref: "/register",
       whatsappLabel: "Obtenir mon rendez-vous Espagne — WhatsApp",
-       whatsappMessage: "Bonjour Joventy, je cherche un rendez-vous visa Espagne depuis Kinshasa (citaconsular.es) le plus vite possible. Je suis intéressé(e) par l'offre créneau à 350 USD payable après résultat. Pouvez-vous m'aider à surveiller le portail et à réserver avec mes identifiants ?",
+       whatsappMessage: "Bonjour Joventy, je cherche un rendez-vous visa Espagne depuis Kinshasa (citaconsular.es) le plus vite possible. Je suis intéressé(e) par l'offre créneau à 200 USD payable après résultat. Pouvez-vous m'aider à surveiller le portail et à réserver avec mes identifiants ?",
     },
   },
   {
@@ -4572,7 +4572,7 @@ const guides: Guide[] = [
     relatedSlugs: ["visa-france-long-sejour-aucun-rendez-vous-kinshasa", "visa-etudiant-france-campus-france-kinshasa", "visa-france-regroupement-familial-conjoint-kinshasa"],
     relatedDestination: "visa-france-long-sejour-kinshasa",
     internalLinks: [{ href: "/visa-france-long-sejour-kinshasa", label: "Visa France long séjour", description: "Le hub dédié aux études, travail et famille." }, { href: "/creneaux-visa-france-long-sejour-kinshasa", label: "Service créneau France long séjour", description: "Assistance de rendez-vous, sans acompte et sans promesse de date." }],
-    conversion: { heading: "Besoin d'aide pour organiser votre rendez-vous ?", body: "Joventy vérifie le parcours administratif et peut suivre le canal de rendez-vous officiel. Le service créneau est de 350 USD, payable après obtention, sans acompte pour cette destination hors Espagne. La décision reste consulaire.", primaryLabel: "Voir le service créneau France", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Question France long séjour", whatsappMessage: "Bonjour, je souhaite comprendre la procédure de rendez-vous France long séjour depuis Kinshasa." },
+    conversion: { heading: "Besoin d'aide pour organiser votre rendez-vous ?", body: "Joventy vérifie le parcours administratif et peut suivre le canal de rendez-vous officiel. Le service créneau est de 200 USD, payable après obtention, sans acompte pour cette destination hors Espagne. La décision reste consulaire.", primaryLabel: "Voir le service créneau France", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Question France long séjour", whatsappMessage: "Bonjour, je souhaite comprendre la procédure de rendez-vous France long séjour depuis Kinshasa." },
   },
   {
     slug: "visa-france-long-sejour-aucun-rendez-vous-kinshasa",
@@ -4590,7 +4590,7 @@ const guides: Guide[] = [
     relatedSlugs: ["rendez-vous-visa-france-long-sejour-kinshasa", "visa-etudiant-france-campus-france-kinshasa", "visa-france-regroupement-familial-conjoint-kinshasa"],
     relatedDestination: "visa-france-long-sejour-kinshasa",
     internalLinks: [{ href: "/guides/rendez-vous-visa-france-long-sejour-kinshasa", label: "Procédure de rendez-vous France", description: "Les étapes France-Visas et ambassade." }],
-    conversion: { heading: "Suivi administratif du rendez-vous", body: "Pour la France long séjour, Joventy propose une assistance de suivi sans acompte : 350 USD uniquement après un créneau effectivement obtenu. Aucune date ni décision n'est garantie.", primaryLabel: "Voir le service créneau", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Parler de mon rendez-vous", whatsappMessage: "Bonjour, aucun rendez-vous France long séjour n'est disponible. Je souhaite une assistance de suivi." },
+    conversion: { heading: "Suivi administratif du rendez-vous", body: "Pour la France long séjour, Joventy propose une assistance de suivi sans acompte : 200 USD uniquement après un créneau effectivement obtenu. Aucune date ni décision n'est garantie.", primaryLabel: "Voir le service créneau", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Parler de mon rendez-vous", whatsappMessage: "Bonjour, aucun rendez-vous France long séjour n'est disponible. Je souhaite une assistance de suivi." },
   },
   {
     slug: "visa-etudiant-france-campus-france-kinshasa",
@@ -4608,7 +4608,7 @@ const guides: Guide[] = [
     relatedSlugs: ["rendez-vous-visa-france-long-sejour-kinshasa", "visa-france-long-sejour-aucun-rendez-vous-kinshasa", "visa-france-regroupement-familial-conjoint-kinshasa"],
     relatedDestination: "visa-france-long-sejour-kinshasa",
     internalLinks: [{ href: "/visa-france-long-sejour-kinshasa", label: "Hub visa France long séjour", description: "Différences entre études, famille et travail." }],
-    conversion: { heading: "Préparer votre parcours étudiant", body: "Joventy peut vous aider à organiser les pièces et le suivi du rendez-vous après les étapes officielles. Le créneau seul coûte 350 USD après obtention, sans acompte pour la France long séjour ; aucun visa n'est garanti.", primaryLabel: "Voir le service rendez-vous", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Question visa étudiant France", whatsappMessage: "Bonjour, je prépare un visa étudiant France depuis Kinshasa et souhaite une assistance administrative." },
+    conversion: { heading: "Préparer votre parcours étudiant", body: "Joventy peut vous aider à organiser les pièces et le suivi du rendez-vous après les étapes officielles. Le créneau seul coûte 200 USD après obtention, sans acompte pour la France long séjour ; aucun visa n'est garanti.", primaryLabel: "Voir le service rendez-vous", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Question visa étudiant France", whatsappMessage: "Bonjour, je prépare un visa étudiant France depuis Kinshasa et souhaite une assistance administrative." },
   },
   {
     slug: "visa-france-regroupement-familial-conjoint-kinshasa",
@@ -4626,7 +4626,7 @@ const guides: Guide[] = [
     relatedSlugs: ["visa-france-long-sejour-aucun-rendez-vous-kinshasa", "rendez-vous-visa-france-long-sejour-kinshasa", "visa-etudiant-france-campus-france-kinshasa"],
     relatedDestination: "visa-france-long-sejour-kinshasa",
     internalLinks: [{ href: "/ambassade-schengen-france-kinshasa", label: "Ambassade de France à Kinshasa", description: "Coordonnées et distinction court / long séjour." }],
-    conversion: { heading: "Organiser votre dossier familial avec prudence", body: "Joventy apporte une assistance administrative et peut suivre le rendez-vous officiel. Le service créneau France long séjour est de 350 USD, payable seulement après obtention et sans acompte ; ce service ne constitue pas un conseil juridique ni une garantie de visa.", primaryLabel: "Voir le service créneau France", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Question visa famille France", whatsappMessage: "Bonjour, je souhaite des informations administratives sur un visa France famille depuis Kinshasa." },
+    conversion: { heading: "Organiser votre dossier familial avec prudence", body: "Joventy apporte une assistance administrative et peut suivre le rendez-vous officiel. Le service créneau France long séjour est de 200 USD, payable seulement après obtention et sans acompte ; ce service ne constitue pas un conseil juridique ni une garantie de visa.", primaryLabel: "Voir le service créneau France", primaryHref: "/creneaux-visa-france-long-sejour-kinshasa", whatsappLabel: "Question visa famille France", whatsappMessage: "Bonjour, je souhaite des informations administratives sur un visa France famille depuis Kinshasa." },
   },
   {
     slug: "aucun-creneau-rendez-vous-cev-kinshasa",
@@ -4649,8 +4649,8 @@ const guides: Guide[] = [
     ],
     relatedSlugs: ["delai-ouverture-rendez-vous-cev-kinshasa", "rendez-vous-cev-kinshasa-visa-schengen", "pays-representes-cev-kinshasa-court-long-sejour"],
     relatedDestination: "visa-schengen-kinshasa",
-    internalLinks: [{ href: "/creneaux-visa-schengen-belgique-kinshasa", label: "Service privé de surveillance CEV", description: "350 USD après obtention, sans acompte ; le rendez-vous officiel reste gratuit." }],
-    conversion: { heading: "Besoin d’une assistance privée ?", body: "Joventy peut assister la surveillance et la préparation, sans accès privilégié ni garantie de date. Le service CEV coûte 350 USD après obtention, sans acompte.", primaryLabel: "Voir le service CEV", primaryHref: "/creneaux-visa-schengen-belgique-kinshasa", whatsappLabel: "Question sur les créneaux CEV", whatsappMessage: "Bonjour, je souhaite comprendre les disponibilités CEV à Kinshasa." },
+    internalLinks: [{ href: "/creneaux-visa-schengen-belgique-kinshasa", label: "Service privé de surveillance CEV", description: "300 USD après obtention, sans acompte ; le rendez-vous officiel reste gratuit." }],
+    conversion: { heading: "Besoin d’une assistance privée ?", body: "Joventy peut assister la surveillance et la préparation, sans accès privilégié ni garantie de date. Le service CEV coûte 300 USD après obtention, sans acompte.", primaryLabel: "Voir le service CEV", primaryHref: "/creneaux-visa-schengen-belgique-kinshasa", whatsappLabel: "Question sur les créneaux CEV", whatsappMessage: "Bonjour, je souhaite comprendre les disponibilités CEV à Kinshasa." },
   },
   {
     slug: "delai-ouverture-rendez-vous-cev-kinshasa",

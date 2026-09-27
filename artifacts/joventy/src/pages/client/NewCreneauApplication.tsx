@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { VISA_PRICING, SERVICE_PACKAGES } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES, getSlotPrice, type SlotServiceLevel } from "@convex/constants";
 
 // Destinations disponibles pour slot_only — dérivées directement de la config backend.
 // Ne pas modifier manuellement : modifiez SERVICE_PACKAGES.slot_only.availableFor dans constants.ts.
@@ -226,6 +226,8 @@ export default function NewCreneauApplication() {
   const [visaDTargetCountry, setVisaDTargetCountry] = useState("FR");
   const [cevForm, setCevForm] = useState<File | null>(null);
   const cevFormRef = useRef<HTMLInputElement>(null);
+  // Niveau de service créneau : normal (défaut) ou express (+50$).
+  const [serviceLevel, setServiceLevel] = useState<SlotServiceLevel>("normal");
   // Shared
   const [userWhatsapp, setUserWhatsapp] = useState("");
   const [isPending, setIsPending] = useState(false);
@@ -324,7 +326,7 @@ export default function NewCreneauApplication() {
         returnDate: returnDate || undefined,
         purpose: "Demande de créneau consulaire via Joventy",
         servicePackage: "slot_only",
-        slotUrgencyTier: "standard",
+        slotUrgencyTier: serviceLevel,
         cevVisaClass: derivedCevClass,
         cevApplicantAgeCategory: isSchengenVisaC ? cevAgeCategory : undefined,
         cevTargetCountry: isSchengenVisaC ? cevTargetCountry : isSchengenVisaD ? visaDTargetCountry : undefined,
@@ -359,7 +361,7 @@ export default function NewCreneauApplication() {
           description: `${failedUploads.map((f) => f.label).join(", ")} n'ont pas pu être uploadés. Vous pouvez les ajouter depuis votre fiche dossier.`,
         });
       } else {
-        toast({ title: "Dossier créé !", description: "Joventy démarre la recherche de créneau. Vous paierez 350 $ uniquement à l'obtention." });
+        toast({ title: "Dossier créé !", description: `Joventy démarre la recherche de créneau. Vous paierez ${getSlotPrice(dest as string, serviceLevel)} $ uniquement à l'obtention.` });
       }
       setLocation(`/dashboard/applications/${id}`);
     } catch (e) {
@@ -778,10 +780,37 @@ export default function NewCreneauApplication() {
               </div>
             </div>
 
+            {/* Niveau de service : normal / express (prix par destination) */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-primary">Niveau de service</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(["normal", "express"] as const).map((level) => {
+                  const price = getSlotPrice(dest as string, level);
+                  const active = serviceLevel === level;
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setServiceLevel(level)}
+                      className={`text-left rounded-xl border-2 p-4 transition-all ${active ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-primary">{level === "express" ? "Express" : "Normal"}</span>
+                        <span className="text-lg font-extrabold text-secondary">{price} $</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {level === "express" ? "Traitement prioritaire — payé à l'obtention." : "Payé uniquement à l'obtention du créneau."}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Tarif */}
             <div className="bg-primary rounded-2xl p-6 text-white">
               <div className="flex items-baseline gap-3 mb-4">
-                <span className="text-3xl font-bold text-secondary">350 $</span>
+                <span className="text-3xl font-bold text-secondary">{getSlotPrice(dest as string, serviceLevel)} $</span>
                 <span className="text-xs bg-secondary/20 text-secondary px-2 py-1 rounded-full font-semibold">PAYÉ APRÈS RÉSULTAT</span>
               </div>
               <div className="space-y-2 text-sm">
@@ -791,11 +820,11 @@ export default function NewCreneauApplication() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-300">Solde (créneau obtenu)</span>
-                  <span className="font-semibold text-white">350 $</span>
+                  <span className="font-semibold text-white">{getSlotPrice(dest as string, serviceLevel)} $</span>
                 </div>
               </div>
               <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-white/10">
-                Aucun paiement maintenant. Les 350 $ sont dus uniquement une fois votre créneau consulaire obtenu. Si aucun créneau n'est trouvé, vous ne payez rien.
+                Aucun paiement maintenant. Le montant est dû uniquement une fois votre créneau consulaire obtenu. Si aucun créneau n'est trouvé, vous ne payez rien.
               </p>
             </div>
 

@@ -3,6 +3,7 @@ import { DESTINATIONS_SEO } from "./src/data/destinations-seo";
 import { getGuideBySlug, getAllGuides } from "./src/data/guides-seo";
 import { EMBASSIES_SEO, getEmbassyBySlug } from "./src/data/embassies-seo";
 import { CRENEAUX_PAGES, getCreneauxPageBySlug } from "./src/data/creneaux-seo";
+import { getSlotPrice } from "./convex/constants";
 
 export type { Guide } from "./src/data/guides-seo";
 export { getAllGuides, DESTINATIONS_SEO, EMBASSIES_SEO, CRENEAUX_PAGES };
@@ -184,8 +185,8 @@ function buildCreneauxSchemas(page: (typeof CRENEAUX_PAGES)[0], url: string): st
       "@type": "OfferCatalog",
       name: "Formules créneau Joventy",
       itemListElement: [
-        { "@type": "Offer", name: "Créneau normal", priceCurrency: "USD", price: "350" },
-        { "@type": "Offer", name: "Créneau express", priceCurrency: "USD", price: "500" },
+        { "@type": "Offer", name: "Créneau normal", priceCurrency: "USD", price: String(getSlotPrice(page.destinationKey, "normal")) },
+        { "@type": "Offer", name: "Créneau express", priceCurrency: "USD", price: String(getSlotPrice(page.destinationKey, "express")) },
       ],
     },
   });

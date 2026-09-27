@@ -589,15 +589,21 @@ export type Destination = keyof typeof VISA_PRICING;
 export type SuccessModel = "appointment" | "evisa" | "paper_visa";
 export type ServicePackage = "full_service" | "slot_only" | "dossier_only";
 
-// ─── Tarification créneaux (système simplifié) ────────────────────────────
+// ─── Tarification créneaux (LEGACY — sans consommateur actif) ─────────────
+/**
+ * @deprecated Le prix créneau dépend désormais de la destination ET du niveau
+ * (normal/express). Utiliser getSlotPrice(destination, level) / getSlotPriceDetails
+ * et la grille SLOT_PRICING_BY_DESTINATION. Conservé uniquement pour compat éventuelle ;
+ * aucune facturation ne s'appuie dessus. `processingWeeksMin` reste indicatif.
+ */
 export const CRENEAU_PRICING = {
-  total: 350,             // Prix unique — payé à l'obtention du créneau
+  total: 200,             // Valeur plancher (grille par destination) — informative
   depositAmount: 0,       // Aucun acompte — paiement uniquement après résultat
-  successAmount: 350,     // Montant dû à l'obtention du créneau
+  successAmount: 200,     // Informative — voir getSlotPrice(destination, level)
   processingWeeksMin: 3,  // Délai minimum en semaines
 } as const;
 
-/** @deprecated Utiliser CRENEAU_PRICING */
+/** @deprecated Utiliser getSlotPrice / SLOT_PRICING_BY_DESTINATION */
 export const CRENEAU_PROMO_PRICING = CRENEAU_PRICING;
 
 // ─── Service visa complet / partiel ───────────────────────────────────────
@@ -614,50 +620,85 @@ export const VISA_PARTIAL_SERVICE = {
   total: 600,
 } as const;
 
+// ─── Tarification créneau PAR DESTINATION × niveau (normal / express) ──────────
+// Prix payé UNIQUEMENT à l'obtention du créneau (aucun acompte : depositAmount = 0,
+// le prix total = successAmount). Deux niveaux de service seulement : normal / express.
+//   - Espagne .................. 200 / 250
+//   - Schengen (CEV) ........... 300 / 350
+//   - USA ...................... 300 / 350
+//   - France ................... 200 / 250
+//   - Allemagne ................ 200 / 250
+//   - Défaut (canada, uk, ch…) . 200 / 250
+export type SlotServiceLevel = "normal" | "express";
+
+/** Grille { normal, express } par destination. Le défaut couvre les destinations non listées. */
+export const SLOT_PRICING_BY_DESTINATION: Record<string, { normal: number; express: number }> & {
+  default: { normal: number; express: number };
+} = {
+  spain:    { normal: 200, express: 250 },
+  schengen: { normal: 300, express: 350 },
+  usa:      { normal: 300, express: 350 },
+  france:   { normal: 200, express: 250 },
+  germany:  { normal: 200, express: 250 },
+  default:  { normal: 200, express: 250 },
+} as const;
+
+/**
+ * Retourne le prix créneau (USD) pour une destination et un niveau de service.
+ * Payé à l'obtention (aucun acompte). Destination inconnue → grille `default`.
+ */
+export function getSlotPrice(destination: string, level: SlotServiceLevel): number {
+  const grid = SLOT_PRICING_BY_DESTINATION[destination] ?? SLOT_PRICING_BY_DESTINATION.default;
+  return grid[level];
+}
+
+/**
+ * Décompose le prix créneau en { depositAmount, successAmount, total }.
+ * Modèle actuel : tout est dû à l'obtention → deposit = 0, success = total = prix.
+ */
+export function getSlotPriceDetails(
+  destination: string,
+  level: SlotServiceLevel,
+): { depositAmount: number; successAmount: number; total: number } {
+  const price = getSlotPrice(destination, level);
+  return { depositAmount: 0, successAmount: price, total: price };
+}
+
+// ─── Niveaux de service créneau (remplace les anciens tiers d'urgence) ─────────
+// Deux niveaux seulement. Les anciennes clés (standard/prioritaire/urgent/tres_urgent)
+// restent acceptées par les validators DB (rétrocompat des dossiers existants) et sont
+// normalisées vers "normal" via normalizeSlotLevel().
 export const SLOT_URGENCY_TIERS = {
-  standard: {
-    key: "standard" as const,
+  normal: {
+    key: "normal" as const,
     label: "Créneau",
-    tagline: "Paiement après résultat",
-    desc: "350 USD — payés uniquement une fois le créneau obtenu. Aucun acompte.",
-    depositAmount: 0,
-    successAmount: 350,
-    total: 350,
+    tagline: "Standard",
+    desc: "Prix payé uniquement une fois le créneau obtenu. Aucun acompte.",
     variableNote: null,
   },
-  prioritaire: {
-    key: "prioritaire" as const,
-    label: "Prioritaire",
-    tagline: "1 à 3 mois",
-    desc: "Date souhaitée dans 1 à 3 mois",
-    depositAmount: 0,
-    successAmount: 350,
-    total: 350,
+  express: {
+    key: "express" as const,
+    label: "Express",
+    tagline: "Priorité de traitement",
+    desc: "Traitement prioritaire — prix payé uniquement à l'obtention du créneau.",
     variableNote: null,
-  },
-  urgent: {
-    key: "urgent" as const,
-    label: "Urgent",
-    tagline: "3 à 6 semaines",
-    desc: "Date souhaitée dans 3 à 6 semaines",
-    depositAmount: 0,
-    successAmount: 350,
-    total: 350,
-    variableNote: null,
-  },
-  tres_urgent: {
-    key: "tres_urgent" as const,
-    label: "Très Urgent",
-    tagline: "< 3 semaines / ASAP",
-    desc: "Date souhaitée dans moins de 3 semaines ou dès que possible",
-    depositAmount: 0,
-    successAmount: 350,
-    total: 350,
-    variableNote: "Tarif fixe 350 USD — paiement uniquement à l'obtention du créneau.",
   },
 } as const;
 
 export type SlotUrgencyTier = keyof typeof SLOT_URGENCY_TIERS;
+
+/** Anciennes clés de tier historiques (dossiers déjà en base). */
+export type LegacySlotUrgencyTier = "standard" | "prioritaire" | "urgent" | "tres_urgent";
+
+/**
+ * Normalise n'importe quelle clé de niveau (nouvelle ou historique) vers "normal" | "express".
+ * Les anciens tiers d'urgence (standard/prioritaire/urgent/tres_urgent) → "normal".
+ */
+export function normalizeSlotLevel(
+  tier: SlotUrgencyTier | LegacySlotUrgencyTier | string | undefined | null,
+): SlotServiceLevel {
+  return tier === "express" ? "express" : "normal";
+}
 
 export const SERVICE_PACKAGES = {
   full_service: {

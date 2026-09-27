@@ -209,7 +209,11 @@ export default defineSchema({
       v.literal("slot_only"),
       v.literal("dossier_only")
     )),
+    // Niveau créneau : normal/express (actuel). Les 4 anciens tiers d'urgence sont
+    // conservés dans l'union pour la rétrocompat des dossiers déjà en base (lecture).
     slotUrgencyTier: v.optional(v.union(
+      v.literal("normal"),
+      v.literal("express"),
       v.literal("standard"),
       v.literal("prioritaire"),
       v.literal("urgent"),

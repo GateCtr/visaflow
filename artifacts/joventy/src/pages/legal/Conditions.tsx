@@ -92,7 +92,8 @@ export default function Conditions() {
 
       <h3>5.3 Service créneau uniquement (slot_only)</h3>
       <p>
-        <strong>350 $ de prime de résultat</strong>, payés <strong>uniquement après l'obtention
+        <strong>prime de résultat à partir de 200 $</strong> selon la destination et le niveau de
+        service choisi (normal ou express), payée <strong>uniquement après l'obtention
         effective du créneau consulaire</strong>. Aucun acompte ni frais d'engagement n'est exigé
         à l'ouverture. Si aucun créneau n'est trouvé, aucun montant n'est réclamé.
         Disponible pour les destinations : USA, Canada, Royaume-Uni, Suisse, Turquie, Schengen (CEV), Espagne, Allemagne et Brésil.

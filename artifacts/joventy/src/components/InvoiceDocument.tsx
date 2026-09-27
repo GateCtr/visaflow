@@ -3,7 +3,7 @@ import { getDisplayVisaType } from "@/lib/visa-display";
 import { Download, Printer, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
-import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS } from "@convex/constants";
+import { VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, normalizeSlotLevel } from "@convex/constants";
 
 interface PriceDetails {
   engagementFee: number;
@@ -472,7 +472,7 @@ export function InvoiceDocument({ app, type = "facture" }: InvoiceDocumentProps)
   const isDossierOnly = servicePackage === "dossier_only";
   const packageLabel = SERVICE_PACKAGES?.[servicePackage as keyof typeof SERVICE_PACKAGES]?.label ?? servicePackage;
   const urgencyLabel = app.slotUrgencyTier
-    ? SLOT_URGENCY_TIERS[app.slotUrgencyTier as keyof typeof SLOT_URGENCY_TIERS]?.label
+    ? SLOT_URGENCY_TIERS[normalizeSlotLevel(app.slotUrgencyTier)].label
     : null;
 
   const engagementFee = app.priceDetails?.engagementFee ?? 0;

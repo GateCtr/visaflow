@@ -4,7 +4,7 @@ import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { MOBILE_MONEY_INFO, VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, type SlotUrgencyTier } from "@convex/constants";
+import { MOBILE_MONEY_INFO, VISA_PRICING, SERVICE_PACKAGES, SLOT_URGENCY_TIERS, normalizeSlotLevel } from "@convex/constants";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -43,8 +43,9 @@ export default function PaymentGate() {
   const servicePackage = (app as { servicePackage?: string } | undefined)?.servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const isSlotOnly = servicePackage === "slot_only";
-  const urgencyTierKey = (app as { slotUrgencyTier?: string } | undefined)?.slotUrgencyTier as SlotUrgencyTier | undefined;
-  const urgencyTier = urgencyTierKey ? SLOT_URGENCY_TIERS[urgencyTierKey] : null;
+  const rawTierKey = (app as { slotUrgencyTier?: string } | undefined)?.slotUrgencyTier;
+  // Normalise les anciens tiers (standard/prioritaire/…) vers normal/express pour l'affichage.
+  const urgencyTier = isSlotOnly ? SLOT_URGENCY_TIERS[normalizeSlotLevel(rawTierKey)] : null;
 
   const amount =
     paymentType === "engagement"

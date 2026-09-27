@@ -339,7 +339,7 @@ export function CreneauxLanding({ data }: Props) {
             </h2>
             <p className="text-white/70 text-base mb-8 max-w-xl mx-auto leading-relaxed">
               Votre dossier est prêt. Joventy surveille le système consulaire en permanence.
-              Aucun acompte — vous payez 350 $ uniquement quand le créneau est confirmé.
+              Aucun acompte — vous payez à partir de 200 $ (selon destination) uniquement quand le créneau est confirmé.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link

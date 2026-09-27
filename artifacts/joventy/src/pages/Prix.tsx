@@ -3,6 +3,15 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, CheckCircle2, MessageCircle, ChevronRight, AlertTriangle, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PublicLayout } from "@/components/layout/PublicLayout";
+import { SLOT_PRICING_BY_DESTINATION } from "@convex/constants";
+
+// Fourchettes de prix créneau dérivées de la grille par destination (source de vérité backend).
+const SLOT_NORMAL_MIN = Math.min(
+  ...Object.values(SLOT_PRICING_BY_DESTINATION).map((p) => p.normal),
+);
+const SLOT_EXPRESS_MAX = Math.max(
+  ...Object.values(SLOT_PRICING_BY_DESTINATION).map((p) => p.express),
+);
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) { return FLAG_SIZES.find((s) => s >= n) ?? 80; }
@@ -65,8 +74,8 @@ export default function Prix() {
       "@type": "OfferCatalog",
       "name": "Formules d'assistance visa Joventy",
       "itemListElement": [
-        { "@type": "Offer", "name": "Créneau normal", "priceCurrency": "USD", "price": "350" },
-        { "@type": "Offer", "name": "Créneau express", "priceCurrency": "USD", "price": "500" },
+        { "@type": "Offer", "name": "Créneau normal", "priceCurrency": "USD", "price": String(SLOT_NORMAL_MIN) },
+        { "@type": "Offer", "name": "Créneau express", "priceCurrency": "USD", "price": String(SLOT_EXPRESS_MAX) },
         { "@type": "Offer", "name": "Accompagnement partiel", "priceCurrency": "USD", "price": "600" },
         { "@type": "Offer", "name": "Accompagnement complet", "priceCurrency": "USD", "price": "1500" },
       ],
@@ -77,10 +86,10 @@ export default function Prix() {
     <PublicLayout solidNav>
       <Helmet>
         <title>Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa | Joventy</title>
-        <meta name="description" content="Tarifs Joventy depuis Kinshasa : créneau consulaire 350$ après résultat, accompagnement complet 1 500$ (500$ + 1 000$), accompagnement partiel 600$. Paiement Mobile Money." />
+        <meta name="description" content="Tarifs Joventy depuis Kinshasa : créneau consulaire à partir de 200$ après résultat (selon destination), accompagnement complet 1 500$ (500$ + 1 000$), accompagnement partiel 600$. Paiement Mobile Money." />
         <link rel="canonical" href="https://joventy.cd/prix" />
         <meta property="og:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta property="og:description" content="Créneau 350$ après résultat · Accompagnement complet 1 500$ · Accompagnement partiel 600$. Toutes destinations. Paiement Mobile Money." />
+        <meta property="og:description" content="Créneau à partir de 200$ après résultat (selon destination) · Accompagnement complet 1 500$ · Accompagnement partiel 600$. Paiement Mobile Money." />
         <meta property="og:url" content="https://joventy.cd/prix" />
         <meta property="og:type" content="website" />
         <meta property="og:image" content="https://joventy.cd/opengraph.jpg" />
@@ -88,7 +97,7 @@ export default function Prix() {
         <meta property="og:site_name" content="Joventy" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Tarifs Visa Joventy 2026 — Prix Assistance Visa Kinshasa" />
-        <meta name="twitter:description" content="Créneau 350$ après résultat · Accompagnement complet 1 500$ · Accompagnement partiel 600$. Toutes destinations. Paiement Mobile Money." />
+        <meta name="twitter:description" content="Créneau à partir de 200$ après résultat (selon destination) · Accompagnement complet 1 500$ · Accompagnement partiel 600$. Paiement Mobile Money." />
         <meta name="twitter:image" content="https://joventy.cd/opengraph.jpg" />
         <meta name="twitter:site" content="@JoventyCD" />
         <script type="application/ld+json">{JSON.stringify(pricingSchema)}</script>
@@ -112,17 +121,17 @@ export default function Prix() {
 
       {/* 3 FORMULES */}
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-          <h2 className="text-2xl font-bold text-primary text-center mb-2">Nos formules — toutes destinations</h2>
-          <p className="mb-8 text-center text-sm text-muted-foreground">Créneau normal : 350 $ · Créneau express : 500 $ · Les conditions applicables sont présentées lors de la demande.</p>
+          <h2 className="text-2xl font-bold text-primary text-center mb-2">Nos formules</h2>
+          <p className="mb-8 text-center text-sm text-muted-foreground">Créneau : à partir de {SLOT_NORMAL_MIN} $ (normal) selon la destination · Express jusqu'à {SLOT_EXPRESS_MAX} $ · Le prix exact est affiché lors de la demande.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Créneau */}
           <div className="bg-white border-2 border-secondary rounded-2xl p-6 shadow-sm flex flex-col">
             <div className="inline-flex items-center gap-1.5 bg-secondary/10 text-secondary text-xs font-bold px-3 py-1 rounded-full mb-4 self-start">
               <CheckCircle2 className="w-3.5 h-3.5" /> Créneau uniquement
             </div>
-            <p className="text-4xl font-extrabold text-primary mb-1">350 $</p>
-            <p className="text-sm text-green-700 font-semibold mb-4">Payé APRÈS obtention du créneau</p>
-            <p className="text-sm text-muted-foreground mb-4">Votre dossier est déjà prêt ? Joventy surveille 24h/24 et verrouille votre créneau consulaire dès qu'une place se libère.</p>
+            <p className="text-4xl font-extrabold text-primary mb-1">dès {SLOT_NORMAL_MIN} $</p>
+            <p className="text-sm text-green-700 font-semibold mb-4">Payé APRÈS obtention du créneau · prix selon destination</p>
+            <p className="text-sm text-muted-foreground mb-4">Votre dossier est déjà prêt ? Joventy surveille 24h/24 et verrouille votre créneau consulaire dès qu'une place se libère. Prix normal ou express selon la destination.</p>
             <ul className="space-y-1.5 text-xs text-slate-600 mb-6 flex-1">
               <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Aucun acompte à l'avance</li>
               <li className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /> Paiement uniquement après créneau obtenu</li>
@@ -184,7 +193,7 @@ export default function Prix() {
             Votre dossier est prêt et vous cherchez uniquement un rendez-vous ? Sélectionnez votre destination :
           </p>
             <p className="text-xs text-green-800 mb-5">
-              Pour le CEV Kinshasa, le rendez-vous officiel est gratuit. Les 350 USD rémunèrent uniquement le service privé Joventy de surveillance et d’assistance, après obtention, sans accès privilégié ni garantie de date.
+              Pour le CEV Kinshasa, le rendez-vous officiel est gratuit. Les {SLOT_PRICING_BY_DESTINATION.schengen.normal} USD (créneau Schengen) rémunèrent uniquement le service privé Joventy de surveillance et d’assistance, après obtention, sans accès privilégié ni garantie de date.
             </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
@@ -208,7 +217,7 @@ export default function Prix() {
             ))}
           </div>
           <p className="text-xs text-green-700 font-medium mt-4 text-center">
-            Toutes ces pages · 350 $ payés uniquement après obtention du créneau · 0 $ d'acompte
+            Toutes ces pages · à partir de {SLOT_NORMAL_MIN} $ payés uniquement après obtention du créneau (selon destination) · 0 $ d'acompte
           </p>
           <p className="text-center mt-3">
             <Link href="/guides/rendez-vous-cev-kinshasa-visa-schengen" className="text-xs font-semibold text-primary underline underline-offset-2">Comprendre Visa On Web et le rendez-vous CEV</Link>
@@ -219,7 +228,7 @@ export default function Prix() {
       {/* TABLE DES DESTINATIONS */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
         <h2 className="text-xl font-bold text-primary mb-4">Destinations couvertes</h2>
-        <p className="text-sm text-muted-foreground mb-6">Les tarifs Joventy sont identiques pour toutes les destinations. Les frais gouvernementaux ou consulaires restent à votre charge et sont payés directement aux organismes concernés.</p>
+        <p className="text-sm text-muted-foreground mb-6">Le prix du créneau dépend de la destination (à partir de {SLOT_NORMAL_MIN} $, normal ou express). Les frais gouvernementaux ou consulaires restent à votre charge et sont payés directement aux organismes concernés.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>

@@ -10,6 +10,7 @@ import { TrustFAQ } from "@/components/TrustFAQ";
 import { Button } from "@/components/ui/button";
 import { JoventyLogo } from "@/components/JoventyLogo";
 import { AdSenseBanner } from "@/components/AdSenseBanner";
+import { getSlotPrice } from "@convex/constants";
 import {
   ArrowRight, Star, ShieldCheck, Clock, FileText, CheckCircle2,
   MessageCircle, Phone, Mail, Zap, Award, Users, TrendingUp,
@@ -504,7 +505,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Combien coûte le service Joventy ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire normal : 350 $ payés uniquement après obtention, aucun acompte ; une formule express est à 500 $. (2) Accompagnement complet : 500 $ d'engagement + 1 000 $ de prime de succès, soit 1 500 $ au total. (3) Accompagnement partiel : forfait de 600 $. Les frais gouvernementaux sont payés directement aux organismes concernés." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Joventy propose trois formules. (1) Créneau consulaire : à partir de 200 $ (normal) selon la destination, payés uniquement après obtention, aucun acompte ; une formule express est disponible (+50 $). (2) Accompagnement complet : 500 $ d'engagement + 1 000 $ de prime de succès, soit 1 500 $ au total. (3) Accompagnement partiel : forfait de 600 $. Les frais gouvernementaux sont payés directement aux organismes concernés." }
             },
             {
               "@type": "Question",
@@ -544,7 +545,7 @@ export default function Landing() {
             {
               "@type": "Question",
               "name": "Comment obtenir un visa Schengen depuis Kinshasa ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa Schengen depuis Kinshasa, le rendez-vous se prend via le Centre Européen des Visas (CEV), géré par l'ambassade belge, sur le portail Visa On Web (visaonweb.diplomatie.be). Les créneaux sont très limités et pris d'assaut. Joventy surveille le système en continu et verrouille un créneau dès qu'il est disponible. Service créneau seul : 350 $ payés UNIQUEMENT après obtention (0 acompte). Service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. En 2026, le système EES (Entry/Exit System) biométrique est en vigueur dans toute la zone Schengen depuis le 10 avril 2026." }
+              "acceptedAnswer": { "@type": "Answer", "text": "Pour un visa Schengen depuis Kinshasa, le rendez-vous se prend via le Centre Européen des Visas (CEV), géré par l'ambassade belge, sur le portail Visa On Web (visaonweb.diplomatie.be). Les créneaux sont très limités et pris d'assaut. Joventy surveille le système en continu et verrouille un créneau dès qu'il est disponible. Service créneau seul : 300 $ payés UNIQUEMENT après obtention (0 acompte). Service complet : 500 $ engagement + 1 000 $ prime de succès = 1 500 $ au total. En 2026, le système EES (Entry/Exit System) biométrique est en vigueur dans toute la zone Schengen depuis le 10 avril 2026." }
             },
             {
               "@type": "Question",
@@ -819,7 +820,7 @@ export default function Landing() {
           <div className="text-center mb-8">
             <p className="text-green-700 font-bold text-xs uppercase tracking-widest mb-2">Créneau Uniquement · 0 $ d'acompte</p>
             <h2 className="text-2xl sm:text-3xl font-black text-primary">
-              Votre dossier est prêt ? On prend votre rendez-vous — 350 $ après résultat
+              Votre dossier est prêt ? On prend votre rendez-vous — à partir de 200 $ après résultat
             </h2>
             <p className="text-muted-foreground mt-3 max-w-xl mx-auto text-sm">
               Votre dossier est prêt ? Joventy surveille le système de rendez-vous consulaire 24h/24 et verrouille votre créneau dès qu'une place apparaît. Vous payez uniquement après confirmation.
@@ -827,11 +828,11 @@ export default function Landing() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { href: "/creneaux-visa-espagne-kinshasa", emoji: "🇪🇸", name: "Espagne", sub: "Visa Schengen via ambassade d'Espagne" },
-              { href: "/creneaux-visa-schengen-belgique-kinshasa", emoji: "🇧🇪", name: "Schengen — CEV", sub: "France, Belgique, Pays-Bas, Italie…" },
-              { href: "/creneaux-visa-usa-kinshasa", emoji: "🇺🇸", name: "États-Unis", sub: "B1/B2 Tourisme · F1 Études" },
-              { href: "/creneaux-visa-allemagne-kinshasa", emoji: "🇩🇪", name: "Allemagne type D", sub: "Visa national · RK-Termin" },
-              { href: "/creneaux-visa-france-long-sejour-kinshasa", emoji: "🇫🇷", name: "France long séjour", sub: "France-Visas · ambassade" },
+              { href: "/creneaux-visa-espagne-kinshasa", emoji: "🇪🇸", name: "Espagne", sub: "Visa Schengen via ambassade d'Espagne", price: getSlotPrice("spain", "normal") },
+              { href: "/creneaux-visa-schengen-belgique-kinshasa", emoji: "🇧🇪", name: "Schengen — CEV", sub: "France, Belgique, Pays-Bas, Italie…", price: getSlotPrice("schengen", "normal") },
+              { href: "/creneaux-visa-usa-kinshasa", emoji: "🇺🇸", name: "États-Unis", sub: "B1/B2 Tourisme · F1 Études", price: getSlotPrice("usa", "normal") },
+              { href: "/creneaux-visa-allemagne-kinshasa", emoji: "🇩🇪", name: "Allemagne type D", sub: "Visa national · RK-Termin", price: getSlotPrice("germany", "normal") },
+              { href: "/creneaux-visa-france-long-sejour-kinshasa", emoji: "🇫🇷", name: "France long séjour", sub: "France-Visas · ambassade", price: getSlotPrice("france", "normal") },
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <div className="group bg-white border border-green-200 hover:border-secondary hover:shadow-md rounded-2xl p-5 flex flex-col items-center text-center transition-all cursor-pointer">
@@ -839,7 +840,7 @@ export default function Landing() {
                   <p className="font-black text-primary text-base group-hover:text-secondary transition-colors">{item.name}</p>
                   <p className="text-xs text-muted-foreground mt-1">{item.sub}</p>
                   <div className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-green-700">
-                    350 $ après résultat <ChevronRight className="w-3.5 h-3.5" />
+                    {item.price} $ après résultat <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </div>
               </Link>

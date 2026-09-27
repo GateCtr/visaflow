@@ -388,7 +388,7 @@ export default function EmbassyPage() {
                 <p className="text-sm leading-relaxed text-slate-700">
                   Après l’inscription personnelle à l’ambassade et la réception de vos identifiants,
                   Joventy peut surveiller les disponibilités sur citaconsular.es. Aucun acompte :
-                  350 USD sont dus uniquement après confirmation du rendez-vous. La décision de visa
+                  200 USD sont dus uniquement après confirmation du rendez-vous. La décision de visa
                   reste celle de l’ambassade.
                 </p>
               </div>

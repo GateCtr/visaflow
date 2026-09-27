@@ -13,6 +13,11 @@ import { Why100PercentOnline } from "@/components/Why100PercentOnline";
 import { TrustFAQ } from "@/components/TrustFAQ";
 import { AdSenseBanner } from "@/components/AdSenseBanner";
 import { trackEvent } from "@/lib/analytics";
+import { getSlotPrice } from "@convex/constants";
+
+// Prix créneau normal par destination (source de vérité backend).
+const SLOT_PRICE_SCHENGEN = getSlotPrice("schengen", "normal");
+const SLOT_PRICE_USA = getSlotPrice("usa", "normal");
 
 const FLAG_SIZES = [20, 40, 80, 160, 320, 640];
 function snapFlagSize(n: number) {
@@ -466,10 +471,10 @@ export default function DestinationPage() {
               <div className="flex-1">
                 <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
-                  Votre dossier est prêt ? Joventy prend votre créneau CEV — 350 $ après résultat
+                  Votre dossier est prêt ? Joventy prend votre créneau CEV — {SLOT_PRICE_SCHENGEN} $ après résultat
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Vos formulaires Schengen sont prêts ? Joventy surveille visaonweb.be 24h/24 et verrouille votre créneau au Centre Européen des Visas de Kinshasa dès qu'un slot apparaît. Aucun acompte — 350 $ payés uniquement après confirmation.
+                  Vos formulaires Schengen sont prêts ? Joventy surveille visaonweb.be 24h/24 et verrouille votre créneau au Centre Européen des Visas de Kinshasa dès qu'un slot apparaît. Aucun acompte — {SLOT_PRICE_SCHENGEN} $ payés uniquement après confirmation.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link href="/creneaux-visa-schengen-belgique-kinshasa">
@@ -524,10 +529,10 @@ export default function DestinationPage() {
               <div className="flex-1">
                 <p className="text-green-700 font-semibold text-xs uppercase tracking-widest mb-1">Service Créneau Uniquement · 0 $ d'acompte</p>
                 <h2 className="text-xl sm:text-2xl font-bold text-primary mb-2">
-                  Dossier prêt ? Joventy prend votre créneau USA — 350 $ payés uniquement après résultat
+                  Dossier prêt ? Joventy prend votre créneau USA — {SLOT_PRICE_USA} $ payés uniquement après résultat
                 </h2>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Joventy surveille usvisaappt.com en permanence et réserve votre créneau à l'ambassade américaine de Kinshasa dès qu'un slot se libère. Aucun acompte — 350 $ payés uniquement après confirmation.
+                  Joventy surveille usvisaappt.com en permanence et réserve votre créneau à l'ambassade américaine de Kinshasa dès qu'un slot se libère. Aucun acompte — {SLOT_PRICE_USA} $ payés uniquement après confirmation.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link href="/creneaux-visa-usa-kinshasa">

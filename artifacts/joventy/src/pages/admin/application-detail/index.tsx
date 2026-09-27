@@ -9,7 +9,7 @@ import { useRoute } from "wouter";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
-import { VISA_PRICING } from "@convex/constants";
+import { VISA_PRICING, normalizeSlotLevel } from "@convex/constants";
 import {
   Loader2, CreditCard, Zap, FileText, Clock, Bot,
   Calendar, MessageSquare, X, ChevronRight,
@@ -87,7 +87,9 @@ export default function ApplicationDetailPage() {
   const servicePackage = (app as { servicePackage?: string }).servicePackage ?? "full_service";
   const isDossierOnly = servicePackage === "dossier_only";
   const isSlotOnly = servicePackage === "slot_only";
-  const urgencyTierKey = (app as { slotUrgencyTier?: string }).slotUrgencyTier as any;
+  const urgencyTierKey = isSlotOnly
+    ? normalizeSlotLevel((app as { slotUrgencyTier?: string }).slotUrgencyTier)
+    : undefined;
   const hunterConfig = (app as { hunterConfig?: any }).hunterConfig ?? null;
 
   const unreadCount = messages.filter((m: any) => !m.isFromAdmin && !m.readByAdmin).length;

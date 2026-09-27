@@ -65,7 +65,7 @@ export default function MethodologieSources() {
             <section>
               <h2 className="text-xl font-bold text-primary">Tarifs de l’assistance</h2>
               <p className="mt-2">
-                Les tarifs de Joventy sont affichés publiquement sur la page Tarifs : accompagnement partiel 600 USD, accompagnement complet 1 500 USD, et service créneau à partir de 350 USD selon la formule affichée. Les frais gouvernementaux ou consulaires sont distincts et restent dus aux organismes concernés.
+                Les tarifs de Joventy sont affichés publiquement sur la page Tarifs : accompagnement partiel 600 USD, accompagnement complet 1 500 USD, et service créneau à partir de 200 USD selon la destination et la formule affichée. Les frais gouvernementaux ou consulaires sont distincts et restent dus aux organismes concernés.
               </p>
             </section>
           </div>

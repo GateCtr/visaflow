@@ -28,12 +28,12 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     emoji: "🇧🇪",
     name: "Belgique long séjour type D",
     title: "Créneau visa Belgique long séjour type D Kinshasa | Joventy",
-    metaDescription: "Service privé de créneau visa Belgique type D à Kinshasa : 350 USD après obtention, sans acompte. Rendez-vous CEV officiel gratuit, sans garantie.",
+    metaDescription: "Service privé de créneau visa Belgique type D à Kinshasa : 200 USD après obtention, sans acompte. Rendez-vous CEV officiel gratuit, sans garantie.",
     h1: "Créneau visa Belgique long séjour type D depuis Kinshasa",
-    accroche: "Pour un séjour belge de plus de 90 jours, créez d’abord votre compte Visa On Web avec votre email personnel et sélectionnez la bonne catégorie. Le CEV reçoit les longs séjours Belgique et Luxembourg. La prise de rendez-vous officielle CEV est gratuite ; les 350 USD rémunèrent uniquement le service privé Joventy, après obtention, sans acompte, accès privilégié ni garantie de date ou de visa.",
+    accroche: "Pour un séjour belge de plus de 90 jours, créez d’abord votre compte Visa On Web avec votre email personnel et sélectionnez la bonne catégorie. Le CEV reçoit les longs séjours Belgique et Luxembourg. La prise de rendez-vous officielle CEV est gratuite ; les 200 USD rémunèrent uniquement le service privé Joventy, après obtention, sans acompte, accès privilégié ni garantie de date ou de visa.",
     urgency: "Les disponibilités officielles et la catégorie applicable varient ; aucun délai ni rendez-vous n’est garanti.",
     stats: [
-      { n: "350 $", label: "service privé Joventy, après créneau confirmé" },
+      { n: "200 $", label: "service privé Joventy, après créneau confirmé" },
       { n: "0 $", label: "d’acompte pour le service créneau" },
       { n: "0 $", label: "pour la prise de rendez-vous officielle CEV" },
       { n: "Visa On Web", label: "compte personnel requis avant la démarche" },
@@ -42,11 +42,11 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     steps: [
       { icon: "📝", title: "Créez votre demande Visa On Web", desc: "Utilisez votre email personnel et la catégorie de long séjour correcte (études, travail, famille ou autre). Vérifiez la checklist officielle avant toute réservation." },
       { icon: "🔎", title: "Demandez le service privé de suivi", desc: "Sans acompte, Joventy suit les disponibilités publiques pertinentes et vous assiste dans le parcours. Nous ne sommes pas le CEV et ne promettons aucune date." },
-      { icon: "✅", title: "Créneau confirmé → paiement de 350 $", desc: "Après obtention effective d’un créneau, vous réglez 350 USD pour le service Joventy. Les éventuels frais officiels restent distincts." },
+      { icon: "✅", title: "Créneau confirmé → paiement de 200 $", desc: "Après obtention effective d’un créneau, vous réglez 200 USD pour le service Joventy. Les éventuels frais officiels restent distincts." },
     ],
     included: ["Assistance de compréhension du parcours Visa On Web personnel", "Suivi des disponibilités publiques du CEV", "Transmission des informations après confirmation", "Accès à l’espace client", "Service privé, sans décision consulaire ni accès privilégié"],
     faqs: [
-      { q: "Le rendez-vous CEV pour un visa D belge est-il payant ?", a: "La prise de rendez-vous officielle CEV est gratuite. Les 350 USD concernent seulement le service privé Joventy, après obtention, sans acompte." },
+      { q: "Le rendez-vous CEV pour un visa D belge est-il payant ?", a: "La prise de rendez-vous officielle CEV est gratuite. Les 200 USD concernent seulement le service privé Joventy, après obtention, sans acompte." },
       { q: "Puis-je utiliser un compte Visa On Web créé par quelqu’un d’autre ?", a: "Utilisez et conservez votre propre compte avec votre email personnel. Vérifiez toutes les données et la catégorie avant de poursuivre." },
       { q: "Le CEV traite-t-il les longs séjours France ou Allemagne ?", a: "Non. Au CEV, les longs séjours concernent Belgique et Luxembourg. La France et l’Allemagne suivent leurs parcours d’ambassade respectifs." },
       { q: "Joventy garantit-il une date ou le visa ?", a: "Non. Les disponibilités relèvent du canal officiel et la décision appartient aux autorités belges ou à l’Office des étrangers." },
@@ -61,12 +61,12 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     emoji: "🇫🇷",
     name: "France long séjour",
     title: "Créneau visa France long séjour Kinshasa 2026 — France-Visas | Joventy",
-    metaDescription: "Rendez-vous visa France long séjour depuis Kinshasa : étapes France-Visas et Ambassade de France. Service créneau à 350 USD, payé après obtention, sans acompte.",
+    metaDescription: "Rendez-vous visa France long séjour depuis Kinshasa : étapes France-Visas et Ambassade de France. Service créneau à 200 USD, payé après obtention, sans acompte.",
     h1: "Créneau visa France long séjour depuis Kinshasa — France-Visas",
     accroche: "Pour un séjour en France de plus de 90 jours, préparez d'abord la demande correspondant à votre situation sur France-Visas. Les rendez-vous et le dépôt relèvent de l'Ambassade de France à Kinshasa, selon ses instructions. Joventy peut suivre la disponibilité et vous assister dans la démarche de rendez-vous ; nous n'avons aucun accès privilégié et ne pouvons pas promettre une date.",
     urgency: "Les disponibilités dépendent des ouvertures officielles et de votre catégorie de visa ; anticipez votre demande.",
     stats: [
-      { n: "350 $", label: "payés après confirmation du créneau obtenu" },
+      { n: "200 $", label: "payés après confirmation du créneau obtenu" },
       { n: "0 $", label: "d'acompte pour cette destination hors Espagne" },
       { n: "France-Visas", label: "à compléter avant de suivre les instructions de dépôt" },
       { n: "Ambassade", label: "autorité compétente pour le long séjour à Kinshasa" },
@@ -80,7 +80,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     steps: [
       { icon: "📝", title: "Préparez votre parcours France-Visas", desc: "Identifiez votre catégorie (études, famille, travail ou autre long séjour), complétez les informations demandées et rassemblez les pièces de la checklist." },
       { icon: "🔎", title: "Demandez le suivi du rendez-vous", desc: "Créez votre demande « Créneau uniquement — France long séjour ». Sans acompte, Joventy suit le canal officiel indiqué pour votre catégorie ; aucune date n'est garantie." },
-      { icon: "✅", title: "Créneau confirmé → paiement de 350 $", desc: "Quand un rendez-vous est effectivement confirmé selon le parcours officiel, vous recevez les informations disponibles et réglez les 350 USD par Mobile Money." },
+      { icon: "✅", title: "Créneau confirmé → paiement de 200 $", desc: "Quand un rendez-vous est effectivement confirmé selon le parcours officiel, vous recevez les informations disponibles et réglez les 200 USD par Mobile Money." },
     ],
     included: [
       "Vérification de la cohérence entre la catégorie France-Visas et la demande de rendez-vous",
@@ -90,7 +90,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       "Support administratif ; ni décision consulaire ni accès privilégié",
     ],
     faqs: [
-      { q: "Le service créneau France long séjour coûte-t-il 350 USD ?", a: "Oui. Le service de rendez-vous seul est facturé 350 USD après l'obtention effective d'un créneau confirmé. Pour cette destination hors Espagne, aucun acompte n'est demandé." },
+      { q: "Le service créneau France long séjour coûte-t-il 200 USD ?", a: "Oui. Le service de rendez-vous seul est facturé 200 USD après l'obtention effective d'un créneau confirmé. Pour cette destination hors Espagne, aucun acompte n'est demandé." },
       { q: "Le visa France long séjour passe-t-il par le CEV ?", a: "Non. Le CEV concerne le court séjour Schengen lorsqu'il est compétent. Un long séjour français se prépare avec France-Visas puis relève de l'Ambassade de France à Kinshasa." },
       { q: "Joventy peut-il garantir une date ou un visa ?", a: "Non. Les dates dépendent des ouvertures officielles et la décision de visa appartient exclusivement à l'ambassade. Joventy ne dispose pas d'accès privilégié." },
       { q: "Campus France est-il nécessaire pour un visa étudiant ?", a: "Pour certains projets d'études, une procédure Campus France peut être requise avant la demande de visa. Vérifiez votre situation sur Campus France et France-Visas." },
@@ -105,14 +105,14 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     name: "Allemagne",
     title: "Créneau Visa Long Séjour Allemagne Kinshasa 2026 — RK-Termin 24h/24 | Joventy",
     metaDescription:
-      "Rendez-vous visa long séjour Allemagne depuis Kinshasa 2026 (études, travail, famille) : Joventy surveille RK-Termin en continu et réserve votre créneau. 350 $ payés uniquement après obtention — aucun acompte.",
+      "Rendez-vous visa long séjour Allemagne depuis Kinshasa 2026 (études, travail, famille) : Joventy surveille RK-Termin en continu et réserve votre créneau. 200 $ payés uniquement après obtention — aucun acompte.",
     h1: "Créneau Visa Long Séjour Allemagne depuis Kinshasa — RK-Termin géré 24h/24",
     accroche:
       "L'ambassade d'Allemagne à Kinshasa traite les visas long séjour (études, travail, regroupement familial) sur rendez-vous via le portail RK-Termin. Ces créneaux sont rares et disparaissent en quelques minutes. Joventy surveille le système en permanence et verrouille votre slot dès qu'un rendez-vous disponible apparaît — sans acompte de votre part.",
     urgency:
       "Les créneaux RK-Termin Allemagne sont libérés de façon irrégulière et pris en quelques secondes.",
     stats: [
-      { n: "350 $", label: "payés uniquement après obtention du créneau" },
+      { n: "200 $", label: "payés uniquement après obtention du créneau" },
       { n: "0 $", label: "d'acompte — aucun paiement à l'avance" },
       { n: "24h/24", label: "surveillance continue du système RK-Termin" },
       { n: "< 2 min", label: "durée typique avant qu'un créneau soit pris" },
@@ -130,8 +130,8 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         icon: "✅",
-        title: "Créneau confirmé → vous payez 350 $",
-        desc: "Vous recevez une notification WhatsApp et email avec la date, l'heure et le lieu de votre rendez-vous à l'ambassade d'Allemagne. C'est à ce moment seulement que vous réglez 350 $ via M-Pesa, Airtel Money ou Orange Money.",
+        title: "Créneau confirmé → vous payez 200 $",
+        desc: "Vous recevez une notification WhatsApp et email avec la date, l'heure et le lieu de votre rendez-vous à l'ambassade d'Allemagne. C'est à ce moment seulement que vous réglez 200 $ via M-Pesa, Airtel Money ou Orange Money.",
       },
     ],
     included: [
@@ -156,15 +156,15 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         q: "Puis-je prendre le créneau moi-même sans Joventy ?",
-        a: "Oui, c'est possible. Mais le système de rendez-vous est difficile d'accès depuis Kinshasa (lenteur, créneaux qui disparaissent en quelques secondes). Le service Joventy assure une surveillance 24h/24. Si vous arrivez à prendre votre créneau seul, vous ne payez rien à Joventy — les 350 $ ne sont dus qu'à l'obtention effective du créneau via Joventy.",
+        a: "Oui, c'est possible. Mais le système de rendez-vous est difficile d'accès depuis Kinshasa (lenteur, créneaux qui disparaissent en quelques secondes). Le service Joventy assure une surveillance 24h/24. Si vous arrivez à prendre votre créneau seul, vous ne payez rien à Joventy — les 200 $ ne sont dus qu'à l'obtention effective du créneau via Joventy.",
       },
       {
         q: "Combien coûte le service créneau Allemagne avec Joventy ?",
-        a: "350 $ au total, payés uniquement après que Joventy a confirmé votre rendez-vous à l'ambassade d'Allemagne. Aucun acompte à l'avance. Paiement via M-Pesa, Airtel Money ou Orange Money.",
+        a: "200 $ au total, payés uniquement après que Joventy a confirmé votre rendez-vous à l'ambassade d'Allemagne. Aucun acompte à l'avance. Paiement via M-Pesa, Airtel Money ou Orange Money.",
       },
       {
         q: "Joventy prépare-t-il aussi mon dossier pour le visa long séjour Allemagne ?",
-        a: "Oui. Le service créneau (350 $) couvre la surveillance du système et la prise de rendez-vous. Si vous souhaitez également que Joventy prépare votre dossier complet (formulaires, vérification des pièces, accompagnement intégral), vous pouvez opter pour le service visa complet à 1 500 $.",
+        a: "Oui. Le service créneau (200 $) couvre la surveillance du système et la prise de rendez-vous. Si vous souhaitez également que Joventy prépare votre dossier complet (formulaires, vérification des pièces, accompagnement intégral), vous pouvez opter pour le service visa complet à 1 500 $.",
       },
       {
         q: "Que se passe-t-il si l'ambassade d'Allemagne annule ou reporte le rendez-vous ?",
@@ -181,17 +181,17 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     name: "Espagne",
     title: "Rendez-vous visa Espagne à Kinshasa : service créneau",
     metaDescription:
-      "Service créneau pour rendez-vous visa Espagne à Kinshasa : suivi sur citaconsular.es après réception des accès. 0 $ d’acompte ; 350 $ après confirmation.",
+      "Service créneau pour rendez-vous visa Espagne à Kinshasa : suivi sur citaconsular.es après réception des accès. 0 $ d’acompte ; 200 $ après confirmation.",
     h1: "Service de créneau visa Espagne à Kinshasa : tarif et étapes",
     accroche:
-      "À Kinshasa, le rendez-vous visa Espagne se réserve sur citaconsular.es après l’inscription personnelle à l’ambassade et la réception des identifiants. Joventy propose un service facultatif de vérification de l’email et de surveillance des créneaux : 350 USD uniquement après confirmation, sans acompte. Le service ne garantit ni date précise ni visa.",
+      "À Kinshasa, le rendez-vous visa Espagne se réserve sur citaconsular.es après l’inscription personnelle à l’ambassade et la réception des identifiants. Joventy propose un service facultatif de vérification de l’email et de surveillance des créneaux : 200 USD uniquement après confirmation, sans acompte. Le service ne garantit ni date précise ni visa.",
     urgency:
       "Les créneaux sur citaconsular.es sont pris en moins de 2 minutes dès leur ouverture.",
     processHeading: "Comment obtenir un créneau visa Espagne à Kinshasa ?",
     processIntro:
       "Le parcours se fait en trois étapes : email personnel à l’ambassade, réception des identifiants, puis recherche du créneau sur citaconsular.es. L’accompagnement Joventy est facultatif et ne garantit ni date ni visa.",
     stats: [
-      { n: "350 $", label: "payés uniquement après obtention du créneau" },
+      { n: "200 $", label: "payés uniquement après obtention du créneau" },
       { n: "0 $", label: "d'acompte — aucun paiement à l'avance" },
       { n: "2 étapes", label: "email ambassade + créneau citaconsular.es" },
       { n: "< 2 min", label: "durée typique avant qu'un créneau soit pris" },
@@ -209,8 +209,8 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         icon: "✅",
-        title: "Surveillez votre créneau sur citaconsular.es → vous payez 350 $",
-        desc: "Dès réception des identifiants, Joventy peut surveiller les créneaux disponibles sur citaconsular.es et vous aider à réserver. Vous recevez la confirmation par WhatsApp — c'est à ce moment seulement que vous réglez 350 $ via M-Pesa.",
+        title: "Surveillez votre créneau sur citaconsular.es → vous payez 200 $",
+        desc: "Dès réception des identifiants, Joventy peut surveiller les créneaux disponibles sur citaconsular.es et vous aider à réserver. Vous recevez la confirmation par WhatsApp — c'est à ce moment seulement que vous réglez 200 $ via M-Pesa.",
       },
     ],
     included: [
@@ -224,7 +224,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     faqs: [
       {
         q: "Comment obtenir un rendez-vous visa Espagne à Kinshasa ?",
-        a: "Envoyez d’abord personnellement votre email d’inscription à l’ambassade. Après réception des identifiants, utilisez citaconsular.es pour accéder à la réservation officielle. Joventy peut vous aider à vérifier l’email et surveiller les créneaux ; son service coûte 350 USD uniquement après confirmation, sans acompte. Aucun délai ni visa n’est garanti.",
+        a: "Envoyez d’abord personnellement votre email d’inscription à l’ambassade. Après réception des identifiants, utilisez citaconsular.es pour accéder à la réservation officielle. Joventy peut vous aider à vérifier l’email et surveiller les créneaux ; son service coûte 200 USD uniquement après confirmation, sans acompte. Aucun délai ni visa n’est garanti.",
       },
       {
         q: "L'Espagne passe-t-elle par le système commun Schengen pour les visas depuis Kinshasa ?",
@@ -240,7 +240,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         q: "Combien coûte le rendez-vous visa Espagne avec Joventy ?",
-        a: "350 $ au total, payés uniquement après confirmation du créneau sur citaconsular.es. Aucun acompte à l'avance. Paiement via M-Pesa, Airtel Money ou Orange Money.",
+        a: "200 $ au total, payés uniquement après confirmation du créneau sur citaconsular.es. Aucun acompte à l'avance. Paiement via M-Pesa, Airtel Money ou Orange Money.",
       },
       {
         q: "Que faire si l'ambassade refuse ou ignore l'email d'inscription ?",
@@ -261,14 +261,14 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     name: "Schengen — CEV Kinshasa",
     title: "Créneau rendez-vous CEV Kinshasa 2026 — Visa Schengen | Joventy",
     metaDescription:
-      "Créneau rendez-vous CEV Kinshasa pour visa Schengen : service privé Joventy à 350 USD après obtention, sans acompte. Le rendez-vous officiel est gratuit.",
+      "Créneau rendez-vous CEV Kinshasa pour visa Schengen : service privé Joventy à 300 USD après obtention, sans acompte. Le rendez-vous officiel est gratuit.",
     h1: "Créneau rendez-vous CEV Kinshasa pour visa Schengen",
     accroche:
-      "Le CEV, géré par l’Ambassade de Belgique (anciennement Maison Schengen), reçoit les demandes de court séjour des pays qu’il représente : il ne concerne donc pas uniquement la Belgique. Créez impérativement votre propre compte Visa On Web avec votre email personnel et vérifiez la compétence sur cev-kin.eu. La prise de rendez-vous officielle est gratuite. Les 350 USD de Joventy rémunèrent exclusivement un service privé de surveillance et d’assistance, après obtention, sans accès privilégié ni garantie de date.",
+      "Le CEV, géré par l’Ambassade de Belgique (anciennement Maison Schengen), reçoit les demandes de court séjour des pays qu’il représente : il ne concerne donc pas uniquement la Belgique. Créez impérativement votre propre compte Visa On Web avec votre email personnel et vérifiez la compétence sur cev-kin.eu. La prise de rendez-vous officielle est gratuite. Les 300 USD de Joventy rémunèrent exclusivement un service privé de surveillance et d’assistance, après obtention, sans accès privilégié ni garantie de date.",
     urgency:
       "Le CEV ouvre des possibilités sur une période glissante de cinq semaines ; de nouvelles plages sont ajoutées chaque jour. Une date n’est jamais garantie.",
     stats: [
-      { n: "350 $", label: "service privé Joventy, après obtention du créneau" },
+      { n: "300 $", label: "service privé Joventy, après obtention du créneau" },
       { n: "0 $", label: "d'acompte — aucun paiement à l'avance" },
       { n: "0 $", label: "pour la prise de rendez-vous officielle CEV" },
       { n: "5 semaines", label: "période glissante annoncée par le CEV" },
@@ -286,8 +286,8 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         icon: "✅",
-        title: "Créneau CEV confirmé → vous payez 350 $",
-        desc: "Après confirmation d’un créneau, vous réglez 350 USD pour le service privé Joventy. Le rendez-vous officiel CEV reste gratuit ; les frais de visa éventuels sont distincts et se règlent selon les instructions officielles.",
+        title: "Créneau CEV confirmé → vous payez 300 $",
+        desc: "Après confirmation d’un créneau, vous réglez 300 USD pour le service privé Joventy. Le rendez-vous officiel CEV reste gratuit ; les frais de visa éventuels sont distincts et se règlent selon les instructions officielles.",
       },
     ],
     included: [
@@ -317,7 +317,7 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         q: "Combien coûte le créneau Schengen CEV avec Joventy ?",
-        a: "Le rendez-vous officiel CEV est gratuit. Les 350 USD, sans acompte et dus après obtention, correspondent uniquement au service privé de surveillance et d’assistance Joventy ; ils ne sont pas versés au CEV.",
+        a: "Le rendez-vous officiel CEV est gratuit. Les 300 USD, sans acompte et dus après obtention, correspondent uniquement au service privé de surveillance et d’assistance Joventy ; ils ne sont pas versés au CEV.",
       },
       {
         q: "L'Espagne passe-t-elle par le CEV à Kinshasa ?",
@@ -338,14 +338,14 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     name: "États-Unis",
     title: "Créneau Visa USA Kinshasa 2026 — Système consulaire géré 24h/24 par Joventy | Joventy",
     metaDescription:
-      "Rendez-vous visa USA depuis Kinshasa 2026 (B1/B2, F1) : Joventy surveille le système consulaire américain en continu et réserve votre créneau dès qu'il apparaît. 350 $ payés uniquement après obtention — aucun acompte.",
+      "Rendez-vous visa USA depuis Kinshasa 2026 (B1/B2, F1) : Joventy surveille le système consulaire américain en continu et réserve votre créneau dès qu'il apparaît. 300 $ payés uniquement après obtention — aucun acompte.",
     h1: "Créneau Visa USA depuis Kinshasa — Système consulaire américain surveillé 24h/24 par Joventy",
     accroche:
       "L'ambassade américaine à Kinshasa publie ses créneaux de rendez-vous visa sur son portail officiel. En 2026, ces créneaux sont extrêmement rares (restrictions Ebola, Travel Advisory Level 4). Joventy surveille le système en permanence et réserve votre créneau dès qu'un slot disponible apparaît — vous ne payez que quand c'est confirmé.",
     urgency:
       "En 2026, les créneaux visa USA à Kinshasa sont extrêmement rares. Restrictions Ebola + Travel Advisory Level 4.",
     stats: [
-      { n: "350 $", label: "payés uniquement après obtention du créneau" },
+      { n: "300 $", label: "payés uniquement après obtention du créneau" },
       { n: "0 $", label: "d'acompte — aucun paiement à l'avance" },
       { n: "24h/24", label: "surveillance continue du système consulaire américain" },
       { n: "DS-160", label: "formulaire requis avant la prise de créneau" },
@@ -363,8 +363,8 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         icon: "✅",
-        title: "Rendez-vous confirmé → vous payez 350 $",
-        desc: "Vous recevez une notification WhatsApp avec la date et l'heure de votre entretien à l'ambassade américaine de Kinshasa. C'est à ce moment seulement que vous réglez 350 $ via M-Pesa, Airtel Money ou Orange Money.",
+        title: "Rendez-vous confirmé → vous payez 300 $",
+        desc: "Vous recevez une notification WhatsApp avec la date et l'heure de votre entretien à l'ambassade américaine de Kinshasa. C'est à ce moment seulement que vous réglez 300 $ via M-Pesa, Airtel Money ou Orange Money.",
       },
     ],
     included: [
@@ -386,15 +386,15 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
       },
       {
         q: "Puis-je demander un créneau visa USA depuis un pays neutre si les services sont suspendus à Kinshasa ?",
-        a: "Oui. Si les services USA sont suspendus à Kinshasa, Joventy peut vous aider à obtenir un créneau dans l'ambassade américaine d'un pays neutre (Maroc, Égypte, Dubaï, Rwanda, etc.) après votre purge de 21 jours hors zone Ebola. Ce service est inclus dans le créneau uniquement à 350 $.",
+        a: "Oui. Si les services USA sont suspendus à Kinshasa, Joventy peut vous aider à obtenir un créneau dans l'ambassade américaine d'un pays neutre (Maroc, Égypte, Dubaï, Rwanda, etc.) après votre purge de 21 jours hors zone Ebola. Ce service est inclus dans le créneau uniquement à 300 $.",
       },
       {
         q: "Combien coûte le créneau visa USA avec Joventy ?",
-        a: "350 $ au total, payés uniquement après confirmation du rendez-vous à l'ambassade américaine. Aucun acompte. Paiement via M-Pesa, Airtel Money ou Orange Money.",
+        a: "300 $ au total, payés uniquement après confirmation du rendez-vous à l'ambassade américaine. Aucun acompte. Paiement via M-Pesa, Airtel Money ou Orange Money.",
       },
       {
         q: "Que se passe-t-il si mon visa B1/B2 est refusé à l'entretien après que Joventy a obtenu le créneau ?",
-        a: "Si Joventy a verrouillé votre créneau (mission accomplie), les 350 $ sont dus. Le refus lors de l'entretien consulaire est une décision souveraine de l'ambassade américaine, indépendante du service Joventy. Nous vous conseillons gratuitement sur la préparation à l'entretien pour maximiser vos chances.",
+        a: "Si Joventy a verrouillé votre créneau (mission accomplie), les 300 $ sont dus. Le refus lors de l'entretien consulaire est une décision souveraine de l'ambassade américaine, indépendante du service Joventy. Nous vous conseillons gratuitement sur la préparation à l'entretien pour maximiser vos chances.",
       },
       {
         q: "Combien de temps faut-il pour avoir un créneau visa USA à Kinshasa ?",
