@@ -157,10 +157,30 @@ export function formatPortalUrlForLog(url: string): string {
  * sert de FALLBACK si getagendas/ (parallèle) répond vide alors qu'il y a des créneaux
  * (race). Validé sur São Paulo / Cuba / Kinshasa (script diagnostic test-parallel-svc-agenda).
  */
-const KNOWN_PORTAL_IDS: Record<string, { serviceId: string; agendaId: string }> = {
-  [KINSHASA_WIDGET_KEY]: { serviceId: KINSHASA_DEFAULT_SERVICE_ID, agendaId: KINSHASA_DEFAULT_AGENDA_ID },
-  [SAOPOLO_WIDGET_KEY]:  { serviceId: SAOPOLO_DEFAULT_SERVICE_ID,  agendaId: SAOPOLO_DEFAULT_AGENDA_ID },
-  [CUBA_LMD_WIDGET_KEY]: { serviceId: CUBA_LMD_DEFAULT_SERVICE_ID, agendaId: CUBA_LMD_DEFAULT_AGENDA_ID },
+const KNOWN_PORTAL_IDS: Record<
+  string,
+  { serviceId: string; agendaId: string; captchaRequired: boolean }
+> = {
+  // Kinshasa : hCaptcha OBLIGATOIRE au signin/ (fait établi). Le /main/ n'est pas toujours
+  // capturé (chemins réduits meute/shortscan) → on ne peut PAS dépendre de detectHcaptcha(/main/).
+  [KINSHASA_WIDGET_KEY]: {
+    serviceId: KINSHASA_DEFAULT_SERVICE_ID,
+    agendaId: KINSHASA_DEFAULT_AGENDA_ID,
+    captchaRequired: true,
+  },
+  // São Paulo : pas confirmé captcha-obligatoire → false (le /main/ le détectera si présent).
+  [SAOPOLO_WIDGET_KEY]: {
+    serviceId: SAOPOLO_DEFAULT_SERVICE_ID,
+    agendaId: SAOPOLO_DEFAULT_AGENDA_ID,
+    captchaRequired: false,
+  },
+  // Cuba/LMD : hCaptcha présent (modal Aceptar → iframe hcaptcha, capture 2026-07-28 ;
+  // signin/ 236B confirmé avec gct). captcha-obligatoire.
+  [CUBA_LMD_WIDGET_KEY]: {
+    serviceId: CUBA_LMD_DEFAULT_SERVICE_ID,
+    agendaId: CUBA_LMD_DEFAULT_AGENDA_ID,
+    captchaRequired: true,
+  },
 };
 
 /**
@@ -173,5 +193,24 @@ const KNOWN_PORTAL_IDS: Record<string, { serviceId: string; agendaId: string }> 
  */
 export function getKnownIdsForPortal(portalUrl: string): { serviceId: string; agendaId: string } | null {
   const key = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$|#)/i)?.[1] ?? "";
-  return KNOWN_PORTAL_IDS[key] ?? null;
+  const entry = KNOWN_PORTAL_IDS[key];
+  return entry ? { serviceId: entry.serviceId, agendaId: entry.agendaId } : null;
+}
+
+/**
+ * Indique si un portail connu exige un hCaptcha (gct) au signin/, INDÉPENDAMMENT du
+ * /main/. Sert de source de vérité pour les chemins réduits (meute + éclaireur shortscan)
+ * qui SAUTENT le GET /main/ et ne peuvent donc pas s'appuyer sur detectHcaptcha(/main/).
+ *
+ * Retourne :
+ *   - true  → portail connu captcha-obligatoire (ex. Kinshasa, Cuba) → gct requis.
+ *   - false → portail connu sans captcha confirmé.
+ *   - null  → portail inconnu → laisser la détection dynamique /main/ décider (fallback sûr).
+ *
+ * @param portalUrl - URL complète du widget citaconsular.es
+ */
+export function portalRequiresCaptcha(portalUrl: string): boolean | null {
+  const key = portalUrl.match(/\/([a-f0-9]{30,})(?:\/|$|#)/i)?.[1] ?? "";
+  const entry = KNOWN_PORTAL_IDS[key];
+  return entry ? entry.captchaRequired : null;
 }

@@ -38,6 +38,8 @@ import {
   getWorkerProxyIdentity,
   saveWorkerProxyIdentity,
   deleteWorkerProxyIdentity,
+  claimSentinelRole,
+  isSpainRedisReady,
 } from "./spain-redis-persistence.js";
 import { initDecodoPool, flagDecodoIp, rotateDecodoUrl } from "./spain-decodo-pool.js";
 import { getActiveJobs, type HunterJob } from "./convexClient.js";
@@ -49,7 +51,9 @@ import { loadGridConfig, type GridConfig, type WorkerRuntimeState } from "./spai
 import { createReservePool, type ReservePoolManager } from "./spain/spain-reserve-pool.js";
 import { createPreflightController, type PreflightController } from "./spain/spain-preflight-controller.js";
 // Pré-résolution hCaptcha par dossier : token gct dédié pré-résolu pendant HH:12→13.
-import { prewarmAllDossiers, hasRegisteredDossiers, hasSlotSeenDossiers } from "./spain-hcaptcha-prewarm.js";
+import { prewarmAllDossiers, hasRegisteredDossiers, hasSlotSeenDossiers, registerDossierCaptcha } from "./spain-hcaptcha-prewarm.js";
+import { portalRequiresCaptcha } from "./spain-portals.js";
+import { HCAPTCHA_SITEKEY } from "./spain-http-booking.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -73,6 +77,80 @@ const RESTART_AFTER_ERROR_MS = ((): number => {
 
 /** Renouvellement du lock Redis (doit être < TTL lock = 50 s) */
 const LOCK_RENEWAL_MS = 30_000;
+
+/**
+ * Mode meute (spain-eclaireur) — GATED par flag, OFF par défaut.
+ * Quand SPAIN_MEUTE_MODE=1 : par portail, 1 dossier devient "eclaireur" (flux normal :
+ * scan datetime/ + publie le snapshot), les autres deviennent "meute" (consomment le
+ * snapshot, sautent datetime/). OFF (défaut) → role undefined → comportement historique
+ * (tous les workers scannent). L'attribution du rôle éclaireur est atomique via
+ * claimSentinelRole (Redis NX, TTL 30 min) ; en mode dégradé Redis, tout le monde reste
+ * éclaireur (claimSentinelRole retourne true) → aucun changement de comportement.
+ */
+const MEUTE_MODE_ENABLED = process.env.SPAIN_MEUTE_MODE === "1";
+
+/**
+ * Dérive une clé de portail stable pour grouper les dossiers d'un même portail.
+ * Réutilise la même logique que portalUrlToKey côté Redis (bkt-id ou tail).
+ */
+function portalKey(portalUrl: string): string {
+  const noFrag = portalUrl.split("#")[0];
+  const m = noFrag.match(/bkt\d+/) ?? noFrag.match(/\/([a-f0-9]{30,})(?:\/|$)/i);
+  return m ? m[0] : noFrag.slice(-40);
+}
+
+/**
+ * Attribue un rôle éclaireur/meute à chaque dossier, PAR PORTAIL, pour ce cycle.
+ *
+ * Règle : le PREMIER dossier (ordre déterministe par id) de chaque portail tente
+ * claimSentinelRole (NX Redis) → devient "eclaireur" ; les autres du même portail
+ * deviennent "meute". Si claimSentinelRole échoue (rôle déjà pris par un autre process
+ * ou instance), le dossier devient "meute" — l'éclaireur est ailleurs.
+ *
+ * IMPORTANT : purement additif. Retourne une Map dossierId → role. Si le mode est OFF,
+ * l'appelant n'utilise pas cette map (role reste undefined).
+ *
+ * @param dossiers dossiers actifs de ce cycle.
+ * @returns Map<dossierId, "eclaireur" | "meute">
+ */
+async function assignRoles(
+  dossiers: SpainDossierConfig[],
+): Promise<Map<string, "eclaireur" | "meute">> {
+  const roles = new Map<string, "eclaireur" | "meute">();
+  // Grouper par portail.
+  const byPortal = new Map<string, SpainDossierConfig[]>();
+  for (const d of dossiers) {
+    const key = portalKey(d.portalUrl);
+    const arr = byPortal.get(key) ?? [];
+    arr.push(d);
+    byPortal.set(key, arr);
+  }
+  for (const [, group] of byPortal) {
+    // Ordre déterministe : le premier par id tente le rôle éclaireur.
+    const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
+    let eclaireurAssigned = false;
+    for (let i = 0; i < sorted.length; i++) {
+      const d = sorted[i];
+      if (!eclaireurAssigned) {
+        // Le candidat éclaireur tente le rôle NX. En dégradé Redis → true (tout le monde
+        // éclaireur, mais on n'en désigne qu'un par ordre déterministe côté process).
+        const isEclaireur = await claimSentinelRole(d.portalUrl, d.id);
+        if (isEclaireur) {
+          roles.set(d.id, "eclaireur");
+          eclaireurAssigned = true;
+          continue;
+        }
+      }
+      roles.set(d.id, "meute");
+    }
+    // Sécurité : si aucun n'a obtenu le rôle (course inter-process), promouvoir le premier
+    // en éclaireur local pour éviter qu'un portail n'ait AUCUN scanner ce cycle.
+    if (!eclaireurAssigned && sorted.length > 0) {
+      roles.set(sorted[0].id, "eclaireur");
+    }
+  }
+  return roles;
+}
 
 /** Intervalle FIXE de rafraîchissement du pool de tokens hCaptcha pré-résolus (ms).
  *  20 s aligne le tick sur l'âge maximal accepté par citaconsular côté module, sans
@@ -347,6 +425,18 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
 
       // 4. Démarrer un worker pour chaque dossier sans worker en cours
       // ── V2 : check sommeil post-détection (DÉSACTIVÉ — annulations arrivent à tout moment) ──
+      // spain-eclaireur (mode meute) : attribution des rôles par portail AVANT le spawn.
+      // Gated par SPAIN_MEUTE_MODE ; OFF → map vide → role reste undefined (comportement actuel).
+      const roleByDossier = MEUTE_MODE_ENABLED
+        ? await assignRoles(dossiers)
+        : new Map<string, "eclaireur" | "meute">();
+      if (MEUTE_MODE_ENABLED && roleByDossier.size > 0) {
+        const eclaireurs = [...roleByDossier.entries()].filter(([, r]) => r === "eclaireur").length;
+        log(
+          "INFO",
+          `[SPAIN-ORCH] 🐺 Mode meute — ${eclaireurs} éclaireur(s), ${roleByDossier.size - eclaireurs} meute (Redis ${isSpainRedisReady() ? "ok" : "dégradé"})`,
+        );
+      }
       {
         for (const config of dossiers) {
         const existing = workers.get(config.id);
@@ -400,6 +490,8 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
                 return a.id.localeCompare(b.id);
               })
               .findIndex((d) => d.id === config.id),
+            // spain-eclaireur : rôle attribué ce cycle (undefined si mode OFF → flux normal).
+            role: roleByDossier.get(config.id),
           },
           reservePool,
         ).then((result) => {
@@ -458,6 +550,20 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
       //     tourne à intervalle FIXE dans ce timer (indépendant de la cadence de cette
       //     boucle), pour garantir un token toujours frais au pic HH:13-14.
       latestActiveDossierIds = dossiers.map((d) => d.id);
+
+      // 5.6 Enregistrement PROACTIF du hCaptcha pour les portails captcha-obligatoire connus
+      //     (Kinshasa, Cuba…). En mode meute/shortscan, le worker SAUTE /main/ et n'appelle
+      //     registerDossierCaptcha qu'au moment du scan — trop tard pour que le prewarm ait
+      //     un token frais au pic. On enregistre donc ici, dès que le dossier est actif, via
+      //     portalRequiresCaptcha (source de vérité indépendante du /main/). Idempotent :
+      //     registerDossierCaptcha ne déclenche pas de solve (c'est le timer qui le fait) et
+      //     met simplement à jour sitekey/pageUrl. Les portails sans captcha ne sont pas
+      //     enregistrés → zéro solve gaspillé.
+      for (const d of dossiers) {
+        if (portalRequiresCaptcha(d.portalUrl.split("#")[0]) === true) {
+          registerDossierCaptcha(d.id, HCAPTCHA_SITEKEY, d.portalUrl.split("#")[0]);
+        }
+      }
 
       // 6. Attendre le prochain poll ou qu'un worker se termine
       // IMPORTANT : quand workers est vide, waitForAnyWorker() retourne une Promise

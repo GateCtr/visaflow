@@ -1325,6 +1325,74 @@ export async function publishSlotSnapshot(
   } catch { /* ignore — non-bloquant */ }
 }
 
+/**
+ * Résultat de lecture d'un snapshot de créneaux (mode meute).
+ * `ageSec` estime l'âge du snapshot depuis sa publication : dérivé du TTL restant
+ * (`ttlSec configuré - PTTL restant`). Utile pour ne pas booker sur un snapshot périmé.
+ */
+export interface SlotSnapshotRead {
+  /** Créneaux partagés par l'éclaireur (vide si absent/expiré/Redis KO). */
+  slots: SlotSnapEntry[];
+  /** Âge estimé du snapshot en secondes (0 si inconnu). */
+  ageSec: number;
+  /** TTL restant en secondes (0 si absent). */
+  ttlSec: number;
+}
+
+/**
+ * Lit le snapshot de créneaux publié par l'éclaireur (symétrique de publishSlotSnapshot).
+ * Clé : spain:slot_snap:{agendaId}:{serviceId}.
+ *
+ * C'est la primitive consommée par les workers "meute" : au lieu de faire leur propre
+ * datetime/, ils lisent les créneaux détectés par l'éclaireur, puis vont directement au
+ * claim + booking. L'âge (dérivé du TTL restant) permet à l'appelant d'ignorer un snapshot
+ * trop vieux (le freeslots stocké peut être périmé — la source de vérité reste tryClaimSlot).
+ *
+ * Dégradé sûr : Redis absent, clé absente, ou payload illisible → { slots: [], ageSec: 0, ttlSec: 0 }.
+ *
+ * @param agendaId  agenda cible (même clé que la publication).
+ * @param serviceId service cible (même clé que la publication).
+ * @param snapTtlSec TTL configuré à la publication (défaut REDIS_SLOT_SNAP_TTL_SEC) — sert
+ *                   à estimer l'âge à partir du TTL restant.
+ */
+export async function readSlotSnapshot(
+  agendaId: string,
+  serviceId: string,
+  snapTtlSec = REDIS_SLOT_SNAP_TTL_SEC,
+): Promise<SlotSnapshotRead> {
+  const empty: SlotSnapshotRead = { slots: [], ageSec: 0, ttlSec: 0 };
+  if (!redisReady || !redisClient) return empty;
+  const key = `${REDIS_SLOT_SNAP_PREFIX}${agendaId}:${serviceId}`;
+  try {
+    const raw = await redisClient.get(key);
+    if (!raw) return empty;
+
+    const parsed = JSON.parse(raw) as Array<{ d?: string; t?: string; a?: string; n?: number }>;
+    if (!Array.isArray(parsed)) return empty;
+
+    const slots: SlotSnapEntry[] = parsed
+      .filter((s) => s && typeof s.d === "string" && typeof s.t === "string")
+      .map((s) => ({
+        date: String(s.d),
+        time: String(s.t),
+        agendaId: typeof s.a === "string" && s.a ? s.a : agendaId,
+        freeslots: Number.isFinite(Number(s.n)) ? Math.max(0, Math.round(Number(s.n))) : 0,
+      }));
+
+    // TTL restant (secondes) → âge estimé = TTL publié - TTL restant.
+    let ttlSec = 0;
+    try {
+      const pttl = await redisClient.pTTL(key); // ms ; -1 = sans expiration, -2 = absent
+      if (typeof pttl === "number" && pttl > 0) ttlSec = Math.ceil(pttl / 1000);
+    } catch { /* PTTL non-fatal */ }
+    const ageSec = ttlSec > 0 ? Math.max(0, snapTtlSec - ttlSec) : 0;
+
+    return { slots, ageSec, ttlSec };
+  } catch {
+    return empty;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1476,6 +1544,86 @@ export async function subscribeToBurst(
     console.warn(`[spain-redis] subscribeToBurst: ${err instanceof Error ? err.message : err}`);
     return null;
   }
+}
+
+/** Résultat de l'attente d'un burst par un worker meute. */
+export interface BurstWaitResult {
+  /** true si un burst a été détecté (pub/sub OU flag) avant le timeout. */
+  bursted: boolean;
+  /** Voie de détection : "pubsub" (réveil instantané), "flag" (déjà émis / polling), "timeout". */
+  via: "pubsub" | "flag" | "timeout";
+  /** Temps d'attente réel (ms). */
+  waitedMs: number;
+}
+
+/**
+ * Attend qu'un signal BURST arrive pour un portail, ou expire au bout de `maxWaitMs`.
+ *
+ * Consommé par les workers MEUTE (spain-eclaireur) : au lieu de scanner immédiatement,
+ * un worker meute attend qu'un éclaireur détecte des créneaux (BURST) avant de se lancer,
+ * pour ne pas gaspiller de solve CF / scan tant qu'il n'y a rien à booker.
+ *
+ * Combine trois voies (première qui déclenche gagne) :
+ *   1. Flag déjà présent (`checkBurstFlag`) → burst émis AVANT cet appel → retour immédiat.
+ *   2. PUB/SUB (`subscribeToBurst`) → réveil instantané si un burst est publié pendant l'attente.
+ *   3. Polling du flag toutes les `pollMs` → filet de sécurité si le pub/sub est manqué.
+ *
+ * Dégradé sûr : Redis absent → { bursted: false, via: "timeout", waitedMs: 0 } immédiat
+ * (l'appelant décidera de retomber sur le flux normal).
+ *
+ * @param portalUrl  portail cible.
+ * @param maxWaitMs  durée maximale d'attente (ms).
+ * @param freshSec   fraîcheur max du flag pour être considéré valide (défaut 120s).
+ * @param pollMs     intervalle de polling du flag (défaut 1000ms).
+ */
+export async function waitForBurstOrTimeout(
+  portalUrl: string,
+  maxWaitMs: number,
+  freshSec = REDIS_BURST_FLAG_TTL_SEC,
+  pollMs = 1_000,
+): Promise<BurstWaitResult> {
+  const startedAt = Date.now();
+  if (!redisReady || !redisClient) {
+    return { bursted: false, via: "timeout", waitedMs: 0 };
+  }
+
+  // 1. Burst déjà émis avant qu'on commence à attendre ?
+  if (await checkBurstFlag(portalUrl, freshSec)) {
+    return { bursted: true, via: "flag", waitedMs: Date.now() - startedAt };
+  }
+
+  return new Promise<BurstWaitResult>((resolve) => {
+    let settled = false;
+    let unsubscribe: (() => Promise<void>) | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | undefined;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (via: BurstWaitResult["via"], bursted: boolean): void => {
+      if (settled) return;
+      settled = true;
+      if (pollTimer) clearInterval(pollTimer);
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      // Désinscription non bloquante (ne retarde pas la résolution).
+      if (unsubscribe) void unsubscribe().catch(() => {});
+      resolve({ bursted, via, waitedMs: Date.now() - startedAt });
+    };
+
+    // 2. PUB/SUB — réveil instantané.
+    void subscribeToBurst(portalUrl, () => finish("pubsub", true)).then((unsub) => {
+      unsubscribe = unsub;
+      if (settled && unsub) void unsub().catch(() => {}); // course : déjà résolu avant l'abonnement
+    });
+
+    // 3. Polling du flag — filet de sécurité si le pub/sub est manqué.
+    pollTimer = setInterval(() => {
+      void checkBurstFlag(portalUrl, freshSec).then((hit) => {
+        if (hit) finish("flag", true);
+      });
+    }, Math.max(200, pollMs));
+
+    // 4. Timeout.
+    deadlineTimer = setTimeout(() => finish("timeout", false), Math.max(0, maxWaitMs));
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

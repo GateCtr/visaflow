@@ -48,6 +48,8 @@ async function main() {
   // the production worker must never submit summary/ and create an appointment.
   process.env.SPAIN_TEST_NO_BOOKING = "1";
   L("OK", "Safety guard actif : summary/ sera toujours ignoré (aucun booking possible)");
+  // Harness : Redis local si REDIS_HOST fourni (neutralise REDIS_URL Railway injoignable).
+  if (process.env.REDIS_HOST) delete process.env.REDIS_URL;
 
   // ── 1. Init Redis + Decodo pool ─────────────────────────────────────────────
   L("STEP", "1 — Init Redis + Decodo pool");
@@ -175,6 +177,16 @@ async function main() {
     L("INFO", `  Dates        : ${config.slotDateFrom ?? "?"} → ${config.slotDateDeadline ?? "?"}`);
     L("INFO", `  applicationId: ${config.applicationId}`);
     L("INFO", `  Autres dossiers disponibles: ${spainJobs.slice(1).map(j => j.applicantName).join(", ") || "(aucun)"}`);
+  }
+
+  // ── Harness : rôle meute/éclaireur via env (SPAIN_WORKER_ROLE) ──────────────
+  // Permet de tester le CHEMIN COURT meute (skip datetime/, booking via snapshot Redis)
+  // avec le VRAI runDossierWorker. Pour un single worker meute, un snapshot doit exister
+  // dans Redis (pré-publié ou par un éclaireur) sinon la meute reste en not_found (pause 6s).
+  const roleEnv = process.env.SPAIN_WORKER_ROLE;
+  if (roleEnv === "meute" || roleEnv === "eclaireur") {
+    config.role = roleEnv;
+    L("INFO", `  Rôle forcé   : ${roleEnv}`);
   }
 
   // ── 2.5 Pré-résolution hCaptcha (appel du VRAI code prod) ───────────────────

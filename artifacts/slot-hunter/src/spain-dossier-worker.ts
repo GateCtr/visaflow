@@ -44,7 +44,7 @@ import {
   type SpainBookingResult,
 } from "./spain-http-booking.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
-import { getKnownIdsForPortal } from "./spain-portals.js";
+import { getKnownIdsForPortal, portalRequiresCaptcha } from "./spain-portals.js";
 import { registerDossierCaptcha, takeDossierToken, markDossierSlotSeen } from "./spain-hcaptcha-prewarm.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
@@ -81,6 +81,8 @@ import {
   tryAcquireBookingSlot,
   releaseBookingSlot,
   MAX_CONCURRENT_BOOKERS,
+  readSlotSnapshot,
+  releaseSentinelRole,
   type SlotSnapEntry,
 } from "./spain-redis-persistence.js";
 import {
@@ -170,6 +172,14 @@ export interface SpainDossierConfig {
   activeDossierCount?: number;
   /** Index de ce dossier dans la liste triée (0-based, déterministe) */
   dossierIndex?: number;
+  /**
+   * Rôle du worker dans le mode meute (spain-eclaireur). Attribué par l'orchestrateur
+   * quand SPAIN_MEUTE_MODE=1 :
+   *   - "eclaireur" : flux normal complet (scan datetime/ → détection → publie le snapshot).
+   *   - "meute"     : consommateur — saute datetime/, lit le snapshot Redis, booking direct.
+   * undefined (défaut, flag off) → comportement historique : tous les workers scannent.
+   */
+  role?: "eclaireur" | "meute";
 }
 
 export interface WorkerResult {
@@ -320,6 +330,8 @@ const GSF_ARM_RECYCLE_MAX = ((): number => {
   const v = Number(process.env.SPAIN_GSF_ARM_RECYCLE_MAX ?? "2");
   return Math.max(1, Math.min(4, Number.isFinite(v) ? Math.round(v) : 2));
 })();
+
+
 
 /** Nombre de mois à scanner via datetime/ (mois courant + N suivants) */
 const DATETIME_MONTHS_AHEAD = ((): number => {
@@ -739,6 +751,11 @@ export interface WorkerScanResult {
   /** DynamicSession du cycle courant — à utiliser pour getsigninfields/ et signin/
    *  car son jar contient le PHPSESSID frais créé par refreshSessionAndScan. */
   ds?: import("./spain-bookitit-direct.js").DynamicSession;
+  /** Mode meute : hCaptcha requis (détecté depuis /main/ dans scanViaSnapshot, car la
+   *  meute ne fait pas initPhpState qui porte normalement cette info dans phpState). */
+  captchaRequired?: boolean;
+  /** Mode meute : sitekey hCaptcha détecté depuis /main/ (null si absent). */
+  captchaSitekey?: string | null;
   /** Trace par mois — bytes/slots/ok pour chaque appel datetime/ */
   monthTraces?: Array<{ month: string; bytes: number; slots: number; ok: boolean }>;
   /**
@@ -1347,6 +1364,139 @@ export async function scanDatetimeDirect(
   };
 }
 
+// ─── MODE MEUTE : scan via snapshot Redis (SAUTE datetime/getwidgetconfigurations/services/agendas) ──
+
+/**
+ * Amorce une session Bookitit pour un worker MEUTE : GET widget SEUL, pour obtenir un
+ * PHPSESSID frais + DynamicSession, SANS POST token, SANS /main/, SANS
+ * getwidgetconfigurations/, SANS getservices/getagendas, SANS datetime/. Prouvé suffisant
+ * (mémoire spain-eclaireur-shared-slots §3/§6, 3/3 signin OK) : c'est le cf_clearance (établi
+ * une fois) + GET widget (PHPSESSID) qui priment la session. srvsrc/version prennent leurs
+ * valeurs par défaut (baseHost, "4"). Réutilise le même impit + cf_clearance de la session.
+ *
+ * @returns DynamicSession prête pour getsigninfields/signin/summary, ou null en cas d'échec.
+ */
+async function primeMeuteSession(
+  session: SpainCfSession,
+  config: SpainDossierConfig,
+  tag: string,
+): Promise<{ ds: DynamicSession; mainHtml: string } | null> {
+  const impit = session._ownImpit;
+  if (!impit) { log("WARN", `${tag} 🐺 primeMeuteSession: _ownImpit absent`); return null; }
+  const targetUrl = config.portalUrl.split("#")[0];
+  const UA = session.userAgent;
+  const baseHost = new URL(targetUrl).origin;
+
+  const extractCookies = (headers: { get: (k: string) => string | null }): Record<string, string> =>
+    parseSetCookiesFromHeaders(headers);
+  const buildCookieStr = (jar: Record<string, string>): string =>
+    Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+
+  const jar: Record<string, string> = {};
+  for (const c of session.allCookies) if (c.name !== "PHPSESSID") jar[c.name] = c.value;
+  if (session.cfClearance) jar.cf_clearance = session.cfClearance;
+
+  // 1. GET widget SEUL → PHPSESSID frais (Set-Cookie). PROUVÉ (mémoire fait #3, test-saopolo-
+  // datetime-hardcoded) : cf_clearance (déjà établi) + GET widget SUFFISENT à primer la session.
+  // On NE fait NI POST token, NI /main/, NI getwidgetconfigurations/getservices/getagendas/datetime.
+  // srvsrc/version prennent leurs valeurs par défaut fiables (baseHost, "4").
+  try {
+    const r = await (impit.fetch(targetUrl, { headers: { "User-Agent": UA, "Cookie": buildCookieStr(jar) } }) as unknown as Promise<Response>);
+    const body = await r.text();
+    Object.assign(jar, extractCookies(r.headers as any));
+    if (r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000))) {
+      log("WARN", `${tag} 🐺 GET widget → CF challenge (HTTP ${r.status}) → abandon meute`);
+      return null;
+    }
+    if (!jar.PHPSESSID) { log("WARN", `${tag} 🐺 GET widget → PHPSESSID absent (HTTP ${r.status})`); return null; }
+  } catch (e) { log("WARN", `${tag} 🐺 GET widget → erreur: ${e}`); return null; }
+
+  // 2. Construire DynamicSession (srvsrc/version par défaut — pas de POST token).
+  const publickey = targetUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "";
+  session.allCookies = Object.entries(jar).filter(([, v]) => v).map(([name, value]) => ({ name, value }));
+  session.bookititState = {
+    jqCallback: `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`,
+    reqCounter: Date.now(),
+    srvsrc: baseHost,
+    version: "4",
+    widgetUrl: targetUrl.endsWith("/") ? targetUrl : targetUrl + "/",
+    publickey,
+    bookititBase: `${baseHost}/onlinebookings`,
+  };
+  const ds = buildDynamicSession(session);
+  if (!ds) { log("WARN", `${tag} 🐺 buildDynamicSession échoué`); return null; }
+
+  // hCaptcha : détecté depuis le /main/ DÉJÀ capturé par initWorkerSession (prefetchedMainHtml).
+  // Pas besoin de re-GET /main/ ici.
+  const mainHtml = session.prefetchedMainHtml ?? "";
+
+  return { ds, mainHtml };
+}
+
+/**
+ * Scan MEUTE : lit le snapshot Redis publié par l'éclaireur (SAUTE datetime/), fabrique un
+ * WorkerScanResult `found` réinjecté dans le chemin de booking EXISTANT. Aucune duplication
+ * de la logique booking (armement §9, gct, tryClaimSlot, signin/summary, repli).
+ *
+ * @returns "found" avec les créneaux partagés, ou "not_found" si snapshot absent/périmé/vide.
+ */
+async function scanViaSnapshot(
+  session: SpainCfSession,
+  config: SpainDossierConfig,
+  tag: string,
+): Promise<WorkerScanResult> {
+  const known = getKnownIdsForPortal(config.portalUrl.split("#")[0]);
+  if (!known) {
+    // Sans IDs connus, la meute ne peut pas booker sans datetime/ — repli flux normal.
+    log("WARN", `${tag} 🐺 pas d'IDs connus pour ce portail → repli scan normal`);
+    return refreshSessionAndScan(session, config, tag);
+  }
+
+  // Lire le snapshot partagé par l'éclaireur.
+  const snap = await readSlotSnapshot(known.agendaId, known.serviceId);
+  if (snap.slots.length === 0) {
+    log("INFO", `${tag} 🐺 snapshot vide → not_found (attente prochain burst)`);
+    return { status: "not_found", serviceId: known.serviceId, serviceName: "", agendaId: known.agendaId, monthTraces: [] };
+  }
+  log("INFO", `${tag} 🐺 snapshot lu : ${snap.slots.length} créneau(x) (âge ${snap.ageSec}s) — SAUT de datetime/`);
+
+  // Amorcer la session (GET widget + POST token + /main/ → PHPSESSID frais).
+  const primed = await primeMeuteSession(session, config, tag);
+  if (!primed) {
+    log("WARN", `${tag} 🐺 amorçage session meute échoué → repli scan normal`);
+    return refreshSessionAndScan(session, config, tag);
+  }
+
+  // hCaptcha : la meute SAUTE /main/ (primeMeuteSession = GET widget seul → prefetchedMainHtml
+  // souvent vide en init réduit) → detectHcaptcha(/main/) n'est PAS fiable ici. Source de vérité
+  // primaire = flag portail connu (portalRequiresCaptcha) ; fallback = détection /main/ si dispo.
+  const cap = detectHcaptcha([{ label: "main", text: primed.mainHtml || (session.prefetchedMainHtml ?? "") }]);
+  const portalCaptcha = portalRequiresCaptcha(config.portalUrl.split("#")[0]);
+  const captchaRequired = portalCaptcha ?? cap.present;
+  const captchaSitekey = cap.sitekey ?? null;
+  if (captchaRequired) {
+    log("INFO", `${tag} 🐺 hCaptcha requis (portail connu=${portalCaptcha ?? "?"}, main=${cap.present}) → gct au signin/`);
+    registerDossierCaptcha(config.id, captchaSitekey || HCAPTCHA_SITEKEY, config.portalUrl.split("#")[0]);
+    markDossierSlotSeen(config.id);
+  }
+
+  const slots: WorkerSlot[] = snap.slots.map((s) => ({
+    date: s.date, time: s.time, agendaId: s.agendaId || known.agendaId, freeslots: s.freeslots,
+  }));
+
+  return {
+    status: "found",
+    slots,
+    serviceId: known.serviceId,
+    serviceName: "",
+    agendaId: known.agendaId,
+    ds: primed.ds,
+    captchaRequired,
+    captchaSitekey,
+    monthTraces: [],
+  };
+}
+
 // ─── Cycle complet par itération (GET token → POST → main → cfg → svc → ag → dt) ──
 
 /**
@@ -1366,11 +1516,103 @@ export async function scanDatetimeDirect(
  *   6. getagendas/ → si vide = not_found
  *   7. datetime/ (multi-mois) → found ou not_found
  */
+/** Chemin court ÉCLAIREUR (gated SPAIN_ECLAIREUR_SHORTSCAN=1, OFF par défaut) : quand le
+ *  portail a des IDs connus, les cycles de scan répétés sautent POST token + /main/ +
+ *  getwidgetconfigurations/ + getservices/ + getagendas/ → GET widget (PHPSESSID frais) →
+ *  datetime/ direct. Prouvé (mémoire spain-eclaireur-shared-slots §3/§7) : cf_clearance
+ *  + GET widget suffisent, et datetime/ répond les MÊMES créneaux qu'après le cycle complet.
+ *  Gain ~5-6s/cycle. OFF → refreshSessionAndScan complet (comportement historique intact). */
+const ECLAIREUR_SHORTSCAN = process.env.SPAIN_ECLAIREUR_SHORTSCAN === "1";
+
+/**
+ * Scan ÉCLAIREUR chemin court : GET widget (PHPSESSID frais) → datetime/ direct (IDs connus),
+ * SANS POST token / /main/ / getwidgetconfigurations/ / getservices/ / getagendas/.
+ * Retourne null si le chemin court n'est pas applicable (pas d'IDs connus / GET widget KO)
+ * → l'appelant retombe sur le cycle complet.
+ */
+async function scanViaWidgetDatetime(
+  session: SpainCfSession,
+  config: SpainDossierConfig,
+  tag: string,
+): Promise<WorkerScanResult | null> {
+  const known = getKnownIdsForPortal(config.portalUrl.split("#")[0]);
+  if (!known) return null;
+  const impit = session._ownImpit;
+  if (!impit) return null;
+  const targetUrl = config.portalUrl.split("#")[0];
+  const UA = session.userAgent;
+  const baseHost = new URL(targetUrl).origin;
+  const buildCookieStr = (jar: Record<string, string>): string =>
+    Object.entries(jar).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join("; ");
+
+  const jar: Record<string, string> = {};
+  for (const c of session.allCookies) if (c.name !== "PHPSESSID") jar[c.name] = c.value;
+  if (session.cfClearance) jar.cf_clearance = session.cfClearance;
+
+  // GET widget SEUL → PHPSESSID frais (Set-Cookie).
+  try {
+    const r = await (impit.fetch(targetUrl, { headers: { "User-Agent": UA, "Cookie": buildCookieStr(jar) } }) as unknown as Promise<Response>);
+    const body = await r.text();
+    Object.assign(jar, parseSetCookiesFromHeaders(r.headers as any));
+    if (r.status === 403 || /just a moment|_cf_chl_opt/i.test(body.slice(0, 3000))) {
+      log("WARN", `${tag} ⚡ shortscan GET widget → CF challenge (HTTP ${r.status}) → cf_expired`);
+      return { status: "cf_expired", errorMessage: "CF challenge sur GET widget (shortscan)", monthTraces: [] };
+    }
+    if (!jar.PHPSESSID) { log("WARN", `${tag} ⚡ shortscan GET widget → PHPSESSID absent → fallback cycle complet`); return null; }
+  } catch (e) { log("WARN", `${tag} ⚡ shortscan GET widget → erreur: ${e} → fallback cycle complet`); return null; }
+
+  // Construire DynamicSession (srvsrc/version par défaut, IDs connus, fallback agenda non confirmé).
+  session.allCookies = Object.entries(jar).filter(([, v]) => v).map(([name, value]) => ({ name, value }));
+  session.bookititState = {
+    jqCallback: `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`,
+    reqCounter: Date.now(),
+    srvsrc: baseHost,
+    version: "4",
+    widgetUrl: targetUrl.endsWith("/") ? targetUrl : targetUrl + "/",
+    publickey: targetUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "",
+    bookititBase: `${baseHost}/onlinebookings`,
+  };
+  const ds = buildDynamicSession(session);
+  if (!ds) return null;
+
+  // hCaptcha : shortscan SAUTE /main/ (init réduit → prefetchedMainHtml souvent vide) →
+  // detectHcaptcha(/main/) n'est PAS fiable. Source de vérité primaire = flag portail connu
+  // (portalRequiresCaptcha) ; fallback = détection /main/ si dispo.
+  const cap = detectHcaptcha([{ label: "main", text: session.prefetchedMainHtml ?? "" }]);
+  const portalCaptcha = portalRequiresCaptcha(config.portalUrl.split("#")[0]);
+  const captchaRequired = portalCaptcha ?? cap.present;
+  const captchaSitekey = cap.sitekey ?? null;
+  const phpState: WorkerPhpState = {
+    services: [{ serviceId: known.serviceId, serviceName: "" }],
+    agendaId: known.agendaId,
+    agendaConfirmed: false, // agenda non confirmé par getagendas/ → 0B partout = not_found (pas session_dead)
+    bestServiceId: known.serviceId,
+    bestServiceName: "",
+    allowAppointment: null,
+    captchaRequired,
+    captchaSitekey,
+    ds,
+  };
+  if (captchaRequired) {
+    log("INFO", `${tag} ⚡ hCaptcha requis (portail connu=${portalCaptcha ?? "?"}, main=${cap.present}) → gct au signin/`);
+    registerDossierCaptcha(config.id, captchaSitekey || HCAPTCHA_SITEKEY, config.portalUrl.split("#")[0]);
+  }
+  log("INFO", `${tag} ⚡ shortscan (GET widget → datetime/ direct, IDs connus) — PHPSESSID frais`);
+  return scanDatetimeDirect(phpState, config, tag);
+}
+
 export async function refreshSessionAndScan(
   session: SpainCfSession,
   config: SpainDossierConfig,
   tag: string,
 ): Promise<WorkerScanResult> {
+  // Chemin court éclaireur (gated) : GET widget → datetime/ direct si IDs connus.
+  if (ECLAIREUR_SHORTSCAN) {
+    const short = await scanViaWidgetDatetime(session, config, tag);
+    if (short !== null) return short;
+    // short === null → chemin court non applicable → cycle complet ci-dessous.
+  }
+
   const impit = session._ownImpit;
   if (!impit) {
     return { status: "error", errorMessage: "refreshSessionAndScan: _ownImpit absent", monthTraces: [] };
@@ -1761,6 +2003,7 @@ async function initWorkerSessionWithDirectRescan(
   targetUrl: string,
   capsolverKey: string,
   tag: string,
+  skipTokenAndMain = false,
 ): Promise<Awaited<ReturnType<typeof initWorkerSession>>> {
   for (let attempt = 1; attempt <= DIRECT_SESSION_RESCAN_MAX; attempt++) {
     let failureKind: WorkerSessionFailureKind = "portal";
@@ -1770,6 +2013,7 @@ async function initWorkerSessionWithDirectRescan(
       capsolverKey,
       undefined,
       (kind) => { failureKind = kind; },
+      skipTokenAndMain,
     );
     if (result) return result;
 
@@ -1902,6 +2146,23 @@ export async function runDossierWorker(
   const portalUrlNoFrag = config.portalUrl.split("#")[0];
   const MAX_SESSION_RETRIES = 3;
 
+  // Rôles éclaireur/meute — calculés AVANT la boucle de session init pour piloter
+  // l'init RÉDUIT (skipTokenAndMain). Meute et éclaireur shortscan (IDs connus) n'ont
+  // besoin ni de POST token ni de /main/ : prouvé (test-noinit-solve-widget-datetime).
+  // Le solve CF + GET widget (token + PHPSESSID) suffit pour datetime/ + getsigninfields/
+  // + signin/. Défaut (éclaireur cycle complet / prod) : init historique complet.
+  const workerIsMeute = config.role === "meute";
+  const shortscanNoPhpInit =
+    ECLAIREUR_SHORTSCAN && getKnownIdsForPortal(portalUrlNoFrag) !== null;
+  const skipTokenAndMainInit = workerIsMeute || shortscanNoPhpInit;
+  if (skipTokenAndMainInit) {
+    log(
+      "INFO",
+      `${tag} ⚡ Init RÉDUIT activé (${workerIsMeute ? "meute" : "shortscan"}) — ` +
+      "solve + GET widget seul (skip POST token + /main/)",
+    );
+  }
+
   let session: SpainCfSession | null = null;
   let cfFromCache = false;
   let solveT0 = Date.now();
@@ -1943,6 +2204,7 @@ export async function runDossierWorker(
       portalUrlNoFrag,
       capsolverKey,
       tag,
+      skipTokenAndMainInit,
     );
 
     if (result) {
@@ -2011,8 +2273,24 @@ export async function runDossierWorker(
   // Reproduit la section 3 de test-bookitit-dynamic.ts : getwidget/ + getservices/ + getagendas/.
   // UNE SEULE FOIS par session PHP (règle §9 Bookitit).
   // Les cycles suivants n'appellent QUE datetime/ — même comportement que le test dynamique A-à-Z.
+  //
+  // MODE MEUTE (spain-eclaireur) : un worker meute SAUTE initPhpState (getwidgetconfigurations/
+  // + getservices/ + getagendas/) — il lira le snapshot Redis et bookera sur des IDs connus
+  // (getKnownIdsForPortal). phpState reste null ; scanViaSnapshot fournit ds + serviceId/agendaId.
+  //
+  // ÉCLAIREUR SHORTSCAN (SPAIN_ECLAIREUR_SHORTSCAN=1 + IDs connus) : SAUTE aussi initPhpState.
+  // Prouvé (test-noinit-solve-widget-datetime) : solve → GET widget → datetime/ direct
+  // fonctionne sans getwidgetconfigurations/getservices/getagendas. scanViaWidgetDatetime
+  // fournit ds + IDs via getKnownIdsForPortal. Gain ~4s au démarrage. Fallback : si le shortscan
+  // retourne null (IDs KO / GET widget KO), refreshSessionAndScan refait le cycle complet.
+  let phpState: WorkerPhpState | null = null;
+  if (workerIsMeute) {
+    log("INFO", `${tag} 🐺 Rôle MEUTE — skip PHP init (getwidgetconfigurations/services/agendas) ; booking via snapshot Redis`);
+  } else if (shortscanNoPhpInit) {
+    log("INFO", `${tag} ⚡ SHORTSCAN — skip PHP init (getwidgetconfigurations/services/agendas) ; scan via GET widget → datetime/ direct (IDs connus)`);
+  } else {
   log("INFO", `${tag} 🔧 PHP init one-shot (getwidgetconfigurations/ + getservices/ + getagendas/)…`);
-  let phpState = await initPhpState(session, config, tag);
+  phpState = await initPhpState(session, config, tag);
   // getservices/ 0B au démarrage = proxy mort ou surcharge, PAS une erreur fatale.
   // On tente jusqu'à 2 rotations IP + réinit avant d'abandonner (au lieu de tuer le worker
   // immédiatement comme ce matin où KAKA/Mr Nkumu sont morts en 0min sur getservices/ 0B).
@@ -2063,9 +2341,10 @@ export async function runDossierWorker(
     workerResult = { dossierId: config.id, status: "error", errorMessage: "initPhpState: aucun service découvert après rotations (getservices/ 0B?)" };
     return workerResult;
   }
+  } // fin du bloc initPhpState (sauté par la meute ET par l'éclaireur shortscan)
 
-  // Peupler la trace avec les données d'init PHP
-  if (phpState._trace) {
+  // Peupler la trace avec les données d'init PHP (skip pour la meute : phpState null)
+  if (phpState?._trace) {
     workerTrace.initConfig = { bytes: phpState._trace.cfgBytes, ok: phpState._trace.cfgBytes > 0 };
     workerTrace.service = {
       bytes: phpState._trace.svcBytes,
@@ -2227,8 +2506,20 @@ export async function runDossierWorker(
         break;
       }
 
-      const scan = await refreshSessionAndScan(session, config, tag);
-      log("INFO", `${tag} 📊 Cycle ${cycleCount} scan=${scan.status} | cfClearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
+      // ── MODE MEUTE : lire le snapshot Redis À CHAQUE CYCLE (source de vérité), SANS
+      // datetime/. Si snap présent → booking direct + clôture (comme l'éclaireur booke
+      // quand il détecte). Si snap vide → not_found → la grille fait la pause 6s puis
+      // re-check au cycle suivant (même cadence que l'éclaireur). Le snapshot lu en premier
+      // par scanViaSnapshot ne coûte rien s'il est vide (retour not_found immédiat).
+      // Repli flux normal intégré si pas d'IDs connus / amorçage échoué. Gated par role.
+      const isMeute = config.role === "meute";
+      let scan: WorkerScanResult;
+      if (isMeute) {
+        scan = await scanViaSnapshot(session, config, tag);
+      } else {
+        scan = await refreshSessionAndScan(session, config, tag);
+      }
+      log("INFO", `${tag} 📊 Cycle ${cycleCount} scan=${scan.status}${isMeute ? " [meute]" : ""} | cfClearance=${session.cfClearance?.slice(0, 15) ?? "ABSENT"}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
 
       // Sur Kinshasa, `datetime/` 0B sur tous les mois est le résultat normal
       // quand l'agenda fallback n'a aucun créneau. Conclure immédiatement
@@ -2755,8 +3046,14 @@ export async function runDossierWorker(
           // refreshSessionAndScan, puis de ré-armer. On tente jusqu'à GSF_ARM_RECYCLE_MAX
           // fois. À chaque re-cycle, on re-vérifie qu'il reste des créneaux éligibles
           // (sinon les créneaux ont disparu → inutile d'insister).
-          for (let recycle = 1; armGsfBytes === 0 && recycle <= GSF_ARM_RECYCLE_MAX; recycle++) {
+          // MEUTE : PAS de re-cycle §9. getsigninfields/ 0B est NORMAL pour la meute (elle n'a
+          // pas fait datetime/, donc le serveur n'a pas "sélectionné" le créneau pour
+          // getsigninfields/) — la session N'est PAS morte. Prouvé (mémoire fait #2/#4) : signin/
+          // aboutit malgré getsigninfields/ 0B. Le re-cycle §9 (session morte) ne concerne que les
+          // workers NORMAUX après datetime/.
+          for (let recycle = 1; !isMeute && armGsfBytes === 0 && recycle <= GSF_ARM_RECYCLE_MAX; recycle++) {
             log("WARN", `${tag} 🔁 armement 0B (session morte §9) — cycle complet ${recycle}/${GSF_ARM_RECYCLE_MAX} pour ré-armer (nouveau PHPSESSID)…`);
+            // Cycle complet refreshSessionAndScan (datetime/) — worker normal uniquement.
             const reScan = await refreshSessionAndScan(session, config, tag);
             if (reScan.status !== "found" || !reScan.slots || reScan.slots.length === 0) {
               log("WARN", `${tag} 🔁 re-cycle ${recycle}: plus de créneau (status=${reScan.status}) — abandon du booking ce cycle`);
@@ -2804,14 +3101,16 @@ export async function runDossierWorker(
           // Certains portails (ex. Kinshasa depuis sept. 2026) activent le hCaptcha à la
           // soumission (WidgetConfiguration.captcha=1). Un token gct est consommable par
           // un seul signin/ : ne jamais conserver celui d'un candidat pour le suivant.
-          const captchaNeeded = phpState?.captchaRequired ?? false;
-          const signinCaptchaSitekey = phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
+          // Meute : la détection hCaptcha vient de scan (scanViaSnapshot), pas de phpState.
+          const captchaNeeded = scan.captchaRequired ?? phpState?.captchaRequired ?? false;
+          const signinCaptchaSitekey = scan.captchaSitekey || phpState?.captchaSitekey || HCAPTCHA_SITEKEY;
 
-          // Si l'armement getsigninfields/ est resté 0B après les cycles de ré-armement,
-          // la session est morte (§9) → tout signin/ renverra 0B. On saute la boucle de
-          // booking pour ne pas gaspiller des signin/ stériles (et des tokens gct). Le worker
-          // re-scannera au prochain front de grille avec un PHPSESSID neuf.
-          const canAttemptSignin = armGsfBytes > 0;
+          // Worker NORMAL : si getsigninfields/ reste 0B après re-cycle, la session est morte
+          // (§9) → tout signin/ renverra 0B → on saute la boucle (pas de signin/ stérile).
+          // MEUTE : on TENTE signin/ même si getsigninfields/ 0B — prouvé (mémoire fait #2/#4)
+          // que signin/ accepte le créneau du snapshot directement, sans getsigninfields/ armé
+          // (getsigninfields/ nécessite un datetime/ préalable que la meute ne fait pas).
+          const canAttemptSignin = isMeute ? true : armGsfBytes > 0;
           const coordinateBeforeBooking = shouldCoordinateBeforeBooking(raceMode);
           log(
             "INFO",
@@ -3418,6 +3717,11 @@ export async function runDossierWorker(
     if (holdingBookingSlot) {
       if (usedSemaphore) { await releaseBookingSlot(config.id).catch(() => {}); usedSemaphore = false; }
       holdingBookingSlot = false;
+    }
+    // spain-eclaireur : l'éclaireur libère son rôle en fin de fenêtre pour permettre la
+    // rotation (sinon le NX TTL 30min garderait le même dossier éclaireur). Owner-check Lua.
+    if (config.role === "eclaireur") {
+      await releaseSentinelRole(config.portalUrl, config.id).catch(() => {});
     }
     // Libération garantie de l'IP, quelle que soit la sortie (return, throw, exception).
     // Owner-check Lua : seul ce dossier peut supprimer sa réservation.
