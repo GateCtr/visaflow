@@ -14,6 +14,11 @@
  *   7. saute getsigninfields/ puis appelle signin/ avec de faux identifiants
  *   8. Si signin/ retourne 0B → log diagnostic + retry avec session re-isolée
  *
+ * Test partagé entre deux utilisateurs :
+ *   TEST_SHARED_SLOT_SECOND_USER=1 démarre une seconde session indépendante,
+ *   réutilise le créneau du premier utilisateur, saute datetime/ sur la session
+ *   B, puis appelle getsigninfields/ et signin/.
+ *
  * Usage :
  *   cd artifacts/slot-hunter
  *   SPAIN_SESSION_MODE=capsolver-residential \
@@ -51,6 +56,7 @@ const PORTAL_URL: string = process.env.PORTAL_URL
 // ── Faux identifiants (aucun compte réel) ────────────────────────────────────
 const FAKE_LOGIN    = "AB123456X";          // Format passeport espagnol fictif
 const FAKE_PASSWORD = "fake_test_password_99";
+const SHARED_SLOT_SECOND_USER = process.env.TEST_SHARED_SLOT_SECOND_USER === "1";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const T0 = Date.now();
