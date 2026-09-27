@@ -36,11 +36,22 @@ function banner(msg: string) {
 }
 
 async function main() {
-  banner(`test-worker-parallel — ${N} workers Cuba en parallèle`);
+  // ── Harness only (aucune méthode prod réécrite) ────────────────────────────
+  // Sécurité : observer signin/ mais JAMAIS créer de rendez-vous (summary/ ignoré).
+  process.env.SPAIN_TEST_NO_BOOKING = "1";
+  // Redis local : si REDIS_HOST fourni, neutraliser REDIS_URL (Railway interne injoignable
+  // en local) pour que initSpainRedis se connecte au Redis local (partage snapshot/burst).
+  if (process.env.REDIS_HOST) delete process.env.REDIS_URL;
+  // Mode meute : 1er dossier = éclaireur (scan datetime/ + publie snapshot), les autres
+  // = meute (lisent le snapshot, sautent datetime/). Prouve le mode meute de bout en bout
+  // via le VRAI runDossierWorker (code prod, non réécrit).
+  const MEUTE = process.env.TEST_MEUTE === "1";
+
+  banner(`test-worker-parallel — ${N} workers Cuba en parallèle${MEUTE ? " [MEUTE: 1 éclaireur + reste meute]" : ""}`);
   console.log(`[${ts()}] Window  : ${process.env.SPAIN_WORKER_WINDOW_MIN ?? "25"} min`);
   console.log(`[${ts()}] Interval: ${process.env.SPAIN_HTTP_SCAN_INTERVAL_SEC ?? "6"} s`);
   console.log(`[${ts()}] Portal  : ${CUBA_LMD_PORTAL_URL}`);
-  console.log(`[${ts()}] Workers : ${N}\n`);
+  console.log(`[${ts()}] Workers : ${N} | meute=${MEUTE} | no-booking=on\n`);
 
   // ── 1. Init Redis + Decodo ──────────────────────────────────────────────────
   console.log(`[${ts()}] ▶  Init Redis…`);
@@ -72,6 +83,8 @@ async function main() {
     otpChannel:    "email" as const,
     portalUrl:     CUBA_LMD_PORTAL_URL,
     groupSize:     1,
+    // Mode meute : 1er = éclaireur (flux normal), les autres = meute (chemin court).
+    ...(MEUTE ? { role: (i === 0 ? "eclaireur" : "meute") as "eclaireur" | "meute" } : {}),
   }));
 
   // ── 3. Lancer en parallèle ──────────────────────────────────────────────────

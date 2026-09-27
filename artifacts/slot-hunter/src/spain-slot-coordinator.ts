@@ -24,5 +24,12 @@ export {
   isIpReservedByOther,
   releaseWorkerIp,
   publishSlotSnapshot,
+  /**
+   * Lit le snapshot de créneaux publié par l'éclaireur (mode meute).
+   * Symétrique de publishSlotSnapshot. Retourne { slots, ageSec, ttlSec }.
+   * Dégradé sûr (Redis absent/clé absente) → slots vide.
+   */
+  readSlotSnapshot,
+  type SlotSnapshotRead,
   recordBookingWinner,
 } from "./spain-redis-persistence.js";

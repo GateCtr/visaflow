@@ -3,8 +3,9 @@
  *
  * FLOW COMPLET (reverse-engineered depuis le bundle Bookitit citaconsular) :
  *   1. Extraire serviceId depuis le HTML rendu quand "found"
- *   2. Vérifier getwidgetconfigurations/ → captcha=0 (Kinshasa) → gct vide
- *                                        → captcha=1 (LMD/Cuba) → résoudre hCaptcha
+ *   2. Détecter le hCaptcha : présence dynamique dans /main/ (detectHcaptcha, source fiable)
+ *      OU flag portail connu (portalRequiresCaptcha — Kinshasa et Cuba sont captcha-OBLIGATOIRE).
+ *      Le flag WidgetConfiguration.captcha est NON fiable (Cuba a captcha=0 mais un hCaptcha visible).
  *   3. JSONP signin/ (login + password + gct + date/time/service[]/agenda[]) → bktToken
  *   4. Si validate requis → JSONP confirmclient/ (bktToken + OTP code)
  *   5. JSONP summary/ (bktToken + all params) → locator (code confirmation)
@@ -12,7 +13,8 @@
  * PRÉREQUIS :
  *   - Session CF active (ensureSpainCfSession déjà fait par le scanner)
  *   - Credentials Bookitit (passport number + password pour Kinshasa)
- *   - CAPSOLVER_API_KEY uniquement si captcha=1 sur le widget
+ *   - Clé solveur captcha (NoneCap/Anti-Captcha/CapSolver) requise sur les portails
+ *     captcha-obligatoire (Kinshasa, Cuba)
  *   - OTP flow configuré (email/SMS via Convex)
  *
  * PARAMÈTRES CONFIRMÉS par capture réelle 2026-07-28 (citaconsular.es) :
@@ -21,7 +23,8 @@
  *   - agendas[]=bktXXX  (idem)
  *   - start/end pour datetime (pas date_from/date_to)
  *   - type, version, src, srvsrc requis sur chaque appel
- *   - gct vide si captcha=0 (Kinshasa), hCaptcha token si captcha=1
+ *   - gct = token hCaptcha requis sur Kinshasa ET Cuba (captcha-obligatoire) ; absent
+ *     uniquement sur un portail réellement sans captcha
  */
 
 import {
@@ -47,6 +50,7 @@ import {
   reportSpainWatcherScan,
 } from "./convexClient.js";
 import { matchServiceForVisa } from "./spain-service-mapping.js";
+import { portalRequiresCaptcha } from "./spain-portals.js";
 import { generateSpainConfirmationPdf, extractConfirmationData } from "./_legacy_spain-confirmation-pdf.js";
 import { buildBookititQueryString, withBookititSelectedPeople } from "./spain-bookitit-params.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
@@ -1186,22 +1190,25 @@ export async function executeHttpBooking(
 
   // ─── 4. Widget config : captcha + registration_type ──────────────────────────
   // getwidgetconfigurations/ a déjà été appelé en parallèle de getagendas/ (step 2+4).
-  // Kinshasa : captcha="0" → gct vide, pas d'appel CapSolver
-  // LMD/Cuba : captcha="1" → hCaptcha requis → gct=P1_eyJ...
+  // ⚠️ Le flag WidgetConfiguration.captcha est NON fiable (Cuba a captcha=0 mais un hCaptcha
+  // RÉELLEMENT présent). Source de vérité primaire = flag portail connu (portalRequiresCaptcha :
+  // Kinshasa + Cuba = captcha-OBLIGATOIRE) ; fallback = flag WidgetConfiguration si portail inconnu.
   let gctToken = "";
   let registrationType = "2"; // défaut Kinshasa
   try {
     const widgetCfg = (rawCfgPayload as any)?.WidgetConfiguration;
     const captchaFlag = widgetCfg?.captcha;
-    const captchaRequired = captchaFlag !== "0" && captchaFlag !== 0 && captchaFlag !== undefined && captchaFlag !== null;
+    const flagSaysCaptcha = captchaFlag !== "0" && captchaFlag !== 0 && captchaFlag !== undefined && captchaFlag !== null;
+    const portalCaptcha = portalRequiresCaptcha(portalUrl.split("#")[0]);
+    const captchaRequired = portalCaptcha ?? flagSaysCaptcha;
     if (captchaRequired) {
-      console.log(`[spain-booking] 🔐 Captcha requis (flag=${captchaFlag}) — résolution hCaptcha…`);
+      console.log(`[spain-booking] 🔐 Captcha requis (portail connu=${portalCaptcha ?? "?"}, flag=${captchaFlag}) — résolution hCaptcha…`);
       gctToken = await solveHCaptcha(portalUrl) ?? "";
       if (!gctToken) {
         return { status: "turnstile_failed", errorMessage: "Impossible de résoudre le captcha hCaptcha", durationMs: Date.now() - t0 };
       }
     } else {
-      console.log(`[spain-booking] ✅ captcha=0 — gct vide (Kinshasa / widget sans captcha)`);
+      console.log(`[spain-booking] ✅ Pas de captcha requis (portail connu=${portalCaptcha ?? "?"}, flag=${captchaFlag}) — gct vide`);
     }
     if (widgetCfg?.registration_type !== undefined && widgetCfg.registration_type !== null) {
       registrationType = String(widgetCfg.registration_type);

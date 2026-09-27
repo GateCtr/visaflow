@@ -1741,6 +1741,14 @@ export async function initWorkerSession(
   capsolverApiKey: string,
   onSetCookie?: SetCookieObserver,
   onFailure?: WorkerSessionFailureObserver,
+  /**
+   * Init RÉDUIT (spain-eclaireur) : après le GET widget (token + PHPSESSID), SAUTER POST token
+   * ET /main/. Prouvé (test-noinit-solve-widget-datetime) : solve → GET widget suffit ; datetime/
+   * + getsigninfields/ + signin/ fonctionnent sans POST token ni /main/. srvsrc/version prennent
+   * les valeurs par défaut (baseHost, "4") ; prefetchedMainHtml reste vide. Défaut false →
+   * comportement historique complet inchangé. Utilisé UNIQUEMENT en shortscan/meute.
+   */
+  skipTokenAndMain = false,
 ): Promise<{ session: SpainCfSession; impit: InstanceType<typeof Impit>; cfFromCache: boolean } | null> {
   const fail = (kind: WorkerSessionFailureKind): null => {
     onFailure?.(kind);
@@ -1906,8 +1914,44 @@ export async function initWorkerSession(
     return fail(isProxyFailure(e) ? "proxy" : "portal");
   }
 
-  // ── Étape 4 : POST token → srvsrc + version ──────────────────────────────────
   const baseHost = new URL(targetUrl).origin;
+
+  // ── Init RÉDUIT (shortscan/meute) : court-circuit après GET widget ────────────
+  // On a cf_clearance (solve) + PHPSESSID + token via le GET widget → suffisant pour
+  // datetime/ + getsigninfields/ + signin/ (prouvé). On SAUTE POST token + /main/.
+  if (skipTokenAndMain) {
+    const publickeyShort = targetUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "";
+    const ensureSlashShort = (u: string): string => (u.endsWith("/") ? u : u + "/");
+    const nowMsShort = Date.now();
+    const allCookiesShort = Object.entries(jar).filter(([, v]) => v).map(([name, value]) => ({ name, value }));
+    console.log(`[spain-soax] 🔧   ⚡ Init RÉDUIT — POST token + /main/ SAUTÉS (shortscan/meute)`);
+    const sessionShort: SpainCfSession = {
+      cfClearance:         jar.cf_clearance ?? "",
+      cfDomain:            ".citaconsular.es",
+      soaxProxyUrl:        stickyProxyUrl,
+      userAgent:           WORKER_UA,
+      createdAt:           nowMsShort,
+      expiresAt:           nowMsShort + CF_CLEARANCE_TTL_MS,
+      allCookies:          allCookiesShort,
+      extraHeaders:        {},
+      source:              "capsolver",
+      prefetchedMainHtml:  "", // pas de /main/ — hCaptcha détecté au moment du booking
+      phpSessionCreatedAt: nowMsShort,
+      bookititState: {
+        jqCallback,
+        reqCounter,
+        srvsrc:       baseHost,
+        version:      "4",
+        widgetUrl:    ensureSlashShort(targetUrl),
+        publickey:    publickeyShort,
+        bookititBase: `${baseHost}/onlinebookings`,
+      },
+      _ownImpit: impit,
+    };
+    return { session: sessionShort, impit, cfFromCache };
+  }
+
+  // ── Étape 4 : POST token → srvsrc + version ──────────────────────────────────
   let srvsrc = baseHost;
   let version = "4";
   try {
