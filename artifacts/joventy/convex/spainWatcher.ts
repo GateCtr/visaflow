@@ -262,11 +262,23 @@ export const internalRecordScan = internalMutation({
     // l'historique). Le prune est fait UNIQUEMENT quand on patche, pour ne pas
     // ajouter de contention sur spainWatcherScans à chaque cycle de chaque worker.
     if (watcher) {
-      const isImportant = args.status === "found" || args.status === "error";
       const sinceLastPatch = now - (watcher.updatedAt ?? 0);
-      const shouldPatch = isImportant || sinceLastPatch >= SINGLETON_PATCH_THROTTLE_MS;
+      // Patch de TÉLÉMÉTRIE (lastScanAt/lastResult) : throttlé STRICTEMENT, même sur
+      // found/error. Bypasser le throttle sur "found" causait 7+ patchs concurrents sur
+      // le même singleton au moment d'un burst (mode meute) → conflits OCC 422/500 en
+      // cascade. L'insert du scan (ci-dessus) suffit à l'historique ; la télémétrie
+      // singleton n'a pas besoin d'être à la milliseconde. L'alerte email found est
+      // traitée séparément (cooldown 30 min, indépendant de ce throttle).
+      const shouldPatchTelemetry = sinceLastPatch >= SINGLETON_PATCH_THROTTLE_MS;
 
-      if (shouldPatch) {
+      // Alerte email "créneau trouvé" — cooldown 30 min. Indépendant du throttle télémétrie
+      // pour ne pas rater une alerte, mais rare par nature (le cooldown + lastAlertSentAt
+      // limitent les écritures → pas de burst OCC).
+      const ALERT_COOLDOWN_MS = 30 * 60 * 1000;
+      const cooldownOk = now - (watcher.lastAlertSentAt ?? 0) > ALERT_COOLDOWN_MS;
+      const shouldAlert = args.status === "found" && !!watcher.adminEmail && cooldownOk;
+
+      if (shouldPatchTelemetry || shouldAlert) {
         const consecutiveErrors =
           args.status === "error"
             ? (watcher.consecutiveErrors ?? 0) + 1
@@ -278,29 +290,27 @@ export const internalRecordScan = internalMutation({
           lastSlotInfo: args.slotInfo,
           consecutiveErrors,
           updatedAt: now,
+          ...(shouldAlert ? { lastAlertSentAt: now } : {}),
         });
 
-        // Prune old scans (keep last MAX_SCANS) — throttlé avec le patch singleton.
-        const old = await ctx.db
-          .query("spainWatcherScans")
-          .withIndex("by_ts")
-          .order("asc")
-          .take(1000);
-        if (old.length > MAX_SCANS) {
-          const toDelete = old.slice(0, old.length - MAX_SCANS);
-          for (const scan of toDelete) {
-            await ctx.db.delete(scan._id);
+        // Prune old scans (keep last MAX_SCANS) — uniquement quand on patche (pas à chaque cycle).
+        if (shouldPatchTelemetry) {
+          const old = await ctx.db
+            .query("spainWatcherScans")
+            .withIndex("by_ts")
+            .order("asc")
+            .take(1000);
+          if (old.length > MAX_SCANS) {
+            const toDelete = old.slice(0, old.length - MAX_SCANS);
+            for (const scan of toDelete) {
+              await ctx.db.delete(scan._id);
+            }
           }
         }
 
-        // Send email alert if slot found — cooldown 30 min pour éviter le spam
-        const ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
-        const lastAlert = watcher.lastAlertSentAt ?? 0;
-        const cooldownOk = now - lastAlert > ALERT_COOLDOWN_MS;
-        if (args.status === "found" && watcher.adminEmail && cooldownOk) {
-          await ctx.db.patch(watcher._id, { lastAlertSentAt: now });
+        if (shouldAlert) {
           await ctx.scheduler.runAfter(0, internal.spainWatcher.internalSendWatcherAlert, {
-            adminEmail: watcher.adminEmail,
+            adminEmail: watcher.adminEmail!,
             slotInfo: args.slotInfo ?? "Créneau disponible",
             portalUrl: watcher.portalUrl,
             screenshotStorageId: args.screenshotStorageId,

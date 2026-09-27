@@ -2459,6 +2459,14 @@ export async function runDossierWorker(
   // si le CF est réellement mort. Remis à 0 sur tout cycle réussi (found/not_found).
   let consecutiveProxyErrors = 0;
 
+  // Throttle client du report `not_found` à Convex. Chaque worker reporte son not_found à
+  // chaque cycle (~6s) ; avec N workers (mode meute) synchronisés sur la grille, ça crée
+  // N écritures concurrentes sur le singleton spainWatcher → conflits OCC 422/500. On ne
+  // reporte donc un not_found QUE toutes les WATCHER_NOTFOUND_THROTTLE_MS par worker (les
+  // found/error restent toujours reportés). L'historique n'a pas besoin de chaque not_found.
+  const WATCHER_NOTFOUND_THROTTLE_MS = 60_000;
+  let lastNotFoundReportAtMs = 0;
+
   // Instant du dernier `found` DE CE WORKER (epoch ms). Sert à distinguer un 0B datetime/
   // "anomalie proxy" (créneaux existent selon un peer, mais MOI je vois 0B → proxy cassé)
   // d'un 0B LÉGITIME (j'ai vu/tenté ces créneaux il y a quelques secondes, ils sont
@@ -2823,12 +2831,17 @@ export async function runDossierWorker(
           }));
         }
         workerTrace.scanMs = Date.now() - cycleStart;
-        void reportSpainWatcherScan({
-          status: "not_found",
-          applicationId: config.applicationId,
-          dossierName: config.applicantName,
-          scanTrace: JSON.stringify(workerTrace),
-        }).catch(() => {});
+        // Report not_found throttlé par worker (anti-contention OCC sur le singleton Convex).
+        const nowReport = Date.now();
+        if (nowReport - lastNotFoundReportAtMs >= WATCHER_NOTFOUND_THROTTLE_MS) {
+          lastNotFoundReportAtMs = nowReport;
+          void reportSpainWatcherScan({
+            status: "not_found",
+            applicationId: config.applicationId,
+            dossierName: config.applicantName,
+            scanTrace: JSON.stringify(workerTrace),
+          }).catch(() => {});
+        }
       }
 
       if (scan.status === "found" && scan.slots && scan.slots.length > 0) {
