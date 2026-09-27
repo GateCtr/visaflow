@@ -15,3 +15,11 @@ description: Why "aucun service connu" recurs and kills bookings despite the sca
 - If `targetServiceId` is known (mono-service portal, bkt1181774 Kinshasa), booking must proceed without requiring the service in HTML or in a list.
 - Thursday logs (getservices/ JSONP fallback → 2 services, datetime/ confirmed 14 slots Sept) proved the scanner side is correct; only the probe wrapper lost the data.
 - Fix verified live on Saopola 2026-08-15 (test-saopola-live.ts, full scan→booking): _services propagated, service stage passed with 0 HTML links, flow reached signin/. Remaining blocker is signin (getsigninfields 0B in pure HTTP → hash-nav/browser path needed).
+
+## Saopolo direct probes without `/main/`
+
+**Rule:** An empty `getservices/` response (HTTP 200, 0B) in a fresh widget session does not prove the downstream scan is unusable. In a read-only comparison on 2026-09-27, both with and without POSTing the widget token, `getagendas/` and `datetime/` returned structured responses when the known Saopolo service ID was used as an explicit diagnostic fallback.
+
+**Why:** The direct downstream calls produced the same agenda and availability in both token variants, while `getservices/` was empty in both. Treating the empty service list as a dead session would discard valid `datetime/` evidence.
+
+**How to apply:** For Saopolo diagnostics, keep the known service ID as an explicit, logged fallback and judge availability from `datetime/` (`state=1` / non-empty `Slots`). Do not silently treat this single test as proof that production can drop its existing initialization path.
