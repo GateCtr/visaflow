@@ -11,7 +11,7 @@
  *   4. getservices/ → serviceId
  *   5. getagendas/ → agendaId
  *   6. datetime/ (mois par mois, dynamique) → premier créneau dispo
- *   7. signin/ avec FAUX credentials → log réponse brute serveur
+ *   7. saute getsigninfields/ puis appelle signin/ avec de faux identifiants
  *   8. Si signin/ retourne 0B → log diagnostic + retry avec session re-isolée
  *
  * Usage :
@@ -314,41 +314,18 @@ async function main() {
   }
 
   if (!slotDate || !slotTime) {
-    warn("Aucun créneau réel trouvé — arrêt avant getsigninfields/ et signin/");
+    warn("Aucun créneau réel trouvé — arrêt avant signin/");
     process.exit(0);
   } else {
     ok(`Créneau : ${slotDate} à ${slotTime}`);
   }
 
-  // ── 6b. getsigninfields/ — probe du nonce PHP ────────────────────────────
-  sep("6b — getsigninfields/ (nonce PHP — probe)");
-  // Ce call est normalement déclenché automatiquement par le widget Backbone JS
-  // quand il navigue vers #selecttime/{date}/{time}/{svc}/{ag}.
-  // Le serveur PHP stocke un nonce dans la session AVANT d'accepter signin/.
-  // → Tester si on peut déclencher ce nonce via HTTP pur.
-  const signinFieldsExtra: Record<string, string> = {
-    "services[]": serviceId,
-    date: slotDate,
-    time: slotTime,
-    selectedPeople: "1",
-  };
-  if (agendaId) signinFieldsExtra["agendas[]"] = agendaId;
-
-  const { raw: sfRaw, parsed: sfParsed, httpStatus: sfStatus } =
-    await callJsonp(bookSession, "getsigninfields/", signinFieldsExtra);
-  log(`HTTP ${sfStatus} | ${sfRaw.length}B`);
-  log(`  Raw (400c) : ${sfRaw.slice(0, 400) || "(vide)"}`);
-  log(`  Parsed     : ${JSON.stringify(sfParsed)?.slice(0, 300) || "null"}`);
-
-  if (sfRaw.length === 0) {
-    warn("getsigninfields/ → 0B — nonce PHP ne peut pas être déclenché via HTTP pur");
-    warn("→ signin/ nécessite le widget Backbone actif (browser) pour ce portail (registration_type=2)");
-  } else {
-    ok("getsigninfields/ → réponse reçue ! Tentative signin/ avec le nonce…");
-  }
+  // ── 6b. getsigninfields/ — volontairement sauté ──────────────────────────
+  sep("6b — getsigninfields/ sauté");
+  log("Test d'omission : aucun appel getsigninfields/ avant signin/.");
 
   // ── 7. signin/ avec faux credentials ──────────────────────────────────────
-  sep("7 — signin/ avec faux credentials");
+  sep("7 — signin/ direct (getsigninfields/ sauté, faux credentials)");
   log(`  login     : ${FAKE_LOGIN}`);
   log(`  password  : ${FAKE_PASSWORD}`);
   log(`  date      : ${slotDate}`);
@@ -403,6 +380,7 @@ async function main() {
   log(`getservices             : ${svcRaw.length > 0 ? "✅" : "❌"} (${svcRaw.length}B)`);
   log(`getagendas              : ${agRaw.length > 0 ? "✅" : "❌"} (${agRaw.length}B)`);
   log(`Créneau cible           : ${slotDate} ${slotTime}`);
+  log("getsigninfields/        : sauté");
   log(`signin/ réponse         : HTTP ${signinStatus} | ${signinRaw.length}B`);
 
   const signinRoot = signinParsed as any;
