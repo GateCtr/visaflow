@@ -11,8 +11,8 @@
  *   - ne bookent JAMAIS (aucun signin/, aucun hCaptcha de booking, aucun coût) ;
  *   - scannent datetime/ en continu (chemin court GET widget → datetime/, IDs connus) ;
  *   - publient les créneaux RÉELS dans le snapshot Redis + un signal burst ;
- *   - tournent sur des proxies Decodo INDÉPENDANTS (redondance : si un proxy meurt, les
- *     autres maintiennent la fraîcheur → pas de trou pendant un re-solve CF de ~30 s).
+ *   - réservent leurs proxies Decodo avec le même allocateur Redis que les workers, pour
+ *     éviter les collisions d'IP tout en gardant plusieurs scouts redondants.
  *
  * Le snapshot reflète alors la réalité : à mesure que des créneaux sont bookés, le prochain
  * datetime/ d'un scout renvoie la liste réduite → le snapshot converge. Combiné à la garde
@@ -28,6 +28,7 @@
 import type { SpainCfSession } from "./spain-soax-solver.js";
 import { initWorkerSession, WORKER_UA } from "./spain-soax-solver.js";
 import {
+  pickDedicatedProxy,
   scanViaWidgetDatetime,
   publishSlotSnapshotWithRetry,
   type SpainDossierConfig,
@@ -35,9 +36,16 @@ import {
 import {
   publishBurstSignal,
   deleteWorkerCfClearance,
+  deleteLastStickyForDossier,
+  deleteWorkerProxyIdentity,
+  getLastStickyForDossier,
+  getWorkerProxyIdentity,
+  saveLastProxyForDossier,
+  saveLastStickyForDossier,
+  saveWorkerProxyIdentity,
 } from "./spain-redis-persistence.js";
+import { releaseWorkerIp, reserveWorkerIp } from "./spain-slot-coordinator.js";
 import {
-  getValidDecodoProxyFromIndex,
   getDecodoPoolSize,
   flagDecodoIp,
 } from "./spain-decodo-pool.js";
@@ -184,7 +192,7 @@ function resolveCapsolverKey(): string {
 
 /**
  * Boucle d'un éclaireur dédié. Ne booke jamais : scanne datetime/ et publie le snapshot.
- * Chaque scout possède un proxy Decodo distinct (index staggeré) + son propre cf_clearance.
+ * Chaque scout détient un bail proxy worker-compatible + son propre cf_clearance.
  */
 async function runScout(
   scoutIndex: number,
@@ -213,10 +221,16 @@ async function runScout(
     // Pas de role meute/eclaireur : le scout n'entre pas dans la logique d'orchestration.
   };
 
-  // Proxy dédié : index de départ distinct par scout ; saute de SCOUT_COUNT en cas de mort
-  // pour ne jamais retomber sur l'IP d'un autre scout.
-  let proxyIndex = scoutIndex;
-  let stickyId = `sc${scoutIndex}-${Math.random().toString(36).slice(2, 8)}`;
+  // Le scout utilise le même allocateur et les mêmes réservations Redis que les workers.
+  // Son ID synthétique le distingue des dossiers Convex tout en partageant l'exclusion IP.
+  const ownerId = scoutConfig.id;
+  const MAX_INIT_ATTEMPTS = Math.max(
+    1,
+    Math.min(10, Number(process.env.SPAIN_ROTATE_MAX_ATTEMPTS ?? "3") || 3),
+  );
+  let proxyUrl = "";
+  let excludedBaseProxy: string | undefined;
+  let stickyId = "";
   let session: SpainCfSession | null = null;
 
   const poolSize = getDecodoPoolSize();
@@ -225,63 +239,100 @@ async function runScout(
     return;
   }
 
-  /** (Re)crée la session CF si absente ou proche de l'expiration. */
-  const ensureSession = async (): Promise<boolean> => {
-    if (session && session.expiresAt - Date.now() > SESSION_MIN_FRESH_MS) return true;
-    // Sélection du proxy en SAUTANT les IPs blacklistées (même logique skip-blacklist que
-    // les workers via getCurrentDecodoUrl/rotateDecodoUrl). getDecodoProxyForIndex renvoyait
-    // l'IP brute à l'index sans vérifier la blacklist → le scout retombait en boucle sur des
-    // IPs mortes (502) qu'il venait lui-même de flaguer. On repart de proxyIndex et on retient
-    // l'index effectif retenu pour que la prochaine rotation avance à partir de là.
-    const picked = getValidDecodoProxyFromIndex(proxyIndex);
+  const newStickyId = (): string => Math.random().toString(36).slice(2, 10);
+
+  const releaseProxy = async (saveForReuse = true): Promise<void> => {
+    if (!proxyUrl) return;
+    const current = proxyUrl;
+    if (saveForReuse) {
+      await saveLastProxyForDossier(ownerId, current).catch(() => {});
+    }
+    await releaseWorkerIp(current, ownerId).catch(() => {});
+    proxyUrl = "";
+  };
+
+  const acquireProxy = async (): Promise<boolean> => {
+    const picked = await pickDedicatedProxy(ownerId, tag, excludedBaseProxy);
     if (!picked) {
-      console.warn(`${tag} ⚠️ aucun proxy à l'index ${proxyIndex}`);
+      console.warn(`${tag} ⚠️ aucune IP Decodo non réservée disponible`);
       return false;
     }
-    if (picked.allBlacklisted) {
-      console.warn(`${tag} ⚠️ toutes les IPs Decodo blacklistées — attente avant nouvel essai`);
-      return false;
-    }
-    const base = picked.url;
-    proxyIndex = picked.idx; // s'aligner sur l'IP réellement sélectionnée
-    const stickyProxy = addStickySession(base, stickyId);
-    console.log(`${tag} 🔐 init session — ${maskProxy(stickyProxy)} (UA=${WORKER_UA.slice(0, 20)}…)`);
-    // Init RÉDUIT (skipTokenAndMain=true) : solve CF + GET widget seul suffit pour datetime/.
-    // initWorkerSession gère le cache cf_clearance Redis (par host:port) en interne.
-    const res = await initWorkerSession(
-      stickyProxy,
-      SCOUT_PORTAL_URL,
-      capsolverKey,
-      undefined,
-      undefined,
-      true,
-    );
-    if (!res) {
-      console.warn(`${tag} ❌ init session échouée — blacklist + rotation proxy`);
-      flagDecodoIp(base, "scout-init-failed");
-      deleteWorkerCfClearance(stickyProxy);
-      // Avancer d'AU MOINS 1 puis laisser getValidDecodoProxyFromIndex sauter les blacklistées.
-      proxyIndex = picked.idx + SCOUT_COUNT;
-      stickyId = `sc${scoutIndex}-${Math.random().toString(36).slice(2, 8)}`;
-      session = null;
-      return false;
-    }
-    session = res.session;
-    console.log(`${tag} ✅ session prête (cfFromCache=${res.cfFromCache})`);
+    proxyUrl = picked;
+
+    // Même règle que les workers : ne réutiliser le sticky que pour sa base proxy connue.
+    const identity = await getWorkerProxyIdentity(ownerId).catch(() => null);
+    const legacyStickyId = await getLastStickyForDossier(ownerId).catch(() => null);
+    stickyId =
+      identity?.baseProxy === proxyUrl
+        ? identity.stickyId
+        : identity
+          ? newStickyId()
+          : legacyStickyId ?? newStickyId();
     return true;
   };
 
-  /** Bascule sur un autre proxy après une mort CF. */
-  const rotateProxy = (reason: string): void => {
-    const picked = getValidDecodoProxyFromIndex(proxyIndex);
-    if (picked && !picked.allBlacklisted) {
-      flagDecodoIp(picked.url, reason);
-      deleteWorkerCfClearance(addStickySession(picked.url, stickyId));
-      proxyIndex = picked.idx + SCOUT_COUNT;
-    } else {
-      proxyIndex += SCOUT_COUNT;
+  /** (Re)crée la session CF si absente ou proche de l'expiration. */
+  const ensureSession = async (): Promise<boolean> => {
+    if (proxyUrl && !(await reserveWorkerIp(proxyUrl, ownerId))) {
+      console.warn(`${tag} ⚠️ réservation IP perdue — abandon de la session et nouvelle allocation`);
+      session = null;
+      proxyUrl = "";
+      stickyId = "";
     }
-    stickyId = `sc${scoutIndex}-${Math.random().toString(36).slice(2, 8)}`;
+    if (session && session.expiresAt - Date.now() > SESSION_MIN_FRESH_MS) return true;
+
+    for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
+      if (!proxyUrl && !(await acquireProxy())) return false;
+
+      const base = proxyUrl;
+      const stickyProxy = addStickySession(base, stickyId);
+      console.log(`${tag} 🔐 init session — ${maskProxy(stickyProxy)} (UA=${WORKER_UA.slice(0, 20)}…)`);
+      // Le scout conserve son init courte : pas de POST token, /main/ ni booking.
+      const res = await initWorkerSession(
+        stickyProxy,
+        SCOUT_PORTAL_URL,
+        capsolverKey,
+        undefined,
+        undefined,
+        true,
+      );
+      if (res) {
+        session = res.session;
+        await saveLastStickyForDossier(ownerId, stickyId).catch(() => {});
+        await saveWorkerProxyIdentity(ownerId, proxyUrl, stickyId).catch(() => {});
+        console.log(`${tag} ✅ session prête (cfFromCache=${res.cfFromCache})`);
+        return true;
+      }
+
+      console.warn(`${tag} ❌ init session échouée — blacklist + réservation libérée`);
+      flagDecodoIp(base, "scout-init-failed");
+      deleteWorkerCfClearance(stickyProxy);
+      await deleteWorkerProxyIdentity(ownerId).catch(() => {});
+      await deleteLastStickyForDossier(ownerId).catch(() => {});
+      await releaseWorkerIp(base, ownerId).catch(() => {});
+      excludedBaseProxy = base;
+      proxyUrl = "";
+      stickyId = "";
+      session = null;
+    }
+
+    console.warn(`${tag} ❌ init impossible après ${MAX_INIT_ATTEMPTS} IP réservées`);
+    return false;
+  };
+
+  /** Libère et blackliste comme un worker; le prochain cycle reprend via l'allocateur partagé. */
+  const rotateProxy = async (reason: string): Promise<void> => {
+    const failedBase = proxyUrl;
+    if (failedBase) {
+      flagDecodoIp(failedBase, reason);
+      deleteWorkerCfClearance(addStickySession(failedBase, stickyId));
+      await deleteWorkerProxyIdentity(ownerId).catch(() => {});
+      await deleteLastStickyForDossier(ownerId).catch(() => {});
+      await releaseWorkerIp(failedBase, ownerId).catch(() => {});
+      excludedBaseProxy = failedBase;
+    }
+    proxyUrl = "";
+    stickyId = "";
     session = null;
   };
 
@@ -290,79 +341,82 @@ async function runScout(
   console.log(`${tag} 🚀 démarré — portail ${SCOUT_PORTAL_URL} (agenda=${known.agendaId}, service=${known.serviceId})`);
 
   let cycles = 0;
-  while (!isStopped()) {
-    // Hors fenêtre [SCOUT_FAST_START_MIN, SCOUT_FAST_END_MIN[ : ARRÊT TOTAL du scan.
-    // Le scout libère sa session et dort jusqu'au prochain HH:SCOUT_FAST_START_MIN au lieu
-    // de scanner en cadence lente — aucune requête réseau entre HH:15 et le prochain HH:03.
-    if (!options.ignoreFastWindow && !isFastWindow(Date.now())) {
-      session = null;
-      const untilNext = msUntilNextFastWindow(Date.now());
-      console.log(
-        `${tag} 💤 hors fenêtre — arrêt du scan, réveil dans ${Math.round(untilNext / 1000)}s ` +
-          `(prochain HH:${String(SCOUT_FAST_START_MIN).padStart(2, "0")})`,
-      );
-      // Sommeil borné par SCOUT_IDLE_TICK_MS pour rester réactif à l'arrêt du pool (isStopped).
-      await sleep(Math.min(untilNext, SCOUT_IDLE_TICK_MS));
-      continue;
-    }
-
-    let tickMs = SCOUT_FAST_TICK_MS;
-    try {
-      const ok = await ensureSession();
-      if (!ok || !session) {
-        cycles++;
-        if (options.maxCycles !== undefined && cycles >= options.maxCycles) break;
-        await sleep(SESSION_RETRY_BACKOFF_MS);
+  try {
+    while (!isStopped()) {
+      // Hors fenêtre : libérer le bail pour que les workers puissent utiliser l'IP.
+      if (!options.ignoreFastWindow && !isFastWindow(Date.now())) {
+        session = null;
+        await releaseProxy(true);
+        const untilNext = msUntilNextFastWindow(Date.now());
+        console.log(
+          `${tag} 💤 hors fenêtre — réservation libérée, réveil dans ${Math.round(untilNext / 1000)}s ` +
+            `(prochain HH:${String(SCOUT_FAST_START_MIN).padStart(2, "0")})`,
+        );
+        // Sommeil borné par SCOUT_IDLE_TICK_MS pour rester réactif à l'arrêt du pool (isStopped).
+        await sleep(Math.min(untilNext, SCOUT_IDLE_TICK_MS));
         continue;
       }
 
-      const scan = await scanViaWidgetDatetime(session, scoutConfig, tag);
+      let tickMs = SCOUT_FAST_TICK_MS;
+      try {
+        const ok = await ensureSession();
+        if (!ok || !session) {
+          cycles++;
+          if (options.maxCycles !== undefined && cycles >= options.maxCycles) break;
+          await sleep(SESSION_RETRY_BACKOFF_MS);
+          continue;
+        }
 
-      if (scan === null) {
-        // Chemin court non applicable (ne devrait pas arriver pour Kinshasa) → réinit.
-        session = null;
-      } else if (scan.status === "cf_expired") {
-        console.warn(`${tag} 🔄 cf_expired — rotation proxy + re-solve`);
-        rotateProxy("scout-cf-expired");
-        tickMs = SESSION_RETRY_BACKOFF_MS;
-      } else if (scan.status === "found" && scan.slots && scan.slots.length > 0) {
-        // Publier les créneaux RÉELS + signal burst. Écrivain unique du snapshot.
-        await publishSlotSnapshotWithRetry(
-          known.agendaId,
-          known.serviceId,
-          scan.slots.map((s) => ({
-            date: s.date,
-            time: s.time,
-            agendaId: s.agendaId ?? known.agendaId,
-            freeslots: s.freeslots,
-          })),
-          tag,
+        const scan = await scanViaWidgetDatetime(session, scoutConfig, tag);
+
+        if (scan === null) {
+          // Chemin court non applicable → refaire l'init sur l'IP réservée.
+          session = null;
+        } else if (scan.status === "cf_expired") {
+          console.warn(`${tag} 🔄 cf_expired — blacklist, libération et allocation worker`);
+          await rotateProxy("scout-cf-expired");
+          tickMs = SESSION_RETRY_BACKOFF_MS;
+        } else if (scan.status === "found" && scan.slots && scan.slots.length > 0) {
+          // Publier les créneaux RÉELS + signal burst. Écrivain unique du snapshot.
+          await publishSlotSnapshotWithRetry(
+            known.agendaId,
+            known.serviceId,
+            scan.slots.map((s) => ({
+              date: s.date,
+              time: s.time,
+              agendaId: s.agendaId ?? known.agendaId,
+              freeslots: s.freeslots,
+            })),
+            tag,
+          );
+          void publishBurstSignal(SCOUT_PORTAL_URL, scan.slots.length);
+          console.log(`${tag} 📢 snapshot publié : ${scan.slots.length} créneau(x) + burst`);
+        } else if (scan.status === "proxy_error") {
+          // Proxy mort au scan → utiliser la même blacklist, libération et allocation.
+          console.warn(`${tag} 🔄 proxy_error au scan — rotation IP worker`);
+          await rotateProxy("scout-proxy-error");
+          tickMs = SESSION_RETRY_BACKOFF_MS;
+        }
+        // not_found / error / server_overload → garder l'IP réservée et la session.
+      } catch (error) {
+        console.warn(
+          `${tag} ⚠️ cycle en erreur : ${error instanceof Error ? error.message : String(error)}`,
         );
-        void publishBurstSignal(SCOUT_PORTAL_URL, scan.slots.length);
-        console.log(`${tag} 📢 snapshot publié : ${scan.slots.length} créneau(x) + burst`);
-      } else if (scan.status === "proxy_error") {
-        // Proxy mort au scan → rotation (comme cf_expired mais sans re-solve immédiat).
-        console.warn(`${tag} 🔄 proxy_error au scan — rotation proxy`);
-        rotateProxy("scout-proxy-error");
         tickMs = SESSION_RETRY_BACKOFF_MS;
       }
-      // not_found / error / server_overload → ne PAS publier (laisse l'âge grimper côté meute).
-    } catch (error) {
-      console.warn(
-        `${tag} ⚠️ cycle en erreur : ${error instanceof Error ? error.message : String(error)}`,
-      );
-      tickMs = SESSION_RETRY_BACKOFF_MS;
+
+      cycles++;
+      if (options.maxCycles !== undefined && cycles >= options.maxCycles) break;
+
+      // Jitter ±15 % pour désynchroniser (indétectabilité + éviter les fronts identiques).
+      const jitter = tickMs * (Math.random() * 0.3 - 0.15);
+      await sleep(tickMs + jitter);
     }
-
-    cycles++;
-    if (options.maxCycles !== undefined && cycles >= options.maxCycles) break;
-
-    // Jitter ±15 % pour désynchroniser (indétectabilité + éviter les fronts identiques).
-    const jitter = tickMs * (Math.random() * 0.3 - 0.15);
-    await sleep(tickMs + jitter);
+  } finally {
+    session = null;
+    await releaseProxy(true);
+    console.log(`${tag} 🛑 arrêté`);
   }
-
-  console.log(`${tag} 🛑 arrêté`);
 }
 
 /**

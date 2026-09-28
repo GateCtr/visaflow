@@ -10,7 +10,37 @@
 import "dotenv/config";
 import { initSpainRedis } from "../spain-redis-persistence.js";
 import { getDecodoPoolSize, initDecodoPool } from "../spain-decodo-pool.js";
+import {
+  isIpReservedByOther,
+  releaseWorkerIp,
+  reserveWorkerIp,
+} from "../spain-slot-coordinator.js";
 import { SAOPOLO_PORTAL_URL } from "../spain-portals.js";
+
+async function verifySharedProxyReservation(): Promise<void> {
+  const proxyUrl = `http://reservation-test.invalid:${20_000 + (process.pid % 40_000)}`;
+  const scoutOwner = `scout-reservation-test-${process.pid}`;
+  const workerOwner = `worker-reservation-test-${process.pid}`;
+
+  try {
+    if (!(await reserveWorkerIp(proxyUrl, scoutOwner))) {
+      throw new Error("Le scout n'a pas pu réserver l'IP de test.");
+    }
+    if (!(await reserveWorkerIp(proxyUrl, scoutOwner))) {
+      throw new Error("Le propriétaire n'a pas pu renouveler son bail.");
+    }
+    if (!(await isIpReservedByOther(proxyUrl, workerOwner))) {
+      throw new Error("Le worker ne voit pas la réservation du scout.");
+    }
+    if (await reserveWorkerIp(proxyUrl, workerOwner)) {
+      throw new Error("Le worker a obtenu une IP déjà réservée au scout.");
+    }
+    console.log("[scout-test] ✅ réservation partagée : renouvellement owner OK, second owner refusé.");
+  } finally {
+    await releaseWorkerIp(proxyUrl, scoutOwner);
+    await releaseWorkerIp(proxyUrl, workerOwner);
+  }
+}
 
 async function main(): Promise<void> {
   // Forcer Redis local pour isoler le snapshot de test des données de production.
@@ -30,6 +60,7 @@ async function main(): Promise<void> {
 
   const redisReady = await initSpainRedis();
   if (!redisReady) throw new Error("Redis local indisponible; arrêt avant le test live.");
+  await verifySharedProxyReservation();
 
   await initDecodoPool();
   const poolSize = getDecodoPoolSize();

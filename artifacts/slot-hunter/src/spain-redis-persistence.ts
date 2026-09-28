@@ -1094,16 +1094,28 @@ function proxyToReserveKey(proxyUrl: string): string {
 }
 
 /**
- * Réserve un proxy Decodo pour un dossier (NX : échoue si déjà réservé par un autre).
- * Retourne true si la réservation a réussi (ou en mode dégradé sans Redis).
+ * Réserve ou renouvelle atomiquement un proxy Decodo pour un owner (worker ou scout).
+ * Un autre owner ne peut pas écraser le bail; le même owner prolonge son TTL.
+ * Retourne true en mode dégradé sans Redis, comme le worker historique.
  * La clé est normalisée sur host:port uniquement — insensible au sticky session ID.
  */
-export async function reserveWorkerIp(proxyUrl: string, dossierId: string): Promise<boolean> {
+export async function reserveWorkerIp(proxyUrl: string, ownerId: string): Promise<boolean> {
   if (!redisReady || !redisClient) return true;
   const key = proxyToReserveKey(proxyUrl);
+  const lua = `
+    local owner = redis.call("GET", KEYS[1])
+    if owner and owner ~= ARGV[1] then
+      return 0
+    end
+    redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[2])
+    return 1
+  `;
   try {
-    const res = await redisClient.set(key, dossierId, { NX: true, EX: REDIS_IP_RESERVE_TTL_SEC });
-    return res === "OK";
+    const res = await (redisClient as any).eval(lua, {
+      keys: [key],
+      arguments: [ownerId, String(REDIS_IP_RESERVE_TTL_SEC)],
+    });
+    return Number(res) === 1;
   } catch (e) {
     console.warn(`[spain-redis] reserveWorkerIp: ${e}`);
     return true; // dégradé
@@ -1111,15 +1123,15 @@ export async function reserveWorkerIp(proxyUrl: string, dossierId: string): Prom
 }
 
 /**
- * Vérifie si une IP est déjà réservée par un autre dossier.
+ * Vérifie si une IP est déjà réservée par un autre owner.
  * La clé est normalisée sur host:port — même port physique, sticky différent = même clé.
  */
-export async function isIpReservedByOther(proxyUrl: string, dossierId: string): Promise<boolean> {
+export async function isIpReservedByOther(proxyUrl: string, ownerId: string): Promise<boolean> {
   if (!redisReady || !redisClient) return false;
   const key = proxyToReserveKey(proxyUrl);
   try {
     const val = await redisClient.get(key);
-    return val !== null && val !== dossierId;
+    return val !== null && val !== ownerId;
   } catch {
     return false;
   }

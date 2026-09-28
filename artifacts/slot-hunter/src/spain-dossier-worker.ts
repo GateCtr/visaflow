@@ -4077,8 +4077,8 @@ async function rotateWorkerIp(
  * Retourne l'URL du proxy, "" si aucun proxy configuré (mode sans proxy),
  * ou null si tous les proxies sont déjà réservés.
  */
-async function pickDedicatedProxy(
-  dossierId: string,
+export async function pickDedicatedProxy(
+  ownerId: string,
   tag: string,
   excludedBaseProxy?: string,
 ): Promise<string | null> {
@@ -4093,12 +4093,12 @@ async function pickDedicatedProxy(
   // ── Priorité : réutiliser le dernier port de ce dossier ──────────────────────
   // Si le même port est réutilisé, la clé Redis du CF clearance (host:port) est
   // identique → cache hit → CapSolver évité (~20s + balance économisés).
-  const savedIdentity = await getWorkerProxyIdentity(dossierId).catch(() => null);
-  const lastProxy = savedIdentity?.baseProxy ?? await getLastProxyForDossier(dossierId);
+  const savedIdentity = await getWorkerProxyIdentity(ownerId).catch(() => null);
+  const lastProxy = savedIdentity?.baseProxy ?? await getLastProxyForDossier(ownerId);
   if (lastProxy && lastProxy !== excludedBaseProxy && !isDecodoIpBlacklisted(lastProxy)) {
-    const reservedByOther = await isIpReservedByOther(lastProxy, dossierId);
+    const reservedByOther = await isIpReservedByOther(lastProxy, ownerId);
     if (!reservedByOther) {
-      const ok = await reserveWorkerIp(lastProxy, dossierId);
+      const ok = await reserveWorkerIp(lastProxy, ownerId);
       if (ok) {
         log("INFO", `${tag} IP Decodo réutilisée (CF cache préservé) : ${maskProxy(lastProxy)}`);
         return lastProxy;
@@ -4122,11 +4122,11 @@ async function pickDedicatedProxy(
     // Skip les IPs blacklistées (portal-html-403, probe-error, etc.)
     if (isDecodoIpBlacklisted(url)) continue;
 
-    const reserved = await isIpReservedByOther(url, dossierId);
+    const reserved = await isIpReservedByOther(url, ownerId);
     if (reserved) continue;
 
     // Tenter de réserver
-    const ok = await reserveWorkerIp(url, dossierId);
+    const ok = await reserveWorkerIp(url, ownerId);
     if (ok) {
       // Avancer l'index global APRÈS ce proxy pour que le prochain appel
       // (même dossier ou autre) commence après celui-ci dans le pool.
