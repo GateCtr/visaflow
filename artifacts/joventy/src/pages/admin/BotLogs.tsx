@@ -49,7 +49,7 @@ import {
 const DEST_FLAGS: Record<string, string> = {
   usa: "\u{1F1FA}\u{1F1F8}", canada: "\u{1F1E8}\u{1F1E6}", uk: "\u{1F1EC}\u{1F1E7}", switzerland: "\u{1F1E8}\u{1F1ED}",
   dubai: "\u{1F1E6}\u{1F1EA}", turkey: "\u{1F1F9}\u{1F1F7}", india: "\u{1F1EE}\u{1F1F3}", schengen: "\u{1F1EA}\u{1F1FA}", spain: "\u{1F1EA}\u{1F1F8}",
-  germany: "\u{1F1E9}\u{1F1EA}",
+  germany: "\u{1F1E9}\u{1F1EA}", france: "\u{1F1EB}\u{1F1F7}",
 };
 
 const STATUS_META = {
@@ -112,9 +112,10 @@ const PAGE_SIZE = 20;
 const CATEGORY_META = CATEGORY_META_SHARED;
 
 // Determine if a log is USA, CEV, Germany based on step name
-function getLogFlow(log: { step: string; data?: string | null }): "usa" | "cev" | "germany" | "other" {
+function getLogFlow(log: { step: string; data?: string | null }): "usa" | "cev" | "germany" | "france" | "other" {
   if (log.step.startsWith("cev_") || log.step.startsWith("cev ")) return "cev";
   if (log.step.startsWith("germany_")) return "germany";
+  if (log.step.startsWith("france_")) return "france";
   // Check data.flow field
   if (log.data) {
     try {
@@ -122,6 +123,7 @@ function getLogFlow(log: { step: string; data?: string | null }): "usa" | "cev" 
       if (d.flow === "usa") return "usa";
       if (d.flow === "cev" || d.flow === "schengen") return "cev";
       if (d.flow === "germany") return "germany";
+      if (d.flow === "france") return "france";
     } catch { /* ignore */ }
   }
   // Default USA steps
@@ -279,7 +281,7 @@ function LogDataBlock({ data, isExpanded }: { data: string; isExpanded: boolean 
 
 // ─── Bot Logs Tab ─────────────────────────────────────────────────────────────
 
-type FlowTab = "usa" | "cev" | "germany" | "spain" | "all";
+type FlowTab = "usa" | "cev" | "germany" | "france" | "spain" | "all";
 
 function BotLogsTab() {
   const [flowTab, setFlowTab]           = useState<FlowTab>("all");
@@ -291,7 +293,7 @@ function BotLogsTab() {
   const [clearing, setClearing]         = useState(false);
   const [clearProgress, setClearProgress] = useState("");
   const [showClearDialog, setShowClearDialog] = useState(false);
-  const [clearTarget, setClearTarget]   = useState<"usa" | "cev" | "germany" | "other" | "all">("all");
+  const [clearTarget, setClearTarget]   = useState<"usa" | "cev" | "germany" | "france" | "other" | "all">("all");
   const [timeUpdate, setTimeUpdate]    = useState(0);
 
   // Auto-update relative time every 10 seconds
@@ -359,6 +361,7 @@ function BotLogsTab() {
     if (flowTab === "usa") return flow === "usa";
     if (flowTab === "cev") return flow === "cev";
     if (flowTab === "germany") return flow === "germany";
+    if (flowTab === "france") return flow === "france";
     return true;
   });
 
@@ -378,6 +381,7 @@ function BotLogsTab() {
   const usaCount     = paginatedLogs.filter(l => getLogFlow(l) === "usa").length;
   const cevCount     = paginatedLogs.filter(l => getLogFlow(l) === "cev").length;
   const germanyCount = paginatedLogs.filter(l => getLogFlow(l) === "germany").length;
+  const franceCount  = paginatedLogs.filter(l => getLogFlow(l) === "france").length;
 
   const allSteps: string[] = paginatedLogs.length > 0
     ? ([...new Set(paginatedLogs.map((l) => l.step))] as string[]).sort()
@@ -436,6 +440,7 @@ function BotLogsTab() {
                 { id: "usa" as FlowTab, label: "🇺🇸 USA", count: usaCount },
                 { id: "cev" as FlowTab, label: "🇪🇺 CEV", count: cevCount },
                 { id: "germany" as FlowTab, label: "🇩🇪 Germany", count: germanyCount },
+                { id: "france" as FlowTab, label: "🇫🇷 France", count: franceCount },
                 { id: "spain" as FlowTab, label: "🇪🇸 Espagne", count: spainCount },
               ]).map(tab => (
                 <button
@@ -471,6 +476,7 @@ function BotLogsTab() {
               <option value="usa">Supprimer : USA seulement</option>
               <option value="cev">Supprimer : CEV seulement</option>
               <option value="germany">Supprimer : Germany seulement</option>
+              <option value="france">Supprimer : France seulement</option>
               <option value="other">Supprimer : Autres</option>
             </select>
 
@@ -496,7 +502,9 @@ function BotLogsTab() {
                       ? "Supprimer uniquement les logs CEV (Schengen) ? Les autres logs seront conservés."
                       : clearTarget === "germany"
                       ? "Supprimer uniquement les logs Germany (RK-Termin) ? Les autres logs seront conservés."
-                      : "Supprimer les logs qui ne sont ni USA, ni CEV, ni Germany ?"}
+                      : clearTarget === "france"
+                      ? "Supprimer uniquement les logs France (consulat.gouv.fr) ? Les autres logs seront conservés."
+                      : "Supprimer les logs qui ne sont ni USA, ni CEV, ni Germany, ni France ?"}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

@@ -172,7 +172,7 @@ export const clearAll = mutation({
  * Retourne { deleted, remaining } pour pagination batch.
  */
 export const clearByFlow = mutation({
-  args: { flow: v.union(v.literal("usa"), v.literal("cev"), v.literal("germany"), v.literal("other")) },
+  args: { flow: v.union(v.literal("usa"), v.literal("cev"), v.literal("germany"), v.literal("france"), v.literal("other")) },
   handler: async (ctx, args) => {
     const BATCH_SIZE = 500;
     const logs = await ctx.db
@@ -182,19 +182,23 @@ export const clearByFlow = mutation({
       .take(BATCH_SIZE * 2); // Take more to filter
 
     const isUsaStep = (step: string) =>
-      !step.startsWith("cev_") && !step.startsWith("cev ") && !step.startsWith("germany_") &&
+      !step.startsWith("cev_") && !step.startsWith("cev ") && !step.startsWith("germany_") && !step.startsWith("france_") &&
       (step.startsWith("usa_") || ["login", "session_start", "session_end", "appointment_status", "payment_check", "ofc_list", "scan", "scan_cutoff", "cooldown", "slots_found", "booking_attempt", "booking_success", "booking_fail", "confirmation_letter", "not_found", "error", "human_behavior", "anti_detection", "execution_time", "rate_limit", "blocked", "restricted", "token_expired", "restriction_skip", "keep_alive", "proxy_preflight_abort", "proxy_health_check", "409_retry_start", "409_retry_exhausted", "409_retry_success"].includes(step));
 
     const isCevStep = (step: string) => step.startsWith("cev_") || step.startsWith("cev ");
     const isGermanyStep = (step: string) => step.startsWith("germany_");
+    const isFranceStep = (step: string) => step.startsWith("france_");
 
-    const toDelete = logs.filter(log => {
-      if (args.flow === "usa") return isUsaStep(log.step);
-      if (args.flow === "cev") return isCevStep(log.step);
-      if (args.flow === "germany") return isGermanyStep(log.step);
+    const matchesFlow = (step: string): boolean => {
+      if (args.flow === "usa") return isUsaStep(step);
+      if (args.flow === "cev") return isCevStep(step);
+      if (args.flow === "germany") return isGermanyStep(step);
+      if (args.flow === "france") return isFranceStep(step);
       // "other" = none of the above
-      return !isUsaStep(log.step) && !isCevStep(log.step) && !isGermanyStep(log.step);
-    }).slice(0, BATCH_SIZE);
+      return !isUsaStep(step) && !isCevStep(step) && !isGermanyStep(step) && !isFranceStep(step);
+    };
+
+    const toDelete = logs.filter(log => matchesFlow(log.step)).slice(0, BATCH_SIZE);
 
     for (const log of toDelete) {
       await ctx.db.delete(log._id);
@@ -206,12 +210,7 @@ export const clearByFlow = mutation({
       .withIndex("by_ts")
       .order("desc")
       .take(10);
-    const remainingOfFlow = remainingLogs.some(log => {
-      if (args.flow === "usa") return isUsaStep(log.step);
-      if (args.flow === "cev") return isCevStep(log.step);
-      if (args.flow === "germany") return isGermanyStep(log.step);
-      return !isUsaStep(log.step) && !isCevStep(log.step) && !isGermanyStep(log.step);
-    });
+    const remainingOfFlow = remainingLogs.some(log => matchesFlow(log.step));
 
     return { deleted: toDelete.length, remaining: remainingOfFlow };
   },

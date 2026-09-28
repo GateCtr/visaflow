@@ -41,6 +41,7 @@ import {
   reportSlotDiscovery,
   reportSlotFound,
   sendHeartbeat,
+  botLog,
   type HunterJob,
 } from "../convexClient.js";
 import type { SessionResult } from "../usaPortal/types.js";
@@ -375,14 +376,42 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
       `[franceHunter] Environnement France invalide (Job ${job.id}) :`,
       error instanceof Error ? error.message : error,
     );
+    botLog({
+      applicationId: job.id,
+      step: "france_env",
+      status: "fail",
+      data: {
+        flow: "france",
+        message: "Environnement France invalide",
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
     return "error";
   }
 
   const config = mapJobToFranceConfig(job);
   if (config === null) {
     // mapJobToFranceConfig a déjà journalisé la cause précise.
+    botLog({
+      applicationId: job.id,
+      step: "france_config",
+      status: "fail",
+      data: { flow: "france", message: "Configuration France invalide" },
+    });
     return "error";
   }
+
+  botLog({
+    applicationId: job.id,
+    step: "france_start",
+    status: "ok",
+    data: {
+      flow: "france",
+      message: "Démarrage du scan France",
+      consulate: config.consulateSlug,
+      service: config.service.serviceName,
+    },
+  });
 
   try {
     // --- 2. Proxy résidentiel FR sticky (IP distincte/stable par Job) -----
@@ -392,6 +421,12 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
         `[franceHunter] Aucun proxy résidentiel FR disponible pour le Job ${job.id}. ` +
           `Traitement abandonné.`,
       );
+      botLog({
+        applicationId: job.id,
+        step: "france_proxy",
+        status: "fail",
+        data: { flow: "france", message: "Aucun proxy résidentiel FR disponible" },
+      });
       return "error";
     }
 
@@ -401,6 +436,12 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
       console.error(
         `[franceHunter] Bootstrap handshake échoué (Job ${job.id}) — abandon, état inchangé.`,
       );
+      botLog({
+        applicationId: job.id,
+        step: "france_handshake",
+        status: "fail",
+        data: { flow: "france", message: "Handshake anti-bot échoué" },
+      });
       return "error";
     }
 
@@ -421,6 +462,16 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
         `[franceHunter] Résolution du consulat échouée (Job ${job.id}, ` +
           `slug=${config.consulateSlug}) — abandon.`,
       );
+      botLog({
+        applicationId: job.id,
+        step: "france_resolve_team",
+        status: "fail",
+        data: {
+          flow: "france",
+          message: "Résolution du consulat échouée",
+          consulate: config.consulateSlug,
+        },
+      });
       return "error";
     }
     const { teamId, serviceZone } = team;
@@ -435,6 +486,12 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
       console.error(
         `[franceHunter] Turnstile #1 (session) non résolu (Job ${job.id}) — abandon.`,
       );
+      botLog({
+        applicationId: job.id,
+        step: "france_turnstile_session",
+        status: "fail",
+        data: { flow: "france", message: "Turnstile #1 (session) non résolu" },
+      });
       return "error";
     }
 
@@ -450,6 +507,12 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
       console.error(
         `[franceHunter] Ouverture de session échouée (Job ${job.id}) — abandon, état inchangé.`,
       );
+      botLog({
+        applicationId: job.id,
+        step: "france_open_session",
+        status: "fail",
+        data: { flow: "france", message: "Ouverture de session échouée" },
+      });
       return "error";
     }
 
@@ -457,6 +520,16 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
       `[franceHunter] Session ouverte (Job ${job.id}, session=${maskSecret(session.sessionId)}) — ` +
         `démarrage du scan (intervalle ${config.scanIntervalMs} ms ±20 %).`,
     );
+    botLog({
+      applicationId: job.id,
+      step: "france_session_open",
+      status: "ok",
+      data: {
+        flow: "france",
+        message: "Session ouverte — démarrage du scan",
+        scanIntervalMs: config.scanIntervalMs,
+      },
+    });
 
     // --- 7. Boucle de scan + renouvellement de session --------------------
     const deadlineMs = Date.now() + MAX_JOB_WALLCLOCK_MS;
@@ -518,14 +591,48 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
         console.error(
           `[franceHunter] Cycle de scan interrompu (Job ${job.id}) — nouvelle tentative au prochain cycle.`,
         );
+        botLog({
+          applicationId: job.id,
+          step: "france_scan",
+          status: "warn",
+          data: {
+            flow: "france",
+            message: "Cycle de scan interrompu — nouvelle tentative au prochain cycle",
+          },
+        });
       } else {
         prevExcluded = scan.excludeDays;
+
+        if (scan.publication === null) {
+          botLog({
+            applicationId: job.id,
+            step: "france_scan",
+            status: "ok",
+            data: {
+              flow: "france",
+              message: "Scan effectué — aucune publication",
+              excludedDays: scan.excludeDays.size,
+            },
+          });
+        }
 
         if (scan.publication !== null) {
           console.log(
             `[franceHunter] Publication détectée (Job ${job.id}, raison=${scan.publication.reason}, ` +
               `jour=${scan.publication.day}, créneaux=${scan.publication.slots.length}).`,
           );
+          botLog({
+            applicationId: job.id,
+            step: "france_publication",
+            status: "ok",
+            data: {
+              flow: "france",
+              message: "Publication détectée",
+              reason: scan.publication.reason,
+              day: scan.publication.day,
+              slots: scan.publication.slots.length,
+            },
+          });
           return await handlePublication(
             http,
             job,
@@ -548,12 +655,31 @@ export async function runFranceJob(job: HunterJob): Promise<SessionResult> {
     console.log(
       `[franceHunter] Fin de la fenêtre d'exécution sans publication (Job ${job.id}).`,
     );
+    botLog({
+      applicationId: job.id,
+      step: "france_not_found",
+      status: "warn",
+      data: {
+        flow: "france",
+        message: "Fin de la fenêtre d'exécution sans publication",
+      },
+    });
     return "not_found";
   } catch (error) {
     console.error(
       `[franceHunter] Erreur inattendue lors du traitement du Job ${job.id} :`,
       error instanceof Error ? error.message : error,
     );
+    botLog({
+      applicationId: job.id,
+      step: "france_error",
+      status: "fail",
+      data: {
+        flow: "france",
+        message: "Erreur inattendue lors du traitement",
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
     return "error";
   }
 }
@@ -592,6 +718,16 @@ async function handlePublication(
       `[franceHunter] Publication trouvée mais autoBook désactivé (Job ${job.id}) — ` +
         `signalement "slot_found" sans réservation.`,
     );
+    botLog({
+      applicationId: job.id,
+      step: "france_slot_found",
+      status: "ok",
+      data: {
+        flow: "france",
+        message: "Créneau trouvé (autoBook désactivé) — aucune réservation",
+        day: publication.day,
+      },
+    });
     if (firstSlot !== undefined) {
       reportSlotDiscovery({
         applicationId: job.id,
@@ -626,17 +762,46 @@ async function handlePublication(
       `[franceHunter] Publication sans créneau exploitable (Job ${job.id}, raison=${publication.reason}) — ` +
         `signalement "slot_found" (booking non déclenché).`,
     );
+    botLog({
+      applicationId: job.id,
+      step: "france_slot_found",
+      status: "ok",
+      data: {
+        flow: "france",
+        message: "Publication sans créneau exploitable — booking non déclenché",
+        reason: publication.reason,
+        day: publication.day,
+      },
+    });
     return "slot_found";
   }
 
   // Turnstile #2 (booking) — distinct du token de session (Requirement 3.3).
   // Même URL de page réelle que pour la session (widget lié à la page RDV).
   const bookingPageUrl = buildFrancePageUrl(config.consulateSlug, config.service.serviceName);
+  botLog({
+    applicationId: job.id,
+    step: "france_booking_attempt",
+    status: "ok",
+    data: {
+      flow: "france",
+      message: "Tentative de réservation",
+      day: publication.day,
+      time: firstSlot.time,
+    },
+  });
+
   const bookingToken = await solveFranceTurnstile("booking", capsolverApiKey, bookingPageUrl);
   if (bookingToken === null) {
     console.error(
       `[franceHunter] Turnstile #2 (booking) non résolu (Job ${job.id}) — booking abandonné.`,
     );
+    botLog({
+      applicationId: job.id,
+      step: "france_booking_fail",
+      status: "fail",
+      data: { flow: "france", message: "Turnstile #2 (booking) non résolu" },
+    });
     return "error";
   }
 
@@ -666,6 +831,17 @@ async function handlePublication(
       ? "accepté sans qrCode (confirmation email)"
       : `${result.qrCodes?.length ?? 0} qrCode(s)`;
     console.log(`[franceHunter] Booking réussi (Job ${job.id}) : ${confirmation}.`);
+    botLog({
+      applicationId: job.id,
+      step: "france_booking_success",
+      status: "ok",
+      data: {
+        flow: "france",
+        message: `Booking réussi : ${confirmation}`,
+        day: publication.day,
+        time: firstSlot.time,
+      },
+    });
     try {
       await reportSlotFound({
         applicationId: job.id,
@@ -690,5 +866,15 @@ async function handlePublication(
     `[franceHunter] Booking échoué (Job ${job.id}) : ${result.error ?? "cause inconnue"} ` +
       `(étape=${result.failedStep ?? "n/a"}) — session préservée.`,
   );
+  botLog({
+    applicationId: job.id,
+    step: "france_booking_fail",
+    status: "fail",
+    data: {
+      flow: "france",
+      message: `Booking échoué : ${result.error ?? "cause inconnue"}`,
+      failedStep: result.failedStep ?? "n/a",
+    },
+  });
   return "error";
 }
