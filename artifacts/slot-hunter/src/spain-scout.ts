@@ -190,6 +190,7 @@ async function runScout(
   scoutIndex: number,
   capsolverKey: string,
   isStopped: () => boolean,
+  options: { maxCycles?: number; ignoreFastWindow?: boolean } = {},
 ): Promise<void> {
   const tag = `[spain-scout#${scoutIndex}]`;
   const known = getKnownIdsForPortal(SCOUT_PORTAL_URL);
@@ -288,11 +289,12 @@ async function runScout(
   await sleep((scoutIndex * SCOUT_FAST_TICK_MS) / SCOUT_COUNT);
   console.log(`${tag} 🚀 démarré — portail ${SCOUT_PORTAL_URL} (agenda=${known.agendaId}, service=${known.serviceId})`);
 
+  let cycles = 0;
   while (!isStopped()) {
     // Hors fenêtre [SCOUT_FAST_START_MIN, SCOUT_FAST_END_MIN[ : ARRÊT TOTAL du scan.
     // Le scout libère sa session et dort jusqu'au prochain HH:SCOUT_FAST_START_MIN au lieu
     // de scanner en cadence lente — aucune requête réseau entre HH:15 et le prochain HH:03.
-    if (!isFastWindow(Date.now())) {
+    if (!options.ignoreFastWindow && !isFastWindow(Date.now())) {
       session = null;
       const untilNext = msUntilNextFastWindow(Date.now());
       console.log(
@@ -308,6 +310,8 @@ async function runScout(
     try {
       const ok = await ensureSession();
       if (!ok || !session) {
+        cycles++;
+        if (options.maxCycles !== undefined && cycles >= options.maxCycles) break;
         await sleep(SESSION_RETRY_BACKOFF_MS);
         continue;
       }
@@ -350,12 +354,28 @@ async function runScout(
       tickMs = SESSION_RETRY_BACKOFF_MS;
     }
 
+    cycles++;
+    if (options.maxCycles !== undefined && cycles >= options.maxCycles) break;
+
     // Jitter ±15 % pour désynchroniser (indétectabilité + éviter les fronts identiques).
     const jitter = tickMs * (Math.random() * 0.3 - 0.15);
     await sleep(tickMs + jitter);
   }
 
   console.log(`${tag} 🛑 arrêté`);
+}
+
+/**
+ * Harnais E2E borné : exécute une seule itération de la boucle réelle du scout.
+ * Utilisé par test-spain-scout-saopolo.ts ; le scout ne possède aucun chemin de booking.
+ */
+export async function runScoutOnceForTest(scoutIndex = 0): Promise<void> {
+  const key = resolveCapsolverKey();
+  if (!key) throw new Error("CAPSOLVER_API_KEY/NONECAP_API_KEY manquante");
+  await runScout(scoutIndex, key, () => false, {
+    maxCycles: 1,
+    ignoreFastWindow: true,
+  });
 }
 
 // ─── Pool ────────────────────────────────────────────────────────────────────
