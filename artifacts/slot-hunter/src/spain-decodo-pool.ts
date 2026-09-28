@@ -440,3 +440,22 @@ export function getDecodoProxyForIndex(idx: number): string | undefined {
   if (pool.length === 0) return undefined;
   return pool[idx % pool.length];
 }
+
+/**
+ * Retourne le prochain proxy NON blacklisté à partir de `startIdx` (inclus), en sautant
+ * les IPs flaguées — même logique de skip-blacklist que `getCurrentDecodoUrl`/`rotateDecodoUrl`
+ * utilisés par les workers. Contrairement à `getDecodoProxyForIndex` (qui renvoie l'IP brute
+ * à l'index, blacklistée ou non), cette fonction évite de retomber en boucle sur des IPs mortes.
+ *
+ * @param startIdx index de départ (inclusif ; modulo taille du pool appliqué en interne).
+ * @returns `{ url, idx, allBlacklisted }` ou `undefined` si le pool est vide. `idx` est
+ *   l'index effectivement retenu (à utiliser pour l'avance suivante côté appelant).
+ */
+export function getValidDecodoProxyFromIndex(
+  startIdx: number,
+): { url: string; idx: number; allBlacklisted: boolean } | undefined {
+  const pool = getPool();
+  if (pool.length === 0) return undefined;
+  const { idx, allBlacklisted } = findNextValidIndex(startIdx, pool);
+  return { url: pool[idx], idx, allBlacklisted };
+}

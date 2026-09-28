@@ -194,11 +194,11 @@ const WINDOW_START_MIN = ((): number => {
  * Override via env : SPAIN_WINDOW_DURATION_MIN
  */
 const WINDOW_DURATION_MIN = ((): number => {
-  // Défaut 22 : fenêtre HH:03 → HH:25 (3+22). Démarrer à HH:03 laisse 10 minutes
+  // Défaut 15 : fenêtre HH:03 → HH:18 (3+15). Démarrer à HH:03 laisse 10 minutes
   // pour établir les sessions avant HH:13, puis les conserve tant qu'aucune panne
-  // réelle n'est détectée. Fin HH:25 alignée sur windowEndMin.
-  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "22");
-  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 22);
+  // réelle n'est détectée. Fin HH:18 alignée sur windowEndMin (ramenée de 25 à 18).
+  const v = Number(process.env.SPAIN_WINDOW_DURATION_MIN ?? "15");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 15);
 })();
 
 // ─── État interne ─────────────────────────────────────────────────────────────
@@ -318,7 +318,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
 
   // ── spain-synchronized-scan (task 11.1) : grille + pool de réserve + preflight ──
   // La grille valide la config de fenêtre (ordre strict windowStartMin < huntStartMin
-  // < lateStartMin < windowEndMin ; sinon défauts 5/13/17/25 réappliqués + erreur
+  // < lateStartMin < windowEndMin ; sinon défauts 3/13/17/18 réappliqués + erreur
   // journalisée par loadGridConfig). Requirements 12.5, 12.6.
   const gridConfig: GridConfig = loadGridConfig();
   // Pool de réserve PARTAGÉ : pré-solvé en preflight (warmUp), emprunté par les
@@ -344,7 +344,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
   // (HH:13-14), on rafraîchit à intervalle FIXE (HCAPTCHA_PREWARM_INTERVAL_MS) via un
   // setInterval dédié, plutôt que de dépendre de la cadence variable de la boucle
   // principale (qui pouvait laisser un token vieillir jusqu'à ~120 s si aucun worker ne
-  // se terminait). Le timer ne fait quelque chose que pendant la fenêtre HH:12→25 et
+  // se terminait). Le timer ne fait quelque chose que pendant la fenêtre HH:12→18 et
   // uniquement si des dossiers actifs sont enregistrés comme ayant un hCaptcha requis.
   // `latestActiveDossierIds` est mise à jour par la boucle à chaque poll Convex.
   let latestActiveDossierIds: string[] = [];
@@ -675,7 +675,7 @@ async function harvestFinishedWorkers(
         break;
       case "exited": {
         // Fenêtre expirée → dormir jusqu'au prochain HH:WINDOW_START_MIN
-        // (le portail publie entre la 5ème et la 25ème minute — inutile de scanner hors fenêtre)
+        // (le portail publie autour de la 13ème minute — inutile de scanner hors fenêtre HH:03→18)
         cooldownMs = msUntilNextWindowStart();
         const nextWakeMin = String(WINDOW_START_MIN).padStart(2, "0");
         log(
@@ -847,7 +847,7 @@ function isInScanWindow(): boolean {
 
 /**
  * Retourne true si on est dans la fenêtre de PRÉ-RÉSOLUTION hCaptcha :
- * [huntStartMin - 1, windowEndMin[ (soit HH:12→25 avec les défauts). On démarre 1 min
+ * [huntStartMin - 1, windowEndMin[ (soit HH:12→18 avec les défauts). On démarre 1 min
  * avant huntStartMin pour que les tokens gct dédiés par dossier soient résolus EN
  * PARALLÈLE et déjà FRAIS quand les créneaux apparaissent (HH:13-14). Le module de
  * pré-résolution rafraîchit ensuite les tokens qui vieillissent tant qu'on reste dans

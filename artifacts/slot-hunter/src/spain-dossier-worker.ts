@@ -232,14 +232,14 @@ const WORKER_WINDOW_MS = ((): number => {
 })();
 
 /**
- * Minute absolue de fin de fenêtre dans l'heure courante (défaut: 25 → HH:25:00).
+ * Minute absolue de fin de fenêtre dans l'heure courante (défaut: 18 → HH:18:00, ramenée de 25).
  * La boucle de scan s'arrête à cette borne quel que soit le moment du démarrage du worker.
  * Ainsi un restart à HH:28 n'étend pas la fenêtre : le worker sort immédiatement.
  * Override : SPAIN_WINDOW_END_MIN
  */
 const WINDOW_END_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_WINDOW_END_MIN ?? "25");
-  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 25));
+  const v = Number(process.env.SPAIN_WINDOW_END_MIN ?? "18");
+  return Math.max(1, Math.min(59, Number.isFinite(v) ? Math.round(v) : 18));
 })();
 
 /** Intervalle de scan start-to-start (secondes → ms) */

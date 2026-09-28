@@ -105,7 +105,9 @@ const DEFAULT_JITTER_PCT = 0;
 const DEFAULT_WINDOW_START_MIN = 3;
 const DEFAULT_HUNT_START_MIN = 13;
 const DEFAULT_LATE_START_MIN = 17;
-const DEFAULT_WINDOW_END_MIN = 25;
+// windowEndMin = 18 : fin de fenêtre ramenée de 25 à 18 (le pic HH:13 est passé, plus de
+// nouveaux créneaux au-delà). Ordre conservé : 3 < 13 < 17 < 18.
+const DEFAULT_WINDOW_END_MIN = 18;
 
 // ─── Helpers de parsing ──────────────────────────────────────────────────────
 
@@ -146,7 +148,7 @@ function parseIntEnv(
  *
  * L'ordre strict `windowStartMin < huntStartMin < lateStartMin < windowEndMin` est
  * vérifié : s'il est violé, les quatre minutes sont réinitialisées aux défauts
- * (5, 13, 17, 25) et un `console.error("[spain-grid] ...")` indique la contrainte
+ * (3, 13, 17, 18) et un `console.error("[spain-grid] ...")` indique la contrainte
  * violée (Requirements 11.8, 11.9).
  *
  * @param env source des variables d'environnement (défaut : `process.env`).
@@ -203,7 +205,7 @@ export function loadGridConfig(env: NodeJS.ProcessEnv = process.env): GridConfig
     console.error(
       `[spain-grid] Ordre de fenêtre invalide: exige windowStartMin(${windowStartMin}) < ` +
         `huntStartMin(${huntStartMin}) < lateStartMin(${lateStartMin}) < windowEndMin(${windowEndMin}); ` +
-        `réinitialisation aux défauts (5, 13, 17, 25).`,
+        `réinitialisation aux défauts (3, 13, 17, 18).`,
     );
     windowStartMin = DEFAULT_WINDOW_START_MIN;
     huntStartMin = DEFAULT_HUNT_START_MIN;

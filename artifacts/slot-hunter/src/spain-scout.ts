@@ -37,7 +37,7 @@ import {
   deleteWorkerCfClearance,
 } from "./spain-redis-persistence.js";
 import {
-  getDecodoProxyForIndex,
+  getValidDecodoProxyFromIndex,
   getDecodoPoolSize,
   flagDecodoIp,
 } from "./spain-decodo-pool.js";
@@ -66,23 +66,28 @@ const SCOUT_FAST_TICK_MS = ((): number => {
   return Math.max(500, Number.isFinite(v) ? Math.round(v) : 2500);
 })();
 
-/** Tick de scan LENT hors fenêtre (ms) — garde le cf_clearance chaud sans marteler. Défaut 45000. */
+/** Borne max du sommeil hors fenêtre (ms). Le scout n'effectue AUCUN scan hors fenêtre ; cette
+ *  valeur ne sert plus qu'à re-vérifier périodiquement l'arrêt du pool pendant l'attente. Défaut 45000. */
 const SCOUT_IDLE_TICK_MS = ((): number => {
   const v = Number(process.env.SPAIN_SCOUT_IDLE_TICK_MS ?? "45000");
   return Math.max(5000, Number.isFinite(v) ? Math.round(v) : 45000);
 })();
 
-/** Minute-dans-l'heure de début de la fenêtre rapide (Europe/Madrid). Défaut 5 (fenêtre HH:05). */
+/** Minute-dans-l'heure de début de la fenêtre rapide (Europe/Madrid). Aligné sur le démarrage
+ *  du worker : lit SPAIN_WINDOW_START_MIN (défaut 3, comme WINDOW_START_MIN de l'orchestrateur)
+ *  et n'accepte un override propre au scout (SPAIN_SCOUT_FAST_START_MIN) que s'il est fourni. */
 const SCOUT_FAST_START_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_SCOUT_FAST_START_MIN ?? "5");
-  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 5));
+  const raw = process.env.SPAIN_SCOUT_FAST_START_MIN ?? process.env.SPAIN_WINDOW_START_MIN ?? "3";
+  const v = Number(raw);
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 3));
 })();
 
-/** Minute-dans-l'heure de fin (exclue) de la fenêtre rapide (Europe/Madrid). Défaut 25
- *  (fenêtre de publication connue HH:05 → HH:25 ; minute historique de publication HH:13). */
+/** Minute-dans-l'heure de fin (exclue) de la fenêtre rapide (Europe/Madrid). Défaut 15 :
+ *  les scouts s'arrêtent TOTALEMENT à HH:15 (le pic de publication HH:13 est passé). Ils ne
+ *  scannent donc jamais jusqu'à la fin de fenêtre du worker (HH:18). */
 const SCOUT_FAST_END_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_SCOUT_FAST_END_MIN ?? "25");
-  return Math.max(1, Math.min(60, Number.isFinite(v) ? Math.round(v) : 25));
+  const v = Number(process.env.SPAIN_SCOUT_FAST_END_MIN ?? "15");
+  return Math.max(1, Math.min(60, Number.isFinite(v) ? Math.round(v) : 15));
 })();
 
 /** Marge de fraîcheur du cf_clearance (ms) sous laquelle on re-initialise la session (5 min). */
@@ -143,6 +148,33 @@ function isFastWindow(nowMs: number): boolean {
   return m >= SCOUT_FAST_START_MIN && m < SCOUT_FAST_END_MIN;
 }
 
+/**
+ * Ms jusqu'au prochain début de fenêtre HH:SCOUT_FAST_START_MIN (Europe/Madrid).
+ * Utilisé hors fenêtre pour que le scout DORME (arrêt total du scan) au lieu de scanner
+ * en cadence lente : une fois HH:15 atteint, plus aucune requête jusqu'au prochain HH:03.
+ */
+function msUntilNextFastWindow(nowMs: number): number {
+  const secondInHour = ((): number => {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Europe/Madrid",
+        hour12: false,
+        minute: "2-digit",
+        second: "2-digit",
+      }).formatToParts(new Date(nowMs));
+      const min = Number(parts.find((p) => p.type === "minute")?.value);
+      const sec = Number(parts.find((p) => p.type === "second")?.value);
+      if (Number.isFinite(min) && Number.isFinite(sec)) return min * 60 + sec;
+    } catch {
+      /* repli ci-dessous */
+    }
+    return (Math.floor(nowMs / 1000) % 3600);
+  })();
+  const startSec = SCOUT_FAST_START_MIN * 60;
+  const deltaSec = secondInHour < startSec ? startSec - secondInHour : 3600 - secondInHour + startSec;
+  return deltaSec * 1000;
+}
+
 /** Résout la clé CapSolver depuis l'environnement (jamais journalisée). */
 function resolveCapsolverKey(): string {
   return process.env.CAPSOLVER_API_KEY ?? process.env.NONECAP_API_KEY ?? "";
@@ -195,11 +227,22 @@ async function runScout(
   /** (Re)crée la session CF si absente ou proche de l'expiration. */
   const ensureSession = async (): Promise<boolean> => {
     if (session && session.expiresAt - Date.now() > SESSION_MIN_FRESH_MS) return true;
-    const base = getDecodoProxyForIndex(proxyIndex);
-    if (!base) {
+    // Sélection du proxy en SAUTANT les IPs blacklistées (même logique skip-blacklist que
+    // les workers via getCurrentDecodoUrl/rotateDecodoUrl). getDecodoProxyForIndex renvoyait
+    // l'IP brute à l'index sans vérifier la blacklist → le scout retombait en boucle sur des
+    // IPs mortes (502) qu'il venait lui-même de flaguer. On repart de proxyIndex et on retient
+    // l'index effectif retenu pour que la prochaine rotation avance à partir de là.
+    const picked = getValidDecodoProxyFromIndex(proxyIndex);
+    if (!picked) {
       console.warn(`${tag} ⚠️ aucun proxy à l'index ${proxyIndex}`);
       return false;
     }
+    if (picked.allBlacklisted) {
+      console.warn(`${tag} ⚠️ toutes les IPs Decodo blacklistées — attente avant nouvel essai`);
+      return false;
+    }
+    const base = picked.url;
+    proxyIndex = picked.idx; // s'aligner sur l'IP réellement sélectionnée
     const stickyProxy = addStickySession(base, stickyId);
     console.log(`${tag} 🔐 init session — ${maskProxy(stickyProxy)} (UA=${WORKER_UA.slice(0, 20)}…)`);
     // Init RÉDUIT (skipTokenAndMain=true) : solve CF + GET widget seul suffit pour datetime/.
@@ -216,7 +259,8 @@ async function runScout(
       console.warn(`${tag} ❌ init session échouée — blacklist + rotation proxy`);
       flagDecodoIp(base, "scout-init-failed");
       deleteWorkerCfClearance(stickyProxy);
-      proxyIndex += SCOUT_COUNT;
+      // Avancer d'AU MOINS 1 puis laisser getValidDecodoProxyFromIndex sauter les blacklistées.
+      proxyIndex = picked.idx + SCOUT_COUNT;
       stickyId = `sc${scoutIndex}-${Math.random().toString(36).slice(2, 8)}`;
       session = null;
       return false;
@@ -228,12 +272,14 @@ async function runScout(
 
   /** Bascule sur un autre proxy après une mort CF. */
   const rotateProxy = (reason: string): void => {
-    const base = getDecodoProxyForIndex(proxyIndex);
-    if (base) {
-      flagDecodoIp(base, reason);
-      deleteWorkerCfClearance(addStickySession(base, stickyId));
+    const picked = getValidDecodoProxyFromIndex(proxyIndex);
+    if (picked && !picked.allBlacklisted) {
+      flagDecodoIp(picked.url, reason);
+      deleteWorkerCfClearance(addStickySession(picked.url, stickyId));
+      proxyIndex = picked.idx + SCOUT_COUNT;
+    } else {
+      proxyIndex += SCOUT_COUNT;
     }
-    proxyIndex += SCOUT_COUNT;
     stickyId = `sc${scoutIndex}-${Math.random().toString(36).slice(2, 8)}`;
     session = null;
   };
@@ -243,7 +289,22 @@ async function runScout(
   console.log(`${tag} 🚀 démarré — portail ${SCOUT_PORTAL_URL} (agenda=${known.agendaId}, service=${known.serviceId})`);
 
   while (!isStopped()) {
-    let tickMs = isFastWindow(Date.now()) ? SCOUT_FAST_TICK_MS : SCOUT_IDLE_TICK_MS;
+    // Hors fenêtre [SCOUT_FAST_START_MIN, SCOUT_FAST_END_MIN[ : ARRÊT TOTAL du scan.
+    // Le scout libère sa session et dort jusqu'au prochain HH:SCOUT_FAST_START_MIN au lieu
+    // de scanner en cadence lente — aucune requête réseau entre HH:15 et le prochain HH:03.
+    if (!isFastWindow(Date.now())) {
+      session = null;
+      const untilNext = msUntilNextFastWindow(Date.now());
+      console.log(
+        `${tag} 💤 hors fenêtre — arrêt du scan, réveil dans ${Math.round(untilNext / 1000)}s ` +
+          `(prochain HH:${String(SCOUT_FAST_START_MIN).padStart(2, "0")})`,
+      );
+      // Sommeil borné par SCOUT_IDLE_TICK_MS pour rester réactif à l'arrêt du pool (isStopped).
+      await sleep(Math.min(untilNext, SCOUT_IDLE_TICK_MS));
+      continue;
+    }
+
+    let tickMs = SCOUT_FAST_TICK_MS;
     try {
       const ok = await ensureSession();
       if (!ok || !session) {
@@ -328,7 +389,9 @@ export function startScoutPool(capsolverKey?: string): () => void {
 
   console.log(
     `[spain-scout] 🐺 Démarrage du pool d'éclaireurs dédiés — ${SCOUT_COUNT} scout(s), ` +
-      `portail ${SCOUT_PORTAL_URL} (fast ${SCOUT_FAST_TICK_MS}ms / idle ${SCOUT_IDLE_TICK_MS}ms)`,
+      `portail ${SCOUT_PORTAL_URL} (fenêtre HH:${String(SCOUT_FAST_START_MIN).padStart(2, "0")}` +
+      `→HH:${String(SCOUT_FAST_END_MIN).padStart(2, "0")}, fast ${SCOUT_FAST_TICK_MS}ms, ` +
+      `arrêt total hors fenêtre)`,
   );
 
   for (let i = 0; i < SCOUT_COUNT; i++) {
