@@ -72,16 +72,17 @@ const SCOUT_IDLE_TICK_MS = ((): number => {
   return Math.max(5000, Number.isFinite(v) ? Math.round(v) : 45000);
 })();
 
-/** Minute-dans-l'heure de début de la fenêtre rapide (Europe/Madrid). Défaut 3. */
+/** Minute-dans-l'heure de début de la fenêtre rapide (Europe/Madrid). Défaut 5 (fenêtre HH:05). */
 const SCOUT_FAST_START_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_SCOUT_FAST_START_MIN ?? "3");
-  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 3));
+  const v = Number(process.env.SPAIN_SCOUT_FAST_START_MIN ?? "5");
+  return Math.max(0, Math.min(59, Number.isFinite(v) ? Math.round(v) : 5));
 })();
 
-/** Minute-dans-l'heure de fin de la fenêtre rapide (Europe/Madrid). Défaut 26 (pic HH:13-14). */
+/** Minute-dans-l'heure de fin (exclue) de la fenêtre rapide (Europe/Madrid). Défaut 25
+ *  (fenêtre de publication connue HH:05 → HH:25 ; minute historique de publication HH:13). */
 const SCOUT_FAST_END_MIN = ((): number => {
-  const v = Number(process.env.SPAIN_SCOUT_FAST_END_MIN ?? "26");
-  return Math.max(1, Math.min(60, Number.isFinite(v) ? Math.round(v) : 26));
+  const v = Number(process.env.SPAIN_SCOUT_FAST_END_MIN ?? "25");
+  return Math.max(1, Math.min(60, Number.isFinite(v) ? Math.round(v) : 25));
 })();
 
 /** Marge de fraîcheur du cf_clearance (ms) sous laquelle on re-initialise la session (5 min). */
