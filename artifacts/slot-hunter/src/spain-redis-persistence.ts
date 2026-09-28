@@ -1326,6 +1326,66 @@ export async function publishSlotSnapshot(
 }
 
 /**
+ * spain-scout — Décrémente (ou retire) UN créneau du snapshot Redis, EN PRÉSERVANT le TTL.
+ *
+ * Appelée juste après un booking réussi (recordBookingWinner) pour corriger le snapshot
+ * dans la fraction de seconde entre deux rafraîchissements des scouts : le créneau booké
+ * voit son `freeslots` décrémenté (retiré si ≤ 0), afin qu'aucun autre worker meute ne
+ * retente un créneau déjà pris (fix boucle sur créneau mort — bug prod 2026-09-28).
+ *
+ * Correction basse latence complémentaire : les scouts republient les vraies données
+ * datetime/ toutes les ~1-3 s (le serveur reflète la place consommée), donc le snapshot
+ * converge de toute façon ; ce décrément couvre juste la fenêtre sub-seconde.
+ *
+ * GET → recompute → SET KEEPTTL (n'allonge jamais la durée de vie du snapshot). No-op si
+ * Redis absent, clé absente, ou créneau introuvable. Fire-and-forget côté appelant.
+ *
+ * @param agendaId  agenda cible (même clé que la publication).
+ * @param serviceId service cible (même clé que la publication).
+ * @param date      date du créneau booké (YYYY-MM-DD).
+ * @param time      heure du créneau booké (HH:MM).
+ * @param by        nombre de places consommées (défaut 1).
+ */
+export async function decrementSlotSnapshot(
+  agendaId: string,
+  serviceId: string,
+  date: string,
+  time: string,
+  by = 1,
+): Promise<void> {
+  if (!redisReady || !redisClient || !agendaId || !serviceId) return;
+  const key = `${REDIS_SLOT_SNAP_PREFIX}${agendaId}:${serviceId}`;
+  try {
+    const raw = await redisClient.get(key);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Array<{ d?: string; t?: string; a?: string; n?: number }>;
+    if (!Array.isArray(parsed)) return;
+
+    let changed = false;
+    const next = parsed
+      .map((s) => {
+        if (s && s.d === date && s.t === time) {
+          changed = true;
+          const remaining = Math.max(0, Math.round(Number(s.n) || 0) - Math.max(1, Math.round(by)));
+          return { ...s, n: remaining };
+        }
+        return s;
+      })
+      // Retire les créneaux dont il ne reste aucune place.
+      .filter((s) => !(s && typeof s.n === "number" && s.n <= 0));
+
+    if (!changed) return;
+
+    // Préserver le TTL restant (KEEPTTL) : ne jamais prolonger la vie du snapshot.
+    if (next.length === 0) {
+      await redisClient.del(key);
+    } else {
+      await redisClient.set(key, JSON.stringify(next), { KEEPTTL: true });
+    }
+  } catch { /* ignore — non-bloquant */ }
+}
+
+/**
  * Résultat de lecture d'un snapshot de créneaux (mode meute).
  * `ageSec` estime l'âge du snapshot depuis sa publication : dérivé du TTL restant
  * (`ttlSec configuré - PTTL restant`). Utile pour ne pas booker sur un snapshot périmé.

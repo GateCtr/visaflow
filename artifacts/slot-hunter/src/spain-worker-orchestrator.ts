@@ -54,6 +54,8 @@ import { createPreflightController, type PreflightController } from "./spain/spa
 import { prewarmAllDossiers, hasRegisteredDossiers, hasSlotSeenDossiers, registerDossierCaptcha } from "./spain-hcaptcha-prewarm.js";
 import { portalRequiresCaptcha } from "./spain-portals.js";
 import { HCAPTCHA_SITEKEY } from "./spain-http-booking.js";
+// spain-scout : pool d'éclaireurs dédiés (rafraîchissent le snapshot Redis, ne bookent jamais).
+import { startScoutPool, SCOUT_POOL_ENABLED } from "./spain-scout.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -255,11 +257,20 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
     `[SPAIN-ORCH] ▶ Orchestrateur démarré (instance: ${SPAIN_INSTANCE_ID}) — mode: agents autonomes par dossier`,
   );
 
+  // spain-scout : fonction d'arrêt du pool d'éclaireurs dédiés (null si pool non démarré).
+  let stopScoutPool: (() => void) | null = null;
+
   // ── Init Redis + Decodo pool ─────────────────────────────────────────────────
   const redisOk = await initSpainRedis();
   if (redisOk) {
     log("INFO", "[SPAIN-ORCH] ✅ Redis Spain connecté");
     await initDecodoPool();
+    // spain-scout : démarrer le pool d'éclaireurs dédiés (feature-flag SPAIN_SCOUT_POOL).
+    // Ils tournent en continu, indépendants des dossiers Convex, et sont l'écrivain UNIQUE
+    // du snapshot Redis (la meute ne republie plus). No-op si le flag est OFF.
+    if (SCOUT_POOL_ENABLED) {
+      stopScoutPool = startScoutPool(resolveCapsolverKey());
+    }
   } else {
     log(
       "WARN",
@@ -430,14 +441,20 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
       // ── V2 : check sommeil post-détection (DÉSACTIVÉ — annulations arrivent à tout moment) ──
       // spain-eclaireur (mode meute) : attribution des rôles par portail AVANT le spawn.
       // Gated par SPAIN_MEUTE_MODE ; OFF → map vide → role reste undefined (comportement actuel).
-      const roleByDossier = MEUTE_MODE_ENABLED
-        ? await assignRoles(dossiers)
-        : new Map<string, "eclaireur" | "meute">();
-      if (MEUTE_MODE_ENABLED && roleByDossier.size > 0) {
+      // spain-scout : quand le pool d'éclaireurs dédiés tourne, il est l'écrivain UNIQUE du
+      // snapshot → AUCUN dossier client ne doit être éclaireur (sinon double publication +
+      // self-perpétuation). Tous les dossiers deviennent "meute" (lecteurs du snapshot).
+      const roleByDossier = SCOUT_POOL_ENABLED
+        ? new Map<string, "eclaireur" | "meute">(dossiers.map((d) => [d.id, "meute" as const]))
+        : MEUTE_MODE_ENABLED
+          ? await assignRoles(dossiers)
+          : new Map<string, "eclaireur" | "meute">();
+      if ((MEUTE_MODE_ENABLED || SCOUT_POOL_ENABLED) && roleByDossier.size > 0) {
         const eclaireurs = [...roleByDossier.entries()].filter(([, r]) => r === "eclaireur").length;
+        const src = SCOUT_POOL_ENABLED ? "scouts dédiés" : "éclaireur dossier";
         log(
           "INFO",
-          `[SPAIN-ORCH] 🐺 Mode meute — ${eclaireurs} éclaireur(s), ${roleByDossier.size - eclaireurs} meute (Redis ${isSpainRedisReady() ? "ok" : "dégradé"})`,
+          `[SPAIN-ORCH] 🐺 Mode meute (${src}) — ${eclaireurs} éclaireur(s), ${roleByDossier.size - eclaireurs} meute (Redis ${isSpainRedisReady() ? "ok" : "dégradé"})`,
         );
       }
       {
@@ -596,6 +613,7 @@ export async function startSpainWorkerOrchestrator(): Promise<void> {
   } finally {
     clearInterval(lockRenewalTimer);
     clearInterval(hcaptchaPrewarmTimer);
+    if (stopScoutPool) stopScoutPool();
     stopAllKeepAlives();
     if (lockHeld) {
       await releaseSpainScannerLock().catch(() => {});

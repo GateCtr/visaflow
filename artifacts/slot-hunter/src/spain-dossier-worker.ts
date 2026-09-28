@@ -84,6 +84,7 @@ import {
   releaseBookingSlot,
   MAX_CONCURRENT_BOOKERS,
   readSlotSnapshot,
+  decrementSlotSnapshot,
   releaseSentinelRole,
   type SlotSnapEntry,
 } from "./spain-redis-persistence.js";
@@ -208,6 +209,21 @@ const PROXY_ERROR_CF_FRESH_MIN_MS = 5 * 60_000;
  * `datetime/` 0B sur tous les mois, jamais à une réponse vide normale.
  */
 const PEER_BURST_MAX_AGE_SEC = 20;
+
+/**
+ * spain-scout — Âge maximal (secondes) d'un snapshot Redis encore considéré FRAIS par la
+ * meute. Au-delà, la meute cesse de faire confiance au snapshot et refait son propre
+ * datetime/ (scan direct). Depuis que la meute ne republie plus (elle ne fait que lire),
+ * un snapshot n'est maintenu à jour QUE par les scouts dédiés / l'éclaireur : quand ceux-ci
+ * cessent de publier (créneaux épuisés ou scouts bloqués), l'âge grimpe et cette garde évite
+ * que la meute boucle sur des créneaux morts. Les scouts republient les vraies données
+ * datetime/ toutes les ~1-3 s en fenêtre chaude → un snapshot vivant reste bien < 8 s.
+ * Override : SPAIN_SNAPSHOT_FRESH_MAX_SEC (défaut 8).
+ */
+const SNAPSHOT_FRESH_MAX_SEC = ((): number => {
+  const v = Number(process.env.SPAIN_SNAPSHOT_FRESH_MAX_SEC ?? "8");
+  return Math.max(1, Number.isFinite(v) ? Math.round(v) : 8);
+})();
 
 /** Fenêtre de surveillance par dossier (25 min) — alignée TTL cf_clearance */
 const WORKER_WINDOW_MS = ((): number => {
@@ -1468,6 +1484,18 @@ async function scanViaSnapshot(
     log("INFO", `${tag} 🐺 snapshot vide → not_found (attente prochain burst)`);
     return { status: "not_found", serviceId: known.serviceId, serviceName: "", agendaId: known.agendaId, monthTraces: [] };
   }
+  // Garde de fraîcheur : un snapshot trop vieux n'est plus une source de vérité fiable
+  // (les scouts / l'éclaireur ont cessé de le rafraîchir → créneaux probablement épuisés
+  // ou pris). On refait alors un datetime/ direct plutôt que de booker sur des données
+  // périmées (fix boucle sur créneau mort — bug prod 2026-09-28). Un snapshot vivant est
+  // republié toutes les ~1-3 s par les scouts → âge < SNAPSHOT_FRESH_MAX_SEC en fenêtre chaude.
+  if (snap.ageSec > SNAPSHOT_FRESH_MAX_SEC) {
+    log(
+      "INFO",
+      `${tag} 🐺 snapshot périmé (âge ${snap.ageSec}s > ${SNAPSHOT_FRESH_MAX_SEC}s) → scan datetime/ direct (pas de booking sur données mortes)`,
+    );
+    return refreshSessionAndScan(session, config, tag);
+  }
   log("INFO", `${tag} 🐺 snapshot lu : ${snap.slots.length} créneau(x) (âge ${snap.ageSec}s) — SAUT de datetime/`);
 
   // Amorcer la session (GET widget + POST token + /main/ → PHPSESSID frais).
@@ -1540,7 +1568,7 @@ const ECLAIREUR_SHORTSCAN = process.env.SPAIN_ECLAIREUR_SHORTSCAN === "1";
  * Retourne null si le chemin court n'est pas applicable (pas d'IDs connus / GET widget KO)
  * → l'appelant retombe sur le cycle complet.
  */
-async function scanViaWidgetDatetime(
+export async function scanViaWidgetDatetime(
   session: SpainCfSession,
   config: SpainDossierConfig,
   tag: string,
@@ -2876,12 +2904,22 @@ export async function runDossierWorker(
         // sans jamais toucher rt.slotEverSeen (monotonie préservée, Req 9.6).
         // Fire-and-forget : ne bloque pas la détection (≤ 500 ms de latence côté flag).
         const raceDetectedAtMs = Date.now();
-        void publishSlotSnapshotWithRetry(
-          scan.agendaId ?? "",
-          scan.serviceId ?? "",
-          scan.slots.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
-          tag,
-        );
+        // spain-scout : la MEUTE ne republie JAMAIS le snapshot. Elle ne fait que LIRE
+        // (scanViaSnapshot) — republier `scan.slots` (relus depuis Redis) réécrivait à
+        // l'identique le snapshot avec âge 0, le figeant indéfiniment même après que des
+        // créneaux aient été bookés (bug prod 2026-09-28 : Christian madada bouclait sur
+        // "13 créneaux âge 1s" alors que 3 étaient déjà pris). Seuls l'éclaireur (flux
+        // normal) et les scouts dédiés (pool permanent) publient des données datetime/
+        // RÉELLES. Meute (role="meute") → skip publication → l'âge grimpe → la garde de
+        // fraîcheur (SPAIN_SNAPSHOT_FRESH_MAX_SEC) fait retomber la meute sur un scan direct.
+        if (config.role !== "meute") {
+          void publishSlotSnapshotWithRetry(
+            scan.agendaId ?? "",
+            scan.serviceId ?? "",
+            scan.slots.map((s) => ({ date: s.date, time: s.time, agendaId: s.agendaId ?? "", freeslots: s.freeslots })),
+            tag,
+          );
+        }
 
         // ── Reporting Convex APRÈS filtre — "found" seulement si créneaux éligibles ──
         // IMPORTANT : ne pas passer "found" si tous les créneaux sont hors-fenêtre,
@@ -3490,6 +3528,16 @@ export async function runDossierWorker(
                 slot.agendaId ?? "",
                 config.id,
                 bookResult.locator,
+              );
+              // spain-scout : décrémenter le créneau booké dans le snapshot Redis (KEEPTTL)
+              // pour correction sub-seconde entre deux rafraîchissements des scouts — évite
+              // qu'un autre worker meute retente ce créneau désormais consommé.
+              void decrementSlotSnapshot(
+                slot.agendaId ?? "",
+                scan.serviceId ?? "",
+                slot.date,
+                slot.time,
+                1,
               );
               await reportBookingSuccess(config, bookResult, slot, scan, tag);
               // V2 : libérer le sémaphore de booking (seulement si réellement acquis)
