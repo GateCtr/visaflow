@@ -497,6 +497,26 @@ export function shouldRefreshAfterSummaryFailure(
 }
 
 /**
+ * Détecte le message métier Bookitit indiquant une réservation déjà pendante :
+ * « Ya existe un servicio pendiente. Cancela el anterior para solicitar otra cita ».
+ *
+ * ⚠️ Ce prédicat ne fait QUE reconnaître le message. Il ne présume PAS qu'il s'agit d'un
+ * fantôme : un tel message ISOLÉ peut refléter un VRAI rendez-vous déjà pris par le client.
+ * L'appelant ne doit le traiter comme un fantôme à contourner (refresh session) que s'il
+ * suit IMMÉDIATEMENT un summary/ échoué du round précédent (réservation temporaire créée
+ * côté serveur malgré un body vide — bug prod 2026-09-28).
+ */
+export function isPendingServiceError(
+  status: SpainBookingResult["status"],
+  errorMessage?: string,
+): boolean {
+  if (status !== "signin_failed") return false;
+  const message = (errorMessage ?? "").toLowerCase();
+  return message.includes("servicio pendiente")
+    || message.includes("cancela el anterior");
+}
+
+/**
  * Seuil "assez de places" pour BYPASSER le sémaphore de booking.
  *
  * Le sémaphore (MAX_CONCURRENT_BOOKERS) sert à éviter les réponses 0B du serveur
@@ -2502,10 +2522,26 @@ export async function runDossierWorker(
   // qui rate son booking blackliste une IP saine + re-solve CF inutilement (bug prod 2026-09-27).
   let lastOwnFoundAtMs = 0;
 
+  // ── "servicio pendiente" fantôme (bug prod 2026-09-28) ──────────────────────────
+  // true si le round PRÉCÉDENT a eu un summary/ échoué (body vide). Le serveur Bookitit
+  // peut avoir créé une réservation TEMPORAIRE fantôme malgré le body vide reçu ; au round
+  // suivant, signin/ répond "Ya existe un servicio pendiente". Ce message ne doit être
+  // traité comme un fantôme (→ refresh session, PAS un RDV confirmé) QUE s'il suit
+  // immédiatement un summary/ échoué. Sinon (message isolé) c'est potentiellement un VRAI
+  // RDV existant du client → on ne le contourne pas (comportement générique inchangé).
+  let lastRoundHadSummaryFailure = false;
+
   while (Date.now() < windowEnd) {
     cycleCount++;
     const cycleStart = Date.now();
     let refreshReason: "slot_taken" | "summary_failed" | "signin_failed" | null = null;
+
+    // Snapshot du flag "summary/ échoué au round précédent" puis reset immédiat : la
+    // détection du "servicio pendiente" fantôme n'est valable que pour CE round-ci
+    // (le round juste après le summary/ vide). Le handler summary_failed le réarmera
+    // en fin de cycle si un nouveau summary/ échoue.
+    const summaryFailedLastRound = lastRoundHadSummaryFailure;
+    lastRoundHadSummaryFailure = false;
 
     // ── spain-synchronized-scan (task 10.1) : phase + tick effectif de la grille ──
     // La phase (preflight/hunt/late) dérive de l'horloge murale Europe/Madrid ; le tick
@@ -3597,6 +3633,8 @@ export async function runDossierWorker(
                 serviceName: scan.serviceName,
               }).catch(() => {});
               refreshReason = "summary_failed";
+              // Armer la détection du "servicio pendiente" fantôme au round SUIVANT.
+              lastRoundHadSummaryFailure = true;
               break;
             }
 
@@ -3646,6 +3684,38 @@ export async function runDossierWorker(
                 time: slot.time,
                 status: "failed",
                 reason: bookResult.errorMessage ?? "signin/ non exploitable",
+                serviceName: scan.serviceName,
+              }).catch(() => {});
+              refreshReason = "signin_failed";
+              break;
+            }
+
+            // ── "Ya existe un servicio pendiente" APRÈS un summary/ échoué ────────
+            // Le round précédent a eu un summary/ body vide → le serveur a créé une
+            // réservation TEMPORAIRE fantôme (non confirmée). Ce round reçoit alors
+            // "servicio pendiente". Ce n'est PAS un vrai RDV : on jette la session
+            // (nouveau PHPSESSID au prochain round → le verrou temporaire, lié à
+            // l'ancien PHPSESSID, expire côté serveur). On NE marque PAS le dossier
+            // comme booké. Gardé UNIQUEMENT si lastRoundHadSummaryFailure (sinon un
+            // "servicio pendiente" isolé pourrait être un VRAI RDV du client → on ne
+            // le contourne pas et on laisse le cas générique le reporter).
+            if (
+              summaryFailedLastRound
+              && isPendingServiceError(bookResult.status, bookResult.errorMessage)
+            ) {
+              log(
+                "WARN",
+                `${tag} ⚠️ "servicio pendiente" juste après un summary/ échoué — réservation ` +
+                  `temporaire FANTÔME (PAS un RDV confirmé). Refresh + scan avec nouveau PHPSESSID.`,
+              );
+              reportBookingLog({
+                applicationId: config.applicationId,
+                dossierId: config.id,
+                applicantName: config.applicantName,
+                date: slot.date,
+                time: slot.time,
+                status: "failed",
+                reason: "Réservation temporaire fantôme (servicio pendiente après summary/ vide) — aucun RDV confirmé",
                 serviceName: scan.serviceName,
               }).catch(() => {});
               refreshReason = "signin_failed";
