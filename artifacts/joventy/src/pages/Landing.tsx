@@ -471,6 +471,28 @@ function StaticTestimonialsGrid() {
   );
 }
 
+/**
+ * Bandeau de stats live des rendez-vous Espagne (chiffres réels agrégés depuis
+ * spainBookingLogs via query publique). S'auto-masque tant qu'aucun compteur n'est > 0.
+ * Libellés grand public (aucune mention "chasseur"/"robot"/"bot").
+ */
+function SpainStatsStrip() {
+  const spainStats = useQuery(api.spainBooking.getPublicStats);
+  if (!spainStats || (spainStats.processed === 0 && spainStats.obtained === 0)) return null;
+  return (
+    <div className="mt-10 grid grid-cols-2 gap-4 max-w-md">
+      <div className="bg-white border border-green-200 rounded-2xl p-5 text-center shadow-sm">
+        <p className="text-primary font-black text-3xl">{spainStats.processed.toLocaleString("fr-FR")}</p>
+        <p className="text-xs text-muted-foreground mt-1">dossiers Espagne traités par notre équipe</p>
+      </div>
+      <div className="bg-white border border-green-200 rounded-2xl p-5 text-center shadow-sm">
+        <p className="text-primary font-black text-3xl">{spainStats.obtained.toLocaleString("fr-FR")}</p>
+        <p className="text-xs text-muted-foreground mt-1">rendez-vous consulaires obtenus</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Landing() {
 
   return (
@@ -1150,6 +1172,8 @@ export default function Landing() {
             <p className="text-muted-foreground text-lg leading-relaxed">
               Pour éviter les confusions, voici les pages utiles selon votre cas : la procédure visa Espagne, l'adresse de l'ambassade et le guide CEV pour la France, la Belgique ou l'Allemagne.
             </p>
+            {/* Stats live RDV Espagne — chiffres réels, s'auto-masque si 0 */}
+            <SpainStatsStrip />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">

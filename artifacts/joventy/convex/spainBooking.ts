@@ -97,3 +97,35 @@ export const getRecentBookingLogs = query({
     return logs;
   },
 });
+
+// ─── Query PUBLIQUE (non authentifiée) ────────────────────────────────────────
+
+/**
+ * Statistiques publiques agrégées des rendez-vous Espagne (Bookitit).
+ *
+ * PUBLIQUE et sans authentification (pattern reviews.listApproved) : elle est
+ * consommée par les pages marketing (AlerteEspagne, landing créneaux Espagne).
+ *
+ * ⚠️ Sécurité : ne renvoie QUE des compteurs agrégés (nombres). Aucune donnée
+ * individuelle (nom, date, dossierId, locator) n'est exposée.
+ *
+ * - `processed` : nombre de dossiers Espagne DISTINCTS ayant eu au moins une
+ *   tentative de booking (dossierId uniques dans spainBookingLogs).
+ * - `obtained`  : nombre de rendez-vous RÉELLEMENT réservés (logs status "booked").
+ *
+ * Chiffres réels bruts (aucun socle marketing ajouté).
+ */
+export const getPublicStats = query({
+  handler: async (ctx): Promise<{ processed: number; obtained: number }> => {
+    const logs = await ctx.db.query("spainBookingLogs").collect();
+
+    const distinctDossiers = new Set<string>();
+    let obtained = 0;
+    for (const l of logs) {
+      if (l.dossierId) distinctDossiers.add(l.dossierId);
+      if (l.status === "booked") obtained += 1;
+    }
+
+    return { processed: distinctDossiers.size, obtained };
+  },
+});

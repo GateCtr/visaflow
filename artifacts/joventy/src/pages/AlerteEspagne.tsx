@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { Helmet } from "react-helmet-async";
 import { api } from "@convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,8 @@ export default function AlerteEspagne() {
   const { toast } = useToast();
   const generateUploadUrl = useMutation(api.spainAlert.generateUploadUrl);
   const submitOrder = useMutation(api.spainAlert.submitOrder);
+  // Stats publiques live des rendez-vous Espagne (Bookitit) : dossiers traités + RDV obtenus.
+  const spainStats = useQuery(api.spainBooking.getPublicStats);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -263,6 +265,24 @@ export default function AlerteEspagne() {
           ))}
         </div>
       </section>
+
+      {/* ═══════════════════════════ STATS RDV ESPAGNE (live) ═══ */}
+      {/* Chiffres réels agrégés depuis spainBookingLogs (query publique). Affichés
+          uniquement si au moins un compteur est > 0 (pas de "0 RDV" contre-productif). */}
+      {spainStats && (spainStats.processed > 0 || spainStats.obtained > 0) && (
+        <section className="bg-gradient-to-r from-emerald-600 to-green-600 py-6 px-4">
+          <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 sm:gap-16">
+            <div className="text-center">
+              <p className="text-white font-black text-3xl">{spainStats.processed.toLocaleString("fr-FR")}</p>
+              <p className="text-white/80 text-xs mt-1 max-w-[150px]">dossiers Espagne traités par notre équipe</p>
+            </div>
+            <div className="text-center">
+              <p className="text-white font-black text-3xl">{spainStats.obtained.toLocaleString("fr-FR")}</p>
+              <p className="text-white/80 text-xs mt-1 max-w-[150px]">rendez-vous consulaires obtenus</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ══════════════════════════════════════════════════ PAIN ═══ */}
       <section className="py-20 px-4">
