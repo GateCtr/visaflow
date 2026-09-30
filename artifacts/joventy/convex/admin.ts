@@ -941,6 +941,60 @@ export const completeDossierOnly = mutation({
   },
 });
 
+/**
+ * Admin : passer MANUELLEMENT un dossier à "completed" SANS exiger le paiement de la
+ * prime de succès. Destiné aux dossiers "créneau" (slot_only / full_service) bloqués sur
+ * `slot_found_awaiting_success_fee` que l'admin veut clôturer (ex. arrangement hors
+ * plateforme, geste commercial) sans passer par le paywall.
+ *
+ * Différence clé avec `confirmSuccessFee` : ici `isSuccessFeePaid` reste INCHANGÉ (donc
+ * `false` si non payé) et `isPaid` n'est PAS forcé à true → la compta n'est pas faussée.
+ * Le dossier passe simplement au statut final "completed", avec une trace explicite.
+ *
+ * Réservé aux admins. Refuse les dossiers déjà complétés ou rejetés.
+ */
+export const completeWithoutPayment = mutation({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown>);
+
+    const app = await ctx.db.get(args.applicationId);
+    if (!app) throw new Error("Dossier introuvable");
+
+    if (app.status === "completed") {
+      throw new Error("Ce dossier est déjà complété.");
+    }
+    if (app.status === "rejected") {
+      throw new Error("Impossible de compléter un dossier rejeté.");
+    }
+
+    // On NE modifie PAS priceDetails.isSuccessFeePaid ni isPaid : le dossier est marqué
+    // terminé sans être compté comme payé (compta préservée). Seul le statut change.
+    await ctx.db.patch(args.applicationId, {
+      status: "completed",
+      logs: [
+        ...(app.logs ?? []),
+        makeLog(
+          "✅ Dossier marqué TERMINÉ manuellement par l'admin — sans paiement de la prime de succès.",
+          "admin"
+        ),
+      ],
+      updatedAt: Date.now(),
+    });
+
+    await ctx.scheduler.runAfter(0, internal.notifications.create, {
+      userId: app.userId,
+      type: "dossier_completed",
+      title: "Dossier complété ✓",
+      body: "Votre dossier a été marqué comme terminé.",
+      applicationId: args.applicationId,
+    });
+
+    return args.applicationId;
+  },
+});
+
 export const getCalendarData = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();

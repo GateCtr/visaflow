@@ -26,6 +26,7 @@ export function QuickActions({ appId, status, isEngagementPaid, isDossierOnly, i
   const setInReview = useMutation(api.admin.setInReview);
   const rejectApplication = useMutation(api.admin.rejectApplication);
   const completeDossierOnly = useMutation(api.admin.completeDossierOnly);
+  const completeWithoutPayment = useMutation(api.admin.completeWithoutPayment);
   const saveAdminNotes = useMutation(api.admin.saveAdminNotes);
 
   const [adminNoteInput, setAdminNoteInput] = useState(adminNotes);
@@ -65,6 +66,17 @@ export function QuickActions({ appId, status, isEngagementPaid, isDossierOnly, i
             <Button size="sm" className="h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => handleAction(() => completeDossierOnly({ applicationId: appId }), "Complété.")}>
               <CheckCircle2 className="w-3.5 h-3.5" /> Complété
+            </Button>
+          )}
+          {/* Terminer sans paiement — dossiers créneau bloqués sur success fee. Ne touche
+              pas la compta (isSuccessFeePaid inchangé). Confirmation requise (action sensible). */}
+          {!isDossierOnly && !isCompleted && status !== "rejected" && (
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+              onClick={() => {
+                if (!window.confirm("Marquer ce dossier comme TERMINÉ sans paiement de la prime de succès ? La compta ne sera pas affectée.")) return;
+                void handleAction(() => completeWithoutPayment({ applicationId: appId }), "Terminé (sans paiement).");
+              }}>
+              <CheckCircle2 className="w-3.5 h-3.5" /> Terminer (sans paiement)
             </Button>
           )}
           {!showRejectForm ? (
