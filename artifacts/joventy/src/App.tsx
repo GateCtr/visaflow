@@ -126,6 +126,12 @@ const ProtectedRoute = ({
 
 function RouterWithTracker() {
   useTrafficTracker();
+  // Scroll-to-top sur chaque changement de route : les SPA conservent la position
+  // de défilement d'une page à l'autre. On remet le scroll en haut à chaque navigation.
+  const [location] = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location]);
   return null;
 }
 
