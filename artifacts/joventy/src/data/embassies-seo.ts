@@ -242,8 +242,8 @@ export const EMBASSIES_SEO: EmbassySEO[] = [
     appointmentOnly: true,
     website: "https://kinshasa.diplo.de",
     mapsQuery: "82 Avenue Roi Baudouin Gombe Kinshasa Ambassade Allemagne",
-    title: "Ambassade d'Allemagne à Kinshasa — Adresse, visa type D & RK-Termin | Joventy",
-    metaDescription: "Coordonnées de l'Ambassade d'Allemagne à Kinshasa : 82 avenue Roi Baudouin, Gombe. Visa national type D, rendez-vous RK-Termin et visa Schengen CEV.",
+    title: "Ambassade Allemagne Kinshasa : RK-Termin, Visa & Adresse",
+    metaDescription: "Ambassade d'Allemagne à Kinshasa (82 avenue Roi Baudouin, Gombe) : rendez-vous RK-Termin, visa national type D, visa Schengen CEV, horaires et contact 2026.",
     h1: "Ambassade d'Allemagne à Kinshasa — adresse et visas type D",
     intro: "L'Ambassade de la République fédérale d'Allemagne à Kinshasa se trouve au 82, avenue Roi Baudouin, à Gombe. Elle traite les demandes de visa national allemand (type D) déposées sur rendez-vous selon la catégorie. Les demandes de visa Schengen de court séjour suivent, elles, le circuit du CEV lorsqu'il est compétent. Vérifiez toujours les consignes actualisées de l'ambassade avant un déplacement.",
     practicalInfo: [

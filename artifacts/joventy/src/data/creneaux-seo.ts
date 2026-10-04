@@ -103,9 +103,9 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     destinationKey: "germany",
     emoji: "🇩🇪",
     name: "Allemagne",
-    title: "Créneau Visa Long Séjour Allemagne Kinshasa 2026 — RK-Termin 24h/24 | Joventy",
+    title: "RK-Termin Kinshasa : Rendez-vous Visa Allemagne Long Séjour",
     metaDescription:
-      "Rendez-vous visa long séjour Allemagne depuis Kinshasa 2026 (études, travail, famille) : Joventy surveille RK-Termin en continu et réserve votre créneau. 200 $ payés uniquement après obtention — aucun acompte.",
+      "Rendez-vous visa long séjour Allemagne (RK-Termin) depuis Kinshasa : études, travail, famille. Joventy surveille le portail en continu. 200 $ après obtention, aucun acompte.",
     h1: "Créneau Visa Long Séjour Allemagne depuis Kinshasa — RK-Termin géré 24h/24",
     accroche:
       "L'ambassade d'Allemagne à Kinshasa traite les visas long séjour (études, travail, regroupement familial) sur rendez-vous via le portail RK-Termin. Ces créneaux sont rares et disparaissent en quelques minutes. Joventy surveille le système en permanence et verrouille votre slot dès qu'un rendez-vous disponible apparaît — sans acompte de votre part.",

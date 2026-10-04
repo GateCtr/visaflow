@@ -281,8 +281,8 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     success: 1000,
     externalFees: "Selon les instructions de l’autorité compétente et du CEV, le rendez-vous officiel étant gratuit",
     processingTime: "Disponibilités et instruction variables ; vérifiez les informations officielles",
-    title: "Visa Schengen Kinshasa 2026 — Guide CEV et pays compétents | Joventy",
-    metaDescription: "Guide visa Schengen à Kinshasa : rôle du CEV géré par l’Ambassade de Belgique, Visa On Web, pays représentés, court et long séjour.",
+    title: "Visa Schengen & CEV Kinshasa 2026 : Rendez-vous en ligne",
+    metaDescription: "Visa Schengen à Kinshasa : rôle du CEV (ex-Maison Schengen) géré par l’Ambassade de Belgique, rendez-vous Visa On Web, pays représentés, court et long séjour.",
     h1: "Visa Schengen depuis Kinshasa : comprendre le parcours CEV",
     intro: "Le CEV de Kinshasa, anciennement Maison Schengen et géré par l’Ambassade de Belgique, reçoit les demandes de court séjour pour les pays qu’il représente. Vérifiez d’abord la destination compétente sur cev-kin.eu : l’Espagne suit sa propre procédure. Le CEV reçoit les longs séjours uniquement pour la Belgique et le Luxembourg ; les longs séjours France et Allemagne relèvent de leurs ambassades.",
     visaTypes: [
