@@ -1712,6 +1712,96 @@ const guides: Guide[] = [
   },
 
   {
+    slug: "rendez-vous-cev-lubumbashi-visa-schengen",
+    title: "Rendez-vous CEV Lubumbashi : visa Schengen pour le Grand Katanga",
+    metaTitle: "CEV Lubumbashi : Rendez-vous Visa Schengen (Katanga) 2026",
+    metaDescription:
+      "Rendez-vous visa Schengen à Lubumbashi : le Consulat de Belgique dessert le Grand Katanga via le CEV. Compte Visa On Web, réservation cev-kin.eu, sélection Lubumbashi.",
+    publishedDate: "2026-09-28",
+    updatedDate: "2026-09-28",
+    readingTime: 7,
+    category: "Visa Schengen",
+    coverEmoji: "🏛️",
+    intro:
+      "À Lubumbashi, les demandes de visa Schengen pour les résidents du Grand Katanga passent par le Consulat général de Belgique, dans le cadre du CEV (Centre Européen des Visas, anciennement « Maison Schengen ») géré par l'Ambassade de Belgique. Le parcours est le même qu'à Kinshasa — compte Visa On Web puis réservation sur cev-kin.eu — mais vous sélectionnez Lubumbashi comme lieu de dépôt. Vérifiez toujours la compétence et la checklist officielles avant toute démarche.",
+    sections: [
+      {
+        heading: "CEV Lubumbashi : qui dépose où ?",
+        body:
+          "Le CEV distingue deux lieux de dépôt en RDC : Kinshasa pour le reste du pays et Lubumbashi pour le Grand Katanga, via le Consulat général de Belgique. Les compétences ne sont pas strictement identiques : certaines destinations (Estonie, Hongrie, Slovaquie) sont indiquées pour Kinshasa seulement. Confirmez la destination compétente sur cev-kin.eu avant de réserver.",
+        list: [
+          "🌐 Site officiel : www.cev-kin.eu (même portail que Kinshasa)",
+          "📍 Lieu de dépôt Katanga : Consulat général de Belgique à Lubumbashi",
+          "Sélectionnez « Lubumbashi » dans le parcours de réservation si vous résidez dans le Grand Katanga",
+          "L'Espagne ne passe pas par le CEV : procédure directe de son ambassade",
+          "Vérifiez la destination compétente avant de créer votre demande",
+        ],
+      },
+      {
+        heading: "Étape 1 — Créer votre compte Visa On Web",
+        body:
+          "Comme à Kinshasa, la première étape obligatoire est la création de votre propre compte sur Visa On Web (le portail officiel belge), avec votre adresse email personnelle. Sans compte Visa On Web actif, vous ne pouvez pas réserver de rendez-vous CEV, que ce soit à Kinshasa ou à Lubumbashi.",
+        list: [
+          "Créez votre compte avec votre email personnel et activez-le (vérifiez les spams)",
+          "Introduisez une nouvelle demande et choisissez le type de séjour (court séjour type C ou long séjour Belgique/Luxembourg)",
+          "Remplissez le formulaire : les données ne sont plus modifiables après et sont contrôlées à l'entrée",
+          "Conservez votre numéro de dossier Visa On Web",
+        ],
+      },
+      {
+        heading: "Étape 2 — Réserver le rendez-vous sur cev-kin.eu (lieu Lubumbashi)",
+        body:
+          "Une fois le dossier Visa On Web créé, prenez rendez-vous sur cev-kin.eu en sélectionnant Lubumbashi comme lieu de dépôt. Les créneaux s'affichent en temps réel et partent vite en période de forte demande ; la réservation officielle est gratuite.",
+        list: [
+          "Cliquez sur « Créez un rendez-vous » et utilisez les données de votre demande Visa On Web",
+          "Sélectionnez Lubumbashi comme lieu de dépôt",
+          "Ne prenez pas de rendez-vous multiples ni de comptes en double",
+          "Confirmez : vous recevez un email avec votre numéro de rendez-vous — conservez-le pour l'entrée",
+          "Si aucune date n'apparaît, les créneaux ouverts sont déjà réservés : réessayez plus tard",
+        ],
+        contextualLink: {
+          href: "/guides/rendez-vous-cev-kinshasa-visa-schengen",
+          label: "Procédure CEV détaillée (Visa On Web + réservation)",
+        },
+      },
+      {
+        heading: "Préparer le dépôt au Consulat de Belgique à Lubumbashi",
+        body:
+          "La réservation se termine à la confirmation du créneau ; le dossier se dépose ensuite physiquement au Consulat général de Belgique à Lubumbashi. Préparez la checklist officielle de la destination compétente et présentez-vous avec la confirmation de rendez-vous.",
+        list: [
+          "Conservez l'email de confirmation et le numéro de rendez-vous",
+          "Vérifiez la checklist officielle de la destination compétente avant de vous présenter",
+          "Arrivez en avance : un retard peut entraîner l'annulation du rendez-vous",
+        ],
+        contextualLink: {
+          href: "/guides/guide-cev-kinshasa-reservation-rdv-depot",
+          label: "Dépôt du dossier au CEV : pièces, jour J et suivi",
+        },
+      },
+    ],
+    faq: [
+      {
+        q: "Le CEV de Lubumbashi accepte-t-il les mêmes demandes que celui de Kinshasa ?",
+        a: "Sélectionnez Lubumbashi pour le Grand Katanga et Kinshasa pour le reste du pays, selon le parcours officiel. Les compétences ne sont pas identiques : Estonie, Hongrie et Slovaquie sont indiquées pour Kinshasa seulement. Vérifiez toujours la destination compétente sur cev-kin.eu.",
+      },
+      {
+        q: "Où se dépose le dossier de visa Schengen à Lubumbashi ?",
+        a: "Au Consulat général de Belgique à Lubumbashi, qui dessert le Grand Katanga dans le cadre du CEV. La réservation du rendez-vous se fait en ligne sur cev-kin.eu après création d'un compte Visa On Web.",
+      },
+      {
+        q: "La prise de rendez-vous CEV à Lubumbashi est-elle payante ?",
+        a: "Non : la réservation sur cev-kin.eu est gratuite et aucun paiement en ligne n'est demandé pour obtenir un créneau. Les frais de visa officiels sont réglés lors du dépôt. Ne payez pas un intermédiaire pour une date.",
+      },
+      {
+        q: "« Maison Schengen » et CEV, est-ce la même chose à Lubumbashi ?",
+        a: "Oui. « Maison Schengen » est l'ancien nom du Centre Européen des Visas (CEV). Le dépôt pour le Grand Katanga se fait au Consulat général de Belgique à Lubumbashi, via le même portail officiel cev-kin.eu que Kinshasa.",
+      },
+    ],
+    relatedSlugs: ["rendez-vous-cev-kinshasa-visa-schengen", "guide-cev-kinshasa-reservation-rdv-depot", "pays-representes-cev-kinshasa-court-long-sejour"],
+    relatedDestination: "visa-schengen-kinshasa",
+  },
+
+  {
     slug: "visa-angleterre-kinshasa-rdv-2026",
     title: "Visa Angleterre depuis Kinshasa : UKVI, rendez-vous biométrique et procédure complète 2026",
     metaTitle: "Visa Angleterre Kinshasa 2026 — Rendez-vous UKVI, Documents, Prix | Joventy",
