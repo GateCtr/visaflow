@@ -276,8 +276,8 @@ export const EMBASSIES_SEO: EmbassySEO[] = [
     appointmentOnly: true,
     website: "https://www.exteriores.gob.es/Embajadas/kinshasa",
     mapsQuery: "Boulevard Colonel Tshatshi 37 Gombe Kinshasa Ambassade Espagne",
-      title: "Ambassade d'Espagne à Kinshasa : contact et rendez-vous",
-     metaDescription: "Ambassade d’Espagne à Kinshasa : email d’inscription visa, citaconsular.es, créneaux et délais indicatifs. Adresse, contacts et guide complet 2026.",
+      title: "Ambassade d'Espagne Kinshasa : Rendez-vous & Contact 2026",
+     metaDescription: "Prendre rendez-vous à l’ambassade d’Espagne à Kinshasa : email d’inscription, portail citaconsular.es, adresse Gombe, horaires et délais. Tout en 2026.",
      h1: "Ambassade d'Espagne à Kinshasa : adresse et contact",
     intro: "L'Ambassade d'Espagne, seule représentation diplomatique espagnole en République Démocratique du Congo, se trouve Boulevard Colonel Tshatshi nº 37, à Gombe, Kinshasa. Pour un visa Espagne, la procédure officielle passe par une inscription par email auprès de l'ambassade, puis une réservation sur citaconsular.es. Cette page vous donne les coordonnées exactes et le cadre de rendez-vous, tandis que notre guide dédié détaille la procédure complète.",
     practicalInfo: [

@@ -326,8 +326,8 @@ export const DESTINATIONS_SEO: DestinationSEO[] = [
     success: 1000,
     externalFees: "Payés directement à l'Ambassade d'Espagne",
     processingTime: "Visa C : 15 jours en principe, jusqu’à 45 jours dans certains cas",
-    title: "Visa Espagne à Kinshasa : types, dossier et démarches",
-    metaDescription: "Visa Espagne depuis Kinshasa : visas C et D, conditions, pièces à préparer, délais et frais à prévoir. Guide du dossier et de l’accompagnement Joventy.",
+    title: "Rendez-vous Visa Espagne Kinshasa 2026 : Démarche & Dossier",
+    metaDescription: "Rendez-vous visa Espagne à Kinshasa : inscription ambassade, créneau citaconsular.es, pièces du dossier et délais. Guide complet 2026 + accompagnement Joventy.",
     h1: "Visa Espagne depuis Kinshasa : catégories et dossier",
     intro: "Le type de visa Espagne dépend de la durée et du motif du séjour : court séjour Schengen (type C) ou long séjour national (type D). Préparez les justificatifs adaptés et vérifiez les conditions de l’Ambassade d’Espagne. Joventy peut accompagner la préparation du dossier ; l’ambassade seule décide d’accorder ou non le visa.",
     visaTypes: [

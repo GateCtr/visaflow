@@ -179,9 +179,9 @@ export const CRENEAUX_PAGES: CreneauxSEO[] = [
     destinationKey: "spain",
     emoji: "🇪🇸",
     name: "Espagne",
-    title: "Rendez-vous visa Espagne à Kinshasa : service créneau",
+    title: "Créneau Rendez-vous Visa Espagne Kinshasa — Citaconsular",
     metaDescription:
-      "Service créneau pour rendez-vous visa Espagne à Kinshasa : suivi sur citaconsular.es après réception des accès. 0 $ d’acompte ; 200 $ après confirmation.",
+      "Créneau rendez-vous visa Espagne Kinshasa sur citaconsular.es : surveillance, capture rapide, 0 $ d’acompte, 200 $ après confirmation.",
     h1: "Service de créneau visa Espagne à Kinshasa : tarif et étapes",
     accroche:
       "À Kinshasa, le rendez-vous visa Espagne se réserve sur citaconsular.es après l’inscription personnelle à l’ambassade et la réception des identifiants. Joventy propose un service facultatif de vérification de l’email et de surveillance des créneaux : 200 USD uniquement après confirmation, sans acompte. Le service ne garantit ni date précise ni visa.",
