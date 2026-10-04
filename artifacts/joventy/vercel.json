@@ -13,6 +13,11 @@
     }
   ],
   "redirects": [
+    { "source": "/guides/visa-france-long-sever-kinshasa-2026", "destination": "/guides/rendez-vous-visa-france-long-sejour-kinshasa", "permanent": true },
+    { "source": "/guides/rendez-vous-visa-long-sejour-kinshasa", "destination": "/guides/rendez-vous-visa-france-long-sejour-kinshasa", "permanent": true },
+    { "source": "/guides/visa-usa-suspendu-ebola-kinshasa-que-fake-2026", "destination": "/guides/visa-usa-suspendu-ebola-kinshasa-que-faire-2026", "permanent": true },
+    { "source": "/guides/guide-visa-visa-bresil-kinshasa-2026", "destination": "/guides/guide-visa-bresil-kinshasa-2026", "permanent": true },
+    { "source": "/e-visa-dubai-kanshasa", "destination": "/e-visa-dubai-kinshasa", "permanent": true },
     {
       "source": "/(.*)",
       "destination": "https://joventy.cd/$1",
