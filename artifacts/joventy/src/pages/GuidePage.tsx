@@ -301,7 +301,11 @@ export default function GuidePage() {
               <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
                 <Link
                   href={guide.conversion.primaryHref}
-                  onClick={() => trackEvent("service_click", { location: "guide_conversion", guide: guide.slug })}
+                  onClick={() => trackEvent("service_click", {
+                    location: "guide_conversion",
+                    guide: guide.slug,
+                    service: guide.conversion?.primaryHref ?? "unknown",
+                  })}
                 >
                   <Button className="w-full sm:w-auto bg-secondary hover:bg-secondary/90 text-white font-semibold">
                     {guide.conversion.primaryLabel} <ArrowRight className="ml-2 h-4 w-4" />
@@ -311,7 +315,11 @@ export default function GuidePage() {
                   href={`https://wa.me/243840808122?text=${encodeURIComponent(guide.conversion.whatsappMessage)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={() => trackEvent("whatsapp_click", { location: "guide_conversion", guide: guide.slug })}
+                  onClick={() => trackEvent("whatsapp_click", {
+                    location: "guide_conversion",
+                    guide: guide.slug,
+                    service: guide.conversion?.primaryHref ?? "unknown",
+                  })}
                   className="inline-flex items-center justify-center text-sm font-semibold text-white/90 hover:text-white underline underline-offset-4"
                 >
                   <MessageCircle className="mr-2 h-4 w-4" />

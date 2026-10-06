@@ -5,6 +5,11 @@ declare global {
     umami?: {
       track(name: string, data?: AnalyticsData): void;
     };
+    gtag?: (
+      command: "event",
+      eventName: string,
+      params?: AnalyticsData,
+    ) => void;
   }
 }
 
@@ -15,6 +20,12 @@ export function trackEvent(name: string, data?: AnalyticsData): void {
     window.umami?.track(name, data);
   } catch {
     // Analytics must never interrupt the visitor journey.
+  }
+
+  try {
+    window.gtag?.("event", name, data);
+  } catch {
+    // A missing or blocked analytics tracker must never interrupt the visitor journey.
   }
 }
 

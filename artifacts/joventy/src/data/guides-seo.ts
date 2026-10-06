@@ -1708,6 +1708,16 @@ const guides: Guide[] = [
     ],
     relatedSlugs: ["guide-cev-kinshasa-reservation-rdv-depot", "aucun-creneau-rendez-vous-cev-kinshasa", "delai-ouverture-rendez-vous-cev-kinshasa", "pays-representes-cev-kinshasa-court-long-sejour"],
     relatedDestination: "visa-schengen-kinshasa",
+    conversion: {
+      heading: "Vous cherchez de l’aide pour surveiller les créneaux CEV ?",
+      body:
+        "La réservation officielle sur cev-kin.eu reste gratuite. Si vous souhaitez une assistance privée pour suivre les disponibilités, Joventy propose ce service à 300 USD après obtention d’un créneau, sans acompte et sans garantie de date. Vous gardez votre propre compte Visa On Web.",
+      primaryLabel: "Voir l’assistance privée CEV",
+      primaryHref: "/creneaux-visa-schengen-belgique-kinshasa",
+      whatsappLabel: "Poser une question sur l’assistance CEV",
+      whatsappMessage:
+        "Bonjour, je souhaite en savoir plus sur l’assistance privée de surveillance des créneaux CEV à Kinshasa.",
+    },
     auditCtaAfterSection: 5,
   },
 

@@ -11,6 +11,7 @@ import { VISA_PRICING, SERVICE_PACKAGES, VISA_PARTIAL_SERVICE, getAvailablePacka
 const FULL_SERVICE_DEFAULTS = { engagementFee: 500, successFee: 1000, total: 1500 } as const;
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
+import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -330,6 +331,11 @@ export default function NewApplication() {
         cevApplicantAgeCategory: isSchengen ? cevApplicantAgeCategory : undefined,
         cevTargetCountry: isSchengen ? cevTargetCountry : undefined,
         userWhatsapp: userWhatsapp.trim() || undefined,
+      });
+      trackEvent("application_created", {
+        flow: "full_application",
+        destination: data.destination,
+        service_package: selectedPackage,
       });
       toast({ title: "Dossier créé !", description: "Réglez les frais d'engagement pour démarrer le traitement." });
       // Marquer la session Victor comme "convaincue" — action réellement complétée

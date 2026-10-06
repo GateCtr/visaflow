@@ -13,6 +13,7 @@ const SLOT_ONLY_SUPPORTED = new Set(
 import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -334,6 +335,11 @@ export default function NewCreneauApplication() {
         userWhatsapp: userWhatsapp.trim() || undefined,
         spainHasCredentials: dest === "spain" && emailSentToEmbassy ? true : undefined,
         joventyWillSendSpainEmail: dest === "spain" && joventyWillSendSpainEmail ? true : undefined,
+      });
+      trackEvent("application_created", {
+        flow: "slot_only",
+        destination: dest,
+        service_level: serviceLevel,
       });
 
       // Upload des documents (optionnels) — les résultats sont collectés pour informer l'utilisateur
