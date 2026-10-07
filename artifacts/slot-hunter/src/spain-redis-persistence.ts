@@ -776,7 +776,7 @@ export interface SerializableDecodoPoolState {
   rotationIndex: number;
   /** IPs blacklistées → timestamp du flagging (ms). Clé = "host:port" (identité exit IP,
    *  robuste au format du username sticky). Les anciennes clés au format URL complète
-   *  expirent par TTL sans effet. */
+   *  sont normalisées par initDecodoPool à la restauration. */
   blacklistedIps: Record<string, number>;
   savedAt: number;
   /**

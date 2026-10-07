@@ -305,9 +305,15 @@ export async function initDecodoPool(): Promise<void> {
     // Restaurer l'index (le sauvegarder pointe sur la DERNIÈRE IP utilisée,
     // donc on reprend à +1 pour ne pas taper deux fois la même IP au restart)
     const restoredIdx = (state.rotationIndex + 1) % pool.length;
-    _blacklistedIps = new Map(
-      Object.entries(state.blacklistedIps).map(([k, v]) => [k, Number(v)]),
-    );
+    _blacklistedIps = new Map();
+    for (const [savedKey, timestamp] of Object.entries(state.blacklistedIps)) {
+      // Les anciens états Redis utilisaient une URL (parfois sticky) comme clé.
+      // Le lookup actuel utilise host:port : normaliser aussi à la restauration,
+      // en conservant le flag le plus récent si plusieurs clés désignent le même port.
+      const key = proxyHostPort(savedKey);
+      const ts = Number(timestamp);
+      _blacklistedIps.set(key, Math.max(_blacklistedIps.get(key) ?? 0, ts));
+    }
 
     // Avancer l'index jusqu'à une IP non-blacklistée
     _index = findNextValidIndex(restoredIdx, pool).idx;

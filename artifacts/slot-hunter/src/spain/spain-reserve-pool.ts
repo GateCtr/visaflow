@@ -210,6 +210,7 @@ export function createReservePool(opts: { targetSize: number }): ReservePoolMana
         console.warn(
           `[spain-reserve-pool] Pré-solve échoué (session/cf_clearance absent) — IP ${deriveStickyId(proxyUrl)}`,
         );
+        flagDecodoIp(proxyUrl, "reserve_resolve_failed");
         return null;
       }
       const { session } = result;
@@ -229,6 +230,7 @@ export function createReservePool(opts: { targetSize: number }): ReservePoolMana
       console.warn(
         `[spain-reserve-pool] Erreur réseau au pré-solve (IP ${deriveStickyId(proxyUrl)}): ${message}`,
       );
+      flagDecodoIp(proxyUrl, "reserve_resolve_failed");
       return null;
     }
   };
@@ -254,8 +256,12 @@ export function createReservePool(opts: { targetSize: number }): ReservePoolMana
       `[spain-reserve-pool] 🔥 warmUp — cible ${targetSize} réserve(s), ${reserves.length} déjà en pool.`,
     );
     const usedBaseKeys = usedBaseKeysOfPool();
+    // Même budget que la reconstitution : ne pas parcourir des milliers de
+    // proxies payants lorsque tous les pré-solves sont rejetés.
+    const maxSolves = (targetSize - size()) * REPLENISH_MAX_ATTEMPTS;
+    let solves = 0;
 
-    while (size() < targetSize) {
+    while (size() < targetSize && solves < maxSolves) {
       const proxyUrl = pickDistinctIp(usedBaseKeys);
       if (proxyUrl === undefined) {
         console.warn(
@@ -267,10 +273,16 @@ export function createReservePool(opts: { targetSize: number }): ReservePoolMana
       // le solve échoue (une IP qui échoue au solve ne doit pas boucler indéfiniment).
       usedBaseKeys.add(proxyBaseKey(proxyUrl));
 
+      solves++;
       const reserve = await solveOne(proxyUrl, capsolverKey, portalUrl);
       if (reserve !== null) {
         reserves.push(reserve);
       }
+    }
+    if (size() < targetSize && solves >= maxSolves && maxSolves > 0) {
+      console.warn(
+        `[spain-reserve-pool] ⚠️ Budget de pré-solve atteint (${solves}/${maxSolves}) — arrêt de warmUp à ${size()}/${targetSize}.`,
+      );
     }
 
     console.log(
@@ -327,8 +339,7 @@ export function createReservePool(opts: { targetSize: number }): ReservePoolMana
               );
               break;
             }
-            // Solve échoué sur cette IP : la blacklister avant de retenter sur une autre.
-            flagDecodoIp(proxyUrl, "reserve_resolve_failed");
+            // solveOne a déjà blacklisté l'IP, comme pour warmUp.
           }
 
           if (attempt < REPLENISH_MAX_ATTEMPTS) {

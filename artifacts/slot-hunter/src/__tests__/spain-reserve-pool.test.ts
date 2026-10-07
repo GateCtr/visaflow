@@ -171,6 +171,55 @@ describe("warmUp — pré-solve jusqu'à targetSize sur des IP distinctes", () =
     // 3 réserves valides atteintes malgré 1 échec → au moins 4 tentatives.
     expect(pool.size()).toBe(3);
     expect(mockInitWorkerSession.mock.calls.length).toBeGreaterThanOrEqual(4);
+    expect(mockFlagDecodoIp).toHaveBeenCalledExactlyOnceWith(makeProxyUrl(2), "reserve_resolve_failed");
+  });
+
+  it("blackliste aussi les exceptions réseau pendant warmUp", async () => {
+    let ipIndex = 0;
+    mockRotateDecodoUrl.mockImplementation(() => makeProxyUrl(++ipIndex));
+    mockInitWorkerSession.mockRejectedValueOnce(new Error("proxy unavailable"));
+
+    const pool = createReservePool({ targetSize: 1 });
+    await pool.warmUp(CAPSOLVER_KEY, PORTAL_URL);
+
+    expect(pool.size()).toBe(1);
+    expect(mockFlagDecodoIp).toHaveBeenCalledExactlyOnceWith(makeProxyUrl(1), "reserve_resolve_failed");
+  });
+
+  it("borne les pré-solves à trois tentatives par réserve manquante", async () => {
+    let ipIndex = 0;
+    mockRotateDecodoUrl.mockImplementation(() => makeProxyUrl(++ipIndex));
+    mockInitWorkerSession.mockResolvedValue(null);
+
+    const pool = createReservePool({ targetSize: 2 });
+    await pool.warmUp(CAPSOLVER_KEY, PORTAL_URL);
+
+    expect(pool.size()).toBe(0);
+    expect(mockInitWorkerSession).toHaveBeenCalledTimes(6);
+    expect(mockFlagDecodoIp).toHaveBeenCalledTimes(6);
+    const urls = mockInitWorkerSession.mock.calls.map((call) => call[0]);
+    expect(new Set(urls).size).toBe(6);
+  });
+
+  it("ne reprend pas le proxy ayant échoué au warmUp suivant", async () => {
+    const bad = makeProxyUrl(1);
+    const good = makeProxyUrl(2);
+    const flagged = new Set<string>();
+    let rotation = 0;
+    mockRotateDecodoUrl.mockImplementation(() => [bad, good][rotation++ % 2]);
+    mockFlagDecodoIp.mockImplementation((url) => { if (url) flagged.add(url); });
+    mockIsDecodoIpBlacklisted.mockImplementation((url) => flagged.has(url));
+    mockInitWorkerSession.mockImplementation(async (url) =>
+      url === bad ? null : makeInitResult(makeCfSession()),
+    );
+
+    const pool = createReservePool({ targetSize: 1 });
+    await pool.warmUp(CAPSOLVER_KEY, PORTAL_URL);
+    expect(pool.borrow(Date.now())?.proxyUrl).toBe(good);
+    await pool.warmUp(CAPSOLVER_KEY, PORTAL_URL);
+
+    expect(mockInitWorkerSession.mock.calls.filter((call) => call[0] === bad)).toHaveLength(1);
+    expect(pool.borrow(Date.now())?.proxyUrl).toBe(good);
   });
 });
 
@@ -331,7 +380,7 @@ describe("replenishAsync — retry 3× avec backoff exponentiel puis warn", () =
     // 3 tentatives de solve exactement (REPLENISH_MAX_ATTEMPTS).
     expect(mockInitWorkerSession).toHaveBeenCalledTimes(3);
     // IP morte blacklistée à chaque échec de solve.
-    expect(mockFlagDecodoIp).toHaveBeenCalled();
+    expect(mockFlagDecodoIp).toHaveBeenCalledTimes(3);
     // Un warn final signalant l'échec de reconstitution.
     const warnedFailure = warnSpy.mock.calls.some((c) =>
       String(c[0]).includes("Reconstitution échouée"),

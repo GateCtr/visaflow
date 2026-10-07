@@ -22,6 +22,7 @@ import {
   reloadDecodoPool,
   initDecodoPool,
   getCurrentDecodoUrl,
+  isDecodoIpBlacklisted,
 } from "./spain-decodo-pool.js";
 import {
   restoreDecodoPoolStateFromRedis,
@@ -56,6 +57,23 @@ function resetPool(urls: string[]): void {
 describe("initDecodoPool — pool fingerprint mismatch detection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("normalizes legacy sticky URL blacklist keys after restart", async () => {
+    resetPool(POOL);
+    const sticky = "http://user-session-old-sessionduration-60:pass@host2:10002";
+    vi.mocked(restoreDecodoPoolStateFromRedis).mockResolvedValue({
+      rotationIndex: 0,
+      blacklistedIps: { [sticky]: Date.now() - 1_000 },
+      savedAt: Date.now(),
+      poolFingerprint: fingerprint(POOL),
+    });
+
+    await initDecodoPool();
+
+    expect(isDecodoIpBlacklisted(POOL[1])).toBe(true);
+    expect(isDecodoIpBlacklisted("http://other-session-new:pass@host2:10002")).toBe(true);
+    expect(getCurrentDecodoUrl()).toBe(POOL[2]);
   });
 
   it("restores saved index when fingerprints match", async () => {

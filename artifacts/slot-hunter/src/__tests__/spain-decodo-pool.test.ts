@@ -421,9 +421,9 @@ describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
     // First arg is the current rotation index (a number)
     const [idxArg, mapArg] = vi.mocked(syncDecodoPoolStateToRedis).mock.calls[0];
     expect(typeof idxArg).toBe("number");
-    // Second arg is the blacklisted IPs Map containing the flagged URL
+    // Second arg contains the stable host:port key, not proxy credentials/sticky data.
     expect(mapArg).toBeInstanceOf(Map);
-    expect((mapArg as Map<string, number>).has(pool[0])).toBe(true);
+    expect(mapArg.has(new URL(pool[0]).host)).toBe(true);
   });
 
   it("TTL-expired entries returned by restore are auto-discarded on first access", async () => {

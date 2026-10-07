@@ -16,4 +16,11 @@ description: Redis persistence for Decodo rotation index and IP blacklist; init 
 - Blacklist TTL: `SPAIN_DECODO_BLACKLIST_TTL_MIN` env var (default 45 min).
 - Redis key: `visaflow:spain-decodo:pool-state` — stores `{ rotationIndex, blacklistedIps, savedAt }`.
 - Pool-exhausted guard: when all IPs are blacklisted, falls back to round-robin (never blocks scan) with a `⚠️ POOL ÉPUISÉ` warning log.
-- Pool fingerprint (size/URL hash) is NOT persisted — stale index on pool change is a known gap (Task #8).
+- Verify the persisted pool fingerprint before restoring allocation state after a pool composition change.
+
+## Shared failure policy
+Reserve warm-up and background replenishment must share the same proxy-exclusion policy. Warm-up must have a bounded solve budget rather than trying the entire configured proxy pool.
+
+**Why:** Failed reserve initialization previously did not flag the proxy during warm-up, allowing later reuse and long runs of paid solves that never produced a usable session.
+
+**How to apply:** Flag failed reserve initialization consistently in both paths. Restore legacy URL-shaped blacklist keys into the same host:port identity used by current lookups. Host:port exclusion is an allocation rule, not proof that two provider ports have distinct real exit IPs.
