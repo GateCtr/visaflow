@@ -93,12 +93,11 @@ describe("initDecodoPool — pool fingerprint mismatch detection", () => {
     // rotationIndex=1 → restored at index 2 → host3:10003
     expect(getCurrentDecodoUrl()).toBe(POOL[2]);
 
-    // syncDecodoPoolStateToRedis must NOT be called during a clean restore
-    // (no mismatch triggered, no immediate sync needed here)
-    expect(vi.mocked(syncDecodoPoolStateToRedis)).not.toHaveBeenCalled();
+    // Rewrite the snapshot so an old Redis EX 24h is removed.
+    expect(vi.mocked(syncDecodoPoolStateToRedis)).toHaveBeenCalledOnce();
   });
 
-  it("resets index to 0 and clears blacklist when pool fingerprint changes", async () => {
+  it("resets the index but retains proxy quarantine when the fingerprint changes", async () => {
     resetPool(POOL);
 
     const staleFingerprint = fingerprint(["http://user:pass@old-host:10001"]);
@@ -114,16 +113,16 @@ describe("initDecodoPool — pool fingerprint mismatch detection", () => {
 
     await initDecodoPool();
 
-    // Index must be reset to 0 (first IP of the new pool)
-    expect(getCurrentDecodoUrl()).toBe(POOL[0]);
+    // Reset starts at 0, but host1 remains quarantined.
+    expect(getCurrentDecodoUrl()).toBe(POOL[1]);
 
     // syncDecodoPoolStateToRedis must have been called with the NEW fingerprint
     // to overwrite the stale Redis entry
     expect(vi.mocked(syncDecodoPoolStateToRedis)).toHaveBeenCalledOnce();
     const [calledIdx, calledBlacklist, calledFingerprint] =
       vi.mocked(syncDecodoPoolStateToRedis).mock.calls[0];
-    expect(calledIdx).toBe(0);
-    expect(calledBlacklist.size).toBe(0); // blacklist cleared
+    expect(calledIdx).toBe(1);
+    expect(calledBlacklist.has("host1:10001")).toBe(true);
     expect(calledFingerprint).toBe(fingerprint(POOL)); // new fingerprint stored
   });
 
@@ -142,7 +141,7 @@ describe("initDecodoPool — pool fingerprint mismatch detection", () => {
 
     await initDecodoPool();
 
-    // Unverifiable state must be discarded → reset to index 0
+    // Only the index is reset; host:port rejection history remains usable.
     expect(getCurrentDecodoUrl()).toBe(POOL[0]);
 
     // Must immediately persist the current fingerprint so the next restart is safe
@@ -150,7 +149,7 @@ describe("initDecodoPool — pool fingerprint mismatch detection", () => {
     const [calledIdx, calledBlacklist, calledFingerprint] =
       vi.mocked(syncDecodoPoolStateToRedis).mock.calls[0];
     expect(calledIdx).toBe(0);
-    expect(calledBlacklist.size).toBe(0); // stale blacklist cleared
+    expect(calledBlacklist.has("host2:10002")).toBe(true);
     expect(calledFingerprint).toBe(fingerprint(POOL));
   });
 

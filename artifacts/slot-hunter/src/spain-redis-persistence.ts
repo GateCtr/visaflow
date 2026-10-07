@@ -769,7 +769,6 @@ export async function restoreApiPrefetchCacheFromRedis(): Promise<Map<string, st
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const REDIS_SPAIN_DECODO_KEY = "visaflow:spain-decodo:pool-state";
-const REDIS_SPAIN_DECODO_TTL_SEC = 24 * 60 * 60; // 24h
 
 export interface SerializableDecodoPoolState {
   /** Index courant dans le pool (prochaine IP à utiliser) */
@@ -783,7 +782,7 @@ export interface SerializableDecodoPoolState {
    * Empreinte du pool au moment de la sauvegarde : "<taille>:<sha256-8hex>".
    * Permet de détecter un changement de composition du pool (ajout/suppression d'IPs,
    * réordonnancement) entre deux redémarrages. Si l'empreinte ne correspond pas,
-   * l'index sauvegardé et la blacklist sont invalidés.
+   * l'index sauvegardé est invalidé, mais les rejets restent liés à host:port.
    */
   poolFingerprint?: string;
 }
@@ -808,7 +807,9 @@ export function syncDecodoPoolStateToRedis(
     ...(poolFingerprint !== undefined ? { poolFingerprint } : {}),
   };
   redisClient
-    .set(REDIS_SPAIN_DECODO_KEY, JSON.stringify(state), { EX: REDIS_SPAIN_DECODO_TTL_SEC })
+    // La quarantaine expire par timestamp, pas par disparition de l'état entier.
+    // SET sans EX retire également le TTL 24h des états déjà existants.
+    .set(REDIS_SPAIN_DECODO_KEY, JSON.stringify(state))
     .catch((err: Error) => {
       console.warn(`[spain-redis] Decodo pool state sync échouée: ${err.message}`);
     });
@@ -834,7 +835,7 @@ export async function restoreDecodoPoolStateFromRedis(
     // Filtrer les IPs dont le blacklist TTL est expiré
     const activeBlacklist: Record<string, number> = {};
     for (const [ip, ts] of Object.entries(parsed.blacklistedIps)) {
-      if (now - Number(ts) <= blacklistTtlMs) {
+      if (Number.isFinite(Number(ts)) && now - Number(ts) < blacklistTtlMs) {
         activeBlacklist[ip] = Number(ts);
       }
     }

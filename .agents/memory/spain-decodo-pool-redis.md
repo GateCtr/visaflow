@@ -1,22 +1,23 @@
 ---
-name: Spain Decodo pool Redis persistence
-description: Redis persistence for Decodo rotation index and IP blacklist; init call order and key design.
+name: Spain proxy exclusion policy
+description: User-selected seven-day quarantine independent of Cloudflare cache expiry; no arbitrary port range exclusions.
 ---
 
-# Spain Decodo Pool — Redis Persistence
+# Spain proxy exclusion policy
 
-## Rule
-`initDecodoPool()` must be called after `initSpainRedis()` in `spain-watcher-loop.ts`. It restores the rotation index (+1 from last saved = next-after-restart) and the IP blacklist from Redis, with random-index fallback when Redis is empty.
+## Seven-day exclusion
+L'utilisateur a choisi une exclusion de **7 jours** pour les IP Espagne rejetées. L'expiration du cache Cloudflare ne signifie pas que le portail accepte de nouveau l'IP.
 
-**Why:** Without persistence, every restart begins at index 0, concentrating all early traffic on the first proxy IP and accelerating its flagging. Without a blacklist, failed IPs are retried immediately on the next scan cycle.
+**Why:** L'utilisateur a signalé qu'un dossier reprenait des IP déjà rejetées après expiration de leur état Redis.
 
-## How to apply
-- `flagDecodoIp(url, reason)` — call BEFORE `rotateDecodoUrl()` at every /main/ 0B or `closeAndInvalidate()` failure point (done in `rotateSpainCfIpAfterMainFailure` and `closeAndInvalidate`).
-- `rotateDecodoUrl()` — already saves index to Redis (fire-and-forget) and skips blacklisted IPs automatically.
-- Blacklist TTL: `SPAIN_DECODO_BLACKLIST_TTL_MIN` env var (default 45 min).
-- Redis key: `visaflow:spain-decodo:pool-state` — stores `{ rotationIndex, blacklistedIps, savedAt }`.
-- Pool-exhausted guard: when all IPs are blacklisted, falls back to round-robin (never blocks scan) with a `⚠️ POOL ÉPUISÉ` warning log.
-- Verify the persisted pool fingerprint before restoring allocation state after a pool composition change.
+**How to apply:** Préserver les exclusions pendant les sept jours, y compris après redémarrage. Un pool entièrement exclu ne doit pas réutiliser automatiquement une IP rejetée.
+
+## No arbitrary port range
+« Port 4000 » était un exemple de port X, pas une demande de bloquer les 4000 premières entrées ou les ports 14xxx.
+
+**Why:** L'utilisateur l'a précisé lors du choix de la durée.
+
+**How to apply:** Exclure les proxys réellement signalés comme défaillants, jamais une plage déduite de cet exemple.
 
 ## Shared failure policy
 Reserve warm-up and background replenishment must share the same proxy-exclusion policy. Warm-up must have a bounded solve budget rather than trying the entire configured proxy pool.

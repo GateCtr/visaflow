@@ -3,7 +3,7 @@
  *
  * Scenarios covered (per task spec):
  *   1. flag IP → getCurrentDecodoUrl returns next IP
- *   2. flag all IPs → getCurrentDecodoUrl falls back to round-robin (returns an IP, doesn't throw)
+ *   2. flag all IPs → no rejected proxy is returned
  *   3. simulate TTL expiry (mock Date.now) → previously flagged IP becomes valid again
  *   4. rotateDecodoUrl skips flagged IPs and logs the skip count
  */
@@ -131,25 +131,24 @@ describe("Scenario 1 — flag IP → getCurrentDecodoUrl skips it", () => {
     expect(a).not.toBe(first);
   });
 
-  it("has no effect on a 1-IP pool (single IP is never blacklisted)", () => {
+  it("also quarantines a rejected proxy in a 1-IP pool", () => {
     const pool = makePool(1);
     setupPool(pool);
 
     const ip = getCurrentDecodoUrl();
     expect(ip).toBe(pool[0]);
 
-    // flagDecodoIp is a no-op for single-IP pools
     flagDecodoIp(ip, "test");
 
-    // The IP is still returned
-    expect(getCurrentDecodoUrl()).toBe(pool[0]);
+    expect(getCurrentDecodoUrl()).toBeUndefined();
+    expect(rotateDecodoUrl()).toBeUndefined();
   });
 });
 
-// ─── Scenario 2: flag all IPs → fallback round-robin (no throw) ───────────────
+// ─── Scenario 2: exhausted pool → no proxy (no throw) ───────────────────────
 
-describe("Scenario 2 — flag all IPs → fallback round-robin", () => {
-  it("returns an IP (doesn't throw) when all 3 IPs are flagged", () => {
+describe("Scenario 2 — flag all IPs → no proxy until quarantine expires", () => {
+  it("returns undefined (doesn't throw) when all 3 IPs are flagged", () => {
     const pool = makePool(3);
     setupPool(pool);
 
@@ -158,18 +157,15 @@ describe("Scenario 2 — flag all IPs → fallback round-robin", () => {
       flagDecodoIp(url, "all-flagged");
     }
 
-    // Must return a value (not undefined, not throw)
+    // Never bypass quarantine when the pool is exhausted.
     let result: string | undefined;
     expect(() => {
       result = getCurrentDecodoUrl();
     }).not.toThrow();
-    expect(result).toBeDefined();
-    expect(typeof result).toBe("string");
-    // The returned value must be one of the pool IPs (fallback round-robin)
-    expect(pool).toContain(result);
+    expect(result).toBeUndefined();
   });
 
-  it("returns an IP (doesn't throw) when all 5 IPs are flagged", () => {
+  it("returns undefined (doesn't throw) when all 5 IPs are flagged", () => {
     const pool = makePool(5);
     setupPool(pool);
 
@@ -181,11 +177,10 @@ describe("Scenario 2 — flag all IPs → fallback round-robin", () => {
     expect(() => {
       result = getCurrentDecodoUrl();
     }).not.toThrow();
-    expect(result).toBeDefined();
-    expect(pool).toContain(result);
+    expect(result).toBeUndefined();
   });
 
-  it("rotateDecodoUrl also returns an IP (doesn't throw) when all IPs are flagged", () => {
+  it("rotateDecodoUrl also returns undefined when all IPs are flagged", () => {
     const pool = makePool(3);
     setupPool(pool);
 
@@ -197,15 +192,14 @@ describe("Scenario 2 — flag all IPs → fallback round-robin", () => {
     expect(() => {
       result = rotateDecodoUrl();
     }).not.toThrow();
-    expect(result).toBeDefined();
-    expect(pool).toContain(result);
+    expect(result).toBeUndefined();
   });
 });
 
 // ─── Scenario 3: TTL expiry (mock Date.now) → flagged IP becomes valid again ──
 
 describe("Scenario 3 — TTL expiry → flagged IP becomes valid again", () => {
-  it("IP re-appears in rotation after TTL expires (default 45 min)", () => {
+  it("IP re-appears in rotation after the configured TTL expires", () => {
     const pool = makePool(2);
     // Use 1-minute TTL for the test
     process.env.SPAIN_DECODO_BLACKLIST_TTL_MIN = "1";
@@ -271,9 +265,13 @@ describe("Scenario 3 — TTL expiry → flagged IP becomes valid again", () => {
     const ip0 = pool[0];
     flagDecodoIp(ip0, "boundary");
 
-    // At exactly TTL — still blacklisted (> check, not >=)
-    vi.spyOn(Date, "now").mockReturnValue(start + ttlMs);
+    // Just before TTL — still blacklisted.
+    vi.spyOn(Date, "now").mockReturnValue(start + ttlMs - 1);
     expect(getCurrentDecodoUrl()).not.toBe(ip0);
+
+    // At exactly TTL — quarantine has ended.
+    vi.spyOn(Date, "now").mockReturnValue(start + ttlMs);
+    expect(getCurrentDecodoUrl()).toBe(ip0);
 
     // One millisecond past TTL — expired and auto-purged
     vi.spyOn(Date, "now").mockReturnValue(start + ttlMs + 1);
@@ -470,7 +468,7 @@ describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
     expect(pool).toContain(next);
   });
 
-  it("allBlacklisted fallback applies when all restored IPs have fresh timestamps", async () => {
+  it("does not reuse a rejected proxy when all restored IPs have fresh timestamps", async () => {
     const pool = makePool(3);
     setupPool(pool);
 
@@ -491,11 +489,10 @@ describe("Scenario 5 — blacklist survives restart via Redis restore", () => {
     setupPool(pool);
     await initDecodoPool();
 
-    // All IPs are blacklisted → allBlacklisted fallback: must return an IP, never throw
+    // All IPs are blacklisted → no fallback to a rejected proxy.
     let result: string | undefined;
     expect(() => { result = getCurrentDecodoUrl(); }).not.toThrow();
-    expect(result).toBeDefined();
-    expect(pool).toContain(result);
+    expect(result).toBeUndefined();
   });
 
   it("restore returning null (Redis empty / unavailable) falls back to random index", async () => {
