@@ -276,4 +276,12 @@ export const sendDueReminders = internalMutation({
 const crons = cronJobs();
 crons.hourly("send-due-reminders", { minuteUTC: 15 }, internal.crons.sendDueReminders);
 
+// ── Rétention des scans Spain : purge basée sur l'âge toutes les 30 min ───────
+crons.interval(
+  "spain-scan-prune",
+  { minutes: 30 },
+  internal.spainWatcher.internalPruneOldScans,
+  {},
+);
+
 export default crons;

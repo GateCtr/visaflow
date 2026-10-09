@@ -6,6 +6,20 @@ const WATCHER_KEY = "default";
 const MAX_SCANS = 200;
 
 /**
+ * Rétention des scans Spain (historique par dossier).
+ *
+ * Avant : prune par écriture (garder les 200 derniers) à l'intérieur de
+ * internalRecordScan — contention sur spainWatcherScans à chaque cycle.
+ * Après : rétention basée sur l'âge, exécutée hors chemin d'écriture par le cron
+ * internalPruneOldScans (voir crons.ts). Les inserts ne prunent plus.
+ */
+const SPAIN_SCAN_RETENTION_HOURS = Math.max(
+  1,
+  Math.min(720, Number(process.env.SPAIN_SCAN_RETENTION_HOURS ?? 48)),
+);
+const RETENTION_MS = SPAIN_SCAN_RETENTION_HOURS * 3_600_000;
+
+/**
  * Throttle du patch du singleton `spainWatcher` dans internalRecordScan.
  *
  * PROBLÈME résolu : avec N dossiers actifs (ex. 18), chaque worker appelle
@@ -91,29 +105,42 @@ export const getWatcherPaginated = query({
       .first();
 
     const pageSize = Math.min(args.pageSize ?? 20, 50);
-    const page = args.page ?? 0;
+    const page = Math.max(0, args.page ?? 0);
+    const statusFilter = args.statusFilter;
+    const applicationId = args.applicationId;
 
-    // Fetch all scans for counting + filtering
-    const allScans = await ctx.db
-      .query("spainWatcherScans")
-      .withIndex("by_ts")
-      .order("desc")
-      .take(MAX_SCANS);
+    // Pagination réelle via index : by_application quand un dossier est ciblé,
+    // sinon by_ts (desc). Le filtre statut est appliqué DANS la requête.
+    // On matérialise la liste filtrée via .collect() sur l'index approprié
+    // (plus de .take(200) global + slice post-filtre) puis on découpe la page.
+    const matched = applicationId
+      ? await ctx.db
+          .query("spainWatcherScans")
+          .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
+          .filter((q) =>
+            statusFilter ? q.eq(q.field("status"), statusFilter) : true,
+          )
+          .collect()
+      : await ctx.db
+          .query("spainWatcherScans")
+          .withIndex("by_ts")
+          .order("desc")
+          .filter((q) =>
+            statusFilter ? q.eq(q.field("status"), statusFilter) : true,
+          )
+          .collect();
 
-    // Apply filters
-    let filtered = args.statusFilter
-      ? allScans.filter((s) => s.status === args.statusFilter)
-      : allScans;
-    if (args.applicationId) {
-      filtered = filtered.filter((s) => s.applicationId === args.applicationId);
-    }
+    // by_application est ordonné par insertion ; forcer le tri desc par ts pour
+    // garder un affichage « plus récent d'abord » cohérent avec le mode by_ts.
+    const ordered = applicationId
+      ? [...matched].sort((a, b) => b.ts - a.ts)
+      : matched;
 
-    const totalCount = filtered.length;
+    const totalCount = ordered.length;
     const totalPages = Math.ceil(totalCount / pageSize);
 
-    // Paginate
     const start = page * pageSize;
-    const pageScans = filtered.slice(start, start + pageSize);
+    const pageScans = ordered.slice(start, start + pageSize);
 
     // Resolve screenshot URLs
     const scans = await Promise.all(
@@ -125,12 +152,19 @@ export const getWatcherPaginated = query({
       }),
     );
 
-    // Stats summary
+    // Stats summary — calculées sur l'ensemble filtré (hors statut) pour refléter
+    // la ventilation found/not_found/error du périmètre courant.
+    const statsSource = applicationId
+      ? await ctx.db
+          .query("spainWatcherScans")
+          .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
+          .collect()
+      : ordered;
     const stats = {
-      total: allScans.length,
-      found: allScans.filter((s) => s.status === "found").length,
-      notFound: allScans.filter((s) => s.status === "not_found").length,
-      errors: allScans.filter((s) => s.status === "error").length,
+      total: statsSource.length,
+      found: statsSource.filter((s) => s.status === "found").length,
+      notFound: statsSource.filter((s) => s.status === "not_found").length,
+      errors: statsSource.filter((s) => s.status === "error").length,
     };
 
     return { watcher: watcher ?? null, scans, page, pageSize, totalCount, totalPages, stats };
@@ -164,6 +198,46 @@ export const getDossierList = query({
       }
     }
     return [...seen.values()].sort((a, b) => b.lastScan - a.lastScan);
+  },
+});
+
+// ─── Query: scans d'un seul dossier (vue per-dossier avec cycles) ───────────────
+
+export const getScansForDossier = query({
+  args: {
+    applicationId: v.string(),
+    page: v.optional(v.number()),
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
+    const pageSize = Math.min(args.pageSize ?? 50, 100);
+    const page = Math.max(0, args.page ?? 0);
+
+    const all = await ctx.db
+      .query("spainWatcherScans")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .collect();
+
+    const ordered = [...all].sort((a, b) => b.ts - a.ts);
+    const totalCount = ordered.length;
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    const start = page * pageSize;
+    const pageScans = ordered.slice(start, start + pageSize);
+
+    const scans = await Promise.all(
+      pageScans.map(async (scan) => {
+        const screenshotUrl = scan.screenshotStorageId
+          ? await ctx.storage.getUrl(scan.screenshotStorageId)
+          : null;
+        return { ...scan, screenshotUrl };
+      }),
+    );
+
+    return { scans, page, pageSize, totalCount, totalPages };
   },
 });
 
@@ -232,8 +306,11 @@ export const internalRecordScan = internalMutation({
     detectedServices: v.optional(v.string()),  // JSON array of {serviceId, serviceName}
     detectedSlots: v.optional(v.string()),     // JSON array of {id, name, slots: [{d, t, n}]}
     scanTrace: v.optional(v.string()),         // JSON: SpainScanTrace — main/initConfig/service/agenda/datetime/booking
+    cycleNumber: v.optional(v.number()),
+    windowId: v.optional(v.number()),
+    idempotencyKey: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const watcher = await ctx.db
       .query("spainWatcher")
       .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
@@ -241,7 +318,8 @@ export const internalRecordScan = internalMutation({
 
     const now = Date.now();
 
-    // Insert scan record
+    // Insert scan record (historique). Le prune par écriture a été retiré :
+    // la rétention est désormais gérée par le cron internalPruneOldScans.
     await ctx.db.insert("spainWatcherScans", {
       ts: now,
       status: args.status,
@@ -254,26 +332,19 @@ export const internalRecordScan = internalMutation({
       detectedServices: args.detectedServices,
       detectedSlots: args.detectedSlots,
       scanTrace: args.scanTrace,
+      cycleNumber: args.cycleNumber,
+      windowId: args.windowId,
+      idempotencyKey: args.idempotencyKey,
     });
 
     // Update watcher singleton — THROTTLÉ pour éviter les conflits OCC (voir constante).
-    // On ne patche que si un événement important (found/error) OU si le dernier patch
+    // On ne patche que si un événement important (found) OU si le dernier patch
     // date d'assez longtemps. Sinon on saute le patch (l'insert du scan suffit à
-    // l'historique). Le prune est fait UNIQUEMENT quand on patche, pour ne pas
-    // ajouter de contention sur spainWatcherScans à chaque cycle de chaque worker.
+    // l'historique).
     if (watcher) {
       const sinceLastPatch = now - (watcher.updatedAt ?? 0);
-      // Patch de TÉLÉMÉTRIE (lastScanAt/lastResult) : throttlé STRICTEMENT, même sur
-      // found/error. Bypasser le throttle sur "found" causait 7+ patchs concurrents sur
-      // le même singleton au moment d'un burst (mode meute) → conflits OCC 422/500 en
-      // cascade. L'insert du scan (ci-dessus) suffit à l'historique ; la télémétrie
-      // singleton n'a pas besoin d'être à la milliseconde. L'alerte email found est
-      // traitée séparément (cooldown 30 min, indépendant de ce throttle).
       const shouldPatchTelemetry = sinceLastPatch >= SINGLETON_PATCH_THROTTLE_MS;
 
-      // Alerte email "créneau trouvé" — cooldown 30 min. Indépendant du throttle télémétrie
-      // pour ne pas rater une alerte, mais rare par nature (le cooldown + lastAlertSentAt
-      // limitent les écritures → pas de burst OCC).
       const ALERT_COOLDOWN_MS = 30 * 60 * 1000;
       const cooldownOk = now - (watcher.lastAlertSentAt ?? 0) > ALERT_COOLDOWN_MS;
       const shouldAlert = args.status === "found" && !!watcher.adminEmail && cooldownOk;
@@ -293,21 +364,6 @@ export const internalRecordScan = internalMutation({
           ...(shouldAlert ? { lastAlertSentAt: now } : {}),
         });
 
-        // Prune old scans (keep last MAX_SCANS) — uniquement quand on patche (pas à chaque cycle).
-        if (shouldPatchTelemetry) {
-          const old = await ctx.db
-            .query("spainWatcherScans")
-            .withIndex("by_ts")
-            .order("asc")
-            .take(1000);
-          if (old.length > MAX_SCANS) {
-            const toDelete = old.slice(0, old.length - MAX_SCANS);
-            for (const scan of toDelete) {
-              await ctx.db.delete(scan._id);
-            }
-          }
-        }
-
         if (shouldAlert) {
           await ctx.scheduler.runAfter(0, internal.spainWatcher.internalSendWatcherAlert, {
             adminEmail: watcher.adminEmail!,
@@ -321,6 +377,166 @@ export const internalRecordScan = internalMutation({
         }
       }
     }
+  },
+});
+
+// ─── Internal: INSERT-only batch (sans singleton) ────────────────────────────
+//
+// Chemin d'écriture principal du worker Spain. CHAQUE élément du batch crée un
+// document unique dans spainWatcherScans — aucun accès au singleton `spainWatcher`
+// (ni query ni patch) → pas de contention OCC. La dédup par idempotencyKey évite
+// les doublons si un batch est rejoué (retry réseau / OCC côté client).
+
+export const internalRecordScanBatch = internalMutation({
+  args: {
+    scans: v.array(
+      v.object({
+        status: v.union(v.literal("found"), v.literal("not_found"), v.literal("error")),
+        slotInfo: v.optional(v.string()),
+        screenshotStorageId: v.optional(v.string()),
+        errorMessage: v.optional(v.string()),
+        applicationId: v.optional(v.string()),
+        dossierName: v.optional(v.string()),
+        pageCaptures: v.optional(v.string()),
+        detectedServices: v.optional(v.string()),
+        detectedSlots: v.optional(v.string()),
+        scanTrace: v.optional(v.string()),
+        cycleNumber: v.optional(v.number()),
+        windowId: v.optional(v.number()),
+        idempotencyKey: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args): Promise<{ inserted: number; skipped: number }> => {
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const scan of args.scans) {
+      // Dédup : si une clé idempotente est fournie et déjà présente, on saute.
+      if (scan.idempotencyKey) {
+        const existing = await ctx.db
+          .query("spainWatcherScans")
+          .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", scan.idempotencyKey))
+          .first();
+        if (existing) {
+          skipped++;
+          continue;
+        }
+      }
+
+      await ctx.db.insert("spainWatcherScans", {
+        ts: Date.now(),
+        status: scan.status,
+        slotInfo: scan.slotInfo,
+        screenshotStorageId: scan.screenshotStorageId,
+        errorMessage: scan.errorMessage,
+        applicationId: scan.applicationId,
+        dossierName: scan.dossierName,
+        pageCaptures: scan.pageCaptures,
+        detectedServices: scan.detectedServices,
+        detectedSlots: scan.detectedSlots,
+        scanTrace: scan.scanTrace,
+        cycleNumber: scan.cycleNumber,
+        windowId: scan.windowId,
+        idempotencyKey: scan.idempotencyKey,
+      });
+      inserted++;
+    }
+
+    return { inserted, skipped };
+  },
+});
+
+// ─── Internal: patch télémétrie singleton + alerte email (best-effort) ────────
+//
+// Extrait de l'ancien internalRecordScan. Appelé séparément (best-effort) après
+// l'insert batch pour rafraîchir le résumé dashboard sans bloquer l'historique.
+// Conserve le throttle SINGLETON_PATCH_THROTTLE_MS et le cooldown found 30 min.
+
+export const internalTouchSingleton = internalMutation({
+  args: {
+    status: v.union(v.literal("found"), v.literal("not_found"), v.literal("error")),
+    slotInfo: v.optional(v.string()),
+    detectedSlots: v.optional(v.string()),
+    detectedServices: v.optional(v.string()),
+    dossierName: v.optional(v.string()),
+    screenshotStorageId: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const watcher = await ctx.db
+      .query("spainWatcher")
+      .withIndex("by_key", (q) => q.eq("key", WATCHER_KEY))
+      .first();
+    if (!watcher) return;
+
+    const now = Date.now();
+    const sinceLastPatch = now - (watcher.updatedAt ?? 0);
+    const shouldPatchTelemetry = sinceLastPatch >= SINGLETON_PATCH_THROTTLE_MS;
+
+    const ALERT_COOLDOWN_MS = 30 * 60 * 1000;
+    const cooldownOk = now - (watcher.lastAlertSentAt ?? 0) > ALERT_COOLDOWN_MS;
+    const shouldAlert = args.status === "found" && !!watcher.adminEmail && cooldownOk;
+
+    if (!shouldPatchTelemetry && !shouldAlert) return;
+
+    const consecutiveErrors =
+      args.status === "error" ? (watcher.consecutiveErrors ?? 0) + 1 : 0;
+
+    await ctx.db.patch(watcher._id, {
+      lastScanAt: now,
+      lastResult: args.status,
+      lastSlotInfo: args.slotInfo,
+      consecutiveErrors,
+      updatedAt: now,
+      ...(shouldAlert ? { lastAlertSentAt: now } : {}),
+    });
+
+    if (shouldAlert) {
+      await ctx.scheduler.runAfter(0, internal.spainWatcher.internalSendWatcherAlert, {
+        adminEmail: watcher.adminEmail!,
+        slotInfo: args.slotInfo ?? "Créneau disponible",
+        portalUrl: watcher.portalUrl,
+        screenshotStorageId: args.screenshotStorageId,
+        detectedSlots: args.detectedSlots,
+        dossierName: args.dossierName,
+        serviceName: args.detectedServices,
+      });
+    }
+  },
+});
+
+// ─── Internal: rétention basée sur l'âge (appelée par cron) ───────────────────
+
+export const internalPruneOldScans = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{ deleted: number }> => {
+    const cutoff = Date.now() - RETENTION_MS;
+    let deleted = 0;
+
+    // Boucle batchée : les rows les plus anciennes d'abord (by_ts asc), on
+    // supprime tant que ts < cutoff.
+    for (;;) {
+      const batch = await ctx.db
+        .query("spainWatcherScans")
+        .withIndex("by_ts", (q) => q.lt("ts", cutoff))
+        .order("asc")
+        .take(200);
+      if (batch.length === 0) break;
+
+      for (const scan of batch) {
+        if (scan.screenshotStorageId) {
+          try {
+            await ctx.storage.delete(scan.screenshotStorageId as any);
+          } catch { /* ignore si déjà supprimé */ }
+        }
+        await ctx.db.delete(scan._id);
+        deleted++;
+      }
+
+      if (batch.length < 200) break;
+    }
+
+    return { deleted };
   },
 });
 

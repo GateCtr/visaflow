@@ -476,8 +476,13 @@ export default defineSchema({
     detectedServices: v.optional(v.string()), // JSON: [{serviceId, serviceName}] when status=found
     detectedSlots: v.optional(v.string()),    // JSON: [{id, name, slots: [{d, t, n}]}] — dates/heures exactes
     scanTrace: v.optional(v.string()),        // JSON: SpainScanTrace — main/initConfig/service/agenda/datetime/booking steps
+    // ─── Télémétrie par cycle (regroupement frontend fenêtre/cycle) ──────────
+    cycleNumber: v.optional(v.number()),      // numéro de cycle de scan dans la fenêtre worker
+    windowId: v.optional(v.number()),         // epoch ms top-of-hour de la fenêtre worker
+    idempotencyKey: v.optional(v.string()),   // `${windowId}:${applicationId ?? '_'}:${cycleNumber}` — dédup insert
   }).index("by_ts", ["ts"])
-    .index("by_application", ["applicationId"]),
+    .index("by_application", ["applicationId"])
+    .index("by_idempotency", ["idempotencyKey"]),
 
   // OTP challenges for portal flows requiring user one-time code (e.g. Spain confirmclient)
   otpChallenges: defineTable({

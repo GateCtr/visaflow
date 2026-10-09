@@ -1224,6 +1224,109 @@ http.route({
   }),
 });
 
+// ─── Spain Watcher : batch de scans (INSERT-only, par cycle) ─────────────────
+// Miroir de /hunter/slot-discovery/batch. INSERT-only côté Convex (pas de patch
+// du singleton dans la même txn → pas de conflit OCC). Le rafraîchissement du
+// singleton (télémétrie dashboard + alerte found) est fait en best-effort via
+// internalTouchSingleton et ne peut jamais faire échouer l'insert historique.
+http.route({
+  path: "/hunter/spain-watcher/scan-result/batch",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const err = requireHunterKey(request);
+    if (err) return err;
+
+    type BatchStatus = "found" | "not_found" | "error";
+    let body: {
+      scans?: Array<{
+        status: BatchStatus;
+        slotInfo?: string;
+        screenshotStorageId?: string;
+        errorMessage?: string;
+        applicationId?: string;
+        dossierName?: string;
+        pageCaptures?: string;
+        detectedServices?: string;
+        detectedSlots?: string;
+        scanTrace?: string;
+        cycleNumber?: number;
+        windowId?: number;
+        idempotencyKey?: string;
+      }>;
+    };
+
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
+
+    if (!body.scans || !Array.isArray(body.scans) || body.scans.length === 0) {
+      return new Response("Missing or empty scans array", { status: 400 });
+    }
+
+    const normalizeStatus = (s: unknown): BatchStatus =>
+      s === "found" || s === "error" ? s : "not_found";
+
+    const sanitized = body.scans.map((s) => ({
+      status: normalizeStatus(s.status),
+      slotInfo: s.slotInfo !== undefined ? String(s.slotInfo) : undefined,
+      screenshotStorageId: s.screenshotStorageId !== undefined ? String(s.screenshotStorageId) : undefined,
+      errorMessage: s.errorMessage !== undefined ? String(s.errorMessage) : undefined,
+      applicationId: s.applicationId !== undefined ? String(s.applicationId) : undefined,
+      dossierName: s.dossierName !== undefined ? String(s.dossierName) : undefined,
+      pageCaptures: s.pageCaptures !== undefined ? String(s.pageCaptures) : undefined,
+      detectedServices: s.detectedServices !== undefined ? String(s.detectedServices) : undefined,
+      detectedSlots: s.detectedSlots !== undefined ? String(s.detectedSlots) : undefined,
+      scanTrace: s.scanTrace !== undefined ? String(s.scanTrace) : undefined,
+      cycleNumber: typeof s.cycleNumber === "number" ? s.cycleNumber : undefined,
+      windowId: typeof s.windowId === "number" ? s.windowId : undefined,
+      idempotencyKey: s.idempotencyKey !== undefined ? String(s.idempotencyKey) : undefined,
+    }));
+
+    let result: { inserted: number; skipped: number };
+    try {
+      result = await ctx.runMutation(internal.spainWatcher.internalRecordScanBatch, {
+        scans: sanitized,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error("spain-watcher/scan-result/batch error:", msg);
+      // OCC / write-conflict transitoire → 503 pour que le client retry.
+      const isOcc = /changed while|conflict|Documents/i.test(msg);
+      return new Response(JSON.stringify({ ok: false, error: msg }), {
+        status: isOcc ? 503 : 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Rafraîchissement singleton best-effort : statut le plus significatif du batch
+    // (found > error > not_found). Un échec ici ne doit JAMAIS faire échouer l'insert.
+    try {
+      const rank = (s: BatchStatus): number => (s === "found" ? 2 : s === "error" ? 1 : 0);
+      const mostSignificant = sanitized.reduce((best, cur) =>
+        rank(cur.status) > rank(best.status) ? cur : best,
+      );
+      await ctx.runMutation(internal.spainWatcher.internalTouchSingleton, {
+        status: mostSignificant.status,
+        slotInfo: mostSignificant.slotInfo,
+        detectedSlots: mostSignificant.detectedSlots,
+        detectedServices: mostSignificant.detectedServices,
+        dossierName: mostSignificant.dossierName,
+        screenshotStorageId: mostSignificant.screenshotStorageId,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.warn("spain-watcher/scan-result/batch singleton touch skipped:", msg);
+    }
+
+    return new Response(JSON.stringify({ ok: true, inserted: result.inserted, skipped: result.skipped }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 // ─── Spain Watcher : commandes rush-prep (CF resolve / session pre-warm) ──────
 http.route({
   path: "/hunter/spain-watcher/rush-prep",
