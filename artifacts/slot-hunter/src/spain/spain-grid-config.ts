@@ -40,7 +40,7 @@ export type FailureKind =
 
 /** Configuration de la grille d'horloge murale, adossée aux variables d'environnement. */
 export interface GridConfig {
-  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 6000). */
+  /** Tick de la phase chasse en ms (SPAIN_HUNT_TICK_MS, défaut 5000). */
   huntTickMs: number;
   /** Tick de la phase tardive en ms (SPAIN_LATE_TICK_MS, défaut 60000). */
   lateTickMs: number;
@@ -94,8 +94,8 @@ const MINUTE_MIN = 0;
 const MINUTE_MAX = 59;
 
 /** Valeurs par défaut (Requirements 11.2, 11.3, 11.4, 11.6, 11.9). */
-// huntTickMs = 6 s : cadence demandée pour la chasse active.
-const DEFAULT_HUNT_TICK_MS = 6_000;
+// huntTickMs = 5 s : cadence demandée pour la chasse active.
+const DEFAULT_HUNT_TICK_MS = 5_000;
 const DEFAULT_LATE_TICK_MS = 60_000;
 // Le jitter de grille est désactivé : tous les workers utilisent le même front exact.
 const DEFAULT_JITTER_PCT = 0;
