@@ -12,6 +12,8 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
+import { deobfuscateUsaBundleAesKey } from "./usa-bundle-deobfuscate.js";
+
 // ─── constantes extraites du bundle Angular (à synchroniser si bundle change) ──
 const EXPECTED_AES_KEY    = "OuoCdl8xQh/OX6LbmgLEtZxZrvnOmrubsMhPW1VPRjk=";
 const EXPECTED_CAPTCHA_SITEKEY = "6LdVVDAqAAAAAK4DS06UwosT8o1SA_3WhzUDAWAp";
@@ -112,6 +114,12 @@ function section(title: string): void {
 
 // ─── Extraction automatique de la clé AES depuis le bundle ─────────────────────
 function extractAesKeyFromBundle(bundleText: string): string | null {
+  // Bundle USA obfusqué (javascript-obfuscator) : clé AES résolue par déobfuscation de la
+  // table de strings (voir usa-bundle-deobfuscate.ts). Court-circuit littéral via expectedKey.
+  const deob = deobfuscateUsaBundleAesKey(bundleText, EXPECTED_AES_KEY);
+  if (deob.aesKey) return deob.aesKey;
+
+  // Repli : ancienne heuristique de proximité (formats non obfusqués).
   const KEY_REGEX = /[A-Za-z0-9+/]{43}=/g;
   const CONTEXT_KEYWORDS = ["PBKDF2", "pbkdf2", "encryptSecretKey", "secretKey", "encKey", "AES", "CryptoJS", "encrypt"];
 
@@ -166,16 +174,22 @@ async function checkBundleIntegrity(): Promise<void> {
 
   const bundleText = await bundleRes.text();
 
-  // 1c. Clé AES
+  // 1c. Clé AES — le bundle est obfusqué : la clé n'est plus littérale, on la résout par
+  //     déobfuscation. Inchangée (résolue == attendue) → PASS. Changée → FAIL avec la nouvelle.
   if (bundleText.includes(EXPECTED_AES_KEY)) {
-    record("B04", "Clé AES inchangée", "bundle", "PASS", `Clé confirmée dans ${bundleName}`, true);
+    record("B04", "Clé AES inchangée", "bundle", "PASS", `Clé confirmée en clair dans ${bundleName}`, true);
   } else {
     const extractedKey = extractAesKeyFromBundle(bundleText);
-    record("B04", "Clé AES inchangée", "bundle", "FAIL",
-      extractedKey
-        ? `❌ Clé changée ! Nouvelle clé extraite automatiquement: "${extractedKey}". Bundle: ${bundleName}`
-        : `❌ La clé AES a changé ET impossible de l'extraire automatiquement. Inspection manuelle requise. Bundle: ${bundleName}`,
-      true);
+    if (extractedKey && extractedKey === EXPECTED_AES_KEY) {
+      record("B04", "Clé AES inchangée", "bundle", "PASS",
+        `Clé confirmée via déobfuscation (bundle obfusqué: ${bundleName})`, true);
+    } else {
+      record("B04", "Clé AES inchangée", "bundle", "FAIL",
+        extractedKey
+          ? `❌ Clé changée ! Nouvelle clé extraite automatiquement: "${extractedKey}". Bundle: ${bundleName}`
+          : `❌ La clé AES a changé ET impossible de l'extraire automatiquement. Inspection manuelle requise. Bundle: ${bundleName}`,
+        true);
+    }
   }
 
   // 1d. reCAPTCHA sitekey

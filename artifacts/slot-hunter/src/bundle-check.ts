@@ -6,6 +6,7 @@ import { USA_ENC_SEC_KEY, updateAesKey } from "./usaPortal.js";
 import { proxyPool } from "./browser.js";
 import { sendAdminBundleCheckReport, type BundleCheckReport } from "./adminReporting.js";
 import { log } from "./scheduler-utils.js";
+import { deobfuscateUsaBundleAesKey } from "./usa-bundle-deobfuscate.js";
 import {
   pausedJobs,
   completedJobs,
@@ -16,6 +17,17 @@ import {
 } from "./scheduler-state.js";
 
 function extractAesKeyFromBundle(bundleText: string): string | null {
+  // Le portail USA obfusque désormais ses chaînes (javascript-obfuscator) : la clé AES
+  // n'apparaît plus en clair, elle vit dans la table de strings décodée à la demande.
+  // On déobfusque la table pour résoudre encSecKey (voir usa-bundle-deobfuscate.ts).
+  // Court-circuit littéral conservé via expectedKey (ancien format non obfusqué).
+  const deob = deobfuscateUsaBundleAesKey(bundleText, USA_ENC_SEC_KEY);
+  if (deob.aesKey) {
+    log("INFO", `🔍 Bundle check : clé AES résolue via déobfuscation (méthode=${deob.method}, scannées=${deob.decodedCount ?? 0})`);
+    return deob.aesKey;
+  }
+
+  // Repli : ancienne heuristique de proximité (bundles non obfusqués / formats inconnus).
   const KEY_REGEX = /[A-Za-z0-9+/]{43}=/g;
   const CONTEXT_KEYWORDS = ["PBKDF2", "pbkdf2", "encryptSecretKey", "secretKey", "encKey", "AES", "CryptoJS", "encrypt"];
 
@@ -107,12 +119,22 @@ export async function checkPortalBundleKey(activeJobs: HunterJob[]): Promise<voi
     }
     const bundleText = await bundleRes.text();
 
+    // Clé en clair (ancien format non obfusqué) → inchangée, rien à faire.
     if (bundleText.includes(USA_ENC_SEC_KEY)) {
       return;
     }
 
+    // Depuis main.65074217902e910c.js, le bundle est OBFUSQUÉ : la clé n'est plus littérale.
+    // On la résout par déobfuscation. Si elle est identique à la clé en code → inchangée (PASS
+    // silencieux, PAS de fausse alerte « clé changée » comme avant ce correctif).
+    const resolvedKey = extractAesKeyFromBundle(bundleText);
+    if (resolvedKey && resolvedKey === USA_ENC_SEC_KEY) {
+      log("INFO", `🔍 Bundle check : clé AES inchangée (obfusquée dans ${bundleName}, résolue par déobfuscation) — OK`);
+      return;
+    }
+
     log("WARN", `🔍 Bundle check : clé AES introuvable dans ${bundleName} — extraction automatique en cours...`);
-    const newKey = extractAesKeyFromBundle(bundleText);
+    const newKey = resolvedKey;
 
     if (newKey) {
       const oldKey = USA_ENC_SEC_KEY;
