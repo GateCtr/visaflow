@@ -568,11 +568,33 @@ async function callBookititViaWidgetNativeJsonp(
 
 // ─── SpainPersistentBrowserManager ────────────────────────────────────────────
 
-class SpainPersistentBrowserManager {
+export class SpainPersistentBrowserManager {
   private _browser: Browser | null = null;
   private _cachedSession: SpainCfSession | null = null;
   private _ua: string = randomChromeUA();
   private _viewport = randomViewport();
+  /**
+   * Overrides pour instancier plusieurs managers (mode multi-navigateurs par dossier).
+   * - _profileDirOverride : userDataDir dédié à CETTE instance (sinon CF_PROFILE_DIR global).
+   * - _proxyUrlOverride   : proxy fixe pour CETTE instance (sinon getProxyUrl() dynamique).
+   * Le constructeur par défaut (sans args) préserve EXACTEMENT le comportement singleton.
+   */
+  private _profileDirOverride?: string;
+  private _proxyUrlOverride?: string;
+  private _syncGlobalSession: boolean;
+
+  /**
+   * @param opts.profileDir  userDataDir isolé pour cette instance (multi-navigateurs).
+   * @param opts.proxyUrl    proxy fixe pour cette instance (ex. port Decodo réservé du dossier).
+   * @param opts.syncGlobalSession  si false, n'écrit PAS dans le cache session global
+   *   (setActiveSpainCfSession) — requis en multi-instances pour que N managers ne se
+   *   piétinent pas sur le slot unique. Défaut true (comportement singleton historique).
+   */
+  constructor(opts?: { profileDir?: string; proxyUrl?: string; syncGlobalSession?: boolean }) {
+    this._profileDirOverride = opts?.profileDir;
+    this._proxyUrlOverride = opts?.proxyUrl;
+    this._syncGlobalSession = opts?.syncGlobalSession ?? true;
+  }
   /**
    * Mutex de lancement : empêche deux appels concurrents à puppeteer.launch().
    * Sans ce verrou, si isBrowserAlive() timeout pendant le Turnstile solve
@@ -638,6 +660,8 @@ class SpainPersistentBrowserManager {
   }
 
   private getProxyUrl(): string | undefined {
+    // Multi-navigateurs : proxy fixe injecté pour CETTE instance (port Decodo du dossier).
+    if (this._proxyUrlOverride) return this._proxyUrlOverride;
     // SPAIN_ISP_PROXY_URL : proxy ISP espagnol (priorité absolue).
     // Route via un PoP CF Madrid/Barcelona → CF ne reconnaît pas l'IP comme datacenter
     // → vrai JSD challenge (pas fast-track) → nonce fraîche depuis l'origine → /main/ ✅.
@@ -806,7 +830,7 @@ class SpainPersistentBrowserManager {
     const maskedProxy = proxyUrl
       ? proxyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 80)
       : "direct (no proxy)";
-    const effectiveProfileDir = ensureProfileDirectory(CF_PROFILE_DIR);
+    const effectiveProfileDir = ensureProfileDirectory(this._profileDirOverride ?? CF_PROFILE_DIR);
     console.log(`[spain-pb] 🚀 Lancement Chromium persistant`);
     console.log(`[spain-pb]    userDataDir : ${effectiveProfileDir}`);
     console.log(`[spain-pb]    Proxy       : ${maskedProxy}`);
@@ -869,6 +893,70 @@ class SpainPersistentBrowserManager {
   /** Page Chromium principale — utilisée par callBookititEndpointViaBrowser pour les appels same-IP. */
   getActivePage(): import("puppeteer").Page | null {
     return this._page;
+  }
+
+  /**
+   * Appel Bookitit JSONP IN-PAGE sur la page de CETTE instance (multi-navigateurs).
+   *
+   * Recette VALIDÉE (test-pb-fullchain-saopolo / cuba) : on passe par jQuery NATIF
+   * (dataType:'jsonp', jsonp:'callback') qui génère/gère son propre callback — c'est ce
+   * qui fonctionne là où un callback fixe reconstruit à la main renvoie 22B. On repart de
+   * l'URL Bookitit déjà construite (makeDirectUrl, ordre strict des params) et on la rejoue
+   * via jq.ajax avec les params en objet `data` (jQuery sérialise services[]/agendas[]/gct…).
+   *
+   * @param url URL Bookitit complète (https://.../onlinebookings/<endpoint>?...)
+   * @returns le JSON stringifié de la réponse, ou "" en cas d'échec/0B.
+   */
+  async callBookititJqOnPage(url: string): Promise<string> {
+    const page = this._page;
+    if (!page) return "";
+    let endpoint = "";
+    let dataObj: Record<string, string | string[]> = {};
+    try {
+      const u = new URL(url);
+      endpoint = u.pathname.match(/\/onlinebookings\/([^/?]+\/?)/)?.[1] ?? "";
+      // Reconstruire l'objet data depuis la query string (jQuery regénère callback + _).
+      const grouped: Record<string, string[]> = {};
+      for (const [k, v] of u.searchParams.entries()) {
+        if (k === "callback" || k === "_") continue; // jQuery natif les gère
+        (grouped[k] ??= []).push(v);
+      }
+      for (const [k, arr] of Object.entries(grouped)) {
+        dataObj[k] = k.endsWith("[]") ? arr : arr[0];
+      }
+    } catch {
+      return "";
+    }
+    if (!endpoint) return "";
+
+    const script = `
+      (function(endpoint, data){ return new Promise(function(resolve){
+        var jq = window.jQuery; if(!jq){ resolve('__ERR_NO_JQUERY'); return; }
+        var t = setTimeout(function(){ resolve('__ERR_TIMEOUT'); }, 20000);
+        jq.ajax({
+          url: window.location.origin + '/onlinebookings/' + endpoint,
+          dataType: 'jsonp', jsonp: 'callback', data: data,
+          success: function(r){ clearTimeout(t); try { resolve(JSON.stringify(r)); } catch(e){ resolve('__ERR_STRINGIFY'); } },
+          error: function(_x, s){ clearTimeout(t); resolve('__ERR_AJAX_' + String(s || 'error')); }
+        });
+      }); })(${JSON.stringify(endpoint)}, ${JSON.stringify(dataObj)})`;
+
+    try {
+      const result = (await Promise.race([
+        page.evaluate(script) as Promise<string>,
+        new Promise<string>((r) => setTimeout(() => r("__ERR_EVAL_TIMEOUT"), 22_000)),
+      ])) as string;
+      if (!result || result.startsWith("__ERR_")) {
+        if (result && result !== "__ERR_NO_JQUERY") {
+          console.warn(`[spain-pb] ⚠️ callBookititJqOnPage ${endpoint} → ${result.slice(0, 80)}`);
+        }
+        return "";
+      }
+      return result;
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ callBookititJqOnPage(${endpoint}): ${err}`);
+      return "";
+    }
   }
 
   /**
@@ -1928,7 +2016,7 @@ class SpainPersistentBrowserManager {
           const restored: SpainCfSession = { ...redisData, source: "playwright", prefetchedMainHtml: undefined };
           this._cachedSession = restored;
           this._lastEnsureFromCache = true; // évite guard destructeur dans ensureSpainCfSession
-          setActiveSpainCfSession(restored);
+          if (this._syncGlobalSession) setActiveSpainCfSession(restored);
           // Réattacher le browser avec les cookies existants (sans navigation = sans proxy requis)
           try {
             await this._reattachBrowserWithSession();
@@ -1939,7 +2027,7 @@ class SpainPersistentBrowserManager {
         } else {
           const restored: SpainCfSession = { ...redisData, source: "playwright" };
           this._cachedSession = restored;
-          setActiveSpainCfSession(restored);
+          if (this._syncGlobalSession) setActiveSpainCfSession(restored);
           const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
           console.log(
             `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
@@ -3470,7 +3558,7 @@ class SpainPersistentBrowserManager {
     // Sync dans le cache de spain-soax-solver.ts pour que runSpainHttpProbe
     // (qui appelle ensureSpainCfSession en interne) trouve la session directement
     // sans déclencher un solve CapSolver.
-    setActiveSpainCfSession(session);
+    if (this._syncGlobalSession) setActiveSpainCfSession(session);
 
     // Persistance Redis pour survie aux redéploiements
     try {
@@ -3643,7 +3731,7 @@ class SpainPersistentBrowserManager {
     // ❌ Nouvelle session vide/nulle → restaurer A
     if (backup && Date.now() < backup.expiresAt) {
       this._cachedSession = backup;
-      setActiveSpainCfSession(backup);
+      if (this._syncGlobalSession) setActiveSpainCfSession(backup);
       const remainMin = Math.round((backup.expiresAt - Date.now()) / 60_000);
       console.log(
         `[spain-pb] ↩️ Re-solve proactif échoué (prefetch: ${prefetchLen}B)` +

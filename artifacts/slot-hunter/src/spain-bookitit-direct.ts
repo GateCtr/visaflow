@@ -712,6 +712,33 @@ export async function callDirect(
       const controller = new AbortController();
       timeout = setTimeout(() => controller.abort(), timeoutMs);
       const url = makeDirectUrl(ds, endpoint, requestExtra);
+
+      // ── Mode navigateur (SPAIN_BROWSER_SESSION) : router l'appel Bookitit IN-PAGE ──
+      // Quand la session vient d'un navigateur par dossier (source="playwright" +
+      // _ownPageFetcher), le cf_clearance chl_page n'est PAS rejouable par impit → on
+      // exécute l'appel JSONP dans la page Chromium du dossier (jQuery natif). Le captcha
+      // (gct) et tous les params passent inchangés dans l'URL → aucune logique à dupliquer.
+      const pageFetcher = ds.session?._ownPageFetcher;
+      if (ds.session?.source === "playwright" && pageFetcher) {
+        clearTimeout(timeout);
+        timeout = undefined;
+        const body = await pageFetcher(url);
+        // Réponse synthétique avec de VRAIS Headers : le JSONP est servi IN-PAGE (pas de
+        // Set-Cookie exploitable côté Node), mais logBookingResponseTrace lit response.headers.get()
+        // et getSetCookieValues() → un objet Headers vide évite le crash « reading 'get' » et
+        // laisse les cookies gérés par le navigateur (PHPSESSID persiste dans la page).
+        const fakeRes = {
+          ok: !!body,
+          status: body ? 200 : 0,
+          headers: new Headers(),
+        } as unknown as Response;
+        logBookingResponseTrace(endpoint, url, fakeRes, body ?? "", parseDirectJsonpDetailed(body ?? ""));
+        if (!body) {
+          // 0B in-page : traité comme réponse vide (null) — même sémantique qu'impit 0B.
+          return null;
+        }
+        return parseDirectJsonpDetailed(body).payload;
+      }
       // Le flow de booking réutilise le même jar, en le mettant à jour si
       // Bookitit renouvelle PHPSESSID via Set-Cookie.
       const headers = makeDirectHeaders(ds);

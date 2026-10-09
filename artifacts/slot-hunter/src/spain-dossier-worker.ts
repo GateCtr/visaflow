@@ -45,6 +45,7 @@ import {
 } from "./spain-http-booking.js";
 import { extractSpainLoginTypes, getSpainBookingLoginType, type SpainLoginType } from "./spain-login-types.js";
 import { getKnownIdsForPortal, portalRequiresCaptcha } from "./spain-portals.js";
+import { isBrowserSessionMode, getBrowserDossierSession, closeBrowserDossierSession } from "./spain-browser-pool.js";
 import { registerDossierCaptcha, takeDossierToken, markDossierSlotSeen, markDossierBooked } from "./spain-hcaptcha-prewarm.js";
 import { confirmSlotsViaDatetime } from "./spain-http-scanner.js";
 import {
@@ -1659,11 +1660,97 @@ export async function scanViaWidgetDatetime(
   return scanDatetimeDirect(phpState, config, tag);
 }
 
+/**
+ * Scan datetime/ EN MODE NAVIGATEUR (session.source==="playwright").
+ *
+ * Différences vs scanViaWidgetDatetime (chemin impit "shortscan") :
+ *  – PAS de GET widget via impit : le PHPSESSID + cf_clearance vivent dans la page Chromium
+ *    du dossier (déjà franchie par le pool). On ne touche jamais impit.
+ *  – session.bookititState est DÉJÀ posé par spain-browser-pool (publickey/widgetUrl/srvsrc).
+ *  – callDirect route tous les appels Bookitit IN-PAGE (jQuery natif) via _ownPageFetcher.
+ *    getagendas/ est donc amorcé in-page par scanDatetimeDirect lui-même (callDirect routé).
+ *  – Captcha : flag portail (portalRequiresCaptcha) = source de vérité ; si requis on
+ *    enregistre le dossier au prewarm hCaptcha → gct injecté au signin/ exactement comme
+ *    en prod HTTP (le gct n'est qu'un paramètre d'URL, le JSONP in-page le transporte).
+ *
+ * @returns WorkerScanResult (slots / not_found / …), ou null si le portail est inconnu
+ *          (pas d'IDs connus → impossible de scanner sans getagendas réel).
+ */
+export async function scanViaBrowserDatetime(
+  session: SpainCfSession,
+  config: SpainDossierConfig,
+  tag: string,
+): Promise<WorkerScanResult | null> {
+  const portalUrl = config.portalUrl.split("#")[0];
+  const known = getKnownIdsForPortal(portalUrl);
+  if (!known) {
+    log("WARN", `${tag} 🌐 mode navigateur: portail inconnu (pas d'IDs connus) → scan impossible`);
+    return null;
+  }
+
+  // bookititState posé par le pool ; fallback défensif si absent.
+  if (!session.bookititState) {
+    const baseHost = new URL(portalUrl).origin;
+    session.bookititState = {
+      jqCallback: `jQuery21109${Date.now()}_${Math.floor(Math.random() * 1e9)}`,
+      reqCounter: Date.now(),
+      srvsrc: baseHost,
+      version: "4",
+      widgetUrl: portalUrl.endsWith("/") ? portalUrl : portalUrl + "/",
+      publickey: portalUrl.match(/widgetdefault\/([^/?#]+)/)?.[1] ?? "",
+      bookititBase: `${baseHost}/onlinebookings`,
+    };
+  }
+
+  const ds = buildDynamicSession(session);
+  if (!ds) {
+    log("WARN", `${tag} 🌐 mode navigateur: buildDynamicSession a renvoyé null → scan impossible`);
+    return null;
+  }
+
+  // Captcha : portail connu = source de vérité primaire ; fallback détection /main/.
+  const cap = detectHcaptcha([{ label: "main", text: session.prefetchedMainHtml ?? "" }]);
+  const portalCaptcha = portalRequiresCaptcha(portalUrl);
+  const captchaRequired = portalCaptcha ?? cap.present;
+  const captchaSitekey = cap.sitekey ?? null;
+
+  const phpState: WorkerPhpState = {
+    services: [{ serviceId: known.serviceId, serviceName: "" }],
+    agendaId: known.agendaId,
+    agendaConfirmed: false, // agenda non confirmé par getagendas/ (amorcé in-page) → 0B = not_found
+    bestServiceId: known.serviceId,
+    bestServiceName: "",
+    allowAppointment: null,
+    captchaRequired,
+    captchaSitekey,
+    ds,
+  };
+
+  if (captchaRequired) {
+    log("INFO", `${tag} 🌐 hCaptcha requis (portail connu=${portalCaptcha ?? "?"}, main=${cap.present}) → gct au signin/ (prewarm)`);
+    registerDossierCaptcha(config.id, captchaSitekey || HCAPTCHA_SITEKEY, portalUrl);
+  }
+
+  log("INFO", `${tag} 🌐 scan navigateur (datetime/ IN-PAGE, IDs connus) — PHPSESSID page`);
+  return scanDatetimeDirect(phpState, config, tag);
+}
+
 export async function refreshSessionAndScan(
   session: SpainCfSession,
   config: SpainDossierConfig,
   tag: string,
 ): Promise<WorkerScanResult> {
+  // Mode NAVIGATEUR (source=playwright) : pas d'impit. Le PHPSESSID vient de la page,
+  // le cf_clearance est déjà franchi. On scanne datetime/ IN-PAGE via scanDatetimeDirect
+  // (callDirect routé par _ownPageFetcher), IDs connus. Amorçage getagendas/ fait par
+  // scanDatetimeDirect/callDirect in-page.
+  if (session.source === "playwright" && session._ownPageFetcher) {
+    const browserScan = await scanViaBrowserDatetime(session, config, tag);
+    if (browserScan !== null) return browserScan;
+    // null → IDs portail inconnus → on NE peut pas scanner en navigateur sans getagendas réel.
+    return { status: "error", errorMessage: "mode navigateur: portail inconnu (pas d'IDs)", monthTraces: [] };
+  }
+
   // Chemin court éclaireur (gated) : GET widget → datetime/ direct si IDs connus.
   if (ECLAIREUR_SHORTSCAN) {
     const short = await scanViaWidgetDatetime(session, config, tag);
@@ -2225,6 +2312,29 @@ export async function runDossierWorker(
   let cfFromCache = false;
   let solveT0 = Date.now();
 
+  // ── Mode NAVIGATEUR (SPAIN_BROWSER_SESSION=1) : 1 Chromium par dossier ──────────
+  // Le portail citaconsular.es (chl_page interactif) n'est PAS franchissable en HTTP-pur
+  // (cf_clearance non rejouable par impit). On crée une session navigateur dédiée au dossier
+  // (CF franchi + widget chargé) ; le worker reste IDENTIQUE (scan + booking via callDirect,
+  // routé in-page par source="playwright" + _ownPageFetcher). OFF par défaut → flux HTTP inchangé.
+  if (isBrowserSessionMode()) {
+    const stickyId = Math.random().toString(36).slice(2, 10);
+    const stickyProxy = proxyUrl ? addStickySession(proxyUrl, stickyId) : "";
+    log("INFO", `${tag} 🌐 Mode NAVIGATEUR — création session Chromium dédiée (proxy ${maskProxy(stickyProxy)})…`);
+    const browserSession = await getBrowserDossierSession(config.id, portalUrlNoFrag, stickyProxy);
+    if (!browserSession) {
+      workerResult = { dossierId: config.id, status: "error", errorMessage: "Mode navigateur : franchissement CF échoué" };
+      return workerResult;
+    }
+    session = browserSession;
+    if (stickyProxy) {
+      proxyUrl = stickyProxy;
+      await saveLastStickyForDossier(config.id, stickyId).catch(() => {});
+      await saveWorkerProxyIdentity(config.id, stripStickySession(stickyProxy), stickyId).catch(() => {});
+    }
+    log("INFO", `${tag} ✅ Session navigateur prête — cf_clearance ${session.cfClearance?.slice(0, 12)}… | cookies=${session.allCookies.map(c => c.name).join(",")}`);
+  }
+
   // Première tentative : récupérer le stickyId de la session précédente pour réutiliser
   // la même exit IP Decodo → cf_clearance Redis encore valide → CapSolver évité.
   // CRITIQUE : le cf_clearance CapSolver est lié à l'exit IP RÉELLE (pas au host:port).
@@ -2244,7 +2354,7 @@ export async function runDossierWorker(
     log("WARN", `${tag} ♻️ Identité proxy/sticky incohérente — ancien cache ignoré`);
   }
 
-  for (let attempt = 0; attempt < MAX_SESSION_RETRIES; attempt++) {
+  for (let attempt = 0; session === null && attempt < MAX_SESSION_RETRIES; attempt++) {
     if (!proxyUrl) break; // mode direct sans proxy
 
     // Sticky session : même exit IP pour impit ET CapSolver.
@@ -2342,7 +2452,11 @@ export async function runDossierWorker(
   // fournit ds + IDs via getKnownIdsForPortal. Gain ~4s au démarrage. Fallback : si le shortscan
   // retourne null (IDs KO / GET widget KO), refreshSessionAndScan refait le cycle complet.
   let phpState: WorkerPhpState | null = null;
-  if (workerIsMeute) {
+  if (isBrowserSessionMode()) {
+    // Mode NAVIGATEUR : skip PHP init HTTP. Le scan passe par refreshSessionAndScan →
+    // scanViaBrowserDatetime (datetime/ IN-PAGE, IDs connus, getagendas/ amorcé in-page).
+    log("INFO", `${tag} 🌐 Mode NAVIGATEUR — skip PHP init HTTP ; scan via datetime/ IN-PAGE (IDs connus)`);
+  } else if (workerIsMeute) {
     log("INFO", `${tag} 🐺 Rôle MEUTE — skip PHP init (getwidgetconfigurations/services/agendas) ; booking via snapshot Redis`);
   } else if (shortscanNoPhpInit) {
     log("INFO", `${tag} ⚡ SHORTSCAN — skip PHP init (getwidgetconfigurations/services/agendas) ; scan via GET widget → datetime/ direct (IDs connus)`);
@@ -3947,6 +4061,10 @@ export async function runDossierWorker(
       // await obligatoire : process.exit() (test) tuerait une Promise fire-and-forget.
       await saveLastProxyForDossier(config.id, stripStickySession(proxyUrl)).catch(() => {});
       releaseWorkerIp(proxyUrl, config.id).catch(() => {});
+    }
+    // Mode navigateur : fermer le Chromium dédié du dossier (libère ~260Mo RAM + port).
+    if (isBrowserSessionMode()) {
+      await closeBrowserDossierSession(config.id).catch(() => {});
     }
   }
 }

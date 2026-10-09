@@ -272,6 +272,23 @@ export async function initDecodoPool(): Promise<void> {
   const pool = getPool();
   if (pool.length === 0) return;
 
+  // ── Override test-only : forcer l'index de départ ───────────────────────────
+  // Si SPAIN_DECODO_START_INDEX est défini (scripts de test uniquement), on fixe
+  // l'index courant et on COURT-CIRCUITE la restauration Redis / l'aléatoire.
+  // Aucun effet en prod (variable absente). Permet de cibler une zone précise du
+  // pool (ex: les IPs autour de l'index 8888) pour reproduire un comportement observé.
+  const startOverride = process.env.SPAIN_DECODO_START_INDEX;
+  if (startOverride !== undefined && startOverride !== "") {
+    const n = Number(startOverride);
+    if (Number.isFinite(n) && n >= 0) {
+      _index = findNextValidIndex(Math.floor(n) % pool.length, pool).idx;
+      console.warn(
+        `[spain-decodo] 🎯 SPAIN_DECODO_START_INDEX=${startOverride} — index de départ forcé à ${_index}/${pool.length} (test)`,
+      );
+      return;
+    }
+  }
+
   const currentFingerprint = computePoolFingerprint(pool);
   const state = await restoreDecodoPoolStateFromRedis(getBlacklistTtlMs()).catch(() => null);
   if (state) {
