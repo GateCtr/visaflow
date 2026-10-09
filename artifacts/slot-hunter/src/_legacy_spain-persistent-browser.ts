@@ -1862,6 +1862,95 @@ export class SpainPersistentBrowserManager {
     }
   }
 
+  /**
+   * Rafraîchit le PHPSESSID — version LÉGÈRE sans re-solve CF (~1.5-2s).
+   *
+   * Imite le mode raccourci HTTP (scanViaWidgetDatetime) : GET widget → PHPSESSID frais → prêt
+   * pour datetime/. Mais un simple fetch() in-page NE SUFFIT PAS : il pose bien le Set-Cookie
+   * PHPSESSID, mais le serveur ne l'ACTIVE pas (le 1er datetime/ dessus revient 0B — observé
+   * São Paulo). Il faut une VRAIE navigation (page.goto) qui recharge la page du widget, comme
+   * le GET widget HTML du shortscan : le serveur associe alors le PHPSESSID frais à une session
+   * widget active → datetime/ répond dès ce cycle.
+   *
+   * Étapes : delete PHPSESSID + localStorage → page.goto(widget) (cf_clearance présent → CF ne
+   * re-challenge pas, PAS de Continuar, PAS de capture /main/) → relire le PHPSESSID frais →
+   * synchroniser dans la session. BEAUCOUP plus léger que refreshPhpSession() (qui attend le clic
+   * Continuar + la capture /main/ 126kB, ~8-21s). Si la nav échoue / 403 / PHPSESSID absent,
+   * renvoie false → l'appelant retombe sur refreshPhpSession() puis re-solve.
+   *
+   * @returns true si un PHPSESSID frais a été posé, activé et synchronisé dans la session.
+   */
+  async refreshPhpSessionLight(): Promise<boolean> {
+    const session = this._cachedSession;
+    let page = this._page;
+    if (!session || !page || !this._browser) {
+      console.warn("[spain-pb] 🔄 refreshPhpSessionLight → pas de session/page/browser active");
+      return false;
+    }
+    const targetUrl = this._currentTargetUrl || DEFAULT_WIDGET_URL;
+    const t0 = Date.now();
+
+    try {
+      // 1. Supprimer le PHPSESSID courant (la nav widget en reposera un neuf via Set-Cookie).
+      try {
+        const cdp = await page.createCDPSession();
+        await cdp.send("Network.deleteCookies", { name: "PHPSESSID", domain: ".citaconsular.es" }).catch(() => {});
+        await cdp.send("Network.deleteCookies", { name: "PHPSESSID", domain: "www.citaconsular.es" }).catch(() => {});
+        await cdp.detach().catch(() => {});
+      } catch { /* non-fatal */ }
+
+      // 2. GET widget IN-PAGE via fetch() — PAS page.goto (qui re-déclenche CF → 403, cf.
+      //    "Navigation root SUPPRIMÉE" plus haut). Le fetch() depuis le contexte de la page
+      //    applique cf_clearance → pas de re-challenge → Bookitit renvoie Set-Cookie: PHPSESSID.
+      //    (L'ACTIVATION de la session PHP pour datetime/ se fait ensuite par un getagendas/
+      //    in-page côté appelant — cf. scanViaBrowserDatetime — comme en HTTP.)
+      let navStatus = 0;
+      try {
+        navStatus = await page.evaluate(`
+          (function(url){ return fetch(url, { credentials: 'include', cache: 'no-store' })
+            .then(function(r){ return r.status; })
+            .catch(function(){ return 0; }); })(${JSON.stringify(targetUrl)})
+        `).catch(() => 0) as number;
+      } catch (navErr) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight — GET widget: ${navErr}`);
+        return false;
+      }
+
+      if (navStatus === 403) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight — GET widget 403 (CF re-challenge) → échec`);
+        return false;
+      }
+
+      // 3. Relire le PHPSESSID frais depuis les cookies de la page.
+      let freshPhp = "";
+      try {
+        const cookies = await page.cookies("https://www.citaconsular.es");
+        freshPhp = cookies.find((c: any) => c.name === "PHPSESSID")?.value ?? "";
+      } catch { /* non-fatal */ }
+
+      if (!freshPhp) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight — PHPSESSID absent après nav (status ${navStatus}) → échec`);
+        return false;
+      }
+
+      // 4. Synchroniser le nouveau PHPSESSID (+ cf_clearance éventuellement renouvelé) en place.
+      const freshCf = (await page.cookies("https://www.citaconsular.es").catch(() => []))
+        .find((c: any) => c.name === "cf_clearance")?.value;
+      session.allCookies = [
+        ...session.allCookies.filter((c) => c.name !== "PHPSESSID"),
+        { name: "PHPSESSID", value: freshPhp },
+      ];
+      if (freshCf) session.cfClearance = freshCf;
+      session.phpSessionCreatedAt = Date.now();
+
+      console.log(`[spain-pb] ⚡ refreshPhpSessionLight (${Date.now() - t0}ms) — PHPSESSID frais ${freshPhp.slice(0, 12)}… (nav widget, pas de Continuar/main)`);
+      return true;
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight exception: ${err}`);
+      return false;
+    }
+  }
+
   getSession(): SpainCfSession | null {
     return this.isSessionValid() ? this._cachedSession : null;
   }

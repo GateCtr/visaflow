@@ -1661,6 +1661,7 @@ export async function scanViaWidgetDatetime(
 }
 
 /**
+/**
  * Scan datetime/ EN MODE NAVIGATEUR (session.source==="playwright").
  *
  * Différences vs scanViaWidgetDatetime (chemin impit "shortscan") :
@@ -1668,7 +1669,15 @@ export async function scanViaWidgetDatetime(
  *    du dossier (déjà franchie par le pool). On ne touche jamais impit.
  *  – session.bookititState est DÉJÀ posé par spain-browser-pool (publickey/widgetUrl/srvsrc).
  *  – callDirect route tous les appels Bookitit IN-PAGE (jQuery natif) via _ownPageFetcher.
- *    getagendas/ est donc amorcé in-page par scanDatetimeDirect lui-même (callDirect routé).
+ *  – getagendas/ n'est JAMAIS appelé (datetime/ direct sur IDs connus) → §9 jamais violée ;
+ *    agendaConfirmed=false → 0B partout = not_found (pas session_dead), comportement voulu.
+ *  – NOUVEAU PHPSESSID PAR CYCLE : comme le mode raccourci HTTP (scanViaWidgetDatetime) qui
+ *    fait un SIMPLE GET widget → PHPSESSID frais via Set-Cookie, on rafraîchit le PHPSESSID
+ *    du navigateur à CHAQUE cycle (y compris le 1er) via _ownPhpRefresher. La voie légère fait
+ *    un simple fetch(widgetUrl) IN-PAGE (~0.3-0.6s, pas de Continuar ni /main/, cf_clearance
+ *    conservé → pas de re-solve) qui pose ET amorce le PHPSESSID → datetime/ répond dès ce
+ *    cycle (sans ce GET, le 1er datetime/ sur un PHPSESSID vierge revient en 0B). Chaque scan
+ *    repart sur une session PHP fraîche et amorcée — comme HTTP.
  *  – Captcha : flag portail (portalRequiresCaptcha) = source de vérité ; si requis on
  *    enregistre le dossier au prewarm hCaptcha → gct injecté au signin/ exactement comme
  *    en prod HTTP (le gct n'est qu'un paramètre d'URL, le JSONP in-page le transporte).
@@ -1686,6 +1695,26 @@ export async function scanViaBrowserDatetime(
   if (!known) {
     log("WARN", `${tag} 🌐 mode navigateur: portail inconnu (pas d'IDs connus) → scan impossible`);
     return null;
+  }
+
+  // ── PHPSESSID frais + AMORCÉ à CHAQUE cycle (y compris le 1er) ────────────────────
+  // Un simple GET widget IN-PAGE (~0.3-0.6s, voie légère _ownPhpRefresher) pose un PHPSESSID
+  // FRAIS via Set-Cookie — exactement comme le mode raccourci HTTP (scanViaWidgetDatetime).
+  // On le fait DÈS le 1er cycle : le PHPSESSID posé au franchissement CF n'est PAS amorcé
+  // côté PHP (le tout premier datetime/ dessus revient en 0B — observé sur São Paulo cycle 1).
+  // Le GET widget ré-amorce l'état PHP → datetime/ répond dès ce cycle. cf_clearance conservé
+  // → aucun re-solve. Si le refresh échoue (CF re-challenge / PHPSESSID absent), on remonte
+  // cf_expired → le worker recrée une session navigateur au cycle suivant.
+  if (session._ownPhpRefresher) {
+    const t0 = Date.now();
+    const refreshed = await session._ownPhpRefresher();
+    if (!refreshed) {
+      log("WARN", `${tag} 🌐 refresh PHP navigateur échoué → cf_expired, nouvelle session au prochain cycle`);
+      return { status: "cf_expired", errorMessage: "mode navigateur: refresh PHP échoué", monthTraces: [] };
+    }
+    log("INFO", `${tag} 🌐 PHPSESSID frais + amorcé (${Date.now() - t0}ms, GET widget seul) — prêt pour datetime/`);
+  } else {
+    log("WARN", `${tag} 🌐 _ownPhpRefresher absent — réutilisation du PHPSESSID courant (pas de refresh)`);
   }
 
   // bookititState posé par le pool ; fallback défensif si absent.
@@ -1731,7 +1760,24 @@ export async function scanViaBrowserDatetime(
     registerDossierCaptcha(config.id, captchaSitekey || HCAPTCHA_SITEKEY, portalUrl);
   }
 
-  log("INFO", `${tag} 🌐 scan navigateur (datetime/ IN-PAGE, IDs connus) — PHPSESSID page`);
+  // ── AMORÇAGE getagendas/ IN-PAGE (1×, ~0.4s) ─────────────────────────────────────
+  // CRITIQUE (mémoire cf-chl-page-mechanism-research §getagendas, cuba-scanner-getservices-fix) :
+  // sur un PHPSESSID frais, le serveur Bookitit exige d'avoir vu UN getagendas/ pour "activer"
+  // la session PHP ; sinon le tout premier datetime/ dessus revient 0B (observé São Paulo cycle 1).
+  // getagendas/ est appelé 1× par PHPSESSID (règle §9) — ici une seule fois par cycle, juste avant
+  // les datetime/, exactement comme initPhpState en HTTP. On IGNORE son résultat (agendaConfirmed
+  // reste false → on garde l'agendaId connu en fallback) : il ne sert qu'à amorcer la session.
+  try {
+    const agT0 = Date.now();
+    const agExtra: Record<string, string> = { "services[]": known.serviceId };
+    const agRaw = await callDirect(ds, "getagendas/", agExtra, tag);
+    const agBytes = JSON.stringify(agRaw ?? "").length;
+    log("INFO", `${tag} 🌐 getagendas/ amorçage (${Date.now() - agT0}ms, ${agBytes}B) — session PHP activée pour datetime/`);
+  } catch (e) {
+    log("WARN", `${tag} 🌐 getagendas/ amorçage échoué (non-fatal): ${e}`);
+  }
+
+  log("INFO", `${tag} 🌐 scan navigateur (datetime/ IN-PAGE, IDs connus) — PHPSESSID ${session.allCookies.find(c => c.name === "PHPSESSID")?.value.slice(0, 8) ?? "?"}…`);
   return scanDatetimeDirect(phpState, config, tag);
 }
 
@@ -3020,6 +3066,29 @@ export async function runDossierWorker(
             scanTrace: JSON.stringify(workerTrace),
           }).catch(() => {});
         }
+      }
+
+      // ── TEST SCAN-ONLY (SPAIN_TEST_SCAN_ONLY=1) : s'arrêter à datetime/ ───────────────
+      // Harness de diagnostic : quand un scan est `found`, on logue les créneaux et on
+      // ENCHAÎNE le cycle suivant SANS tenter getsigninfields/signin. Permet d'observer la
+      // STABILITÉ de la détection sur plusieurs cycles (le flux normal s'arrête au 1er found
+      // via signin_failed sur creds factices). Aucun effet en prod (variable absente).
+      if (scan.status === "found" && process.env.SPAIN_TEST_SCAN_ONLY === "1") {
+        const slots = scan.slots ?? [];
+        const eligibleCount = slots.filter((s) => isSlotInDateWindow(s.date, config, tag) && s.freeslots > 0).length;
+        const totalFree = slots.reduce((n, s) => n + Math.max(0, s.freeslots), 0);
+        log(
+          "INFO",
+          `${tag} 🧪 SCAN_ONLY — Cycle ${cycleCount}: ${slots.length} créneau(x) (${eligibleCount} éligibles, ${totalFree} places) → stop à datetime/, cycle suivant`,
+        );
+        markSlotSeen(rt, slots);
+        scheduleCatchUp = false;
+        // Replanification identique aux autres branches : on attend le prochain front de grille.
+        const scanOnlyWait = grid.msUntilNextTick(now, tick, rt.gridSeed);
+        const scanOnlySleep = scanOnlyWait < 0 ? lastGridWaitMs : scanOnlyWait;
+        if (scanOnlyWait >= 0) lastGridWaitMs = scanOnlyWait;
+        if (shouldScheduleWake(now + scanOnlySleep, windowEnd)) await sleep(scanOnlySleep);
+        continue;
       }
 
       if (scan.status === "found" && scan.slots && scan.slots.length > 0) {

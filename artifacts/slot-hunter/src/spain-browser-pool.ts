@@ -125,6 +125,41 @@ export async function getBrowserDossierSession(
     _ownImpit: phantomImpit,
     _ownPageFetcher: (url: string) => entry!.manager.callBookititJqOnPage(url).then((s) => s || null),
   };
+
+  // Rafraîchisseur PHP : imite le parcours complet du navigateur (comme le flux HTTP qui
+  // refait GET widget → POST token → nouveau PHPSESSID à chaque cycle). refreshPhpSession()
+  // supprime PHPSESSID + localStorage, re-navigue le widget SANS re-solver le CF (cf_clearance
+  // conservé) et capture un PHPSESSID FRAIS. On resynchronise ensuite le nouveau PHPSESSID
+  // (+ cf_clearance éventuellement renouvelé par CF) dans la session du worker, pour que
+  // buildDynamicSession reconstruise un jar à jour au scan suivant.
+  session._ownPhpRefresher = async (): Promise<boolean> => {
+    // 1) Voie LÉGÈRE (~0.3-0.6s) : simple GET widget in-page → PHPSESSID frais via Set-Cookie,
+    //    sans recharger le widget ni re-cliquer Continuar (prouvé suffisant par le shortscan HTTP).
+    const light = await entry!.manager.refreshPhpSessionLight();
+    if (light) {
+      const refreshed = entry!.manager.getSession();
+      if (refreshed) {
+        session.allCookies = refreshed.allCookies;
+        session.cfClearance = refreshed.cfClearance;
+        session.phpSessionCreatedAt = refreshed.phpSessionCreatedAt;
+      }
+      return true;
+    }
+    // 2) Fallback LOURD (~8-21s) : parcours widget complet (delete + re-nav + Continuar + /main/).
+    //    N'arrive que si le GET léger a échoué (CF re-challenge / PHPSESSID absent).
+    console.warn(`[browser-pool] ⚠️ ${dossierId} refresh léger échoué → parcours widget complet (refreshPhpSession)`);
+    const heavy = await entry!.manager.refreshPhpSession();
+    if (!heavy) return false;
+    const refreshed = entry!.manager.getSession();
+    if (refreshed) {
+      session.allCookies = refreshed.allCookies;
+      session.cfClearance = refreshed.cfClearance;
+      session.prefetchedMainHtml = refreshed.prefetchedMainHtml;
+      session.phpSessionCreatedAt = refreshed.phpSessionCreatedAt;
+    }
+    return true;
+  };
+
   return session;
 }
 
