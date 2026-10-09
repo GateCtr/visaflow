@@ -24,6 +24,7 @@ import { HunterConfig } from "./HunterConfig";
 import { DocumentVault } from "./DocumentVault";
 import { ActivityLog } from "./ActivityLog";
 import { BotLogTimeline } from "./BotLogTimeline";
+import { SpainDossierCycles } from "./SpainDossierCycles";
 import { ChatPanel } from "./ChatPanel";
 import { InvoicePanel } from "./InvoicePanel";
 import { Receipt } from "lucide-react";
@@ -348,6 +349,11 @@ function TabBot({
           usVisaCode={(app as { usVisaCode?: string }).usVisaCode ?? null}
           usVisaCategory={(app as { usVisaCategory?: string }).usVisaCategory ?? null}
         />
+      )}
+
+      {/* Historique scans Espagne groupé par cycle — dossiers Espagne uniquement */}
+      {(app.destination === "spain" || app.destination === "espagne" || app.destination === "es") && (
+        <SpainDossierCycles applicationId={appId} />
       )}
 
       {/* Bot Logs */}
