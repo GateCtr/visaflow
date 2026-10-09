@@ -93,11 +93,12 @@ import {
   reportSlotFound,
   sendHeartbeat,
   reportSlotDiscoveryBatch,
-  reportSpainWatcherScan,
+  reportSpainWatcherScanBatch,
   attachConfirmationDoc,
   uploadFile,
   reportBookingLog,
   type SlotDiscoveryEvent,
+  type SpainWatcherScanRow,
 } from "./convexClient.js";
 import { log } from "./scheduler-utils.js";
 import { parseSetCookies, parseSetCookiesFromHeaders } from "./spain-cookie-parser.js";
@@ -230,6 +231,21 @@ const SNAPSHOT_FRESH_MAX_SEC = ((): number => {
 const WORKER_WINDOW_MS = ((): number => {
   const v = Number(process.env.SPAIN_WORKER_WINDOW_MIN ?? "25");
   return (Number.isFinite(v) ? v : 25) * 60_000;
+})();
+
+/**
+ * Télémétrie des cycles (batch) : chaque cycle de scan produit exactement une ligne
+ * d'historique bufferisée en mémoire par worker, puis envoyée en batch à Convex.
+ * SPAIN_SCAN_FLUSH_MS = intervalle du timer de flush (défaut 20000, borné [5000,120000]).
+ * SPAIN_SCAN_FLUSH_MAX = taille max du buffer avant flush immédiat (défaut 25, borné [1,200]).
+ */
+const SPAIN_SCAN_FLUSH_MS = ((): number => {
+  const v = Number(process.env.SPAIN_SCAN_FLUSH_MS ?? "20000");
+  return Math.min(120_000, Math.max(5_000, Number.isFinite(v) ? v : 20_000));
+})();
+const SPAIN_SCAN_FLUSH_MAX = ((): number => {
+  const v = Number(process.env.SPAIN_SCAN_FLUSH_MAX ?? "25");
+  return Math.min(200, Math.max(1, Number.isFinite(v) ? Math.floor(v) : 25));
 })();
 
 /**
@@ -2295,6 +2311,20 @@ export async function runDossierWorker(
     log("INFO", `${tag} 🧪 SPAIN_BYPASS_WINDOW=1 — fenêtre test ${WORKER_WINDOW_MS / 60_000} min depuis maintenant`);
   }
 
+  // ── windowId stable pour la télémétrie des cycles ───────────────────────────
+  // Identifiant de fenêtre partagé par toutes les lignes de scan de ce worker, utilisé
+  // pour regrouper les cycles côté frontend. En prod = epoch ms du début de l'heure du
+  // worker ; en mode test (bypass) = début dérivé de la fenêtre relative.
+  const windowId: number = bypassWindow
+    ? windowEndEarly - WORKER_WINDOW_MS
+    : (() => {
+        const now = new Date();
+        return new Date(
+          now.getFullYear(), now.getMonth(), now.getDate(),
+          now.getHours(), 0, 0, 0,
+        ).getTime();
+      })();
+
   // ── 1. Réserver une IP Decodo dédiée ────────────────────────────────────────
   let proxyUrl = await pickDedicatedProxy(config.id, tag);
   if (proxyUrl === null) {
@@ -2313,6 +2343,53 @@ export async function runDossierWorker(
   // quand le sémaphore est bypassé (assez de créneaux) → on ne fait PAS de releaseBookingSlot
   // pour ne pas décrémenter un compteur jamais incrémenté.
   let usedSemaphore = false;
+
+  // ── Télémétrie des cycles (déclarée ici pour être accessible dans le finally) ──
+  // Compteur de cycles de scan — incrémenté en tête de boucle, lu par enqueueScanRow.
+  let cycleCount = 0;
+  // Buffer de télémétrie des cycles (une ligne par cycle, plus d'échantillonnage 1/60s).
+  // Les lignes sont accumulées en mémoire puis envoyées en batch à Convex (route INSERT-only
+  // dédupliquée par idempotencyKey), ce qui supprime la contention OCC sur le singleton.
+  const cycleScanBuffer: SpainWatcherScanRow[] = [];
+
+  /**
+   * Vide le buffer en envoyant un batch à Convex. En cas d'échec d'envoi, les lignes sont
+   * ré-insérées en tête du buffer pour être retentées au prochain flush (rien n'est perdu
+   * ni avancé avant un envoi réussi).
+   */
+  const flushScanBuffer = async (): Promise<void> => {
+    if (cycleScanBuffer.length === 0) return;
+    const rows = cycleScanBuffer.splice(0, cycleScanBuffer.length);
+    try {
+      await reportSpainWatcherScanBatch(rows);
+    } catch (err) {
+      log("WARN", `${tag} [spain-worker] flush failed (${rows.length} ligne(s)) — ré-enfilées: ${err}`);
+      cycleScanBuffer.unshift(...rows);
+    }
+  };
+
+  /**
+   * Enfile une ligne de scan pour ce cycle et déclenche un flush immédiat si le buffer
+   * atteint SPAIN_SCAN_FLUSH_MAX. windowId/cycleNumber/idempotencyKey sont renseignés ici
+   * pour garantir leur cohérence sur toutes les branches (not_found + found/eligible).
+   */
+  const enqueueScanRow = (
+    row: Omit<SpainWatcherScanRow, "cycleNumber" | "windowId" | "idempotencyKey">,
+  ): void => {
+    cycleScanBuffer.push({
+      ...row,
+      cycleNumber: cycleCount,
+      windowId,
+      idempotencyKey: `${windowId}:${config.applicationId ?? "_"}:${cycleCount}`,
+    });
+    if (cycleScanBuffer.length >= SPAIN_SCAN_FLUSH_MAX) {
+      void flushScanBuffer();
+    }
+  };
+
+  // Timer de flush périodique — vidé dans le finally du worker.
+  const flushIntervalHandle = setInterval(() => { void flushScanBuffer(); }, SPAIN_SCAN_FLUSH_MS);
+
   try {
 
   const capsolverKey =
@@ -2617,7 +2694,6 @@ export async function runDossierWorker(
   // windowEnd calculé au tout début de runDossierWorker (avant init) pour éviter
   // le bug du fallback WORKER_WINDOW_MS quand l'init dépasse HH:WINDOW_END_MIN.
   const windowEnd = windowEndEarly;
-  let cycleCount = 0;
 
   if (windowEnd <= Date.now()) {
     log("WARN", `${tag} ⏰ Fenêtre HH:${String(WINDOW_END_MIN).padStart(2, "0")} expirée après init — exit`);
@@ -2666,14 +2742,6 @@ export async function runDossierWorker(
   // IP, comme session_dead) ; on ne rotationne que si l'échec PERSISTE (2e consécutif) ou
   // si le CF est réellement mort. Remis à 0 sur tout cycle réussi (found/not_found).
   let consecutiveProxyErrors = 0;
-
-  // Throttle client du report `not_found` à Convex. Chaque worker reporte son not_found à
-  // chaque cycle (~6s) ; avec N workers (mode meute) synchronisés sur la grille, ça crée
-  // N écritures concurrentes sur le singleton spainWatcher → conflits OCC 422/500. On ne
-  // reporte donc un not_found QUE toutes les WATCHER_NOTFOUND_THROTTLE_MS par worker (les
-  // found/error restent toujours reportés). L'historique n'a pas besoin de chaque not_found.
-  const WATCHER_NOTFOUND_THROTTLE_MS = 60_000;
-  let lastNotFoundReportAtMs = 0;
 
   // Instant du dernier `found` DE CE WORKER (epoch ms). Sert à distinguer un 0B datetime/
   // "anomalie proxy" (créneaux existent selon un peer, mais MOI je vois 0B → proxy cassé)
@@ -3055,17 +3123,13 @@ export async function runDossierWorker(
           }));
         }
         workerTrace.scanMs = Date.now() - cycleStart;
-        // Report not_found throttlé par worker (anti-contention OCC sur le singleton Convex).
-        const nowReport = Date.now();
-        if (nowReport - lastNotFoundReportAtMs >= WATCHER_NOTFOUND_THROTTLE_MS) {
-          lastNotFoundReportAtMs = nowReport;
-          void reportSpainWatcherScan({
-            status: "not_found",
-            applicationId: config.applicationId,
-            dossierName: config.applicantName,
-            scanTrace: JSON.stringify(workerTrace),
-          }).catch(() => {});
-        }
+        // Une ligne d'historique par cycle (plus d'échantillonnage) — bufferisée puis flushée en batch.
+        enqueueScanRow({
+          status: "not_found",
+          applicationId: config.applicationId,
+          dossierName: config.applicantName,
+          scanTrace: JSON.stringify(workerTrace),
+        });
       }
 
       // ── TEST SCAN-ONLY (SPAIN_TEST_SCAN_ONLY=1) : s'arrêter à datetime/ ───────────────
@@ -3173,7 +3237,9 @@ export async function runDossierWorker(
           .map((s) => ({ d: s.date, t: s.time, n: s.freeslots }));
 
         workerTrace.scanMs = Date.now() - cycleStart;
-        void reportSpainWatcherScan({
+        // Une ligne d'historique par cycle (plus d'échantillonnage) — l'alerte email "found"
+        // est désormais déclenchée côté serveur par la route batch (internalTouchSingleton).
+        enqueueScanRow({
           status: eligible.length > 0 ? "found" : "not_found",
           slotInfo: eligible.length > 0
             ? buildSlotInfoSummary(eligible)
@@ -3185,7 +3251,7 @@ export async function runDossierWorker(
             : undefined,
           detectedSlots: JSON.stringify(detectedSlotsPayload),
           scanTrace: JSON.stringify(workerTrace),
-        }).catch(() => {});
+        });
 
         if (eligible.length === 0) {
           log(
@@ -4107,6 +4173,10 @@ export async function runDossierWorker(
   return workerResult;
 
   } finally {
+    // Télémétrie des cycles : arrêter le timer de flush et envoyer les cycles restants
+    // avant de rendre la main, pour qu'aucune ligne bufferisée ne soit perdue à la sortie.
+    clearInterval(flushIntervalHandle);
+    await flushScanBuffer();
     // V2 : libérer le sémaphore de booking si encore détenu (crash, exception…)
     // Seulement si le slot Redis a réellement été acquis (pas en cas de bypass).
     if (holdingBookingSlot) {

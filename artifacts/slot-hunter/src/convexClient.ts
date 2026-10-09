@@ -957,6 +957,52 @@ export async function reportSpainWatcherScan(payload: {
   }
 }
 
+/**
+ * Une ligne d'historique de scan Espagne, taguée par cycle et par fenêtre.
+ * Chaque cycle de scan produit exactement une ligne (plus d'échantillonnage).
+ */
+export interface SpainWatcherScanRow {
+  status: "found" | "not_found" | "error";
+  cycleNumber: number;
+  windowId: number;
+  idempotencyKey: string;
+  applicationId?: string;
+  dossierName?: string;
+  slotInfo?: string;
+  detectedServices?: string;
+  detectedSlots?: string;
+  scanTrace?: string;
+  errorMessage?: string;
+  screenshotStorageId?: string;
+}
+
+/**
+ * Envoie un batch de lignes de scan Espagne à Convex (une par cycle).
+ * Passe par fetchWithRetry pour que les OCC transitoires (503) soient réessayés.
+ * Ne swallow jamais silencieusement : les échecs non-2xx et réseau sont loggés
+ * avec le nombre de lignes concernées.
+ */
+export async function reportSpainWatcherScanBatch(scans: SpainWatcherScanRow[]): Promise<void> {
+  if (scans.length === 0) return;
+  const url = `${CONVEX_SITE_URL}/hunter/spain-watcher/scan-result/batch`;
+  try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: {
+        "X-Hunter-Key": HUNTER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ scans }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[convexClient] reportSpainWatcherScanBatch failed: ${res.status} count=${scans.length} ${text}`);
+    }
+  } catch (err) {
+    console.warn(`[convexClient] reportSpainWatcherScanBatch error (count=${scans.length}):`, err);
+  }
+}
+
 // ─── Spain Watcher : rush-prep commands (CF resolve / session pre-warm) ───────
 
 /**
