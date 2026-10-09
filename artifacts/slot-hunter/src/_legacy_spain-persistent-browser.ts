@@ -568,11 +568,33 @@ async function callBookititViaWidgetNativeJsonp(
 
 // ─── SpainPersistentBrowserManager ────────────────────────────────────────────
 
-class SpainPersistentBrowserManager {
+export class SpainPersistentBrowserManager {
   private _browser: Browser | null = null;
   private _cachedSession: SpainCfSession | null = null;
   private _ua: string = randomChromeUA();
   private _viewport = randomViewport();
+  /**
+   * Overrides pour instancier plusieurs managers (mode multi-navigateurs par dossier).
+   * - _profileDirOverride : userDataDir dédié à CETTE instance (sinon CF_PROFILE_DIR global).
+   * - _proxyUrlOverride   : proxy fixe pour CETTE instance (sinon getProxyUrl() dynamique).
+   * Le constructeur par défaut (sans args) préserve EXACTEMENT le comportement singleton.
+   */
+  private _profileDirOverride?: string;
+  private _proxyUrlOverride?: string;
+  private _syncGlobalSession: boolean;
+
+  /**
+   * @param opts.profileDir  userDataDir isolé pour cette instance (multi-navigateurs).
+   * @param opts.proxyUrl    proxy fixe pour cette instance (ex. port Decodo réservé du dossier).
+   * @param opts.syncGlobalSession  si false, n'écrit PAS dans le cache session global
+   *   (setActiveSpainCfSession) — requis en multi-instances pour que N managers ne se
+   *   piétinent pas sur le slot unique. Défaut true (comportement singleton historique).
+   */
+  constructor(opts?: { profileDir?: string; proxyUrl?: string; syncGlobalSession?: boolean }) {
+    this._profileDirOverride = opts?.profileDir;
+    this._proxyUrlOverride = opts?.proxyUrl;
+    this._syncGlobalSession = opts?.syncGlobalSession ?? true;
+  }
   /**
    * Mutex de lancement : empêche deux appels concurrents à puppeteer.launch().
    * Sans ce verrou, si isBrowserAlive() timeout pendant le Turnstile solve
@@ -638,6 +660,8 @@ class SpainPersistentBrowserManager {
   }
 
   private getProxyUrl(): string | undefined {
+    // Multi-navigateurs : proxy fixe injecté pour CETTE instance (port Decodo du dossier).
+    if (this._proxyUrlOverride) return this._proxyUrlOverride;
     // SPAIN_ISP_PROXY_URL : proxy ISP espagnol (priorité absolue).
     // Route via un PoP CF Madrid/Barcelona → CF ne reconnaît pas l'IP comme datacenter
     // → vrai JSD challenge (pas fast-track) → nonce fraîche depuis l'origine → /main/ ✅.
@@ -806,7 +830,7 @@ class SpainPersistentBrowserManager {
     const maskedProxy = proxyUrl
       ? proxyUrl.replace(/:([^:@]+)@/, ":***@").slice(0, 80)
       : "direct (no proxy)";
-    const effectiveProfileDir = ensureProfileDirectory(CF_PROFILE_DIR);
+    const effectiveProfileDir = ensureProfileDirectory(this._profileDirOverride ?? CF_PROFILE_DIR);
     console.log(`[spain-pb] 🚀 Lancement Chromium persistant`);
     console.log(`[spain-pb]    userDataDir : ${effectiveProfileDir}`);
     console.log(`[spain-pb]    Proxy       : ${maskedProxy}`);
@@ -869,6 +893,70 @@ class SpainPersistentBrowserManager {
   /** Page Chromium principale — utilisée par callBookititEndpointViaBrowser pour les appels same-IP. */
   getActivePage(): import("puppeteer").Page | null {
     return this._page;
+  }
+
+  /**
+   * Appel Bookitit JSONP IN-PAGE sur la page de CETTE instance (multi-navigateurs).
+   *
+   * Recette VALIDÉE (test-pb-fullchain-saopolo / cuba) : on passe par jQuery NATIF
+   * (dataType:'jsonp', jsonp:'callback') qui génère/gère son propre callback — c'est ce
+   * qui fonctionne là où un callback fixe reconstruit à la main renvoie 22B. On repart de
+   * l'URL Bookitit déjà construite (makeDirectUrl, ordre strict des params) et on la rejoue
+   * via jq.ajax avec les params en objet `data` (jQuery sérialise services[]/agendas[]/gct…).
+   *
+   * @param url URL Bookitit complète (https://.../onlinebookings/<endpoint>?...)
+   * @returns le JSON stringifié de la réponse, ou "" en cas d'échec/0B.
+   */
+  async callBookititJqOnPage(url: string): Promise<string> {
+    const page = this._page;
+    if (!page) return "";
+    let endpoint = "";
+    let dataObj: Record<string, string | string[]> = {};
+    try {
+      const u = new URL(url);
+      endpoint = u.pathname.match(/\/onlinebookings\/([^/?]+\/?)/)?.[1] ?? "";
+      // Reconstruire l'objet data depuis la query string (jQuery regénère callback + _).
+      const grouped: Record<string, string[]> = {};
+      for (const [k, v] of u.searchParams.entries()) {
+        if (k === "callback" || k === "_") continue; // jQuery natif les gère
+        (grouped[k] ??= []).push(v);
+      }
+      for (const [k, arr] of Object.entries(grouped)) {
+        dataObj[k] = k.endsWith("[]") ? arr : arr[0];
+      }
+    } catch {
+      return "";
+    }
+    if (!endpoint) return "";
+
+    const script = `
+      (function(endpoint, data){ return new Promise(function(resolve){
+        var jq = window.jQuery; if(!jq){ resolve('__ERR_NO_JQUERY'); return; }
+        var t = setTimeout(function(){ resolve('__ERR_TIMEOUT'); }, 20000);
+        jq.ajax({
+          url: window.location.origin + '/onlinebookings/' + endpoint,
+          dataType: 'jsonp', jsonp: 'callback', data: data,
+          success: function(r){ clearTimeout(t); try { resolve(JSON.stringify(r)); } catch(e){ resolve('__ERR_STRINGIFY'); } },
+          error: function(_x, s){ clearTimeout(t); resolve('__ERR_AJAX_' + String(s || 'error')); }
+        });
+      }); })(${JSON.stringify(endpoint)}, ${JSON.stringify(dataObj)})`;
+
+    try {
+      const result = (await Promise.race([
+        page.evaluate(script) as Promise<string>,
+        new Promise<string>((r) => setTimeout(() => r("__ERR_EVAL_TIMEOUT"), 22_000)),
+      ])) as string;
+      if (!result || result.startsWith("__ERR_")) {
+        if (result && result !== "__ERR_NO_JQUERY") {
+          console.warn(`[spain-pb] ⚠️ callBookititJqOnPage ${endpoint} → ${result.slice(0, 80)}`);
+        }
+        return "";
+      }
+      return result;
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ callBookititJqOnPage(${endpoint}): ${err}`);
+      return "";
+    }
   }
 
   /**
@@ -1774,6 +1862,95 @@ class SpainPersistentBrowserManager {
     }
   }
 
+  /**
+   * Rafraîchit le PHPSESSID — version LÉGÈRE sans re-solve CF (~1.5-2s).
+   *
+   * Imite le mode raccourci HTTP (scanViaWidgetDatetime) : GET widget → PHPSESSID frais → prêt
+   * pour datetime/. Mais un simple fetch() in-page NE SUFFIT PAS : il pose bien le Set-Cookie
+   * PHPSESSID, mais le serveur ne l'ACTIVE pas (le 1er datetime/ dessus revient 0B — observé
+   * São Paulo). Il faut une VRAIE navigation (page.goto) qui recharge la page du widget, comme
+   * le GET widget HTML du shortscan : le serveur associe alors le PHPSESSID frais à une session
+   * widget active → datetime/ répond dès ce cycle.
+   *
+   * Étapes : delete PHPSESSID + localStorage → page.goto(widget) (cf_clearance présent → CF ne
+   * re-challenge pas, PAS de Continuar, PAS de capture /main/) → relire le PHPSESSID frais →
+   * synchroniser dans la session. BEAUCOUP plus léger que refreshPhpSession() (qui attend le clic
+   * Continuar + la capture /main/ 126kB, ~8-21s). Si la nav échoue / 403 / PHPSESSID absent,
+   * renvoie false → l'appelant retombe sur refreshPhpSession() puis re-solve.
+   *
+   * @returns true si un PHPSESSID frais a été posé, activé et synchronisé dans la session.
+   */
+  async refreshPhpSessionLight(): Promise<boolean> {
+    const session = this._cachedSession;
+    let page = this._page;
+    if (!session || !page || !this._browser) {
+      console.warn("[spain-pb] 🔄 refreshPhpSessionLight → pas de session/page/browser active");
+      return false;
+    }
+    const targetUrl = this._currentTargetUrl || DEFAULT_WIDGET_URL;
+    const t0 = Date.now();
+
+    try {
+      // 1. Supprimer le PHPSESSID courant (la nav widget en reposera un neuf via Set-Cookie).
+      try {
+        const cdp = await page.createCDPSession();
+        await cdp.send("Network.deleteCookies", { name: "PHPSESSID", domain: ".citaconsular.es" }).catch(() => {});
+        await cdp.send("Network.deleteCookies", { name: "PHPSESSID", domain: "www.citaconsular.es" }).catch(() => {});
+        await cdp.detach().catch(() => {});
+      } catch { /* non-fatal */ }
+
+      // 2. GET widget IN-PAGE via fetch() — PAS page.goto (qui re-déclenche CF → 403, cf.
+      //    "Navigation root SUPPRIMÉE" plus haut). Le fetch() depuis le contexte de la page
+      //    applique cf_clearance → pas de re-challenge → Bookitit renvoie Set-Cookie: PHPSESSID.
+      //    (L'ACTIVATION de la session PHP pour datetime/ se fait ensuite par un getagendas/
+      //    in-page côté appelant — cf. scanViaBrowserDatetime — comme en HTTP.)
+      let navStatus = 0;
+      try {
+        navStatus = await page.evaluate(`
+          (function(url){ return fetch(url, { credentials: 'include', cache: 'no-store' })
+            .then(function(r){ return r.status; })
+            .catch(function(){ return 0; }); })(${JSON.stringify(targetUrl)})
+        `).catch(() => 0) as number;
+      } catch (navErr) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight — GET widget: ${navErr}`);
+        return false;
+      }
+
+      if (navStatus === 403) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight — GET widget 403 (CF re-challenge) → échec`);
+        return false;
+      }
+
+      // 3. Relire le PHPSESSID frais depuis les cookies de la page.
+      let freshPhp = "";
+      try {
+        const cookies = await page.cookies("https://www.citaconsular.es");
+        freshPhp = cookies.find((c: any) => c.name === "PHPSESSID")?.value ?? "";
+      } catch { /* non-fatal */ }
+
+      if (!freshPhp) {
+        console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight — PHPSESSID absent après nav (status ${navStatus}) → échec`);
+        return false;
+      }
+
+      // 4. Synchroniser le nouveau PHPSESSID (+ cf_clearance éventuellement renouvelé) en place.
+      const freshCf = (await page.cookies("https://www.citaconsular.es").catch(() => []))
+        .find((c: any) => c.name === "cf_clearance")?.value;
+      session.allCookies = [
+        ...session.allCookies.filter((c) => c.name !== "PHPSESSID"),
+        { name: "PHPSESSID", value: freshPhp },
+      ];
+      if (freshCf) session.cfClearance = freshCf;
+      session.phpSessionCreatedAt = Date.now();
+
+      console.log(`[spain-pb] ⚡ refreshPhpSessionLight (${Date.now() - t0}ms) — PHPSESSID frais ${freshPhp.slice(0, 12)}… (nav widget, pas de Continuar/main)`);
+      return true;
+    } catch (err) {
+      console.warn(`[spain-pb] ⚠️ refreshPhpSessionLight exception: ${err}`);
+      return false;
+    }
+  }
+
   getSession(): SpainCfSession | null {
     return this.isSessionValid() ? this._cachedSession : null;
   }
@@ -1928,7 +2105,7 @@ class SpainPersistentBrowserManager {
           const restored: SpainCfSession = { ...redisData, source: "playwright", prefetchedMainHtml: undefined };
           this._cachedSession = restored;
           this._lastEnsureFromCache = true; // évite guard destructeur dans ensureSpainCfSession
-          setActiveSpainCfSession(restored);
+          if (this._syncGlobalSession) setActiveSpainCfSession(restored);
           // Réattacher le browser avec les cookies existants (sans navigation = sans proxy requis)
           try {
             await this._reattachBrowserWithSession();
@@ -1939,7 +2116,7 @@ class SpainPersistentBrowserManager {
         } else {
           const restored: SpainCfSession = { ...redisData, source: "playwright" };
           this._cachedSession = restored;
-          setActiveSpainCfSession(restored);
+          if (this._syncGlobalSession) setActiveSpainCfSession(restored);
           const remainMin = Math.round((restored.expiresAt - Date.now()) / 60_000);
           console.log(
             `[spain-pb] ♻️ Session CF restaurée depuis Redis (reste ${remainMin}min` +
@@ -3470,7 +3647,7 @@ class SpainPersistentBrowserManager {
     // Sync dans le cache de spain-soax-solver.ts pour que runSpainHttpProbe
     // (qui appelle ensureSpainCfSession en interne) trouve la session directement
     // sans déclencher un solve CapSolver.
-    setActiveSpainCfSession(session);
+    if (this._syncGlobalSession) setActiveSpainCfSession(session);
 
     // Persistance Redis pour survie aux redéploiements
     try {
@@ -3643,7 +3820,7 @@ class SpainPersistentBrowserManager {
     // ❌ Nouvelle session vide/nulle → restaurer A
     if (backup && Date.now() < backup.expiresAt) {
       this._cachedSession = backup;
-      setActiveSpainCfSession(backup);
+      if (this._syncGlobalSession) setActiveSpainCfSession(backup);
       const remainMin = Math.round((backup.expiresAt - Date.now()) / 60_000);
       console.log(
         `[spain-pb] ↩️ Re-solve proactif échoué (prefetch: ${prefetchLen}B)` +

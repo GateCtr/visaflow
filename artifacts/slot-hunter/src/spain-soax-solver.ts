@@ -173,6 +173,23 @@ export interface SpainCfSession {
    */
   _ownImpit?: InstanceType<typeof import("impit").Impit>;
   /**
+   * Fetcher Bookitit IN-PAGE propre à CETTE session (mode SPAIN_BROWSER_SESSION).
+   * Quand présent (session navigateur par dossier), callDirect/le scan routent les appels
+   * /onlinebookings/* vers la page Chromium de ce dossier au lieu d'impit — car le
+   * cf_clearance chl_page n'est PAS rejouable par un client HTTP. Reçoit l'URL Bookitit
+   * complète, renvoie le body (JSON stringifié) ou null. Lié à la page via spain-browser-pool.
+   */
+  _ownPageFetcher?: (url: string) => Promise<string | null>;
+  /**
+   * Rafraîchisseur de session PHP IN-PAGE propre à CETTE session (mode SPAIN_BROWSER_SESSION).
+   * Supprime PHPSESSID + localStorage, re-navigue le widget (cf_clearance conservé → pas de
+   * re-solve CF), capture un PHPSESSID FRAIS + nouveau /main/, et met à jour session.allCookies
+   * en place. Appelé par le worker à CHAQUE cycle de scan (sauf le 1er) pour imiter le parcours
+   * complet du navigateur comme le fait le flux HTTP (nouveau PHPSESSID par cycle). Renvoie true
+   * si le refresh a réussi, false sinon. Lié à la page via spain-browser-pool.
+   */
+  _ownPhpRefresher?: () => Promise<boolean>;
+  /**
    * État Bookitit pour le mode HTTP-pur (capsolver-residential).
    * Établi lors de l'init de session (GET widget → POST token → GET /main/).
    * Partagé par le scanner et le booking pour garantir le même jqCallback
