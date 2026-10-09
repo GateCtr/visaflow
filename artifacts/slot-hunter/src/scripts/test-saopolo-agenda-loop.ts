@@ -17,11 +17,18 @@ import {
   callDirect,
   CALL_DIRECT_NETWORK_ERROR,
 } from "../spain-bookitit-direct.js";
+import {
+  getDecodoPoolSize,
+  getDecodoProxyForIndex,
+} from "../spain-decodo-pool.js";
 
 const SAOPOLO_URL = "https://www.citaconsular.es/es/hosteds/widgetdefault/28330379fc95acafd31ee9e8938c278ff/";
 const CAPSOLVER_API_KEY = process.env.CAPSOLVER_API_KEY ?? "";
 const PROXY_URL = process.argv[2] || (process.env.SPAIN_ISP_PROXY_URL ?? process.env.SPAIN_RESIDENTIAL_PROXY_URL ?? "");
 const LOOP_COUNT = 5;
+// Nombre max de proxies à essayer sur un échec portail (403 / token absent).
+// Si un argv proxy est fourni, on ne rotate pas (une seule IP imposée).
+const MAX_PROXY_ROTATIONS = Number(process.env.SAOPOLO_MAX_ROTATIONS ?? 6);
 
 function log(msg: string): void {
   console.log(`[test-saopolo-loop] ${msg}`);
@@ -35,25 +42,107 @@ async function main(): Promise<void> {
 
   if (!CAPSOLVER_API_KEY) { console.error("❌ CAPSOLVER_API_KEY requis"); process.exit(1); }
 
-  // Sticky ID
-  const stickyId = Math.random().toString(36).slice(2, 10);
-  let stickyProxy = PROXY_URL;
-  if (PROXY_URL && PROXY_URL.includes("sessionduration")) {
+  const addStickyId = (url: string): string => {
+    const sid = Math.random().toString(36).slice(2, 10);
+    if (!url || !url.includes("sessionduration")) return url;
     try {
-      const u = new URL(PROXY_URL);
+      const u = new URL(url);
       const user = decodeURIComponent(u.username);
       const stickyUser = user.includes("-session-")
-        ? user.replace(/-session-[^-]+/, `-session-${stickyId}`)
-        : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${stickyId}$2`);
+        ? user.replace(/-session-[^-]+/, `-session-${sid}`)
+        : user.replace(/(.*?)(-sessionduration-.*)$/, `$1-session-${sid}$2`);
       u.username = encodeURIComponent(stickyUser);
-      stickyProxy = u.toString();
-    } catch { /* keep original */ }
+      return u.toString();
+    } catch { return url; }
+  };
+
+  // ── 1. Init session CF (avec rotation de proxy sur 403 / token absent) ───────
+  log("\n═══ INIT SESSION CF ═══");
+
+  // Mode A : un proxy est imposé en argument → une seule IP, pas de rotation.
+  // Mode B : aucun argv → on puise dans le pool thordata (decodo-proxies.csv) et on
+  //          rotate sur chaque échec "portal" (403/token absent), en flaggant l'IP morte.
+  const useArgvProxy = Boolean(PROXY_URL);
+  const poolSize = getDecodoPoolSize();
+  const maxAttempts = useArgvProxy ? 1 : Math.min(MAX_PROXY_ROTATIONS, poolSize || 1);
+
+  if (!useArgvProxy && poolSize === 0) {
+    console.error("❌ Aucun proxy : passe une URL en argument ou configure decodo-proxies.csv");
+    process.exit(1);
+  }
+  log(useArgvProxy
+    ? `Mode    : proxy imposé (argv) — pas de rotation`
+    : `Mode    : rotation pool thordata — ${poolSize} IP(s), max ${maxAttempts} tentative(s)`);
+
+  let initResult: Awaited<ReturnType<typeof initWorkerSession>> = null;
+  // Index de départ : aléatoire par défaut (évite de re-taper toujours les mêmes
+  // premières IP, qui ont pu être grillées lors de runs précédents). Override via
+  // SAOPOLO_START_INDEX pour un départ déterministe.
+  let poolIdx = process.env.SAOPOLO_START_INDEX
+    ? Number(process.env.SAOPOLO_START_INDEX)
+    : (poolSize > 0 ? Math.floor(Math.random() * poolSize) : 0);
+  if (!useArgvProxy) log(`StartIdx: ${poolIdx} (pool ${poolSize})`);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Sélection du proxy pour cette tentative.
+    // NB thordata : toutes les entrées partagent le même host:port — l'identité
+    // d'exit IP tient au `sessid` dans le username, PAS au host:port. On ne peut donc
+    // PAS utiliser la blacklist du pool (clé host:port) : flagger une entrée les
+    // blacklisterait toutes. On parcourt les entrées brutes par index (chaque index =
+    // sessid distinct = exit IP distincte) et on y ajoute un -session-{sid} aléatoire.
+    let proxyForAttempt: string;
+    if (useArgvProxy) {
+      proxyForAttempt = addStickyId(PROXY_URL);
+    } else {
+      const raw = getDecodoProxyForIndex(poolIdx);
+      if (!raw) {
+        console.error(`[test-saopolo-loop] ❌ Plus d'entrée dans le pool à l'index ${poolIdx}`);
+        break;
+      }
+      poolIdx++; // avancer pour la prochaine rotation (sessid suivant)
+      proxyForAttempt = addStickyId(raw);
+    }
+
+    const maskedP = proxyForAttempt.replace(/:([^:@]+)@/, ":***@").slice(0, 70);
+    log(`🔑 Tentative ${attempt}/${maxAttempts} — proxy: ${maskedP}…`);
+
+    // onFailure nous indique la nature de l'échec pour décider de rotater ou non.
+    // SAOPOLO_REDUCED=1 → flux RÉDUIT (solve → GET widget → datetime), on SAUTE POST token + /main/.
+    const reduced = process.env.SAOPOLO_REDUCED === "1";
+    let failureKind: string | undefined;
+    initResult = await initWorkerSession(
+      proxyForAttempt,
+      SAOPOLO_URL.split("#")[0],
+      CAPSOLVER_API_KEY,
+      undefined,
+      (kind) => { failureKind = kind; },
+      reduced,
+    );
+
+    if (initResult) break; // ✅ succès
+
+    // Échec : décider si on rotate.
+    //  - "portal"  → 403 / token absent : CF a rejeté le clearance sur cette IP → rotate + flag
+    //  - "proxy"   → tunnel/CONNECT KO : IP morte → rotate + flag
+    //  - "captcha" → CapSolver KO : ne vient pas de l'IP, inutile de rotater
+    log(`⚠️ Échec init (kind=${failureKind ?? "?"})`);
+    if (useArgvProxy) break; // proxy imposé : pas de rotation
+    if (failureKind === "captcha") {
+      log(`   → échec CapSolver (non lié au proxy) — arrêt`);
+      break;
+    }
+    if (failureKind === "portal" || failureKind === "proxy") {
+      // Pas de flagDecodoIp ici (clé host:port → blacklisterait tout le pool thordata).
+      // On avance simplement sur l'entrée suivante = nouveau sessid = nouvelle exit IP.
+      log(`   → rotation vers la session (sessid) suivante`);
+      await sleep(500);
+      continue;
+    }
+    // kind inconnu : on tente quand même la suivante
+    continue;
   }
 
-  // ── 1. Init session CF ──────────────────────────────────────────────────────
-  log("\n═══ INIT SESSION CF ═══");
-  const initResult = await initWorkerSession(stickyProxy, SAOPOLO_URL.split("#")[0], CAPSOLVER_API_KEY);
-  if (!initResult) { console.error("❌ initWorkerSession échoué"); process.exit(1); }
+  if (!initResult) { console.error("❌ initWorkerSession échoué (toutes rotations épuisées)"); process.exit(1); }
   const { session } = initResult;
   log(`✅ Session établie — /main/ ${session.prefetchedMainHtml?.length ?? 0}B`);
 

@@ -16,3 +16,6 @@ citaconsular-discovery.json
 .env.production
 .env.test
 *.env
+
+# Binaire Go compilé du proxy TLS (17MB — recompilé via `go build` dans tls-proxy-go/)
+tls-proxy-go/tlsproxy
