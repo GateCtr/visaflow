@@ -756,29 +756,74 @@ export const internalGetRushPrepCommand = internalMutation({
   },
 });
 
-// ─── Mutation: suppression des scans historiques ──────────────────────────────
+// ─── Mutations: suppression des scans historiques (batche) ─────────
 
+const CLEAR_BATCH_SIZE = 500;
+
+/**
+ * Supprime TOUS les scans Espagne par batch (max 500/appel pour rester dans les
+ * limites de temps/documents d'une mutation Convex). Retourne { deleted, remaining } :
+ * si remaining est vrai, le frontend doit rappeler jusqu'a epuisement.
+ */
 export const clearScans = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ deleted: number; remaining: boolean }> => {
     const identity = await ctx.auth.getUserIdentity();
     requireAdmin(identity as Record<string, unknown> | null);
 
-    const scans = await ctx.db
+    const batch = await ctx.db
       .query("spainWatcherScans")
       .withIndex("by_ts")
-      .collect();
+      .order("desc")
+      .take(CLEAR_BATCH_SIZE);
 
-    for (const scan of scans) {
-      // Supprimer le screenshot du storage si présent
+    for (const scan of batch) {
       if (scan.screenshotStorageId) {
         try {
           await ctx.storage.delete(scan.screenshotStorageId as any);
-        } catch { /* ignore si déjà supprimé */ }
+        } catch { /* ignore si deja supprime */ }
       }
       await ctx.db.delete(scan._id);
     }
 
-    return { deleted: scans.length };
+    const peek = await ctx.db
+      .query("spainWatcherScans")
+      .withIndex("by_ts")
+      .take(1);
+
+    return { deleted: batch.length, remaining: peek.length > 0 };
+  },
+});
+
+/**
+ * Supprime les scans Espagne d'UN SEUL dossier par batch (max 500/appel).
+ * Retourne { deleted, remaining } pour que le frontend rappelle jusqu'a epuisement.
+ */
+export const clearScansForDossier = mutation({
+  args: { applicationId: v.string() },
+  handler: async (ctx, args): Promise<{ deleted: number; remaining: boolean }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    requireAdmin(identity as Record<string, unknown> | null);
+
+    const batch = await ctx.db
+      .query("spainWatcherScans")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .take(CLEAR_BATCH_SIZE);
+
+    for (const scan of batch) {
+      if (scan.screenshotStorageId) {
+        try {
+          await ctx.storage.delete(scan.screenshotStorageId as any);
+        } catch { /* ignore si deja supprime */ }
+      }
+      await ctx.db.delete(scan._id);
+    }
+
+    const peek = await ctx.db
+      .query("spainWatcherScans")
+      .withIndex("by_application", (q) => q.eq("applicationId", args.applicationId))
+      .take(1);
+
+    return { deleted: batch.length, remaining: peek.length > 0 };
   },
 });

@@ -8,14 +8,15 @@
  * sans duplication de markup.
  */
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { Flag, RefreshCw } from "lucide-react";
+import { Flag, RefreshCw, Trash2 } from "lucide-react";
 import { SpainCycleGroupedList } from "../spainScanTrace";
 import type { SpainScanRow } from "../spainScanGrouping";
 
 export function SpainDossierCycles({ applicationId }: { applicationId: string }) {
   const [page, setPage] = useState(0);
+  const [clearing, setClearing] = useState(false);
   const pageSize = 50;
 
   const data = useQuery(api.spainWatcher.getScansForDossier, {
@@ -23,11 +24,33 @@ export function SpainDossierCycles({ applicationId }: { applicationId: string })
     page,
     pageSize,
   });
+  const clearScansForDossier = useMutation(api.spainWatcher.clearScansForDossier);
 
   const scans = data?.scans ?? [];
   const totalPages = data?.totalPages ?? 0;
   const totalCount = data?.totalCount ?? 0;
   const safePage = Math.min(page, Math.max(0, totalPages - 1));
+
+  const handleClear = async () => {
+    if (clearing) return;
+    if (!window.confirm(`Supprimer tous les scans Espagne de ce dossier (${totalCount} entrées) ? Les screenshots seront aussi supprimés. Action irréversible.`)) {
+      return;
+    }
+    setClearing(true);
+    try {
+      // Suppression batchée : rappeler tant qu'il reste des lignes.
+      let guard = 0;
+      while (guard++ < 200) {
+        const r = await clearScansForDossier({ applicationId });
+        if (!r?.remaining) break;
+      }
+      setPage(0);
+    } catch {
+      /* ignore — l'UI se rafraîchit via la query réactive */
+    } finally {
+      setClearing(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-border shadow-sm p-6">
@@ -39,6 +62,16 @@ export function SpainDossierCycles({ applicationId }: { applicationId: string })
             <span className="ml-1 text-[10px] text-muted-foreground bg-slate-100 px-1.5 py-0.5 rounded-full">{totalCount}</span>
           )}
         </h3>
+        {totalCount > 0 && (
+          <button
+            onClick={handleClear}
+            disabled={clearing}
+            className="ml-auto flex items-center gap-1 px-2.5 py-1 text-[10px] rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-medium transition-colors disabled:opacity-50"
+          >
+            {clearing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+            {clearing ? "Suppression..." : "Vider"}
+          </button>
+        )}
       </div>
 
       {data === undefined ? (

@@ -922,7 +922,7 @@ function SpainWatcherTab({ compact = false }: { compact?: boolean } = {}) {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={async () => { await clearSpainScans(); setScanPage(0); }} className="bg-red-600 hover:bg-red-700">
+                  <AlertDialogAction onClick={async () => { let guard = 0; while (guard++ < 200) { const r = await clearSpainScans(); if (!r?.remaining) break; } setScanPage(0); }} className="bg-red-600 hover:bg-red-700">
                     Supprimer tout
                   </AlertDialogAction>
                 </AlertDialogFooter>
