@@ -2990,7 +2990,16 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
       // relatif : tous les comptes détectent dans la MÊME fenêtre de tick → ils voient la
       // même publication à l'instant T, puis se répartissent les créneaux (allocation
       // déterministe + claim). Le jitter déterministe par compte casse la régularité.
-      const effectiveIntervalMs = scheduleDecision.intervalMs || intervalMs;
+      //
+      // PLANCHER PAR DOSSIER : `intervalMs` (= cevScanIntervalSec) prend TOUJOURS le dessus
+      // quand il est plus grand que l'intervalle du schedule, même schedule activé. Cela
+      // permet de configurer un espacement par dossier (ex: 900s = 15min → 4 clics/h) qui
+      // reste dans la limite MAX_CLICKS_PER_HOUR sans être écrasé par une tranche haute
+      // densité. Le schedule ne peut qu'ACCÉLÉRER un dossier jusqu'à son plancher, jamais
+      // le forcer à scanner plus vite. Si le schedule est OFF, `scheduleDecision.intervalMs`
+      // vaut déjà `intervalMs` (voir getCevScheduleDecision) → le max() est neutre.
+      const scheduleIntervalMs = scheduleDecision.intervalMs || intervalMs;
+      const effectiveIntervalMs = Math.max(scheduleIntervalMs, intervalMs);
       const finalSleepMs = cevMsUntilNextTick(Date.now(), effectiveIntervalMs, gridSeed);
       nextScanAllowedAt = Date.now() + finalSleepMs;
       logger.info(`Grille: prochain front dans ${Math.round(finalSleepMs / 1000)}s (tick: ${Math.round(effectiveIntervalMs / 1000)}s, band: ${scheduleDecision.bandLabel}, jitterPct: ${CEV_GRID_JITTER_PCT})`);
