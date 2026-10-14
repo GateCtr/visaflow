@@ -1,0 +1,1 @@
+if (!navigator.cookieEnabled) document.getElementById('no_cookie').className = ''; if (typeof $diags !== 'undefined') $diags.initializationSuccessful = true;

@@ -1,0 +1,1 @@
+window.staticHost="https://atlasauth.b2clogin.com/static";window.targetSlice="001-000";window.targetDc="BL2";window.initializationTimeout=30000;window.diagsAlways=true;window.maxTrace=1000

@@ -1,0 +1,30 @@
+[
+  {
+    "i": 1,
+    "kind": "inline",
+    "type": "application/javascript",
+    "filename": "inline-01.js",
+    "bytes": 5624
+  },
+  {
+    "i": 2,
+    "kind": "inline",
+    "type": "application/javascript",
+    "filename": "inline-02.js",
+    "bytes": 188
+  },
+  {
+    "i": 3,
+    "kind": "inline",
+    "type": "application/javascript",
+    "filename": "inline-03.js",
+    "bytes": 207892
+  },
+  {
+    "i": 4,
+    "kind": "inline",
+    "type": "application/javascript",
+    "filename": "inline-04.js",
+    "bytes": 157
+  }
+]
