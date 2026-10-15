@@ -606,31 +606,26 @@ async function submitSlotSelection(
   // Dédupliquer (formAction peut être dans les candidates génériques)
   const uniqueCandidates = [...new Set(candidates)];
 
-  // Corps du form : champs cachés + données du slot sélectionné
+  // Corps du form : champs RÉELS confirmés par capture live de la page SelectSlot.
+  // Le vrai form CEV ne contient que 5 champs (hiddenInputCount=5) :
+  //   __RequestVerificationToken, SelectedDate, SelectedTime, PlanningType (=PreciseSlot), ScheduleLineId (GUID).
+  // On part des hiddenInputs (source du token anti-forgery, de PlanningType et de la
+  // structure exacte) et on ÉCRASE les 3 champs variables avec les valeurs du créneau.
+  // Casse EXACTE du form réel — aucun champ deviné : évite le fingerprint anti-bot et
+  // les collisions de model binding insensible à la casse d'ASP.NET MVC.
   const formFields: Record<string, string> = {
-    ...hiddenInputs,
-    // Noms probables du champ date (à confirmer via les logs)
-    selectedDate:        slot.date,
-    appointmentDate:     slot.date,
-    date:                slot.date,
-    SelectedDate:        slot.date,
-    AppointmentDate:     slot.date,
-    // Noms probables du champ heure
-    selectedTime:        slot.time,
-    appointmentTime:     slot.time,
-    time:                slot.time,
-    SelectedTime:        slot.time,
-    AppointmentTime:     slot.time,
-    // ID du créneau si disponible (CEV utilise scheduleLineId en priorité)
-    ...(slot.id != null ? {
-      slotId:         String(slot.id),
-      appointmentId:  String(slot.id),
-      SlotId:         String(slot.id),
-      id:             String(slot.id),
-      scheduleLineId: String(slot.id),  // champ natif CEV AvailableSlotForPublic
-      ScheduleLineId: String(slot.id),
-    } : {}),
+    ...hiddenInputs,                 // __RequestVerificationToken, PlanningType, (SelectedDate/SelectedTime/ScheduleLineId vides)
+    SelectedDate: slot.date,
+    SelectedTime: slot.time,
+    // Si slot.id est null → on laisse la valeur de hiddenInputs (GUID zéro '00000000-...' par défaut)
+    ...(slot.id != null ? { ScheduleLineId: String(slot.id) } : {}),
   };
+
+  // Garde-fou : si l'extraction HTML a varié et que PlanningType n'est pas dans hiddenInputs,
+  // le poser à la valeur observée par défaut.
+  if (!formFields.PlanningType) {
+    formFields.PlanningType = 'PreciseSlot';
+  }
 
   botLog({
     applicationId: clientId,
