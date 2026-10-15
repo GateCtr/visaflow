@@ -1063,20 +1063,17 @@ export async function bookCevViaHttp(
       });
       return { success: false, error: 'NO_SLOT_WITH_ENOUGH_FREE_PLACES' };
     }
-    const slot = (slotsWithMinFree.length > 0 ? slotsWithMinFree : availableSlots)[0];
-    botLog({
-      applicationId: clientId,
-      step: 'cev_http_slot_selected',
-      status: 'ok',
-      data: {
-        date: slot.date, time: slot.time, id: slot.id, free: slot.free ?? 1,
-        groupSize: groupSize ?? null,
-        minFreeRequired: minFree,
-        totalSlots: availableSlots.length,
-        slotsWithMinFree: slotsWithMinFree.length,
-        allSlots: availableSlots.slice(0, 10).map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
-      },
-    });
+    // ── Liste triée des créneaux candidats (free décroissant) ──
+    // On tente le meilleur en premier ; sur SLOT_TAKEN (race condition), on
+    // réessaie IMMÉDIATEMENT avec le créneau suivant.
+    const candidateSlots = slotsWithMinFree.length > 0 ? slotsWithMinFree : availableSlots;
+
+    // CAS targetSlot (coordination inter-comptes) : availableSlots a déjà été réduit
+    // à [matched] plus haut, donc candidateSlots ne contient que ce créneau — une seule
+    // tentative, pas de retombée sur un autre créneau. La borne multi-créneaux ne
+    // s'applique donc que sans targetSlot.
+    // Borne de sécurité : au plus min(5, nombre de candidats) tentatives SLOT_TAKEN.
+    const maxSlotAttempts = Math.min(5, candidateSlots.length);
 
     // Sans antiforgery token → Playwright peut lire le vrai DOM
     if (!antiForgeryToken) {
@@ -1089,23 +1086,65 @@ export async function bookCevViaHttp(
       return { success: false, error: 'NO_ANTIFORGERY_TOKEN', needsPlaywright: true };
     }
 
-    // ═══ ÉTAPE 5 : Soumettre la sélection de slot ═══
-    // Si on a un endpoint confirmé en mémoire → le passer en priorité (évite le multi-endpoint guess)
-    const submitResult = await submitSlotSelection(
-      sessionCookie,
-      selectSlotUrl,
-      ua,
-      formAction,
-      hiddenInputs,
-      slot,
-      clientId,
-      siphoned,
-      knownConfig?.submitEndpoint,    // preferredEndpoint — essayé en premier si connu
-      selectSlotCookies,              // cookie complet (inclut __RequestVerificationToken anti-CSRF)
-    );
+    // ═══ ÉTAPE 5 : Soumettre la sélection de slot (avec retry SLOT_TAKEN immédiat) ═══
+    let slot = candidateSlots[0];
+    let submitResult: Awaited<ReturnType<typeof submitSlotSelection>> | null = null;
 
-    if (!submitResult.success) {
-      const isSlotTaken = submitResult.error === 'SLOT_TAKEN';
+    for (let attemptIndex = 0; attemptIndex < maxSlotAttempts; attemptIndex++) {
+      slot = candidateSlots[attemptIndex];
+
+      botLog({
+        applicationId: clientId,
+        step: 'cev_http_slot_selected',
+        status: 'ok',
+        data: {
+          date: slot.date, time: slot.time, id: slot.id, free: slot.free ?? 1,
+          attemptIndex,
+          groupSize: groupSize ?? null,
+          minFreeRequired: minFree,
+          totalSlots: availableSlots.length,
+          slotsWithMinFree: slotsWithMinFree.length,
+          allSlots: availableSlots.slice(0, 10).map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
+        },
+      });
+
+      // Si on a un endpoint confirmé en mémoire → le passer en priorité (évite le multi-endpoint guess)
+      submitResult = await submitSlotSelection(
+        sessionCookie,
+        selectSlotUrl,
+        ua,
+        formAction,
+        hiddenInputs,
+        slot,
+        clientId,
+        siphoned,
+        knownConfig?.submitEndpoint,    // preferredEndpoint — essayé en premier si connu
+        selectSlotCookies,              // cookie complet (inclut __RequestVerificationToken anti-CSRF)
+      );
+
+      if (submitResult.success) break;
+
+      // SLOT_TAKEN (race condition) → passer IMMÉDIATEMENT au créneau candidat suivant
+      // (aucun délai). Playwright ne peut rien y faire non plus → needsPlaywright reste false.
+      if (submitResult.error === 'SLOT_TAKEN') {
+        const remainingCandidates = Math.max(0, maxSlotAttempts - attemptIndex - 1);
+        botLog({
+          applicationId: clientId,
+          step: 'cev_http_slot_taken_retry',
+          status: 'warn',
+          data: {
+            attemptIndex,
+            date: slot.date,
+            time: slot.time,
+            remainingCandidates,
+            finalUrl: submitResult.finalUrl,
+          },
+        });
+        continue;
+      }
+
+      // Toute AUTRE erreur (NO_ANTIFORGERY_TOKEN, endpoint non confirmé, erreur réseau…)
+      // → ne pas boucler, retourner comme avant (needsPlaywright selon le cas existant).
       botLog({
         applicationId: clientId,
         step: 'cev_http_submit_failed',
@@ -1114,13 +1153,29 @@ export async function bookCevViaHttp(
           error: submitResult.error,
           finalUrl: submitResult.finalUrl,
           usedKnownEndpoint: !!knownConfig,
-          isSlotTaken,
-          hint: isSlotTaken
-            ? 'Slot déjà pris (race condition) — réessayer avec le prochain créneau'
-            : 'Endpoints de booking HTTP non confirmés — fallback Playwright recommandé',
+          isSlotTaken: false,
+          hint: 'Endpoints de booking HTTP non confirmés — fallback Playwright recommandé',
         },
       });
-      return { success: false, error: submitResult.error, needsPlaywright: !isSlotTaken };
+      return { success: false, error: submitResult.error, needsPlaywright: true };
+    }
+
+    // Tous les créneaux candidats tentés ont répondu SLOT_TAKEN (ou aucune tentative)
+    // → abandon ; le dossier continuera de scanner au prochain cycle.
+    if (!submitResult || !submitResult.success) {
+      botLog({
+        applicationId: clientId,
+        step: 'cev_http_submit_failed',
+        status: 'warn',
+        data: {
+          error: 'SLOT_TAKEN',
+          attemptsTried: maxSlotAttempts,
+          usedKnownEndpoint: !!knownConfig,
+          isSlotTaken: true,
+          hint: 'Tous les créneaux candidats ont été pris (race condition) — scan au prochain cycle',
+        },
+      });
+      return { success: false, error: 'SLOT_TAKEN', needsPlaywright: false };
     }
 
     // ═══ ÉTAPE 6 : Extraire le code de confirmation ═══

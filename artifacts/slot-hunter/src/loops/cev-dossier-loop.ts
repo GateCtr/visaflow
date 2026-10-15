@@ -2776,13 +2776,15 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
           // est au niveau TCP/TLS, la session applicative reste valide.
           consecutiveTransient++;
           state.errors++;
-          // Backoff doux et borné : 2s, 4s, 8s, 16s, 30s max — reste très en deçà
-          // du cycle nominal (~120s) pour ne pas rater la fenêtre de publication,
-          // tout en évitant de marteler un serveur déjà à genoux.
-          const transientDelayMs = Math.min(30_000, 2_000 * 2 ** Math.min(consecutiveTransient - 1, 4));
+          // Retry quasi-immédiat (demande utilisateur) : le handshake TLS n'ayant jamais
+          // abouti, aucun clic n'a été compté → on peut reprendre tout de suite.
+          //   - 1re coupure consécutive : 0 ms (retry immédiat, pas de sleep)
+          //   - à partir de la 2e        : 500 ms, plafonné à 1 s (garde-fou anti-martelage)
+          // On reste donc toujours <= 1 s, bien en deçà du cycle nominal (~120s).
+          const transientDelayMs = consecutiveTransient <= 1 ? 0 : Math.min(1_000, 500);
           logger.warn(
             `  ⚡ Serveur CEV saturé sur #${dossier.index} ${dossier.vowintRef} ` +
-            `(coupure ${consecutiveTransient}) — retry dans ${Math.round(transientDelayMs / 1000)}s ` +
+            `(coupure ${consecutiveTransient}) — retry ${transientDelayMs === 0 ? "immédiat" : `dans ${transientDelayMs}ms`} ` +
             `avec le dossier suivant, aucun clic consommé`,
           );
           botLog({
@@ -2794,7 +2796,8 @@ async function runAccountLoop(job: any, accountIndex: number = 0, totalAccounts:
               dossierIndex: dossier.index,
               scanCount: state.scanCount,
               consecutiveTransient,
-              retryInSec: Math.round(transientDelayMs / 1000),
+              retryInSec: Math.round(transientDelayMs / 1000), // 0 pour la 1re tentative (retry immédiat)
+              retryInMs: transientDelayMs,
               error: (result.error ?? "").slice(0, 200),
             },
           });
