@@ -1086,12 +1086,55 @@ export async function bookCevViaHttp(
       return { success: false, error: 'NO_ANTIFORGERY_TOKEN', needsPlaywright: true };
     }
 
+    // ─── Extraction de validUntil (durée de vie de la session CEV) ──────────────
+    // La page SelectSlot embed un champ validUntil (ISO datetime SANS suffixe Z →
+    // heure UTC côté serveur CEV, comme dans isCevSessionValid de cevPortal.ts).
+    // On s'en sert comme garde additif AVANT chaque retry SLOT_TAKEN pour éviter
+    // une soumission réseau vouée à l'échec si la session a expiré en plein milieu
+    // des retries. Si introuvable → null → aucun blocage (fallback identique à aujourd'hui).
+    let sessionValidUntilMs: number | null = null;
+    {
+      const validUntilMatch = html.match(
+        /validUntil['"]?\s*[:=]\s*['"]?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)/i,
+      );
+      if (validUntilMatch?.[1]) {
+        const iso = validUntilMatch[1].endsWith('Z') ? validUntilMatch[1] : validUntilMatch[1] + 'Z';
+        const parsed = new Date(iso).getTime();
+        sessionValidUntilMs = Number.isNaN(parsed) ? null : parsed;
+      }
+    }
+    const SESSION_EXPIRY_BUFFER_MS = 5000;
+
     // ═══ ÉTAPE 5 : Soumettre la sélection de slot (avec retry SLOT_TAKEN immédiat) ═══
     let slot = candidateSlots[0];
     let submitResult: Awaited<ReturnType<typeof submitSlotSelection>> | null = null;
 
     for (let attemptIndex = 0; attemptIndex < maxSlotAttempts; attemptIndex++) {
       slot = candidateSlots[attemptIndex];
+
+      // Garde additif : à partir de la 2e tentative, si la session expire (ou va expirer
+      // dans la marge BUFFER), arrêter proprement sans soumettre un POST voué à l'échec.
+      // La 1re tentative (attemptIndex === 0) n'est JAMAIS bloquée : le créneau fraîchement
+      // détecté doit toujours être tenté, même si validUntil est proche (cas nominal).
+      if (
+        attemptIndex >= 1 &&
+        sessionValidUntilMs !== null &&
+        Date.now() >= sessionValidUntilMs - SESSION_EXPIRY_BUFFER_MS
+      ) {
+        const nowMs = Date.now();
+        botLog({
+          applicationId: clientId,
+          step: 'cev_http_retry_session_expiring',
+          status: 'warn',
+          data: {
+            attemptIndex,
+            sessionValidUntilMs,
+            nowMs,
+            remainingMs: sessionValidUntilMs - nowMs,
+          },
+        });
+        return { success: false, error: 'SESSION_EXPIRED', needsPlaywright: false };
+      }
 
       botLog({
         applicationId: clientId,
