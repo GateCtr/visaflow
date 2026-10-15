@@ -1984,9 +1984,15 @@ async function handleSlotFoundMulti(
   //    les places restantes. On réveille au plus min(remainingFree, éligibles).
   //    Fallback d'urgence (détecteur hors pool + totalFree≤1) : pas de réveil (le seul
   //    créneau est pris, ouvrir une 2e session risque un "multiple session" CEV).
+  // (C) Plafonner AUSSI par le nombre de créneaux DISTINCTS réellement distribuables :
+  // on ne réveille jamais plus de dossiers que de cibles uniques disponibles, pour que
+  // l'allocation entrelacée puisse donner un premier choix distinct à chacun (zéro collision
+  // interne tant que #dossiers réveillés ≤ #créneaux distincts). inlineSlots.length = nombre
+  // de créneaux (date+heure) distincts détectés ; fallback remainingFree si HTML absent.
+  const distinctDistributableSlots = inlineSlots.length > 0 ? inlineSlots.length : remainingFree;
   const dossiersToWake = detectorMustBookAsFallback
     ? 0
-    : Math.min(remainingFree, otherRefsWithinDeadline.length);
+    : Math.min(remainingFree, otherRefsWithinDeadline.length, distinctDistributableSlots);
   skipMulti = dossiersToWake <= 0;
 
   if (skipMulti) {
@@ -2022,28 +2028,79 @@ async function handleSlotFoundMulti(
     const selectedRefs = otherRefsWithinDeadline.slice(0, dossiersToWake);
     logFn.info(`  🚀 remainingFree=${remainingFree} — lancement ${selectedRefs.length} dossier(s) secondaire(s) éligible(s) par deadline [${selectedRefs.join(", ")}]...`);
 
-    const bookingTasks = selectedRefs.map((vowintRef) => {
+    // (A)+(B) Chaque dossier réveillé reçoit une CIBLE DISTINCTE via l'allocation
+    // entrelacée (buildCevSlotAssignment avec un rang 0-based parmi LES RÉVEILLÉS comme
+    // accountIndex, et le nombre de réveillés comme totalAccounts) → les premiers choix
+    // ne se recouvrent jamais tant que #créneaux ≥ #réveillés. Hors mode RACE, un claim
+    // Redis PAR DOSSIER (vowintRef, pas applicationId) est posé avant soumission ; sur
+    // échec de claim on passe au créneau SUIVANT de la liste entrelacée du dossier ; sur
+    // échec de booking on libère le claim. En mode RACE, aucun claim (le serveur CEV arbitre).
+    const wakeTotal = selectedRefs.length;
+    const bookingTasks = selectedRefs.map((vowintRef, wakeIndex) => {
       const refDeadline = resolveCevDeadline(vowintRef, dossierDeadlines ?? new Map(), globalDeadline);
-      // Slot unique + relais deadline : cibler EXACTEMENT le créneau le plus proche
-      // dans la deadline de CE dossier, pour aller vite (pas de re-choix aléatoire).
-      // Multi-slots : laisser bookDossierIsolated re-scanner et choisir (targetSlot undefined)
-      // pour que chaque dossier réveillé prenne un créneau distinct via sa propre allocation.
-      let targetForRef: { date: string; time: string } | undefined;
-      if (detectorBlockedByDeadline) {
-        const ordered = buildCevSlotAssignment(
-          `${applicationId}:${vowintRef}`,
-          inlineSlots.map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
-          groupSize ?? 1, totalAccounts, accountIndex, refDeadline,
-        );
-        if (ordered.length > 0) targetForRef = { date: ordered[0].date, time: ordered[0].time };
-      }
-      return bookDossierIsolated(
-        vowintEmail, vowintPassword,
-        vowintRef, applicationId,
-        groupSize, undefined, logger,
-        targetForRef,
+      // Liste entrelacée propre à CE dossier réveillé (cascade de fallback complète).
+      const orderedForRef = buildCevSlotAssignment(
+        `${applicationId}:${vowintRef}`,
+        inlineSlots.map(s => ({ date: s.date, time: s.time, free: s.free ?? 1 })),
+        groupSize ?? 1,
+        wakeTotal,
+        wakeIndex,
         refDeadline,
-      ).then(result => ({ vowintRef, ...result }));
+      );
+
+      const task = async (): Promise<{
+        vowintRef: string;
+        success: boolean;
+        confirmationCode?: string;
+        bookedDate?: string;
+        bookedTime?: string;
+        screenshotStorageId?: string;
+        error?: string;
+      }> => {
+        // Cas sans cible (HTML absent → orderedForRef vide) : une seule passe sans claim,
+        // bookDossierIsolated re-scanne et choisit lui-même (comportement historique).
+        const candidatesForRef: Array<CevSlotCandidate | null> =
+          orderedForRef.length > 0 ? orderedForRef : [null];
+
+        let lastResult: {
+          success: boolean;
+          confirmationCode?: string;
+          bookedDate?: string;
+          bookedTime?: string;
+          screenshotStorageId?: string;
+          error?: string;
+        } | null = null;
+
+        for (const candidate of candidatesForRef) {
+          // (B) Claim Redis PAR DOSSIER (clé = vowintRef) — sauf mode RACE.
+          if (candidate && !raceMode) {
+            const claimed = await tryClaimCevSlot(candidate.date, candidate.time, vowintRef, candidate.free);
+            if (!claimed) {
+              logFn.info(`  ⏭️ ${vowintRef} : ${candidate.date} ${candidate.time} déjà claim par un autre dossier → créneau suivant`);
+              continue;
+            }
+          }
+
+          lastResult = await bookDossierIsolated(
+            vowintEmail, vowintPassword,
+            vowintRef, applicationId,
+            groupSize, undefined, logger,
+            candidate ? { date: candidate.date, time: candidate.time } : undefined,
+            refDeadline,
+          );
+
+          if (lastResult?.success) break;
+
+          // Échec de booking → libérer le claim pour qu'un autre dossier puisse tenter ce créneau.
+          if (candidate && !raceMode) {
+            await releaseCevSlot(candidate.date, candidate.time, vowintRef);
+          }
+        }
+
+        return { vowintRef, ...(lastResult ?? { success: false, error: "no_candidate" }) };
+      };
+
+      return task();
     });
 
     const results = await Promise.allSettled(bookingTasks);

@@ -21,8 +21,18 @@
  *   3. Puis plus de places libres (moins de risque de collision).
  *   4. Puis heure la plus tôt.
  *
+ * ENTRELACEMENT (anti-collision des cascades de retry) :
+ *   Au lieu d'une simple rotation (chaque compte = rotation de la même séquence, dont
+ *   les cascades de retry convergent), chaque compte visite les créneaux par PAS de N
+ *   (= totalAccounts) : compte[i] vise sorted[i], sorted[i+N], sorted[i+2N], …
+ *   Tant que #créneaux ≥ #comptes, les PREMIERS choix de deux comptes distincts ne se
+ *   recouvrent JAMAIS, et plus largement les k-ièmes choix divergent au maximum.
+ *   La liste est ensuite complétée par les créneaux des autres rangs (dans l'ordre trié)
+ *   pour garder une cascade de fallback COMPLÈTE (permutation de tous les créneaux).
+ *
  * FALLBACK :
- *   Plus de comptes que de créneaux → wrap-around cyclique ; le claim Redis
+ *   Plus de comptes que de créneaux → wrap-around (certains rangs n'ont pas de créneau
+ *   dédié mais reçoivent la liste complète en fallback) ; le claim Redis
  *   (tryClaimCevSlot) départage les recoupements en ~1 ms, sans attente.
  */
 
@@ -88,10 +98,35 @@ export function buildCevSlotAssignment(
     return a.time.localeCompare(b.time);
   });
 
-  // ── Décalage cyclique par index de compte ───────────────────────────────────
-  // Compte[i] commence à sorted[i % N], puis continue cycliquement.
-  const startPos = ((myIndex % sorted.length) + sorted.length) % sorted.length;
-  return [...sorted.slice(startPos), ...sorted.slice(0, startPos)];
+  // ── Entrelacement par pas de N (anti-convergence des cascades) ──────────────
+  // N = nombre de comptes/dossiers réveillés. Le compte de rang `start` (= myIndex
+  // ramené dans [0, N[) visite d'abord sorted[start], sorted[start+N], sorted[start+2N]…
+  // (ses créneaux "dédiés"), puis complète avec tous les créneaux restants dans l'ordre
+  // trié (les rangs voisins) pour garder une cascade de fallback complète.
+  //
+  // Propriété clé : tant que sorted.length ≥ N, les premiers éléments de deux listes de
+  // rangs différents sont sorted[r] ≠ sorted[r'] → aucun recouvrement des premiers choix,
+  // et les k-ièmes choix divergent au maximum. Si N > sorted.length, certains rangs n'ont
+  // pas de créneau dédié (boucle `for` vide) mais reçoivent quand même la permutation
+  // complète via le complément → pas de crash, wrap-around sûr.
+  const len = sorted.length;
+  const step = Math.max(1, totalAccounts);
+  const start = ((myIndex % step) + step) % step;
+
+  const result: CevSlotCandidate[] = [];
+  const taken = new Array<boolean>(len).fill(false);
+
+  // 1. Créneaux dédiés de ce rang, par pas de N.
+  for (let k = start; k < len; k += step) {
+    result.push(sorted[k]!);
+    taken[k] = true;
+  }
+  // 2. Complément : tous les autres créneaux dans l'ordre trié (fallback complet).
+  for (let k = 0; k < len; k++) {
+    if (!taken[k]) result.push(sorted[k]!);
+  }
+
+  return result;
 }
 
 // ─── Date limite par AppId ────────────────────────────────────────────────────
