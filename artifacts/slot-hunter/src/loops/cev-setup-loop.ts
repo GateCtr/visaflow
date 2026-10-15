@@ -4,6 +4,7 @@
 import { getPendingCevSetups, resetCevSetupLock, recordCevSetupLoginFail, reportSlotFound } from "../convexClient.js";
 import { runCevDirectSessionSetup } from "../cevBooking.js";
 import { setupCevSessionHttp } from "../cevHttpSetup.js";
+import { isDirectTransientError } from "../cev-shared-impit.js";
 
 // Timeout global par setup : 4 min (le lock Convex dure 13 min)
 const CEV_SETUP_TIMEOUT_MS = 4 * 60_000;
@@ -130,11 +131,16 @@ export async function startCevSetupLoop(): Promise<void> {
         }
 
         // ── Stratégie 2 : Playwright (fallback si HTTP échoue) ───────────────
+        // Une coupure réseau transitoire (TLS handshake eof, reset…) ne doit PAS
+        // déclencher le fallback Playwright : le serveur CEV est saturé, pas en
+        // panne applicative. On la laisse être reclassée en TRANSIENT_NETWORK plus
+        // bas pour simplement réessayer au prochain cycle (sans clic consommé).
         const skipPlaywright = (
           r.error === "CEV_VOWINT_SESSION_FAILED" ||
           r.error === "SESSION_EXPIRED_AFTER_REDIRECT" ||
           r.error === "MULTI_SESSION_NOT_ALLOWED" ||
           r.error === "PLAYWRIGHT_UNAVAILABLE" ||
+          r.error === "TRANSIENT_NETWORK" ||
           (r.error ?? "").includes("RATE_LIMIT") ||
           (r.error ?? "").includes("TooManyAttempts")
         );
@@ -169,13 +175,25 @@ export async function startCevSetupLoop(): Promise<void> {
         } else {
           console.log(`[CEV-SETUP] ❌ Échec session=${s.sessionId}: ${r.error}`);
 
+          // ── Coupure réseau transitoire ───────────────────────────────────
+          // Soit le code dédié TRANSIENT_NETWORK (setup HTTP), soit un message
+          // brut matché par le détecteur partagé (fallback Playwright). Le
+          // handshake TLS n'ayant jamais abouti, le serveur n'a PAS compté de
+          // clic → on NE touche PAS au compteur de clics, on NE compte PAS un
+          // échec de login et on N'AUTO-PAUSE PAS. On déverrouille simplement le
+          // lock et on laisse le prochain cycle réessayer.
+          const isTransientNetwork = r.error === "TRANSIENT_NETWORK" || isDirectTransientError(r.error);
+
           const isLoginFailure = r.error === "CEV_VOWINT_SESSION_FAILED";
           const isTimeout = r.error === "TIMEOUT_4MIN";
           const isSessionDead = r.error === "CEV_SESSION_DEAD_NO_POLL";
           const isTooManyAttempts = (r.error ?? "").includes("TooManyAttempts") || (r.error ?? "").includes("RATE_LIMIT");
           const isRateLimit = isTooManyAttempts;
 
-          if (isTooManyAttempts) {
+          if (isTransientNetwork) {
+            console.log(`[CEV-SETUP] ⚡ Coupure réseau transitoire (${r.error}) session=${s.sessionId} — retry au prochain cycle (pas de clic consommé)`);
+            await resetCevSetupLock(s.sessionId).catch(() => {});
+          } else if (isTooManyAttempts) {
             console.log(`[CEV-SETUP] 🚫 RATE-LIMIT VOWINT session=${s.sessionId} — lock 60 min (blocage VOWINT)`);
             sessionFailTracker.delete(s.sessionId as string);
             try {

@@ -20,7 +20,7 @@
  */
 
 import { botLog, getBotConfigValue } from "./convexClient.js";
-import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, getCevProxyUrl, shouldUseProxy, lockCevProxy, unlockCevProxy } from "./cev-shared-impit.js";
+import { cevImpitFetch, getCevBrowserHeaders, getCevSessionUa, rotateCevUaProfile, setCevExternalUserAgent, getCevProxyExitIp, getCevProxyUrl, shouldUseProxy, lockCevProxy, unlockCevProxy, isDirectTransientError } from "./cev-shared-impit.js";
 import { lookup } from "node:dns/promises";
 import {
   syncVowintSessionToRedis,
@@ -1940,6 +1940,14 @@ export async function setupCevSessionHttp(
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Coupure réseau transitoire (serveur CEV saturé coupant le handshake TLS,
+    // reset de connexion, DNS, timeout…) → PAS un échec dur. La connexion n'ayant
+    // jamais abouti, aucun clic n'a été consommé côté serveur. On remonte un code
+    // dédié que la boucle de setup classera comme « à réessayer au prochain cycle ».
+    if (isDirectTransientError(msg)) {
+      botLog({ applicationId: clientId, step: "cev_http_setup_transient", status: "warn", data: { error: msg } });
+      return { success: false, error: "TRANSIENT_NETWORK" };
+    }
     botLog({ applicationId: clientId, step: "cev_http_setup_error", status: "fail", data: { error: msg } });
     return { success: false, error: msg };
   }

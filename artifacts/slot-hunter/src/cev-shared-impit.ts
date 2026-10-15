@@ -1164,6 +1164,24 @@ const DIRECT_FETCH_TIMEOUT_MS = 120_000;
 const DIRECT_TRANSIENT_RE =
   /tls handshake eof|unexpectedeof|connectionreset|connection reset|econnreset|econnaborted|econnrefused|epipe|etimedout|broken pipe|socket hang up|failed to connect|hyper_util|abort|timeout|dns error/i;
 
+/**
+ * Détecte une erreur réseau transitoire (coupure côté serveur CEV saturé,
+ * handshake TLS avorté, reset de connexion, DNS, timeout…).
+ *
+ * Source unique de vérité pour tout le flux CEV : la boucle de setup et le
+ * setup HTTP réutilisent ce détecteur plutôt que de dupliquer la regex, afin
+ * qu'une coupure réseau transitoire soit classée comme « à réessayer » et non
+ * comme un échec dur remonté à l'utilisateur.
+ *
+ * IMPORTANT quota de clics : une erreur « tls handshake eof » signifie que la
+ * connexion n'a jamais abouti → le serveur n'a PAS compté de clic. Un retry sur
+ * ce type d'erreur ne doit donc pas incrémenter le compteur local de clics.
+ */
+export function isDirectTransientError(msg: unknown): boolean {
+  const text = msg instanceof Error ? msg.message : String(msg ?? "");
+  return DIRECT_TRANSIENT_RE.test(text);
+}
+
 async function directFetchWithRetry(url: string, options: RequestInit, logPrefix: string): Promise<Response> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= DIRECT_MAX_RETRIES; attempt++) {
